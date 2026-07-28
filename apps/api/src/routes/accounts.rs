@@ -742,6 +742,14 @@ fn normalise_profile_summary(raw: Option<&str>) -> Result<Option<String>, &'stat
     Ok(summary)
 }
 
+fn parse_optional_profile_summary(payload: &Value) -> Result<Option<String>, &'static str> {
+    match payload.get("summary") {
+        None => Ok(None),
+        Some(Value::String(summary)) => normalise_profile_summary(Some(summary)),
+        Some(_) => Err("summary must be a string"),
+    }
+}
+
 fn normalise_profile_tags<'a>(
     raw_tags: impl IntoIterator<Item = &'a str>,
     required_tags: &[&str],
@@ -771,6 +779,19 @@ fn normalise_profile_tags<'a>(
         return Err("too many tags");
     }
     Ok(tags)
+}
+
+fn parse_optional_profile_tags(payload: &Value) -> Result<Vec<String>, &'static str> {
+    match payload.get("tags") {
+        None => Ok(Vec::new()),
+        Some(Value::Array(tags)) => {
+            if !tags.iter().all(Value::is_string) {
+                return Err("tags must contain only strings");
+            }
+            normalise_profile_tags(tags.iter().filter_map(Value::as_str), &[])
+        }
+        Some(_) => Err("tags must be an array of strings"),
+    }
 }
 
 fn profile_response(
@@ -1245,18 +1266,8 @@ pub async fn create_account(
     };
 
     // --- optional summary / tags / email ---
-    let summary =
-        normalise_profile_summary(payload.get("summary").and_then(Value::as_str)).map_err(bad)?;
-    let tags = normalise_profile_tags(
-        payload
-            .get("tags")
-            .and_then(Value::as_array)
-            .into_iter()
-            .flatten()
-            .filter_map(Value::as_str),
-        &[],
-    )
-    .map_err(bad)?;
+    let summary = parse_optional_profile_summary(&payload).map_err(bad)?;
+    let tags = parse_optional_profile_tags(&payload).map_err(bad)?;
     let email = payload
         .get("email")
         .and_then(|v| v.as_str())

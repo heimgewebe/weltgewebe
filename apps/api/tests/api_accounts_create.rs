@@ -415,6 +415,36 @@ async fn create_profile_fields_are_bounded_and_normalised_before_jsonl_side_effe
             "location": {"lat": 53.55, "lon": 9.99},
             "tags": ["x".repeat(65)]
         }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555555",
+            "title": "Object summary",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "summary": {"text": "wrong type"}
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555556",
+            "title": "String tags",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": "wrong type"
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555557",
+            "title": "Mixed tags",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": ["valid", 7, "also-valid"]
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555558",
+            "title": "Null summary",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "summary": null
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555559",
+            "title": "Null tags",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": null
+        }),
     ];
 
     for payload in invalid_payloads {

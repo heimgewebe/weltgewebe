@@ -1,18 +1,29 @@
 export function countUnicodeCodePoints(value: string): number {
-  return [...value].length;
+  let count = 0;
+  for (const codePoint of value) {
+    if (codePoint) count += 1;
+  }
+  return count;
 }
 
-export function constrainCodePointInput(
-  currentValue: string,
-  nextValue: string,
-  maxCodePoints: number,
-): string {
-  const nextCodePoints = [...nextValue];
-  if (nextCodePoints.length <= maxCodePoints) return nextValue;
+const PROFILE_TAG_PREFIXES = ["skill:", "good:", "interest:"] as const;
 
-  const currentCodePointCount = countUnicodeCodePoints(currentValue);
-  if (nextCodePoints.length <= currentCodePointCount) return nextValue;
-  if (currentCodePointCount >= maxCodePoints) return currentValue;
-
-  return nextCodePoints.slice(0, maxCodePoints).join("");
+export function validateProfileTags(
+  values: readonly [string, string, string],
+): string[] | null {
+  const tags: string[] = [];
+  const seen = new Set<string>();
+  for (const [index, value] of values.entries()) {
+    for (const rawEntry of value.split(",")) {
+      const entry = rawEntry.trim();
+      if (!entry) continue;
+      const tag = PROFILE_TAG_PREFIXES[index] + entry;
+      if (countUnicodeCodePoints(tag) > 64) return null;
+      if (seen.has(tag)) continue;
+      seen.add(tag);
+      tags.push(tag);
+      if (tags.length > 62) return null;
+    }
+  }
+  return tags;
 }

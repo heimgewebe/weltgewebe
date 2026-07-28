@@ -272,29 +272,40 @@ async fn invalid_profile_fields_do_not_reach_postgres_or_cache() -> Result<()> {
     let _env = set_gewebe_in_dir(&in_dir);
 
     let (app, cookie, state) = postgres_write_app(pool.clone(), "writepath-admin-invalid").await?;
-    let id = "66666666-6666-4666-8666-666666666666";
-    let payload = serde_json::json!({
-        "id": id,
-        "title": "Invalid profile fields",
-        "location": {"lat": 53.55, "lon": 9.99},
-        "summary": "x".repeat(501)
-    });
+    let invalid_payloads = [
+        serde_json::json!({
+            "id": "66666666-6666-4666-8666-666666666666",
+            "title": "Invalid profile length",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "summary": "x".repeat(501)
+        }),
+        serde_json::json!({
+            "id": "66666666-6666-4666-8666-666666666667",
+            "title": "Invalid profile type",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": ["valid", {"wrong": "type"}]
+        }),
+    ];
 
-    let response = app
-        .oneshot(post_accounts(&cookie, &payload.to_string()))
-        .await?;
-    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-
-    let persisted: bool =
-        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM domain_accounts WHERE id = $1)")
-            .bind(id)
-            .fetch_one(&pool)
+    for payload in invalid_payloads {
+        let id = payload["id"].as_str().context("invalid payload id")?;
+        let response = app
+            .clone()
+            .oneshot(post_accounts(&cookie, &payload.to_string()))
             .await?;
-    assert!(
-        !persisted,
-        "invalid profile fields must not reach PostgreSQL"
-    );
-    assert!(state.accounts.read().await.get(id).is_none());
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+        let persisted: bool =
+            sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM domain_accounts WHERE id = $1)")
+                .bind(id)
+                .fetch_one(&pool)
+                .await?;
+        assert!(
+            !persisted,
+            "invalid profile fields must not reach PostgreSQL"
+        );
+        assert!(state.accounts.read().await.get(id).is_none());
+    }
     assert!(!in_dir.join("demo.accounts.jsonl").exists());
 
     Ok(())
