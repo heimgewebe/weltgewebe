@@ -153,6 +153,7 @@ pub struct ProposalView {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finalized_at: Option<DateTime<Utc>>,
     pub veto_count: i64,
+    pub message_count: i64,
     pub yes_votes: i64,
     pub no_votes: i64,
     pub abstain_votes: i64,
@@ -182,6 +183,7 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
         voting_until: proposal.voting_until,
         finalized_at: proposal.finalized_at,
         veto_count: proposal.veto_count,
+        message_count: proposal.message_count,
         yes_votes: proposal.yes_votes,
         no_votes: proposal.no_votes,
         abstain_votes: proposal.abstain_votes,

@@ -4,8 +4,12 @@ import { mockApiResponses } from "./fixtures/mockApi";
 const GUEST_ID = "guest-governance-e2e";
 const WEBER_ID = "weber-governance-e2e";
 const PROPOSAL_ID = "11111111-1111-4111-8111-111111111111";
+const SECOND_PROPOSAL_ID = "22222222-2222-4222-8222-222222222222";
 
-function proposal(status: "consent" | "voting" = "consent") {
+function proposal(
+  status: "consent" | "voting" = "consent",
+  messageCount: number | null = 1,
+) {
   return {
     id: PROPOSAL_ID,
     kind: "weberantrag",
@@ -17,6 +21,7 @@ function proposal(status: "consent" | "voting" = "consent") {
     consent_until: "2026-07-21T10:00:00Z",
     voting_until: status === "voting" ? "2026-07-28T10:00:00Z" : undefined,
     veto_count: status === "voting" ? 1 : 0,
+    ...(messageCount === null ? {} : { message_count: messageCount }),
     yes_votes: 0,
     no_votes: 0,
     abstain_votes: 0,
@@ -40,7 +45,13 @@ async function installGovernanceRoutes(
   options: {
     initialStatus?: "consent" | "voting";
     existingApplicantId?: string;
+    initialMessageCount?: number;
+    detailMessageCount?: number;
+    initialMessages?: number;
+    omitMessageCount?: boolean;
+    rawListMessageCount?: string;
     deferListResponse?: boolean;
+    deferMessagesResponse?: boolean;
   } = {},
 ) {
   let currentStatus = options.initialStatus ?? "consent";
@@ -48,6 +59,12 @@ async function installGovernanceRoutes(
   const listResponseGate = options.deferListResponse
     ? new Promise<void>((resolve) => {
         resolveListResponse = resolve;
+      })
+    : null;
+  let resolveMessagesResponse: (() => void) | null = null;
+  const messagesResponseGate = options.deferMessagesResponse
+    ? new Promise<void>((resolve) => {
+        resolveMessagesResponse = resolve;
       })
     : null;
   const requests: Array<{ method: string; pathname: string; body: unknown }> =
@@ -62,22 +79,31 @@ async function installGovernanceRoutes(
 
     if (url.pathname === "/api/proposals" && method === "GET") {
       if (listResponseGate) await listResponseGate;
+      const listedProposal = {
+        ...proposal(
+          currentStatus,
+          options.omitMessageCount ? null : (options.initialMessageCount ?? 1),
+        ),
+        applicant_account_id: options.existingApplicantId ?? GUEST_ID,
+      };
+      let responseBody = JSON.stringify([listedProposal]);
+      if (options.rawListMessageCount) {
+        responseBody = responseBody.replace(
+          /"message_count":-?\d+(?:\.\d+)?(?:e[+-]?\d+)?/i,
+          `"message_count":${options.rawListMessageCount}`,
+        );
+      }
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            ...proposal(currentStatus),
-            applicant_account_id: options.existingApplicantId ?? GUEST_ID,
-          },
-        ]),
+        body: responseBody,
       });
     }
     if (url.pathname === "/api/proposals" && method === "POST") {
       return route.fulfill({
         status: 201,
         contentType: "application/json",
-        body: JSON.stringify(proposal("consent")),
+        body: JSON.stringify(proposal("consent", 0)),
       });
     }
     if (url.pathname === `/api/proposals/${PROPOSAL_ID}` && method === "GET") {
@@ -85,7 +111,14 @@ async function installGovernanceRoutes(
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          ...proposal(currentStatus),
+          ...proposal(
+            currentStatus,
+            options.omitMessageCount
+              ? undefined
+              : (options.detailMessageCount ??
+                  options.initialMessageCount ??
+                  1),
+          ),
           applicant_account_id: options.existingApplicantId ?? GUEST_ID,
           own_vote: undefined,
         }),
@@ -95,18 +128,19 @@ async function installGovernanceRoutes(
       url.pathname === `/api/proposals/${PROPOSAL_ID}/messages` &&
       method === "GET"
     ) {
+      if (messagesResponseGate) await messagesResponseGate;
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            id: "message-1",
+        body: JSON.stringify(
+          Array.from({ length: options.initialMessages ?? 1 }, (_, index) => ({
+            id: `message-${index + 1}`,
             author_account_id: WEBER_ID,
             author_title: "Weber im Test",
             body: "Willkommen im öffentlichen Gesprächsraum.",
             created_at: "2026-07-14T12:00:00Z",
-          },
-        ]),
+          })),
+        ),
       });
     }
     if (
@@ -158,6 +192,7 @@ async function installGovernanceRoutes(
     requests,
     setStatus: (status: "consent" | "voting") => (currentStatus = status),
     releaseListResponse: () => resolveListResponse?.(),
+    releaseMessagesResponse: () => resolveMessagesResponse?.(),
   };
 }
 
@@ -237,13 +272,16 @@ test("the five governance actions stay usable on a 320 pixel viewport", async ({
   }
 });
 
-test("veto and conversation links resolve to real filtered governance views", async ({
+test("veto and conversation links resolve to their factual governance views", async ({
   page,
 }) => {
   await mockApiResponses(page, {
     auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
   });
-  await installGovernanceRoutes(page, { initialStatus: "voting" });
+  const governance = await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    initialMessageCount: 1,
+  });
 
   await page.goto("/antraege?ereignis=veto");
   await expect(
@@ -251,11 +289,271 @@ test("veto and conversation links resolve to real filtered governance views", as
   ).toBeVisible();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
 
+  governance.setStatus("consent");
   await page.goto("/antraege?ereignis=gespraech");
-  await expect(
-    page.getByRole("heading", { name: "Gesprächsphasen" }),
-  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+});
+
+test("the conversation view treats a legacy API without message_count as empty", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    omitMessageCount: true,
+  });
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toHaveCount(0);
+  await expect(
+    page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
+  ).toBeVisible();
+});
+
+test("the conversation view rejects a non-finite message count", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    rawListMessageCount: "1e400",
+  });
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(page.getByText("Weberstatus für Gast im Test")).toHaveCount(0);
+  await expect(
+    page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
+  ).toBeVisible();
+});
+
+test("query navigation rebinds detail and mutations to the selected proposal", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+
+  let releaseFirstDetail!: () => void;
+  const firstDetailGate = new Promise<void>((resolve) => {
+    releaseFirstDetail = resolve;
+  });
+  let markFirstDetailRequested!: () => void;
+  const firstDetailRequested = new Promise<void>((resolve) => {
+    markFirstDetailRequested = resolve;
+  });
+  const messagePosts: string[] = [];
+
+  await page.route("**/api/proposals**", async (route: Route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
+
+    if (url.pathname === "/api/proposals" && method === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            ...proposal("consent", 0),
+            id: PROPOSAL_ID,
+            applicant_title: "Antrag Alpha",
+          },
+          {
+            ...proposal("consent", 0),
+            id: SECOND_PROPOSAL_ID,
+            applicant_title: "Antrag Beta",
+          },
+        ]),
+      });
+    }
+
+    const detailMatch = url.pathname.match(/^\/api\/proposals\/([^/]+)$/);
+    if (detailMatch && method === "GET") {
+      const proposalId = detailMatch[1];
+      if (proposalId === PROPOSAL_ID) {
+        markFirstDetailRequested();
+        await firstDetailGate;
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          ...proposal("consent", 0),
+          id: proposalId,
+          applicant_title:
+            proposalId === PROPOSAL_ID ? "Antrag Alpha" : "Antrag Beta",
+          own_vote: undefined,
+        }),
+      });
+    }
+
+    const messagesMatch = url.pathname.match(
+      /^\/api\/proposals\/([^/]+)\/messages$/,
+    );
+    if (messagesMatch && method === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      });
+    }
+    if (messagesMatch && method === "POST") {
+      messagePosts.push(url.pathname);
+      const body = request.postDataJSON() as { body: string };
+      return route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "message-beta",
+          author_account_id: WEBER_ID,
+          author_title: "Weber im Test",
+          body: body.body,
+          created_at: "2026-07-27T15:00:00Z",
+        }),
+      });
+    }
+
+    return route.fulfill({ status: 404 });
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await firstDetailRequested;
+  await page.evaluate((proposalId) => {
+    const link = document.createElement("a");
+    link.href = `/antraege?id=${proposalId}`;
+    link.textContent = "Zu Antrag Beta";
+    document.body.append(link);
+  }, SECOND_PROPOSAL_ID);
+  await page.getByRole("link", { name: "Zu Antrag Beta" }).click();
+
+  await expect(
+    page.getByRole("heading", { name: "Antrag Beta" }),
+  ).toBeVisible();
+  await page.getByLabel("Beitrag verfassen").fill("Beitrag für Beta");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Beitrag für Beta")).toBeVisible();
+  expect(messagePosts).toEqual([
+    `/api/proposals/${SECOND_PROPOSAL_ID}/messages`,
+  ]);
+
+  releaseFirstDetail();
+  await expect(
+    page.getByRole("heading", { name: "Antrag Beta" }),
+  ).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Antrag Alpha" })).toHaveCount(
+    0,
+  );
+});
+
+test("the first contribution updates the retained proposal projection", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "consent",
+    initialMessageCount: 0,
+    initialMessages: 0,
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await page.getByLabel("Beitrag verfassen").fill("Erster belegter Beitrag");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Erster belegter Beitrag")).toBeVisible();
+
+  await page.getByRole("link", { name: "Alle Anträge" }).click();
+  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Gespräche" }).click();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+});
+
+test("a late list response cannot undo the first confirmed contribution", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  const governance = await installGovernanceRoutes(page, {
+    initialStatus: "consent",
+    initialMessageCount: 0,
+    initialMessages: 0,
+    deferListResponse: true,
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await page.getByLabel("Beitrag verfassen").fill("Beitrag vor später Liste");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Beitrag vor später Liste")).toBeVisible();
+
+  governance.releaseListResponse();
+  await page.getByRole("link", { name: "Alle Anträge" }).click();
+  await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Gespräche" }).click();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+});
+
+test("a confirmed post increments a fresher retained detail count", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  const governance = await installGovernanceRoutes(page, {
+    initialStatus: "consent",
+    initialMessageCount: 0,
+    detailMessageCount: 1,
+    initialMessages: 0,
+    deferMessagesResponse: true,
+  });
+  const listResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/proposals" && response.request().method() === "GET"
+    );
+  });
+
+  await page.goto(`/antraege?id=${PROPOSAL_ID}`);
+  await listResponse;
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => requestAnimationFrame(() => resolve())),
+  );
+  governance.releaseMessagesResponse();
+  await page.getByLabel("Beitrag verfassen").fill("Zweiter belegter Beitrag");
+  await page.getByRole("button", { name: "Beitrag senden" }).click();
+  await expect(page.getByText("Zweiter belegter Beitrag")).toBeVisible();
+
+  await page.getByRole("link", { name: "Alle Anträge" }).click();
+  await expect(page.getByText("2 Beiträge", { exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Gespräche" }).click();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
+});
+
+test("the conversation view excludes voting proposals without contributions", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: WEBER_ID, role: "weber" },
+  });
+  await installGovernanceRoutes(page, {
+    initialStatus: "voting",
+    initialMessageCount: 0,
+  });
+
+  await page.goto("/antraege?ereignis=gespraech");
+  await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
+  await expect(page.getByText("Weberstatus für Gast im Test")).toHaveCount(0);
+  await expect(
+    page.getByText("Noch gibt es keine Gespräche mit Beiträgen."),
+  ).toBeVisible();
 });
 
 test("a guest reaches the Weber application as a distinct weaving action", async ({

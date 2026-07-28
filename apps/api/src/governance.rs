@@ -110,6 +110,7 @@ pub struct ProposalWithCounts {
     pub voting_until: Option<DateTime<Utc>>,
     pub finalized_at: Option<DateTime<Utc>>,
     pub veto_count: i64,
+    pub message_count: i64,
     pub yes_votes: i64,
     pub no_votes: i64,
     pub abstain_votes: i64,
@@ -314,6 +315,7 @@ pub async fn create_weber_proposal(
         voting_until: None,
         finalized_at: None,
         veto_count: 0,
+        message_count: 0,
         yes_votes: 0,
         no_votes: 0,
         abstain_votes: 0,
@@ -669,6 +671,8 @@ const PROPOSAL_WITH_COUNTS_SELECT: &str = "SELECT p.id::text AS id, p.kind, \
         p.created_at, p.consent_until, p.voting_until, p.finalized_at, \
         (SELECT count(*) FROM governance_vetoes v \
             WHERE v.proposal_id = p.id) AS veto_count, \
+        (SELECT count(*) FROM governance_messages gm \
+            WHERE gm.proposal_id = p.id) AS message_count, \
         (SELECT count(*) FROM governance_votes gv \
             WHERE gv.proposal_id = p.id AND gv.choice = 'ja') AS yes_votes, \
         (SELECT count(*) FROM governance_votes gv \
@@ -690,6 +694,7 @@ fn proposal_from_row(row: &sqlx::postgres::PgRow) -> Result<ProposalWithCounts, 
         voting_until: row.try_get("voting_until")?,
         finalized_at: row.try_get("finalized_at")?,
         veto_count: row.try_get("veto_count")?,
+        message_count: row.try_get("message_count")?,
         yes_votes: row.try_get("yes_votes")?,
         no_votes: row.try_get("no_votes")?,
         abstain_votes: row.try_get("abstain_votes")?,
@@ -1098,6 +1103,12 @@ mod tests {
             );
         }
         assert!(ProposalStatus::from_db("garbage").is_err());
+    }
+
+    #[test]
+    fn proposal_list_projects_canonical_message_counts() {
+        assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("FROM governance_messages gm"));
+        assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("AS message_count"));
     }
 
     #[test]
