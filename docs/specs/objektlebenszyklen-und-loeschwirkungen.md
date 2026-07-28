@@ -181,6 +181,23 @@ zurückgeben:
 }
 ```
 
+Für einen JSONL-Betrieb ohne Conversation-Subsystem lautet die Wirkung:
+
+```json
+{
+  "node_id": "…",
+  "node_state": "removed",
+  "removed_edge_ids": ["…"],
+  "conversation": {
+    "effect": "not_applicable"
+  }
+}
+```
+
+`not_applicable` bedeutet ausschließlich, dass dieser Persistenzpfad keine
+Conversation verwaltet. Es darf nicht als Löschung einer leeren Conversation
+interpretiert werden.
+
 oder bei vorhandenen Beiträgen:
 
 ```json
@@ -197,7 +214,9 @@ oder bei vorhandenen Beiträgen:
 ```
 
 Ein Client darf den Erfolg nicht allein aus einem leeren HTTP-Status ableiten,
-wenn Nebenwirkungen für den Nutzer relevant sind.
+wenn Nebenwirkungen für den Nutzer relevant sind. Bei `archived` bleibt nach
+der Kartenaktualisierung eine sichtbare Quittung mit direktem Link
+`Archiv öffnen` erhalten. Daraus folgt keine allgemeine Archivübersicht.
 
 ## Governance-Konvergenz
 

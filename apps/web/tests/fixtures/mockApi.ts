@@ -18,6 +18,10 @@ import {
 import fs from "node:fs";
 import path from "node:path";
 
+export type MockNodeDeleteConversation =
+  | { effect: "not_applicable" }
+  | { effect: "archived"; archive_id: string; archive_url: string };
+
 export interface MockApiOptions {
   /**
    * Pre-authenticate the mock without going through the dev-login flow.
@@ -25,6 +29,7 @@ export interface MockApiOptions {
    * behaviour exactly.
    */
   auth?: { authenticated: boolean; account_id?: string; role?: string };
+  nodeDeleteConversation?: MockNodeDeleteConversation;
 }
 
 export async function mockApiResponses(
@@ -67,6 +72,9 @@ export async function mockApiResponses(
   let isAuthenticated = options.auth?.authenticated ?? false;
   let currentAccountId = options.auth?.account_id ?? null;
   let currentRole = options.auth?.role ?? "gast";
+  const nodeDeleteConversation = options.nodeDeleteConversation ?? {
+    effect: "not_applicable" as const,
+  };
 
   // Node creates and their server-derived Fäden persist for the lifetime of
   // the mock. There is deliberately no direct edge-create request surface.
@@ -286,7 +294,7 @@ export async function mockApiResponses(
             node_id: nodeId,
             node_state: "removed",
             removed_edge_ids: [],
-            conversation: { effect: "deleted_empty" },
+            conversation: nodeDeleteConversation,
           }),
         });
       }

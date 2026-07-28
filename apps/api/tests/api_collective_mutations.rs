@@ -347,7 +347,7 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
     assert_eq!(receipt["node_id"], "n1");
     assert_eq!(receipt["node_state"], "removed");
     assert_eq!(receipt["removed_edge_ids"], serde_json::json!(["e1"]));
-    assert_eq!(receipt["conversation"]["effect"], "deleted_empty");
+    assert_eq!(receipt["conversation"]["effect"], "not_applicable");
     assert!(state.nodes.read().await.get("n1").is_none());
     assert!(state.edges.read().await.get("e1").is_none());
     assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));

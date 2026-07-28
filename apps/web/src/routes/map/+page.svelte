@@ -486,9 +486,14 @@
   }
 
   async function handleDomainChanged(
-    event: CustomEvent<{ action: "updated" | "deleted" }>,
+    event: CustomEvent<{
+      action: "updated" | "deleted";
+      preservePanel?: boolean;
+    }>,
   ) {
-    if (event.detail.action === "deleted") leaveToNavigation();
+    if (event.detail.action === "deleted" && !event.detail.preservePanel) {
+      leaveToNavigation();
+    }
     await invalidate("weltgewebe:domain-data");
   }
 

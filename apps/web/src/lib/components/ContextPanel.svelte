@@ -31,6 +31,7 @@
     kind: "node";
     id: string;
     action: "updated" | "deleted";
+    preservePanel?: boolean;
   };
   type KompositionPanelHandle = { requestClose: () => void };
   type SheetStage = "compact" | "full";

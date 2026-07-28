@@ -79,7 +79,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await panel.getByRole("tab", { name: "Bearbeiten" }).click();
     page.once("dialog", async (dialog) => {
       expect(dialog.type()).toBe("confirm");
-      expect(dialog.message()).toContain("Knoten wirklich löschen");
+      expect(dialog.message()).toContain("Knoten aus dem Gewebe entfernen");
       await dialog.accept();
     });
     const deleteRequestPromise = page.waitForRequest(
@@ -87,11 +87,53 @@ test.describe("Knoten bearbeiten und löschen", () => {
         request.method() === "DELETE" &&
         /\/api\/nodes\/[^/]+$/.test(new URL(request.url()).pathname),
     );
-    await panel.getByRole("button", { name: "Knoten löschen" }).click();
+    await panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }).click();
     const deleteRequest = await deleteRequestPromise;
     expect(deleteRequest.headers()["if-match"]).toMatch(/^".+"$/);
 
     await expect(panel).toHaveCount(0);
+    await expect(page.locator(".map-marker")).toHaveCount(
+      markerCountBeforeDelete - 1,
+    );
+  });
+
+  test("archivierte Gesprächsbeiträge bleiben nach der Entfernung erreichbar", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: "e2e-weber",
+        role: "weber",
+      },
+      nodeDeleteConversation: {
+        effect: "archived",
+        archive_id: "70000000-0000-4000-8000-000000000001",
+        archive_url:
+          "/api/conversations/70000000-0000-4000-8000-000000000001",
+      },
+    });
+    await page.goto("/map");
+
+    const panel = await openFirstNode(page);
+    const markerCountBeforeDelete = await page.locator(".map-marker").count();
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    page.once("dialog", async (dialog) => {
+      expect(dialog.message()).toContain("Aus dem Gewebe entfernen");
+      await dialog.accept();
+    });
+    await panel
+      .getByRole("button", { name: "Aus dem Gewebe entfernen" })
+      .click();
+
+    const receipt = panel.getByTestId("node-archive-receipt");
+    await expect(receipt).toBeVisible();
+    await expect(
+      receipt.getByRole("link", { name: "Archiv öffnen" }),
+    ).toHaveAttribute(
+      "href",
+      "/api/conversations/70000000-0000-4000-8000-000000000001",
+    );
     await expect(page.locator(".map-marker")).toHaveCount(
       markerCountBeforeDelete - 1,
     );
@@ -159,7 +201,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
       panel.getByRole("button", { name: "Bearbeiten", exact: true }),
     ).toHaveCount(0);
     await expect(
-      panel.getByRole("button", { name: "Knoten löschen" }),
+      panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }),
     ).toHaveCount(0);
 
     const uebersichtTab = panel.getByRole("tab", { name: "Übersicht" });

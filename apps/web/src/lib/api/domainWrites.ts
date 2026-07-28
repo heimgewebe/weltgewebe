@@ -203,6 +203,7 @@ export function replaceNode(
 }
 
 export type NodeDeleteConversationEffect =
+  | { effect: "not_applicable" }
   | { effect: "deleted_empty" }
   | { effect: "archived"; archive_id: string; archive_url: string };
 
@@ -213,13 +214,67 @@ export interface NodeDeleteReceipt {
   conversation: NodeDeleteConversationEffect;
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseNodeDeleteReceipt(
+  value: unknown,
+  expectedNodeId: string,
+): NodeDeleteReceipt {
+  if (!isRecord(value)) {
+    throw new ApiRequestError(502, value);
+  }
+  const removedEdgeIds = value.removed_edge_ids;
+  const conversation = value.conversation;
+  if (
+    value.node_id !== expectedNodeId ||
+    value.node_state !== "removed" ||
+    !Array.isArray(removedEdgeIds) ||
+    !removedEdgeIds.every((edgeId) => typeof edgeId === "string") ||
+    !isRecord(conversation)
+  ) {
+    throw new ApiRequestError(502, value);
+  }
+
+  const effect = conversation.effect;
+  let parsedConversation: NodeDeleteConversationEffect;
+  if (effect === "not_applicable" || effect === "deleted_empty") {
+    parsedConversation = { effect };
+  } else if (
+    effect === "archived" &&
+    typeof conversation.archive_id === "string" &&
+    conversation.archive_id.length > 0 &&
+    typeof conversation.archive_url === "string" &&
+    conversation.archive_url ===
+      `/api/conversations/${conversation.archive_id}`
+  ) {
+    parsedConversation = {
+      effect,
+      archive_id: conversation.archive_id,
+      archive_url: conversation.archive_url,
+    };
+  } else {
+    throw new ApiRequestError(502, value);
+  }
+
+  return {
+    node_id: expectedNodeId,
+    node_state: "removed",
+    removed_edge_ids: [...removedEdgeIds],
+    conversation: parsedConversation,
+  };
+}
+
 /** DELETE /api/nodes/:id — delete a node and report its exact lifecycle effects. */
 export function deleteNode(
   id: string,
   etag?: string,
 ): Promise<NodeDeleteReceipt> {
-  return deleteJson<NodeDeleteReceipt>(
+  return deleteJson<unknown>(
     `/api/nodes/${encodeURIComponent(id)}`,
     etag,
-  ).catch((error) => preserveOnlyMatchingNodeConflict(error, id));
+  )
+    .then((value) => parseNodeDeleteReceipt(value, id))
+    .catch((error) => preserveOnlyMatchingNodeConflict(error, id));
 }
