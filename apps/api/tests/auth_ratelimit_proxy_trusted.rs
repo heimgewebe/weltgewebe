@@ -148,3 +148,39 @@ async fn rate_limit_respects_forwarded_header_when_trusted() -> Result<()> {
 
     Ok(())
 }
+
+#[tokio::test]
+#[serial]
+async fn ambiguous_forwarded_chains_share_the_transport_peer_bucket() -> Result<()> {
+    let _guard = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+
+    let mut config = default_config();
+    config.auth_rl_ip_per_min = Some(2);
+    let app = app(test_state(config)?);
+
+    let request = |xff: &'static str, email: &'static str| {
+        Request::post("/auth/magic-link/request")
+            .header("Content-Type", "application/json")
+            .header("X-Forwarded-For", xff)
+            .body(body::Body::from(format!(r#"{{"email":"{email}"}}"#)))
+    };
+
+    let first = app
+        .clone()
+        .oneshot(request("1.2.3.4, 10.0.0.1", "a@example.com")?)
+        .await?;
+    assert_eq!(first.status(), StatusCode::OK);
+
+    let second = app
+        .clone()
+        .oneshot(request("5.6.7.8, 10.0.0.1", "b@example.com")?)
+        .await?;
+    assert_eq!(second.status(), StatusCode::OK);
+
+    let third = app
+        .oneshot(request("9.10.11.12, 10.0.0.1", "c@example.com")?)
+        .await?;
+    assert_eq!(third.status(), StatusCode::TOO_MANY_REQUESTS);
+
+    Ok(())
+}

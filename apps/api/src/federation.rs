@@ -28,7 +28,7 @@ use tokio::sync::RwLock;
 use url::Url;
 use uuid::Uuid;
 
-use crate::routes::auth::effective_client_ip;
+use crate::routes::auth::client_ip_or_peer;
 
 pub const FEDERATION_PROTOCOL_VERSION: &str = "wg-federation/1";
 pub const FEDERATION_SCHEMA_VERSION: u16 = 1;
@@ -1741,7 +1741,7 @@ async fn receive_rate_limit_guard(
     next: Next,
 ) -> Result<Response, ApiError> {
     if let Some(connect_info) = request.extensions().get::<ConnectInfo<SocketAddr>>() {
-        let client_ip = effective_client_ip(connect_info.0, request.headers());
+        let client_ip = client_ip_or_peer(connect_info.0, request.headers(), "federation-receive");
         if !service.allow_receive_client(&client_ip.to_string()) {
             return Err(ApiError::too_many_requests(
                 "federation client receive rate limit exceeded",
@@ -1766,7 +1766,8 @@ async fn object_read_rate_limit_guard(
     next: Next,
 ) -> Result<Response, ApiError> {
     if let Some(connect_info) = request.extensions().get::<ConnectInfo<SocketAddr>>() {
-        let client_ip = effective_client_ip(connect_info.0, request.headers());
+        let client_ip =
+            client_ip_or_peer(connect_info.0, request.headers(), "federation-object-read");
         if !service.allow_object_read_client(&client_ip.to_string()) {
             return Err(ApiError::too_many_requests(
                 "federation client object read rate limit exceeded",
@@ -2058,6 +2059,8 @@ fn identity_from_env() -> anyhow::Result<Option<CellIdentity>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::test_helpers::EnvGuard;
+    use serial_test::serial;
 
     fn identity(cell_id: &str, seed: u8) -> CellIdentity {
         CellIdentity::new(
@@ -2067,6 +2070,29 @@ mod tests {
             [seed; 32],
         )
         .expect("test identity")
+    }
+
+    #[test]
+    #[serial]
+    fn federation_prefilter_groups_ambiguous_xff_under_proxy_peer() {
+        let _guard = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+        let peer: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        let mut headers = axum::http::HeaderMap::new();
+        headers.insert(
+            "X-Forwarded-For",
+            "203.0.113.7, 198.51.100.9".parse().unwrap(),
+        );
+        let client_ip = client_ip_or_peer(peer, &headers, "federation-receive-test");
+        assert_eq!(client_ip, peer.ip());
+
+        let service = FederationService::new(
+            identity("cell-a", 1),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        for _ in 0..RECEIVE_RATE_PER_CLIENT {
+            assert!(service.allow_receive_client(&client_ip.to_string()));
+        }
+        assert!(!service.allow_receive_client(&client_ip.to_string()));
     }
 
     #[test]
