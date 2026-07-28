@@ -330,6 +330,21 @@ implementations:
       - scripts/tests/test_weltgewebe_up_deploy_scope.sh
       - .github/workflows/production-live-contract.yml
 
+  - id: impl.guard.secure-receipt-io
+    path: scripts/ops/weltgewebe_secure_receipt_io.py
+    impl_type: guard
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/merge-to-live.md
+      - docs/deployment.md
+    verified_by:
+      - scripts/ci/tests/test_secure_receipt_io.py
+      - scripts/ci/tests/test_production_reconciler_contract.py
+      - scripts/ci/tests/test_verify_public_release_commit.py
+      - .github/workflows/production-live-contract.yml
+
   - id: impl.guard.kubernetes-platform
     path: scripts/platform/validate_platform.py
     impl_type: guard

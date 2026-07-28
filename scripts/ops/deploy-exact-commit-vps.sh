@@ -2,6 +2,11 @@
 set -Eeuo pipefail
 umask 022
 
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+run_ops_python() {
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}
+
 SOURCE_CHECKOUT="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 RELEASE_ROOT="${WELTGEWEBE_RELEASE_ROOT:-/opt/weltgewebe-releases}"
 RUNTIME_ENV="${WELTGEWEBE_RUNTIME_ENV:-/etc/weltgewebe/weltgewebe.env}"
@@ -82,7 +87,7 @@ write_lock_contention_receipt() {
   else
     receipt="$legacy_receipt"
   fi
-  python3 - "$receipt" "$legacy_receipt" "$PRODUCTION_LOCK_DOMAIN" \
+  run_ops_python "$receipt" "$legacy_receipt" "$PRODUCTION_LOCK_DOMAIN" \
     "$PRODUCTION_LOCK_FILE" "$lock_owner_entrypoint" "$COMMIT" \
     "$deploy_invocation_id" << 'PY'
 import json
@@ -92,6 +97,8 @@ import stat
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
+from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])
 legacy_path = Path(sys.argv[2])
@@ -107,67 +114,9 @@ payload = {
     "deploy_invocation_id": sys.argv[7] or None,
     "recorded_at": datetime.now(timezone.utc).isoformat(),
 }
-def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-    directory_fd = os.open(path.parent, directory_flags)
-    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
-    temporary_created = False
-    try:
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
-
-        file_flags = (
-            os.O_WRONLY
-            | os.O_CREAT
-            | os.O_EXCL
-            | os.O_CLOEXEC
-            | os.O_NOFOLLOW
-        )
-        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
-        temporary_created = True
-        try:
-            os.fchmod(file_fd, 0o600)
-            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
-                json.dump(payload, handle, sort_keys=True, indent=2)
-                handle.write("\n")
-                handle.flush()
-                os.fsync(file_fd)
-            metadata = os.fstat(file_fd)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != 0
-                or metadata.st_nlink != 1
-                or metadata.st_mode & 0o777 != 0o600
-            ):
-                raise SystemExit("temporary receipt metadata is unsafe")
-        finally:
-            os.close(file_fd)
-
-        os.replace(
-            temporary_name,
-            path.name,
-            src_dir_fd=directory_fd,
-            dst_dir_fd=directory_fd,
-        )
-        temporary_created = False
-        os.fsync(directory_fd)
-    finally:
-        if temporary_created:
-            try:
-                os.unlink(temporary_name, dir_fd=directory_fd)
-            except FileNotFoundError:
-                pass
-        os.close(directory_fd)
-
-
-write_atomic_root_json(path, payload)
+write_secure_json(path, payload)
 if legacy_path != path:
-    write_atomic_root_json(legacy_path, payload)
+    write_secure_json(legacy_path, payload)
 PY
   printf '%s\n' "$receipt"
 }
@@ -236,7 +185,7 @@ acquire_production_lock() {
 write_bounded_response() {
   local output="$1"
   local limit="$2"
-  python3 -c '
+  python3 -I -c '
 import os
 import sys
 from pathlib import Path
@@ -270,7 +219,7 @@ write_deploy_receipt() {
   local frontend_commit_value="$4"
   local observed_main="$5"
   local receipt="$STATE_ROOT/receipts/$COMMIT.json"
-  python3 - "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
+  run_ops_python "$receipt" "$COMMIT" "$WEB_SHA256" "$started_at" "$completed_at" \
     "$api_commit_value" "$frontend_commit_value" "$observed_main" "$migration_completed_at" \
     "$PRODUCTION_LOCK_DOMAIN" "$lock_owner_entrypoint" "$lock_handoff" "$result" \
     "$deploy_invocation_id" << 'PY'
@@ -280,6 +229,8 @@ import secrets
 import stat
 import sys
 from pathlib import Path
+sys.path.insert(0, os.environ["WELTGEWEBE_OPS_SCRIPT_DIR"])
+from weltgewebe_secure_receipt_io import (SecureMetadataError, SecurePayloadError, read_secure_json, write_secure_json)
 
 path = Path(sys.argv[1])
 payload = {
@@ -299,65 +250,7 @@ payload = {
     "result": sys.argv[13],
     "deploy_invocation_id": sys.argv[14] or None,
 }
-def write_atomic_root_json(path: Path, payload: dict[str, object]) -> None:
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_CLOEXEC | os.O_NOFOLLOW
-    directory_fd = os.open(path.parent, directory_flags)
-    temporary_name = f".{path.name}.{os.getpid()}.{secrets.token_hex(8)}.tmp"
-    temporary_created = False
-    try:
-        directory_metadata = os.fstat(directory_fd)
-        if (
-            not stat.S_ISDIR(directory_metadata.st_mode)
-            or directory_metadata.st_uid != 0
-            or directory_metadata.st_mode & 0o022
-        ):
-            raise SystemExit(f"receipt directory is unsafe: {path.parent}")
-
-        file_flags = (
-            os.O_WRONLY
-            | os.O_CREAT
-            | os.O_EXCL
-            | os.O_CLOEXEC
-            | os.O_NOFOLLOW
-        )
-        file_fd = os.open(temporary_name, file_flags, 0o600, dir_fd=directory_fd)
-        temporary_created = True
-        try:
-            os.fchmod(file_fd, 0o600)
-            with os.fdopen(file_fd, "w", encoding="utf-8", closefd=False) as handle:
-                json.dump(payload, handle, sort_keys=True, indent=2)
-                handle.write("\n")
-                handle.flush()
-                os.fsync(file_fd)
-            metadata = os.fstat(file_fd)
-            if (
-                not stat.S_ISREG(metadata.st_mode)
-                or metadata.st_uid != 0
-                or metadata.st_nlink != 1
-                or metadata.st_mode & 0o777 != 0o600
-            ):
-                raise SystemExit("temporary receipt metadata is unsafe")
-        finally:
-            os.close(file_fd)
-
-        os.replace(
-            temporary_name,
-            path.name,
-            src_dir_fd=directory_fd,
-            dst_dir_fd=directory_fd,
-        )
-        temporary_created = False
-        os.fsync(directory_fd)
-    finally:
-        if temporary_created:
-            try:
-                os.unlink(temporary_name, dir_fd=directory_fd)
-            except FileNotFoundError:
-                pass
-        os.close(directory_fd)
-
-
-write_atomic_root_json(path, payload)
+write_secure_json(path, payload)
 PY
 }
 
