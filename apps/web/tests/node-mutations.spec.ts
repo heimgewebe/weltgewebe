@@ -174,18 +174,16 @@ test.describe("Knoten bearbeiten und löschen", () => {
       .getByRole("button", { name: "Aus dem Gewebe entfernen" })
       .click();
 
-    const receipt = panel.getByTestId("node-archive-receipt");
+    const receipt = panel.getByRole("link", { name: "Archiv öffnen" });
     await expect(receipt).toBeVisible();
-    await expect(
-      receipt.getByRole("link", { name: "Archiv öffnen" }),
-    ).toHaveAttribute(
+    await expect(receipt).toHaveAttribute(
       "href",
       "/archive?id=70000000-0000-4000-8000-000000000001",
     );
     await expect(page.locator(".map-marker")).toHaveCount(
       markerCountBeforeDelete - 1,
     );
-    await receipt.getByRole("link", { name: "Archiv öffnen" }).click();
+    await receipt.click();
     await expect(page).toHaveURL(
       /\/archive\?id=70000000-0000-4000-8000-000000000001$/,
     );

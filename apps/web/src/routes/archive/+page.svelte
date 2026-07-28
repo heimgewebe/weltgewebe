@@ -1,13 +1,10 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
-  import { get } from "svelte/store";
-  import { page } from "$app/stores";
   import {
     ArchiveConversationApiError,
     loadArchivedConversation,
     type ArchivedConversationView,
   } from "$lib/api/archiveConversation";
-  import { formatDate } from "$lib/utils/formatDate";
 
   type ArchiveState =
     | "overview"
@@ -29,6 +26,12 @@
   let state: ArchiveState = "overview";
   let archive: ArchivedConversationView | null = null;
   let controller: AbortController | null = null;
+  const archiveDate = new Intl.DateTimeFormat("de-DE", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 
   function classifyError(error: unknown): ArchiveState {
     if (error instanceof ArchiveConversationApiError) {
@@ -40,7 +43,9 @@
   }
 
   onMount(() => {
-    const conversationId = get(page).url.searchParams.get("id");
+    const conversationId = new URLSearchParams(window.location.search).get(
+      "id",
+    );
     if (conversationId === null) {
       state = "overview";
       return;
@@ -143,7 +148,7 @@
           <dt>Archiviert</dt>
           <dd>
             <time datetime={archive.conversation.archived_at}>
-              {formatDate(archive.conversation.archived_at)}
+              {archiveDate.format(new Date(archive.conversation.archived_at))}
             </time>
           </dd>
         </div>
@@ -166,7 +171,7 @@
                     {message.author_title}
                   </h3>
                   <time datetime={message.created_at}>
-                    {formatDate(message.created_at)}
+                    {archiveDate.format(new Date(message.created_at))}
                   </time>
                 </header>
                 {#if message.deleted_at}
