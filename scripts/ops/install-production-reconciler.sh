@@ -121,6 +121,7 @@ stage_file scripts/ops/deploy-exact-commit-vps.sh weltgewebe-deploy-exact-commit
 stage_file scripts/ops/reconcile-production-main-vps.sh weltgewebe-reconcile-production-main 0755
 stage_file scripts/ops/validate_web_deploy_archive.py weltgewebe-validate-web-deploy-archive 0755
 stage_file scripts/ops/verify_public_release_commit.py weltgewebe-verify-public-release 0755
+stage_file scripts/ops/weltgewebe_secure_receipt_io.py weltgewebe_secure_receipt_io.py 0644
 stage_file infra/systemd/system/weltgewebe-production-reconcile.service weltgewebe-production-reconcile.service 0644
 stage_file infra/systemd/system/weltgewebe-production-reconcile.timer weltgewebe-production-reconcile.timer 0644
 
@@ -128,9 +129,14 @@ bash -n "$staging/weltgewebe-deploy-exact-commit"
 bash -n "$staging/weltgewebe-reconcile-production-main"
 python3 -m py_compile \
   "$staging/weltgewebe-validate-web-deploy-archive" \
-  "$staging/weltgewebe-verify-public-release"
+  "$staging/weltgewebe-verify-public-release" \
+  "$staging/weltgewebe_secure_receipt_io.py"
 
 install -d -o root -g root -m 0755 /usr/local/libexec
+# Install the dependency before any entrypoint begins importing it. Old
+# entrypoints ignore this file, so both sides of the rollout remain executable.
+atomic_install "$staging/weltgewebe_secure_receipt_io.py" \
+  /usr/local/libexec/weltgewebe_secure_receipt_io.py 0644
 atomic_install "$staging/weltgewebe-deploy-exact-commit" \
   /usr/local/libexec/weltgewebe-deploy-exact-commit 0755
 atomic_install "$staging/weltgewebe-reconcile-production-main" \
@@ -147,6 +153,8 @@ require_matching_sha256 "$staging/weltgewebe-validate-web-deploy-archive" \
   /usr/local/libexec/weltgewebe-validate-web-deploy-archive
 require_matching_sha256 "$staging/weltgewebe-verify-public-release" \
   /usr/local/libexec/weltgewebe-verify-public-release
+require_matching_sha256 "$staging/weltgewebe_secure_receipt_io.py" \
+  /usr/local/libexec/weltgewebe_secure_receipt_io.py
 systemd-analyze verify \
   "$staging/weltgewebe-production-reconcile.service" \
   "$staging/weltgewebe-production-reconcile.timer"
@@ -182,6 +190,7 @@ manifest="/var/lib/weltgewebe-main-reconciler/installed-contract.sha256"
     /usr/local/libexec/weltgewebe-reconcile-production-main \
     /usr/local/libexec/weltgewebe-validate-web-deploy-archive \
     /usr/local/libexec/weltgewebe-verify-public-release \
+    /usr/local/libexec/weltgewebe_secure_receipt_io.py \
     /etc/systemd/system/weltgewebe-production-reconcile.service \
     /etc/systemd/system/weltgewebe-production-reconcile.timer
 } > "$staging/installed-contract.sha256"
