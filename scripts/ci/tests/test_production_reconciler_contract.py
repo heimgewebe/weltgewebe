@@ -261,6 +261,13 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         ):
             self.assertNotIn(forbidden, script)
 
+    def test_secure_receipt_helper_is_in_critical_impl_registry(self) -> None:
+        registry = self.read("audit/impl-registry.yaml")
+        self.assertIn("id: impl.guard.secure-receipt-io", registry)
+        self.assertIn("path: scripts/ops/weltgewebe_secure_receipt_io.py", registry)
+        self.assertIn("scripts/ci/tests/test_secure_receipt_io.py", registry)
+        self.assertIn(".github/workflows/production-live-contract.yml", registry)
+
     def test_public_verifier_writes_receipts_through_safe_descriptors(self) -> None:
         script = self.read("scripts/ops/verify_public_release_commit.py")
         receipt_io = self.read("scripts/ops/weltgewebe_secure_receipt_io.py")
