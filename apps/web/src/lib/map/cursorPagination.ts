@@ -32,6 +32,8 @@ export type CursorPaginationOptions = {
   maxItems?: number;
 };
 
+export type MapResourceTransport = "cursor" | "static-list";
+
 type FetchLike = (input: string) => Promise<Response>;
 
 type CursorEnvelope<T> = {
@@ -258,6 +260,7 @@ export type MapResourceLoad = {
 export async function loadMapResources(
   fetcher: FetchLike,
   apiUrl: string,
+  transport: MapResourceTransport = "cursor",
 ): Promise<MapResourceLoad> {
   const resourceStatus: MapResourceStatus[] = [];
 
@@ -268,7 +271,7 @@ export async function loadMapResources(
     try {
       const endpoint = `${apiUrl}/api/${resource}`;
       const result =
-        apiUrl.length === 0
+        transport === "static-list"
           ? await fetchCompleteStaticList<T>(fetcher, endpoint)
           : await fetchCursorPages<T>(fetcher, endpoint);
       resourceStatus.push(

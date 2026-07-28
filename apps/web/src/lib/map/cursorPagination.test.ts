@@ -173,6 +173,25 @@ describe("loadMapResources", () => {
     expect(result.loadNotice).toBeNull();
   });
 
+  it("uses cursor transport by default for relative same-origin APIs", async () => {
+    const fetcher = vi.fn(async () => page([], false, null, 1000));
+
+    const result = await loadMapResources(fetcher, "");
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/nodes?pagination=cursor&limit=1000",
+      "/api/accounts?pagination=cursor&limit=1000",
+      "/api/edges?pagination=cursor&limit=1000",
+    ]);
+    expect(result.resourceStatus).toEqual([
+      { resource: "nodes", status: "complete", loaded: 0, pages: 1 },
+      { resource: "accounts", status: "complete", loaded: 0, pages: 1 },
+      { resource: "edges", status: "complete", loaded: 0, pages: 1 },
+    ]);
+    expect(result.loadState).toBe("ok");
+    expect(result.loadNotice).toBeNull();
+  });
+
   it("loads the built-in static demo endpoints as complete bare arrays", async () => {
     const staticResources: Record<string, unknown[]> = {
       nodes: [{ id: "node-1" }],
@@ -189,7 +208,7 @@ describe("loadMapResources", () => {
       });
     });
 
-    const result = await loadMapResources(fetcher, "");
+    const result = await loadMapResources(fetcher, "", "static-list");
 
     expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
       "/api/nodes",
