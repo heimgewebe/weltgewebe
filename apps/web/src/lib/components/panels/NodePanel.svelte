@@ -290,7 +290,11 @@
     try {
       const receipt = await deleteNode(id, nodeDetails?.updated_at);
       if (receipt.conversation.effect === "archived") {
-        archiveReceipt = receipt.conversation;
+        archiveReceipt = {
+          ...receipt.conversation,
+          archive_url:
+            `/archive?id=${encodeURIComponent(receipt.conversation.archive_id)}`,
+        };
         editing = false;
         activeTab = "uebersicht";
         dispatch("domainChanged", { kind: "node", id, action: "archived" });
