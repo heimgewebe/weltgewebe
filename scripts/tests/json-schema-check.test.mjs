@@ -43,6 +43,10 @@ test("compiles draft-07 and validates positive and negative data", () => {
 
     assert.equal(run("compile", "--schema", schema).status, 0);
     assert.equal(
+      run("compile", "--schema", schema, "--spec", "draft7").status,
+      0,
+    );
+    assert.equal(
       run("validate", "--schema", schema, "--data", valid).status,
       0,
     );
@@ -77,7 +81,7 @@ test("auto-detects draft 2020-12 and loads formats", () => {
   }
 });
 
-test("rejects unsupported schema declarations instead of guessing", () => {
+test("rejects unsupported schema declarations even with an explicit spec", () => {
   const directory = fixtureDirectory();
   try {
     const schema = join(directory, "schema.json");
@@ -89,9 +93,34 @@ test("rejects unsupported schema declarations instead of guessing", () => {
       }),
     );
 
-    const result = run("compile", "--schema", schema);
+    for (const arguments_ of [
+      ["compile", "--schema", schema],
+      ["compile", "--schema", schema, "--spec", "draft7"],
+    ]) {
+      const result = run(...arguments_);
+      assert.equal(result.status, 2);
+      assert.match(result.stderr, /unsupported schema \$schema/);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("rejects an explicit spec that conflicts with the schema declaration", () => {
+  const directory = fixtureDirectory();
+  try {
+    const schema = join(directory, "schema.json");
+    writeFileSync(
+      schema,
+      JSON.stringify({
+        $schema: "https://json-schema.org/draft/2020-12/schema",
+        type: "object",
+      }),
+    );
+
+    const result = run("compile", "--schema", schema, "--spec", "draft7");
     assert.equal(result.status, 2);
-    assert.match(result.stderr, /unsupported schema \$schema/);
+    assert.match(result.stderr, /conflicts with schema \$schema/);
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
