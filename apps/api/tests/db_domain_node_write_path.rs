@@ -1103,7 +1103,360 @@ async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
     Ok(())
 }
 
-/// J. An account-scoped operation survives a simulated API restart. The first
+/// J. Every real node edit projects one additional seven-day activity Faden.
+/// A semantically empty patch keeps the node version and must not inflate the
+/// hotspot. The initial create Faden is included in the asserted counts.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() -> Result<()> {
+    const ACTOR_ID: &str = "10000000-0000-4000-8000-000000000013";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, _state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let created_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"Aktiver Knoten","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.55,"lon":9.99}}"#,
+        ))
+        .await?;
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(created_response.into_body(), usize::MAX).await?)?;
+    let node_id = created["id"].as_str().context("created node id")?;
+    let created_version = created["updated_at"]
+        .as_str()
+        .context("created node updated_at")?;
+    let persisted_create_version: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT updated_at FROM domain_nodes WHERE id = $1")
+            .bind(node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(created_version, persisted_create_version.to_rfc3339());
+    let created_etag = format!("\"{created_version}\"");
+
+    let initial_edge_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(initial_edge_count, 1, "node creation projects one Faden");
+
+    let patched_response = app
+        .clone()
+        .oneshot(patch_node_req(
+            &cookie,
+            node_id,
+            r#"{"info":"Gemeinsam bearbeitet"}"#,
+            &created_etag,
+        ))
+        .await?;
+    assert_eq!(patched_response.status(), StatusCode::OK);
+    let patched: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(patched_response.into_body(), usize::MAX).await?)?;
+    let patched_etag = format!(
+        "\"{}\"",
+        patched["updated_at"]
+            .as_str()
+            .context("patched node updated_at")?
+    );
+    assert_ne!(patched["updated_at"], created["updated_at"]);
+
+    let after_patch_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(after_patch_count, 2, "a real patch adds one activity Faden");
+
+    let lifetimes: Vec<f64> = sqlx::query_scalar(
+        "SELECT EXTRACT(EPOCH FROM ((payload->>'expires_at')::timestamptz - created_at))::double precision
+         FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(lifetimes.len(), 2);
+    assert!(
+        lifetimes
+            .iter()
+            .all(|seconds| (*seconds - 604_800.0).abs() < 0.001),
+        "every projected Faden must expire exactly 168 hours after creation: {lifetimes:?}",
+    );
+
+    let noop_response = app
+        .clone()
+        .oneshot(patch_node_req(&cookie, node_id, r#"{}"#, &patched_etag))
+        .await?;
+    assert_eq!(noop_response.status(), StatusCode::OK);
+    let noop: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(noop_response.into_body(), usize::MAX).await?)?;
+    assert_eq!(noop["updated_at"], patched["updated_at"]);
+    let after_noop_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_noop_count, 2,
+        "an empty patch must not inflate the activity hotspot",
+    );
+
+    let identical_info_response = app
+        .clone()
+        .oneshot(patch_node_req(
+            &cookie,
+            node_id,
+            r#"{"info":"Gemeinsam bearbeitet"}"#,
+            &patched_etag,
+        ))
+        .await?;
+    assert_eq!(identical_info_response.status(), StatusCode::OK);
+    let identical_info: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(identical_info_response.into_body(), usize::MAX).await?,
+    )?;
+    assert_eq!(identical_info["updated_at"], patched["updated_at"]);
+
+    let identical_visibility_response = app
+        .clone()
+        .oneshot(patch_node_req(
+            &cookie,
+            node_id,
+            r#"{"search_visibility":"public"}"#,
+            &patched_etag,
+        ))
+        .await?;
+    assert_eq!(identical_visibility_response.status(), StatusCode::OK);
+    let identical_visibility: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(identical_visibility_response.into_body(), usize::MAX).await?,
+    )?;
+    assert_eq!(identical_visibility["updated_at"], patched["updated_at"]);
+    let after_semantic_noops: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_semantic_noops, 2,
+        "identical info and visibility patches must not inflate the activity hotspot",
+    );
+
+    let replaced_response = app
+        .clone()
+        .oneshot(replace_node_req(
+            &cookie,
+            node_id,
+            "Aktiver Knoten – überarbeitet",
+            &patched_etag,
+        ))
+        .await?;
+    assert_eq!(replaced_response.status(), StatusCode::OK);
+    let replaced: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(replaced_response.into_body(), usize::MAX).await?)?;
+    assert_ne!(replaced["updated_at"], patched["updated_at"]);
+
+    let after_replace_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_replace_count, 3,
+        "a full replacement adds one activity Faden"
+    );
+
+    let replaced_etag = format!(
+        "\"{}\"",
+        replaced["updated_at"]
+            .as_str()
+            .context("replaced node updated_at")?
+    );
+    let identical_replace_response = app
+        .clone()
+        .oneshot(replace_node_req(
+            &cookie,
+            node_id,
+            "Aktiver Knoten – überarbeitet",
+            &replaced_etag,
+        ))
+        .await?;
+    assert_eq!(identical_replace_response.status(), StatusCode::OK);
+    let identical_replace: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(identical_replace_response.into_body(), usize::MAX).await?,
+    )?;
+    assert_eq!(identical_replace["updated_at"], replaced["updated_at"]);
+    let after_identical_replace: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_identical_replace, 3,
+        "an identical full replacement must not inflate the activity hotspot",
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// J2. The post-commit edit projection retains the per-node advisory guard.
+/// A concurrent deletion cannot pass the edit between its durable node write
+/// and the derived Faden; after the edit completes, deletion removes both the
+/// node and every activity edge without leaving an orphan.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_edit_projection_serializes_with_delete() -> Result<()> {
+    const ACTOR_ID: &str = "10000000-0000-4000-8000-000000000014";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, _state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let created_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"Race node","kind":"Werkstatt","address":"Musterstraße 2","location":{"lat":53.56,"lon":9.98}}"#,
+        ))
+        .await?;
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(created_response.into_body(), usize::MAX).await?)?;
+    let node_id = created["id"]
+        .as_str()
+        .context("created race node id")?
+        .to_string();
+    let created_version = created["updated_at"]
+        .as_str()
+        .context("created race node updated_at")?
+        .to_string();
+    let created_etag = format!("\"{created_version}\"");
+
+    // Hold the edge table after node creation. The patch can commit its node
+    // row, but its derived edge must wait while the outer node guard remains held.
+    let mut edge_blocker = pool.begin().await.context("begin edge blocker")?;
+    sqlx::query("LOCK TABLE domain_edges IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *edge_blocker)
+        .await
+        .context("block activity edge projection")?;
+
+    let patch_app = app.clone();
+    let patch_cookie = cookie.clone();
+    let patch_node_id = node_id.clone();
+    let mut patch_task = tokio::spawn(async move {
+        patch_app
+            .oneshot(patch_node_req(
+                &patch_cookie,
+                &patch_node_id,
+                r#"{"info":"race update"}"#,
+                &created_etag,
+            ))
+            .await
+    });
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let current: chrono::DateTime<chrono::Utc> =
+            sqlx::query_scalar("SELECT updated_at FROM domain_nodes WHERE id = $1")
+                .bind(&node_id)
+                .fetch_one(&pool)
+                .await?;
+        if current.to_rfc3339() != created_version {
+            break;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            anyhow::bail!("patch did not commit its node update before projection timeout");
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), &mut patch_task)
+            .await
+            .is_err(),
+        "patch must still be waiting for the blocked Faden projection",
+    );
+
+    let delete_pool = pool.clone();
+    let delete_node_id = node_id.clone();
+    let mut delete_task = tokio::spawn(async move {
+        let mut guard = delete_pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(node_mutation_lock_key(&delete_node_id))
+            .execute(&mut *guard)
+            .await?;
+        let outcome = delete_node_with_edges_in_postgres(&delete_pool, &delete_node_id).await?;
+        guard.commit().await?;
+        Ok::<_, anyhow::Error>(outcome)
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut delete_task)
+            .await
+            .is_err(),
+        "delete must wait while edit projection owns the per-node guard",
+    );
+
+    edge_blocker
+        .commit()
+        .await
+        .context("release edge blocker")?;
+    let patch_response = patch_task.await.context("join guarded patch")??;
+    assert_eq!(patch_response.status(), StatusCode::OK);
+
+    let delete_outcome = delete_task.await.context("join serialized delete")??;
+    assert!(
+        !delete_outcome.removed_edge_ids.is_empty(),
+        "serialized delete must remove the projected activity edges",
+    );
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(&node_id)
+            .fetch_one(&pool)
+            .await?;
+    let edge_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM domain_edges WHERE target_id = $1")
+            .bind(&node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!node_exists, "serialized delete must remove the node");
+    assert_eq!(
+        edge_count, 0,
+        "serialized delete must leave no orphan Faden"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K. An account-scoped operation survives a simulated API restart. The first
 /// request returns 201; the same semantic request from a newly built app returns
 /// the existing node with 200; changed data under the same key returns 409.
 #[tokio::test]

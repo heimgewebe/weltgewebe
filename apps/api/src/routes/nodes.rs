@@ -907,18 +907,100 @@ fn node_create_error_message(err: &node_create::NodeCreateValidationError) -> St
     }
 }
 
-/// Ensure the Faden that visualizes a successful `Knoten knüpfen` action.
+fn node_activity_faden_operation_id(
+    activity_kind: &str,
+    account_id: &str,
+    node_id: &str,
+    action_id: &str,
+) -> String {
+    fn component(value: &str) -> String {
+        format!("{}:{value}", value.len())
+    }
+
+    let name = format!(
+        "weltgewebe:node-activity-faden:v1|{}|{}|{}|{}",
+        component(activity_kind),
+        component(account_id),
+        component(node_id),
+        component(action_id),
+    );
+    Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes()).to_string()
+}
+
+/// Project one recent participation action as an expiring account-to-node
+/// Faden. Every successful edit or new node-conversation contribution gets a
+/// distinct deterministic operation id, while an idempotent replay repairs the
+/// same projection instead of increasing the hotspot twice.
+///
+/// The strict edge contract only admits UUID endpoints. Older imported nodes
+/// and accounts can still carry historical text ids; participation on those
+/// entities must remain available, so the derived projection is skipped with a
+/// structured warning instead of turning a successful domain write into a 500.
+pub(crate) async fn ensure_node_activity_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    node_id: &str,
+    activity_kind: &str,
+    action_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    super::collective_write_guard::run_node_activity_projection(
+        state,
+        node_id,
+        ensure_node_activity_faden_guarded(state, auth, node_id, activity_kind, action_id),
+    )
+    .await
+}
+
+pub(crate) async fn ensure_node_activity_faden_guarded(
+    state: &ApiState,
+    auth: &AuthContext,
+    node_id: &str,
+    activity_kind: &str,
+    action_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    let account_id = auth.account_id.as_deref().ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            "authenticated account context missing".to_string(),
+        )
+    })?;
+    if Uuid::parse_str(account_id).is_err() || Uuid::parse_str(node_id).is_err() {
+        tracing::warn!(
+            event = "node.faden_projection.skipped_legacy_identifier",
+            node_id,
+            account_id,
+            activity_kind,
+            "Recent participation cannot be represented by the UUID-only Faden contract"
+        );
+        return Ok(());
+    }
+
+    let operation_id =
+        node_activity_faden_operation_id(activity_kind, account_id, node_id, action_id);
+    ensure_node_faden_with_operation_id(
+        state,
+        auth,
+        node_id,
+        Some(&operation_id),
+        false,
+        activity_kind,
+    )
+    .await
+}
+
+/// Ensure the Faden that visualizes one successful Webungsaktion.
 ///
 /// The edge writer remains an internal projection primitive. Its HTTP route is
 /// intentionally absent. Reusing the node operation id (or, if absent, the
 /// server-owned node id) makes projection retries idempotent across process
 /// failures and response loss.
-async fn ensure_node_created_faden(
+async fn ensure_node_faden_with_operation_id(
     state: &ApiState,
     auth: &AuthContext,
-    node: &Node,
+    node_id: &str,
     node_operation_id: Option<&str>,
     account_lifecycle_guarded: bool,
+    activity_kind: &str,
 ) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
@@ -947,7 +1029,7 @@ async fn ensure_node_created_faden(
             )
         })?;
         let mut tx = pool.begin().await.map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, "failed to begin node Faden account guard");
+            tracing::error!(%error, account_id = %account_id, node_id, activity_kind, "failed to begin node Faden account guard");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to guard creator account for derived Faden".to_string(),
@@ -960,7 +1042,7 @@ async fn ensure_node_created_faden(
         .fetch_optional(&mut *tx)
         .await
         .map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, "failed to lock creator account for node Faden");
+            tracing::error!(%error, account_id = %account_id, node_id, activity_kind, "failed to lock creator account for node Faden");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to guard creator account for derived Faden".to_string(),
@@ -977,11 +1059,11 @@ async fn ensure_node_created_faden(
         None
     };
 
-    let projection_operation_id = node_operation_id.unwrap_or(node.id.as_str());
+    let projection_operation_id = node_operation_id.unwrap_or(node_id);
     let payload = json!({
         "source_id": account_id,
         "source_type": "account",
-        "target_id": node.id,
+        "target_id": node_id,
         "target_type": "node",
         "edge_kind": "reference",
         "operation_id": projection_operation_id,
@@ -993,8 +1075,9 @@ async fn ensure_node_created_faden(
         .map_err(|(status, message)| {
             tracing::error!(
                 event = "node.faden_projection.failed",
-                node_id = %node.id,
+                node_id,
                 account_id = %account_id,
+                activity_kind,
                 %status,
                 error = %message,
                 "Node is durable but its derived Faden projection failed"
@@ -1007,7 +1090,7 @@ async fn ensure_node_created_faden(
 
     if let Some(tx) = account_guard.take() {
         tx.commit().await.map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, node_id = %node.id, "failed to commit node Faden account guard");
+            tracing::error!(%error, account_id = %account_id, node_id, activity_kind, "failed to commit node Faden account guard");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to finalize derived Faden account guard".to_string(),
@@ -1134,7 +1217,10 @@ pub async fn create_node(
     });
 
     let id = Uuid::new_v4().to_string();
-    let now = chrono::Utc::now().to_rfc3339();
+    // PostgreSQL `timestamptz` stores microseconds. Emit the same precision in
+    // the create response so its `updated_at` is immediately reusable as the
+    // exact `If-Match` value for the first edit.
+    let now = chrono::Utc::now().to_rfc3339_opts(chrono::SecondsFormat::Micros, false);
     let (node, mut record) =
         build_node_record(validated, id.clone(), now, creator_account_id.clone());
     add_create_operation_metadata(&mut record, operation.as_ref());
@@ -1230,12 +1316,13 @@ pub async fn create_node(
                         nodes.insert(existing.id.clone(), existing.clone());
                         state.metrics.set_nodes_cache_count(nodes.len() as i64);
                     }
-                    ensure_node_created_faden(
+                    ensure_node_faden_with_operation_id(
                         &state,
                         &auth,
-                        &existing,
+                        &existing.id,
                         semantic_request.operation_id.as_deref(),
                         false,
+                        "node_create",
                     )
                     .await?;
                     return Ok((StatusCode::OK, Json(existing)));
@@ -1365,12 +1452,13 @@ pub async fn create_node(
                         nodes.insert(existing.id.clone(), existing.clone());
                         state.metrics.set_nodes_cache_count(nodes.len() as i64);
                     }
-                    ensure_node_created_faden(
+                    ensure_node_faden_with_operation_id(
                         &state,
                         &auth,
-                        &existing,
+                        &existing.id,
                         semantic_request.operation_id.as_deref(),
                         postgres_lifecycle_guarded,
+                        "node_create",
                     )
                     .await?;
                     if let Some(tx) = node_create_lifecycle_guard.take() {
@@ -1410,12 +1498,13 @@ pub async fn create_node(
         }
     }
 
-    if let Err(projection_error) = ensure_node_created_faden(
+    if let Err(projection_error) = ensure_node_faden_with_operation_id(
         &state,
         &auth,
-        &node,
+        &node.id,
         semantic_request.operation_id.as_deref(),
         postgres_lifecycle_guarded,
+        "node_create",
     )
     .await
     {
@@ -2699,12 +2788,12 @@ pub async fn replace_node(
         .cloned()
         .ok_or(NodeMutationError::Status(StatusCode::NOT_FOUND))?;
     let mut node = Node {
-        id: existing.id,
+        id: existing.id.clone(),
         kind: validated.kind,
         title: validated.title,
-        created_at: existing.created_at,
-        updated_at: chrono::Utc::now().to_rfc3339(),
-        created_by_account_id: existing.created_by_account_id,
+        created_at: existing.created_at.clone(),
+        updated_at: existing.updated_at.clone(),
+        created_by_account_id: existing.created_by_account_id.clone(),
         search_visibility: validated
             .search_visibility
             .unwrap_or(existing.search_visibility),
@@ -2717,6 +2806,10 @@ pub async fn replace_node(
             lon: validated.lon,
         },
     };
+    if node == existing {
+        return Ok(Json(existing));
+    }
+    node.updated_at = chrono::Utc::now().to_rfc3339();
 
     match state.config.domain_node_write_source {
         DomainNodeWriteSource::Jsonl => {
@@ -3034,24 +3127,35 @@ async fn patch_node_jsonl(
             if should_update {
                 let mut v: Value =
                     serde_json::from_str(&line).map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                let current_projection = map_json_to_node(&v)
+                    .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
-                // Update the field
+                // Compare the public node projection, not just raw JSON shape:
+                // legacy rows without an explicit visibility already mean
+                // `public` and therefore must not advance the version when a
+                // client sends that same effective value.
                 let mut has_changes = false;
                 match &payload.info {
                     Some(Some(s)) => {
-                        v["info"] = Value::String(s.clone());
-                        has_changes = true;
+                        if current_projection.info.as_deref() != Some(s.as_str()) {
+                            v["info"] = Value::String(s.clone());
+                            has_changes = true;
+                        }
                     }
                     Some(None) => {
-                        v["info"] = Value::Null;
-                        has_changes = true;
+                        if current_projection.info.is_some() {
+                            v["info"] = Value::Null;
+                            has_changes = true;
+                        }
                     }
                     None => {} // No-op
                 }
 
                 if let Some(Some(v_enum)) = payload.search_visibility {
-                    v["search_visibility"] = Value::String(v_enum.as_str().to_string());
-                    has_changes = true;
+                    if current_projection.search_visibility != v_enum {
+                        v["search_visibility"] = Value::String(v_enum.as_str().to_string());
+                        has_changes = true;
+                    }
                 }
 
                 // Clean up old "steckbrief" field if it exists (migration logic)
@@ -3279,6 +3383,33 @@ mod search_visibility_mapping_tests {
         wrong_type["search_visibility"] = json!({"scope": "public"});
         let wrong_type = map_json_to_node(&wrong_type).expect("wrong-type visibility fixture");
         assert_eq!(wrong_type.search_visibility, SearchVisibility::Hidden);
+    }
+}
+
+#[cfg(test)]
+mod node_activity_faden_tests {
+    use super::*;
+
+    #[test]
+    fn operation_ids_are_deterministic_and_activity_scoped() {
+        let account = "10000000-0000-4000-8000-000000000001";
+        let node = "20000000-0000-4000-8000-000000000001";
+        let action = "2026-07-29T06:00:00Z";
+        let first = node_activity_faden_operation_id("node_edit", account, node, action);
+        let replay = node_activity_faden_operation_id("node_edit", account, node, action);
+        let contribution =
+            node_activity_faden_operation_id("conversation_message", account, node, action);
+
+        assert_eq!(first, replay);
+        assert_ne!(first, contribution);
+        assert!(Uuid::parse_str(&first).is_ok());
+    }
+
+    #[test]
+    fn length_prefixes_keep_ambiguous_components_distinct() {
+        let left = node_activity_faden_operation_id("ab", "c", "d", "e");
+        let right = node_activity_faden_operation_id("a", "bc", "d", "e");
+        assert_ne!(left, right);
     }
 }
 

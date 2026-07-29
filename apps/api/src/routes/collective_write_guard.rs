@@ -158,24 +158,61 @@ async fn release_node_mutation_guard(guard: NodeMutationGuard) {
     }
 }
 
-async fn run_node_mutation<F>(state: &ApiState, node_id: &str, mutation: F) -> Response
+async fn run_node_mutation<F, T>(
+    state: &ApiState,
+    node_id: &str,
+    mutation: F,
+) -> Result<T, Response>
 where
-    F: Future<Output = Response>,
+    F: Future<Output = Result<T, Response>>,
 {
     // Applicability and storage-mode errors take precedence over HTTP
     // preconditions. This preserves the existing fail-closed write contract
     // and avoids reading or locking a node for a mutation that cannot run.
     if let Err((status, message)) = reject_node_patch_unless_writable(state) {
-        return (status, message).into_response();
+        return Err((status, message).into_response());
     }
 
     let guard = match acquire_node_mutation_guard(state, node_id).await {
         Ok(guard) => guard,
-        Err(response) => return response,
+        Err(response) => return Err(response),
     };
-    let response = mutation.await;
+    let outcome = mutation.await;
     release_node_mutation_guard(guard).await;
-    response
+    outcome
+}
+
+/// Serialize a post-commit activity projection with node deletion. The node is
+/// re-read after the guard is acquired: a projection that lost the race to a
+/// completed deletion becomes a no-op, while a later deletion waits until the
+/// new edge is durable and then removes it in the normal cascade.
+pub(crate) async fn run_node_activity_projection<F>(
+    state: &ApiState,
+    node_id: &str,
+    projection: F,
+) -> Result<(), (StatusCode, String)>
+where
+    F: Future<Output = Result<(), (StatusCode, String)>>,
+{
+    let guard = acquire_node_mutation_guard(state, node_id)
+        .await
+        .map_err(|response| {
+            (
+                response.status(),
+                "failed to acquire node activity projection guard".to_string(),
+            )
+        })?;
+    let node_exists = node_exists_for_activity_projection(state, node_id).await;
+    let outcome = match node_exists {
+        Ok(true) => projection.await,
+        Ok(false) => Ok(()),
+        Err(response) => Err((
+            response.status(),
+            "failed to verify node before activity projection".to_string(),
+        )),
+    };
+    release_node_mutation_guard(guard).await;
+    outcome
 }
 
 pub async fn create_node_serialized(
@@ -186,6 +223,35 @@ pub async fn create_node_serialized(
     nodes::create_node(State(state), Extension(auth), Json(payload))
         .await
         .into_response()
+}
+
+async fn node_exists_for_activity_projection(state: &ApiState, id: &str) -> Result<bool, Response> {
+    if uses_postgres_node_persistence(state) {
+        let pool = state.db_pool.as_ref().ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "PostgreSQL pool unavailable for node activity projection",
+            )
+                .into_response()
+        })?;
+        return sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)",
+        )
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, node_id = %id, "failed to verify node existence for activity projection");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to verify node before activity projection",
+            )
+                .into_response()
+        });
+    }
+
+    let cache = state.nodes.read().await;
+    Ok(cache.get(id).is_some())
 }
 
 async fn current_node_for_precondition(
@@ -272,27 +338,59 @@ pub async fn patch_node_serialized(
     headers: HeaderMap,
     Json(payload): Json<nodes::UpdateNode>,
 ) -> Response {
+    let projection_auth = auth.clone();
+    let mutation_auth = auth;
     let mutation_state = state.clone();
     let mutation_id = id.clone();
-    run_node_mutation(&state, &id, async move {
+    let outcome = run_node_mutation(&state, &id, async move {
         let node = match current_node_for_precondition(&mutation_state, &mutation_id).await {
             Ok(node) => node,
-            Err(response) => return response,
+            Err(response) => return Err(response),
         };
         let Some(current) = node.as_ref() else {
-            return StatusCode::NOT_FOUND.into_response();
+            return Err(StatusCode::NOT_FOUND.into_response());
         };
-        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
-            return (status, message).into_response();
+        if let Err((status, message)) = authorize_node_mutation(&mutation_auth, current) {
+            return Err((status, message).into_response());
         }
+        let previous_updated_at = current.updated_at.clone();
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
-            return *response;
+            return Err(*response);
         }
-        nodes::patch_node(State(mutation_state), Path(mutation_id), Json(payload))
+        let Json(node) = nodes::patch_node(
+            State(mutation_state.clone()),
+            Path(mutation_id),
+            Json(payload),
+        )
+        .await
+        .map_err(|error| error.into_response())?;
+        if node.updated_at != previous_updated_at {
+            if let Err((status, message)) = nodes::ensure_node_activity_faden_guarded(
+                &mutation_state,
+                &projection_auth,
+                &node.id,
+                "node_edit",
+                &node.updated_at,
+            )
             .await
-            .into_response()
+            {
+                tracing::error!(
+                    event = "node.edit_faden_projection.failed",
+                    node_id = %node.id,
+                    %status,
+                    error = %message,
+                    "Node edit remains successful because it is already durable; the derived Faden is missing"
+                );
+            }
+        }
+        Ok(node)
     })
-    .await
+    .await;
+
+    match outcome {
+        Ok(node) => Json(node).into_response(),
+        Err(response) => response,
+    }
 }
 
 pub async fn replace_node_serialized(
@@ -302,27 +400,59 @@ pub async fn replace_node_serialized(
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Response {
+    let projection_auth = auth.clone();
+    let mutation_auth = auth;
     let mutation_state = state.clone();
     let mutation_id = id.clone();
-    run_node_mutation(&state, &id, async move {
+    let outcome = run_node_mutation(&state, &id, async move {
         let node = match current_node_for_precondition(&mutation_state, &mutation_id).await {
             Ok(node) => node,
-            Err(response) => return response,
+            Err(response) => return Err(response),
         };
         let Some(current) = node.as_ref() else {
-            return StatusCode::NOT_FOUND.into_response();
+            return Err(StatusCode::NOT_FOUND.into_response());
         };
-        if let Err((status, message)) = authorize_node_mutation(&auth, current) {
-            return (status, message).into_response();
+        if let Err((status, message)) = authorize_node_mutation(&mutation_auth, current) {
+            return Err((status, message).into_response());
         }
+        let previous_updated_at = current.updated_at.clone();
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
-            return *response;
+            return Err(*response);
         }
-        nodes::replace_node(State(mutation_state), Path(mutation_id), Json(payload))
+        let Json(node) = nodes::replace_node(
+            State(mutation_state.clone()),
+            Path(mutation_id),
+            Json(payload),
+        )
+        .await
+        .map_err(|error| error.into_response())?;
+        if node.updated_at != previous_updated_at {
+            if let Err((status, message)) = nodes::ensure_node_activity_faden_guarded(
+                &mutation_state,
+                &projection_auth,
+                &node.id,
+                "node_edit",
+                &node.updated_at,
+            )
             .await
-            .into_response()
+            {
+                tracing::error!(
+                    event = "node.edit_faden_projection.failed",
+                    node_id = %node.id,
+                    %status,
+                    error = %message,
+                    "Node replacement remains successful because it is already durable; the derived Faden is missing"
+                );
+            }
+        }
+        Ok(node)
     })
-    .await
+    .await;
+
+    match outcome {
+        Ok(node) => Json(node).into_response(),
+        Err(response) => response,
+    }
 }
 
 pub async fn delete_node_serialized(
@@ -333,25 +463,29 @@ pub async fn delete_node_serialized(
 ) -> Response {
     let mutation_state = state.clone();
     let mutation_id = id.clone();
-    run_node_mutation(&state, &id, async move {
+    match run_node_mutation(&state, &id, async move {
         let node = match current_node_for_precondition(&mutation_state, &mutation_id).await {
             Ok(node) => node,
-            Err(response) => return response,
+            Err(response) => return Err(response),
         };
         let Some(current) = node.as_ref() else {
-            return StatusCode::NOT_FOUND.into_response();
+            return Err(StatusCode::NOT_FOUND.into_response());
         };
         if let Err((status, message)) = authorize_node_mutation(&auth, current) {
-            return (status, message).into_response();
+            return Err((status, message).into_response());
         }
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
-            return *response;
+            return Err(*response);
         }
-        nodes::delete_node(State(mutation_state), Path(mutation_id))
+        let response = nodes::delete_node(State(mutation_state), Path(mutation_id))
             .await
-            .into_response()
+            .into_response();
+        Ok(response)
     })
     .await
+    {
+        Ok(response) | Err(response) => response,
+    }
 }
 
 #[cfg(test)]
