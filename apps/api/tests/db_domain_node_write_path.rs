@@ -1103,7 +1103,152 @@ async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
     Ok(())
 }
 
-/// J. An account-scoped operation survives a simulated API restart. The first
+/// J. Every real node edit projects one additional seven-day activity Faden.
+/// A semantically empty patch keeps the node version and must not inflate the
+/// hotspot. The initial create Faden is included in the asserted counts.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() -> Result<()> {
+    const ACTOR_ID: &str = "10000000-0000-4000-8000-000000000013";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, _state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let created_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"Aktiver Knoten","kind":"Werkstatt","address":"Musterstraße 1","location":{"lat":53.55,"lon":9.99}}"#,
+        ))
+        .await?;
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(created_response.into_body(), usize::MAX).await?)?;
+    let node_id = created["id"].as_str().context("created node id")?;
+    let created_version = created["updated_at"]
+        .as_str()
+        .context("created node updated_at")?;
+    let persisted_create_version: chrono::DateTime<chrono::Utc> =
+        sqlx::query_scalar("SELECT updated_at FROM domain_nodes WHERE id = $1")
+            .bind(node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(created_version, persisted_create_version.to_rfc3339());
+    let created_etag = format!("\"{created_version}\"");
+
+    let initial_edge_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(initial_edge_count, 1, "node creation projects one Faden");
+
+    let patched_response = app
+        .clone()
+        .oneshot(patch_node_req(
+            &cookie,
+            node_id,
+            r#"{"info":"Gemeinsam bearbeitet"}"#,
+            &created_etag,
+        ))
+        .await?;
+    assert_eq!(patched_response.status(), StatusCode::OK);
+    let patched: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(patched_response.into_body(), usize::MAX).await?)?;
+    let patched_etag = format!(
+        "\"{}\"",
+        patched["updated_at"]
+            .as_str()
+            .context("patched node updated_at")?
+    );
+    assert_ne!(patched["updated_at"], created["updated_at"]);
+
+    let after_patch_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(after_patch_count, 2, "a real patch adds one activity Faden");
+
+    let lifetimes: Vec<f64> = sqlx::query_scalar(
+        "SELECT EXTRACT(EPOCH FROM ((payload->>'expires_at')::timestamptz - created_at))::double precision
+         FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(lifetimes.len(), 2);
+    assert!(
+        lifetimes
+            .iter()
+            .all(|seconds| (*seconds - 604_800.0).abs() < 0.001),
+        "every projected Faden must expire exactly 168 hours after creation: {lifetimes:?}",
+    );
+
+    let noop_response = app
+        .clone()
+        .oneshot(patch_node_req(&cookie, node_id, r#"{}"#, &patched_etag))
+        .await?;
+    assert_eq!(noop_response.status(), StatusCode::OK);
+    let noop: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(noop_response.into_body(), usize::MAX).await?)?;
+    assert_eq!(noop["updated_at"], patched["updated_at"]);
+    let after_noop_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_noop_count, 2,
+        "an empty patch must not inflate the activity hotspot",
+    );
+
+    let replaced_response = app
+        .clone()
+        .oneshot(replace_node_req(
+            &cookie,
+            node_id,
+            "Aktiver Knoten – überarbeitet",
+            &patched_etag,
+        ))
+        .await?;
+    assert_eq!(replaced_response.status(), StatusCode::OK);
+    let replaced: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(replaced_response.into_body(), usize::MAX).await?)?;
+    assert_ne!(replaced["updated_at"], patched["updated_at"]);
+
+    let after_replace_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_replace_count, 3,
+        "a full replacement adds one activity Faden"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K. An account-scoped operation survives a simulated API restart. The first
 /// request returns 201; the same semantic request from a newly built app returns
 /// the existing node with 200; changed data under the same key returns 409.
 #[tokio::test]
