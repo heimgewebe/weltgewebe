@@ -180,6 +180,7 @@ class ProductionReconcilerContractTests(unittest.TestCase):
             "superseded_after_deploy",
             "superseded_after_verify",
             "verified_observed",
+            "consistent_observed_unattested",
             "verified",
             "failed",
         ):
@@ -193,7 +194,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("web_artifacts[@]:20", script)
         self.assertIn("repair_observed_deployment_state", script)
         self.assertIn('"migration_completed_at": None', script)
-        self.assertIn("original web artifact hash", script)
+        self.assertIn("build provenance is unattested", script)
+        self.assertIn('"schema_version": 6', script)
+        self.assertIn('"attestation_verified": verification.get', script)
         self.assertIn('ln -sfn "receipts/$target_commit.json"', script)
         self.assertIn('chmod 0600 "$artifact"', script)
         self.assertIn('DOCKER_CONFIG="$STATE_ROOT/docker-config"', script)

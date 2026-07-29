@@ -302,14 +302,6 @@ except SecurePayloadError:
     existing = None
 except (OSError, SecureMetadataError) as exc:
     raise SystemExit(f"deployment receipt evidence is unsafe: {exc}") from exc
-if verification.get("pass") is not True:
-    raise SystemExit("public verification receipt is not passing")
-if verification.get("expected_commit") != commit:
-    raise SystemExit("public verification receipt targets another commit")
-frontend = verification.get("frontend") or {}
-api = verification.get("api") or {}
-if frontend.get("commit") != commit or api.get("commit") != commit:
-    raise SystemExit("public verification receipt does not bind both endpoints")
 
 
 def is_lower_hex(value: object, length: int) -> bool:
@@ -353,6 +345,163 @@ def parse_aware_timestamp(value: object) -> datetime | None:
         return parsed.astimezone(timezone.utc)
     except (ValueError, OverflowError):
         return None
+
+
+PUBLIC_VERIFICATION_KEYS = frozenset(
+    {
+        "schema_version",
+        "expected_commit",
+        "verified_at",
+        "pass",
+        "status",
+        "pass_scope",
+        "identity_verified",
+        "artifact_tree_declaration_verified",
+        "attestation_verified",
+        "provenance_status",
+        "reasons",
+        "limitations",
+        "frontend",
+        "api",
+    }
+)
+PUBLIC_ENDPOINT_KEYS = frozenset(
+    {"url", "status", "commit", "version", "headers", "error", "artifact_tree"}
+)
+PUBLIC_ARTIFACT_TREE_KEYS = frozenset(
+    {"schema_version", "sha256", "file_count", "compile_revision", "provenance", "error"}
+)
+PUBLIC_LIMITATIONS = [
+    "the public verifier does not reconstruct the deployed artifact tree",
+    "artifact provenance is explicitly unattested",
+]
+LIMITED_EVIDENCE_BOUNDARY = (
+    "Exact public identity and declared artifact-tree consistency only; "
+    "deployed bytes were not reconstructed and build provenance is unattested."
+)
+SCHEMA6_LIMITED_KEYS = SCHEMA5_VERIFIED_KEYS | {
+    "evidence_boundary",
+    "public_verification_schema_version",
+    "public_verification_status",
+    "public_pass_scope",
+    "identity_verified",
+    "artifact_tree_declaration_verified",
+    "attestation_verified",
+    "artifact_tree_schema_version",
+    "artifact_tree_sha256",
+    "artifact_tree_file_count",
+    "artifact_tree_compile_revision",
+    "artifact_tree_provenance",
+}
+
+
+def validate_limited_public_verification(payload: object) -> dict[str, object]:
+    if not isinstance(payload, dict) or set(payload) != PUBLIC_VERIFICATION_KEYS:
+        raise SystemExit("public verification receipt field matrix is invalid")
+    if (
+        payload.get("schema_version") != 3
+        or payload.get("expected_commit") != commit
+        or payload.get("pass") is not True
+        or payload.get("status") != "consistency_pass_unattested"
+        or payload.get("pass_scope")
+        != "identity_and_declared_artifact_consistency"
+        or payload.get("identity_verified") is not True
+        or payload.get("artifact_tree_declaration_verified") is not True
+        or payload.get("attestation_verified") is not False
+        or payload.get("provenance_status") != "unattested"
+        or payload.get("reasons") != []
+        or payload.get("limitations") != PUBLIC_LIMITATIONS
+        or parse_aware_timestamp(payload.get("verified_at")) is None
+    ):
+        raise SystemExit("public verification receipt is not an exact limited pass")
+
+    checked_endpoints: dict[str, dict[str, object]] = {}
+    for name in ("frontend", "api"):
+        endpoint = payload.get(name)
+        if not isinstance(endpoint, dict) or set(endpoint) != PUBLIC_ENDPOINT_KEYS:
+            raise SystemExit(f"public {name} receipt field matrix is invalid")
+        if (
+            endpoint.get("status") != 200
+            or endpoint.get("commit") != commit
+            or endpoint.get("error") is not None
+            or not isinstance(endpoint.get("headers"), dict)
+        ):
+            raise SystemExit(f"public {name} receipt is not commit-bound")
+        checked_endpoints[name] = endpoint
+
+    frontend_endpoint = checked_endpoints["frontend"]
+    api_endpoint = checked_endpoints["api"]
+    if frontend_endpoint.get("version") != commit[:8]:
+        raise SystemExit("public frontend receipt version is not commit-bound")
+    frontend_headers = frontend_endpoint["headers"]
+    assert isinstance(frontend_headers, dict)
+    if "no-store" not in str(frontend_headers.get("cache-control", "")).lower():
+        raise SystemExit("public frontend receipt lacks no-store evidence")
+    api_headers = api_endpoint["headers"]
+    assert isinstance(api_headers, dict)
+    if (
+        api_headers.get("x-weltgewebe-api-build") != commit
+        or api_headers.get("x-weltgewebe-build") != commit[:8]
+        or api_endpoint.get("artifact_tree") is not None
+    ):
+        raise SystemExit("public API receipt headers are not commit-bound")
+
+    artifact_tree = frontend_endpoint.get("artifact_tree")
+    if not isinstance(artifact_tree, dict) or set(artifact_tree) != PUBLIC_ARTIFACT_TREE_KEYS:
+        raise SystemExit("public artifact-tree receipt field matrix is invalid")
+    file_count = artifact_tree.get("file_count")
+    if (
+        artifact_tree.get("schema_version") != 1
+        or not is_lower_hex(artifact_tree.get("sha256"), 64)
+        or not isinstance(file_count, int)
+        or isinstance(file_count, bool)
+        or not 1 <= file_count <= (1 << 53) - 1
+        or artifact_tree.get("compile_revision") != commit
+        or artifact_tree.get("provenance") != "unattested"
+        or artifact_tree.get("error") is not None
+    ):
+        raise SystemExit("public artifact-tree receipt is not a valid unattested declaration")
+    return artifact_tree
+
+
+def is_current_limited_receipt(
+    payload: object,
+    artifact_tree: dict[str, object],
+) -> bool:
+    if not isinstance(payload, dict) or set(payload) != SCHEMA6_LIMITED_KEYS:
+        return False
+    completed_at = parse_aware_timestamp(payload.get("completed_at"))
+    return (
+        payload.get("schema_version") == 6
+        and payload.get("environment") == "production"
+        and payload.get("commit") == commit
+        and payload.get("web_artifact_sha256") is None
+        and payload.get("started_at") is None
+        and completed_at is not None
+        and payload.get("api_commit") == commit
+        and payload.get("frontend_commit") == commit
+        and payload.get("observed_main_after_deploy") == commit
+        and payload.get("migration_completed_at") is None
+        and payload.get("lock_domain") == "weltgewebe-production-deployment-v1"
+        and payload.get("lock_owner_entrypoint") == "reconciler"
+        and payload.get("lock_handoff") == "public-observation"
+        and payload.get("result") == "consistent_observed_unattested"
+        and payload.get("deploy_invocation_id") is None
+        and payload.get("evidence_boundary") == LIMITED_EVIDENCE_BOUNDARY
+        and payload.get("public_verification_schema_version") == 3
+        and payload.get("public_verification_status")
+        == "consistency_pass_unattested"
+        and payload.get("public_pass_scope")
+        == "identity_and_declared_artifact_consistency"
+        and payload.get("identity_verified") is True
+        and payload.get("artifact_tree_declaration_verified") is True
+        and payload.get("attestation_verified") is False
+        and payload.get("artifact_tree_schema_version") == 1
+        and payload.get("artifact_tree_sha256") == artifact_tree.get("sha256")
+        and payload.get("artifact_tree_file_count") == artifact_tree.get("file_count")
+        and payload.get("artifact_tree_compile_revision") == commit
+        and payload.get("artifact_tree_provenance") == "unattested"
+    )
 
 
 def is_current_verified_receipt(payload: object) -> bool:
@@ -471,7 +620,16 @@ def migrate_schema4_verified_receipt(payload: object) -> dict[str, object] | Non
     return migrated
 
 
-if is_current_verified_receipt(existing):
+artifact_tree = validate_limited_public_verification(verification)
+assert isinstance(verification, dict)
+frontend = verification["frontend"]
+api = verification["api"]
+assert isinstance(frontend, dict)
+assert isinstance(api, dict)
+
+if is_current_verified_receipt(existing) and existing.get("result") == "verified":
+    raise SystemExit(0)
+if is_current_limited_receipt(existing, artifact_tree):
     raise SystemExit(0)
 
 migrated_schema4 = migrate_schema4_verified_receipt(existing)
@@ -480,7 +638,7 @@ if migrated_schema4 is not None:
     raise SystemExit(0)
 
 payload = {
-    "schema_version": 5,
+    "schema_version": 6,
     "environment": "production",
     "commit": commit,
     "web_artifact_sha256": None,
@@ -493,12 +651,22 @@ payload = {
     "lock_domain": "weltgewebe-production-deployment-v1",
     "lock_owner_entrypoint": "reconciler",
     "lock_handoff": "public-observation",
-    "result": "verified_observed",
+    "result": "consistent_observed_unattested",
     "deploy_invocation_id": None,
-    "evidence_boundary": (
-        "Recovered from exact public readback; original web artifact hash and "
-        "deployment start time are unavailable."
+    "evidence_boundary": LIMITED_EVIDENCE_BOUNDARY,
+    "public_verification_schema_version": verification.get("schema_version"),
+    "public_verification_status": verification.get("status"),
+    "public_pass_scope": verification.get("pass_scope"),
+    "identity_verified": verification.get("identity_verified"),
+    "artifact_tree_declaration_verified": verification.get(
+        "artifact_tree_declaration_verified"
     ),
+    "attestation_verified": verification.get("attestation_verified"),
+    "artifact_tree_schema_version": artifact_tree.get("schema_version"),
+    "artifact_tree_sha256": artifact_tree.get("sha256"),
+    "artifact_tree_file_count": artifact_tree.get("file_count"),
+    "artifact_tree_compile_revision": artifact_tree.get("compile_revision"),
+    "artifact_tree_provenance": artifact_tree.get("provenance"),
 }
 write_secure_json(deployment_path, payload)
 PY
@@ -669,11 +837,12 @@ if "$LIVE_VERIFIER" \
     exit 0
   fi
   repair_observed_deployment_state "$initial_receipt"
-  write_state "verified_observed" "$target_commit" "public state already matched; markers repaired"
+  write_state "consistent_observed_unattested" "$target_commit" \
+    "public identity and artifact declaration matched; provenance remains unattested"
   ln -sfn "reconcile-receipts/$target_commit.json" "$STATE_ROOT/reconcile-current.json"
   prune_artifacts
   prune_releases
-  echo "production_reconcile=noop commit=$target_commit state=repaired"
+  echo "production_reconcile=noop commit=$target_commit state=consistent_observed_unattested"
   exit 0
 fi
 

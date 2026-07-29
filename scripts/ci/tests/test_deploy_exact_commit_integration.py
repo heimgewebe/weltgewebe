@@ -363,12 +363,40 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 deployed = marker is None or Path(marker).exists()
                 observed_commit = commit if deployed else os.environ["PUBLIC_COMMIT"]
                 passed = observed_commit == commit
+                artifact_tree = {
+                    "schema_version": 1,
+                    "sha256": "a" * 64,
+                    "file_count": 103,
+                    "compile_revision": observed_commit,
+                    "provenance": "unattested",
+                    "error": None,
+                }
                 payload = {
-                    "schema_version": 2,
+                    "schema_version": int(
+                        os.environ.get("TEST_PUBLIC_VERIFICATION_SCHEMA", "3")
+                    ),
                     "expected_commit": commit,
                     "verified_at": datetime.now(timezone.utc).isoformat(),
                     "pass": passed,
+                    "status": os.environ.get(
+                        "TEST_PUBLIC_VERIFICATION_STATUS",
+                        "consistency_pass_unattested" if passed else "failed",
+                    ),
+                    "pass_scope": os.environ.get(
+                        "TEST_PUBLIC_PASS_SCOPE",
+                        "identity_and_declared_artifact_consistency" if passed else "none",
+                    ),
+                    "identity_verified": passed,
+                    "artifact_tree_declaration_verified": passed,
+                    "attestation_verified": (
+                        os.environ.get("TEST_PUBLIC_ATTESTATION_VERIFIED", "0") == "1"
+                    ),
+                    "provenance_status": "unattested",
                     "reasons": [] if passed else ["public commit differs"],
+                    "limitations": [
+                        "the public verifier does not reconstruct the deployed artifact tree",
+                        "artifact provenance is explicitly unattested",
+                    ] if passed else [],
                     "frontend": {
                         "url": "https://example.invalid/_app/version.json",
                         "status": 200,
@@ -376,6 +404,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                         "version": observed_commit[:8],
                         "headers": {"cache-control": "no-store"},
                         "error": None,
+                        "artifact_tree": artifact_tree,
                     },
                     "api": {
                         "url": "https://example.invalid/api/version",
@@ -387,8 +416,11 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                             "x-weltgewebe-build": observed_commit[:8],
                         },
                         "error": None,
+                        "artifact_tree": None,
                     },
                 }
+                if os.environ.get("TEST_PUBLIC_EXTRA_FIELD"):
+                    payload["untrusted_extension"] = "value"
                 output.parent.mkdir(parents=True, exist_ok=True)
                 output.write_text(json.dumps(payload) + "\\n", encoding="utf-8")
                 raise SystemExit(0 if passed else 1)
@@ -717,7 +749,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
     def install_root_json(self, path: Path, payload: dict[str, object]) -> None:
         self.install_root_text(path, json.dumps(payload) + "\n")
 
-    def reconcile_existing_public_commit(self) -> subprocess.CompletedProcess[str]:
+    def reconcile_existing_public_commit(
+        self, *, extra_env: dict[str, str] | None = None
+    ) -> subprocess.CompletedProcess[str]:
         reconcile_env = self.base_environment()
         reconcile_env.update(
             {
@@ -727,6 +761,8 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 "WELTGEWEBE_MIN_FREE_KIB": "1",
             }
         )
+        if extra_env:
+            reconcile_env.update(extra_env)
         argv = self.privileged(
             [
                 "env",
@@ -1308,8 +1344,8 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["schema_version"], 5)
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["schema_version"], 6)
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assertIsNone(receipt["deploy_invocation_id"])
         self.assertIsNone(receipt["web_artifact_sha256"])
 
@@ -1326,7 +1362,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assertIsNone(receipt["web_artifact_sha256"])
 
     def test_public_noop_does_not_promote_incomplete_schema4_receipt(
@@ -1342,7 +1378,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assert_observed_recovery_timestamps(receipt)
 
     def test_public_noop_does_not_promote_schema4_with_invalid_timestamps(
@@ -1358,7 +1394,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assert_observed_recovery_timestamps(receipt)
 
     def test_public_noop_does_not_promote_schema4_with_overflowing_timestamp(
@@ -1374,7 +1410,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assert_observed_recovery_timestamps(receipt)
 
     def test_public_noop_does_not_promote_schema4_with_inconsistent_timestamps(
@@ -1392,7 +1428,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assert_observed_recovery_timestamps(receipt)
 
     def test_public_noop_does_not_promote_schema4_with_unknown_metadata(
@@ -1408,7 +1444,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assertNotIn("untrusted_extension", receipt)
 
     def test_public_noop_does_not_promote_schema4_with_duplicate_keys(
@@ -1430,7 +1466,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assert_observed_recovery_timestamps(receipt)
 
     def schema5_verified_receipt(self, **overrides: object) -> dict[str, object]:
@@ -1457,18 +1493,17 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
     def assert_schema5_receipt_rewritten_as_observed(
         self, payload: dict[str, object]
     ) -> dict[str, object]:
-        self.install_root_json(
-            self.state / "receipts" / f"{self.commit}.json", payload
-        )
+        self.install_root_json(self.state / "receipts" / f"{self.commit}.json", payload)
         result = self.reconcile_existing_public_commit()
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 0, result.stderr)
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["schema_version"], 5)
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["schema_version"], 6)
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
+        self.assertFalse(receipt["attestation_verified"])
         return receipt
 
     def test_public_noop_preserves_valid_direct_schema5_verified_receipt(self) -> None:
@@ -1523,9 +1558,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self,
     ) -> None:
         self.assert_schema5_receipt_rewritten_as_observed(
-            self.schema5_verified_receipt(
-                started_at="0001-01-01T00:00:00+23:59"
-            )
+            self.schema5_verified_receipt(started_at="0001-01-01T00:00:00+23:59")
         )
 
     def test_public_noop_rewrites_schema5_verified_with_wrong_time_order(self) -> None:
@@ -1535,7 +1568,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             )
         )
 
-    def test_public_noop_preserves_valid_schema5_observed_receipt(self) -> None:
+    def test_public_noop_rewrites_legacy_schema5_observed_receipt_as_limited(
+        self,
+    ) -> None:
         original = self.schema5_verified_receipt(
             web_artifact_sha256=None,
             started_at=None,
@@ -1554,7 +1589,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt, original)
+        self.assertEqual(receipt["schema_version"], 6)
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
+        self.assertFalse(receipt["attestation_verified"])
 
     def test_public_noop_rewrites_schema5_observed_with_unknown_field(self) -> None:
         payload = self.schema5_verified_receipt(
@@ -1597,8 +1634,8 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         receipt = json.loads(
             (self.state / "receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(receipt["schema_version"], 5)
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["schema_version"], 6)
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
 
     def test_main_advancing_after_migration_is_superseded_before_full_deploy(
@@ -1669,26 +1706,69 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertNotEqual(receipt["observed_main_after_deploy"], self.commit)
         self.assertFalse((self.state / "current.json").exists())
 
+    def test_public_noop_rejects_generic_pass_without_limited_status(self) -> None:
+        result = self.reconcile_existing_public_commit(
+            extra_env={"TEST_PUBLIC_VERIFICATION_STATUS": "verified"}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not an exact limited pass", result.stderr)
+        self.assertFalse((self.state / "current.json").exists())
+
+    def test_public_noop_rejects_attestation_claim_without_verifier_support(
+        self,
+    ) -> None:
+        result = self.reconcile_existing_public_commit(
+            extra_env={"TEST_PUBLIC_ATTESTATION_VERIFIED": "1"}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("not an exact limited pass", result.stderr)
+        self.assertFalse((self.state / "current.json").exists())
+
+    def test_public_noop_rejects_unknown_verification_receipt_fields(self) -> None:
+        result = self.reconcile_existing_public_commit(
+            extra_env={"TEST_PUBLIC_EXTRA_FIELD": "1"}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("field matrix is invalid", result.stderr)
+        self.assertFalse((self.state / "current.json").exists())
+
     def test_public_noop_repairs_missing_deployment_receipt(self) -> None:
         result = self.reconcile_existing_public_commit()
         self.restore_test_ownership()
         self.assertEqual(result.returncode, 0, result.stderr)
         receipt_path = self.state / "receipts" / f"{self.commit}.json"
         receipt = json.loads(receipt_path.read_text())
-        self.assertEqual(receipt["schema_version"], 5)
-        self.assertEqual(receipt["result"], "verified_observed")
+        self.assertEqual(receipt["schema_version"], 6)
+        self.assertEqual(receipt["result"], "consistent_observed_unattested")
         self.assertEqual(receipt["lock_domain"], "weltgewebe-production-deployment-v1")
         self.assertEqual(receipt["lock_owner_entrypoint"], "reconciler")
         self.assertEqual(receipt["lock_handoff"], "public-observation")
         self.assertIsNone(receipt["deploy_invocation_id"])
         self.assertIsNone(receipt["migration_completed_at"])
         self.assertIsNone(receipt["web_artifact_sha256"])
-        self.assertIn("original web artifact hash", receipt["evidence_boundary"])
+        self.assertIn("build provenance is unattested", receipt["evidence_boundary"])
+        self.assertEqual(receipt["public_verification_schema_version"], 3)
+        self.assertEqual(
+            receipt["public_verification_status"], "consistency_pass_unattested"
+        )
+        self.assertEqual(
+            receipt["public_pass_scope"],
+            "identity_and_declared_artifact_consistency",
+        )
+        self.assertTrue(receipt["identity_verified"])
+        self.assertTrue(receipt["artifact_tree_declaration_verified"])
+        self.assertFalse(receipt["attestation_verified"])
+        self.assertEqual(receipt["artifact_tree_sha256"], "a" * 64)
+        self.assertEqual(receipt["artifact_tree_compile_revision"], self.commit)
+        self.assertEqual(receipt["artifact_tree_provenance"], "unattested")
         self.assertEqual((self.state / "current.json").resolve(), receipt_path)
         reconcile_receipt = json.loads(
             (self.state / "reconcile-receipts" / f"{self.commit}.json").read_text()
         )
-        self.assertEqual(reconcile_receipt["result"], "verified_observed")
+        self.assertEqual(reconcile_receipt["result"], "consistent_observed_unattested")
 
 
 if __name__ == "__main__":

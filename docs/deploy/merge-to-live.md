@@ -218,7 +218,16 @@ und zusätzlich alle fünf Minuten:
 - `https://weltgewebe.net/_app/version.json`;
 - `https://weltgewebe.net/api/version`;
 - `X-Weltgewebe-API-Build`;
-- `X-Weltgewebe-Build`.
+- `X-Weltgewebe-Build`;
+- die geschlossene `artifact_tree`-Deklaration mit Baumhash, Dateizahl,
+  Kompiliercommit und Provenienzstatus.
+
+Der öffentliche Prüfer rekonstruiert den ausgelieferten Dateibaum nicht. Solange
+`artifact_tree.provenance` den Wert `unattested` trägt, lautet der erfolgreiche
+Status deshalb ausschließlich `consistency_pass_unattested`. Der Receipt setzt
+`attestation_verified: false` und begrenzt seine Aussage auf Commitidentität und
+die formal konsistente Artefaktbaumdeklaration. Ein solcher Lauf ist kein
+Herkunftsbeweis für die ausgelieferten Bytes.
 
 Push- und Zeitplanbeobachter verwenden dieselbe GitHub-Concurrency-Gruppe. Ein
 Zeitplanlauf kann daher nicht während eines noch laufenden Push-Rollouts einen
@@ -238,51 +247,63 @@ Reconciler-Konflikt und öffentliche Readbacks liegen unter
 Installationsmanifest bindet die installierten Helfer und Units zusätzlich an
 SHA-256.
 
-Ist der exakte aktuelle Commit bereits öffentlich belegt, aber sein ursprünglicher
-Deploymentbeleg fehlt, repariert der Reconciler die Zustandszeiger mit einem
-`verified_observed`-Beleg. Dabei werden fehlende historische Werte wie
-Webartefakt-Hash oder Startzeit ausdrücklich als unbekannt ausgewiesen und nicht
-erfunden.
+Ist der exakte aktuelle Commit öffentlich konsistent, aber sein ursprünglicher
+Deploymentbeleg fehlt oder ist nicht vertrauenswürdig rekonstruierbar, schreibt
+der Reconciler einen Schema-6-Beleg mit dem Ergebnis
+`consistent_observed_unattested`. Dieser Zustand repariert die Zustandszeiger,
+wertet den öffentlichen Readback jedoch nicht zu `verified_observed` auf.
+Historische Werte wie Webarchiv-Hash oder Startzeit bleiben ausdrücklich
+`null`.
 
-Schema-5-Belege werden fehlgeschlossen gegen eine geschlossene Feldmatrix
-validiert. Beide Ergebnisarten enthalten ausschließlich
-`schema_version`, `environment`, `commit`, `web_artifact_sha256`, `started_at`,
-`completed_at`, `api_commit`, `frontend_commit`,
-`observed_main_after_deploy`, `migration_completed_at`, `lock_domain`,
-`lock_owner_entrypoint`, `lock_handoff`, `result` und
-`deploy_invocation_id`. Nur `verified_observed` ergänzt `evidence_boundary`.
-Unbekannte Zusatzfelder machen den Beleg ungültig.
+Schema-5-Belege des direkten oder geerbten Deploymentpfads werden weiterhin
+fehlgeschlossen gegen ihre geschlossene Feldmatrix validiert. Ein gültiges
+`verified` enthält den vollständigen lokalen Deploymentnachweis einschließlich
+Webarchiv-Hash und geordneter Zeitpunkte. Das frühere Ergebnis
+`verified_observed` bleibt nur als Legacy-Eingang lesbar und wird beim nächsten
+frischen öffentlichen Readback in den begrenzten Schema-6-Vertrag überführt.
 
-| Schema-5-Ergebnis | Zeitvertrag | Evidenzgrenze |
+Schema 6 enthält neben den gemeinsamen Deploymentfeldern ausschließlich:
+
+- `evidence_boundary`;
+- Schema, Status und Geltungsbereich des öffentlichen Verifiers;
+- `identity_verified`, `artifact_tree_declaration_verified` und
+  `attestation_verified`;
+- Schema, SHA-256, Dateizahl, Kompiliercommit und Provenienz der ausgelieferten
+  Artefaktbaumdeklaration.
+
+| Ergebnis | Zeitvertrag | Evidenzgrenze |
 | --- | --- | --- |
-| `verified` | `started_at`, `migration_completed_at` und `completed_at` sind zeitzonenbehaftete ISO-Zeitpunkte; nach sicherer UTC-Normalisierung gilt `started_at <= migration_completed_at <= completed_at` | Webartefakt-Hash ist ein kleingeschriebener SHA-256; direkter Lock besitzt keine Aufruf-ID, geerbter Lock eine SHA-256-gebundene Aufruf-ID |
-| `verified_observed` | nur `completed_at` ist ein zeitzonenbehafteter ISO-Zeitpunkt; `started_at` und `migration_completed_at` bleiben ausdrücklich `null` | Webartefakt-Hash und Aufruf-ID bleiben `null`; `evidence_boundary` ist ein nichtleerer Text und begrenzt die Aussage auf den öffentlichen Readback |
+| Schema 5 `verified` | `started_at`, `migration_completed_at` und `completed_at` sind zeitzonenbehaftete ISO-Zeitpunkte; nach sicherer UTC-Normalisierung gilt `started_at <= migration_completed_at <= completed_at` | lokaler Webarchiv-Hash und Lock-Übergabe sind belegt; dies ist noch keine unabhängige kryptografische Buildattestation |
+| Schema 6 `consistent_observed_unattested` | nur `completed_at` ist ein zeitzonenbehafteter ISO-Zeitpunkt; `started_at` und `migration_completed_at` bleiben `null` | Commitidentität und geschlossene Artefaktbaumdeklaration sind konsistent; Baumrekonstruktion und vertrauenswürdige Buildherkunft sind ausdrücklich nicht belegt |
 
-Zeitpunkte ohne Zeitzone, syntaktisch ungültige Werte, UTC-Überläufe und eine
-widersprüchliche Reihenfolge werden nicht als aktueller Deploymentbeleg
-akzeptiert. Der Reconciler ersetzt einen solchen, dateisystemseitig sicheren
-Beleg erst nach einem frischen öffentlichen Readback durch `verified_observed`.
+Zeitpunkte ohne Zeitzone, syntaktisch ungültige Werte, UTC-Überläufe, unbekannte
+Felder oder eine widersprüchliche Reihenfolge werden nicht akzeptiert. Der
+Reconciler prüft zusätzlich den vollständigen Schema-3-Receipt des öffentlichen
+Verifiers. Ein grüner Exitcode allein reicht nicht: Status, Scope,
+Artefaktbaumdaten und `attestation_verified: false` müssen exakt zum begrenzten
+Vertrag passen.
 
 Für bestehende Deploymentbelege des Schemas 4 gilt eine enge Migrationsmatrix:
 
-| Schema-4-Ergebnis | Lock-Übergabe | Schema-5-Behandlung |
+| Schema-4-Ergebnis | Lock-Übergabe | Behandlung |
 | --- | --- | --- |
-| `verified` mit vollständigen kanonischen Feldern | `deploy-helper` / `direct` | verlustfreie Migration; alle Evidenzfelder bleiben erhalten, `deploy_invocation_id` wird explizit `null` |
-| `verified` | `reconciler` / `inherited` | keine Aufwertung ohne historische Aufruf-ID; nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
-| nichtterminal, widersprüchlich, unvollständig oder mit unbekannten Feldern | beliebig | keine semantische Migration; nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
-| syntaktisch beschädigt, aber dateisystemseitig sicher | beliebig | nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
+| `verified` mit vollständigen kanonischen Feldern | `deploy-helper` / `direct` | verlustfreie Migration nach Schema 5; alle Evidenzfelder bleiben erhalten, `deploy_invocation_id` wird explizit `null` |
+| `verified` | `reconciler` / `inherited` | keine Aufwertung ohne historische Aufruf-ID; nach frischem öffentlichen Readback Ersatz durch Schema 6 `consistent_observed_unattested` |
+| nichtterminal, widersprüchlich, unvollständig oder mit unbekannten Feldern | beliebig | keine semantische Migration; nach frischem öffentlichen Readback Ersatz durch den begrenzten Schema-6-Beleg |
+| syntaktisch beschädigt, aber dateisystemseitig sicher | beliebig | nach frischem öffentlichen Readback Ersatz durch den begrenzten Schema-6-Beleg |
 | dateisystemseitig unsicher | beliebig | fehlgeschlossen; keine Zustandsreparatur |
 
 Die direkte Migration ist nur erlaubt, wenn Commit, API, Frontend, beobachtetes
-`main`, Lockdomäne, Ergebnis, Zeitfelder und Webartefakt-Hash vollständig zum
+`main`, Lockdomäne, Ergebnis, Zeitfelder und Webarchiv-Hash vollständig zum
 Schema-4-Vertrag passen. Insbesondere wird für geerbte Handoffs keine
-`deploy_invocation_id` erfunden. Der ersetzende `verified_observed`-Beleg
-beansprucht ausschließlich den frischen öffentlichen Readback und verwirft
-unbestätigte Legacy-Metadaten bewusst.
+`deploy_invocation_id` erfunden. Der Schema-6-Ersatz verwirft unbestätigte
+Legacy-Metadaten bewusst und übernimmt nur die exakt validierte öffentliche
+Konsistenzaussage.
 
-`verified` belegt die Code- und Webartefaktidentität. Laufzeitkonfiguration und
-Karteninhalt bleiben bewusst außerhalb dieser Commitidentität; ihre Belegung
-erfolgt über die bestehenden Produktions- und Kartenmanifeste.
+`verified` belegt den vertrauensgebundenen lokalen Deploymentpfad und den dabei
+verwendeten Webarchiv-Hash. `consistent_observed_unattested` belegt nur die
+öffentliche Konsistenz. Laufzeitkonfiguration, Karteninhalt und unabhängige
+Buildherkunft bleiben außerhalb beider Aussagen und benötigen eigene Belege.
 
 ## Initiale Installation
 
