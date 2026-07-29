@@ -21,6 +21,27 @@ def _rust_timeout_ms(name: str) -> int:
     return int(match.group(1).replace("_", ""))
 
 
+def _rust_function_body(source: str, signature: str) -> str:
+    signature_start = source.find(signature)
+    if signature_start < 0:
+        raise AssertionError(f"missing Rust function signature {signature!r}")
+    opening_brace = source.find("{", signature_start + len(signature))
+    if opening_brace < 0:
+        raise AssertionError(f"missing opening brace for {signature!r}")
+
+    depth = 0
+    for index in range(opening_brace, len(source)):
+        token = source[index]
+        if token == "{":
+            depth += 1
+        elif token == "}":
+            depth -= 1
+            if depth == 0:
+                return source[opening_brace + 1 : index]
+
+    raise AssertionError(f"missing closing brace for {signature!r}")
+
+
 def _compose_timeout_ms() -> int:
     payload = yaml.safe_load(COMPOSE.read_text(encoding="utf-8"))
     value = payload["services"]["api"]["healthcheck"]["timeout"]
@@ -55,12 +76,11 @@ class ReadinessDeadlineContractTests(unittest.TestCase):
 
     def test_liveness_remains_separate_from_readiness(self) -> None:
         source = HEALTH_ROUTE.read_text(encoding="utf-8")
-        live_body = source.split("async fn live()", 1)[1].split(
-            "#[derive(Debug, Default, Clone, Copy)]", 1
-        )[0]
+        live_body = _rust_function_body(source, "async fn live() -> Response")
         self.assertNotIn("run_readiness_checks", live_body)
         self.assertNotIn("check_database", live_body)
         self.assertNotIn("check_nats", live_body)
+        self.assertNotIn("check_policy", live_body)
 
 
 if __name__ == "__main__":
