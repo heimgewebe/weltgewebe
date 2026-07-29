@@ -2,11 +2,7 @@
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
-  import {
-    ApiRequestError,
-    deleteNode,
-    replaceNode,
-  } from "$lib/api/domainWrites";
+  import { ApiRequestError, replaceNode } from "$lib/api/domainWrites";
   import {
     buildPanelEndpoint,
     createPanelDetailsLoader,
@@ -285,6 +281,7 @@
     deleting = true;
     mutationError = "";
     try {
+      const { deleteNode } = await import("$lib/api/nodeDelete");
       const receipt = await deleteNode(id, nodeDetails?.updated_at);
       if (receipt.conversation.effect === "archived") {
         archiveHref = `/archive?id=${encodeURIComponent(receipt.conversation.archive_id)}`;

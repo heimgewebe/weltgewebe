@@ -31,9 +31,9 @@ export async function deleteNode(
       throw new ApiRequestError(response.status, await readErrorBody(response));
     }
 
-    const receipt = (await response.json().catch(() => null)) as
-      | NodeDeleteReceipt
-      | null;
+    const receipt = (await response
+      .json()
+      .catch(() => null)) as NodeDeleteReceipt | null;
     const conversation = receipt?.conversation;
     const effect = conversation?.effect;
     if (
