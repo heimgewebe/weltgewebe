@@ -23,6 +23,7 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: development
+      GIT_COMMIT_SHA: ${GIT_COMMIT_SHA:-}
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:5173 >/dev/null"]
       interval: 5s

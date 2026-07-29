@@ -25,6 +25,15 @@ class SecurePayloadError(SecureReceiptError):
     """The path is safe, but its payload is invalid."""
 
 
+def _reject_duplicate_json_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in payload:
+            raise SecurePayloadError(f"receipt payload contains duplicate key: {key}")
+        payload[key] = value
+    return payload
+
+
 def _required_flag(name: str) -> int:
     value = getattr(os, name, None)
     if not isinstance(value, int):
@@ -136,7 +145,9 @@ def read_secure_json(
         os.close(directory_fd)
 
     try:
-        payload = json.loads(raw.decode("utf-8"))
+        payload = json.loads(
+            raw.decode("utf-8"), object_pairs_hook=_reject_duplicate_json_keys
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise SecurePayloadError(f"receipt payload is invalid: {receipt_path}: {exc}") from exc
     if require_object and not isinstance(payload, dict):

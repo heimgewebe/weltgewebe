@@ -13,6 +13,17 @@ const IGNORE = [
   "scripts/record-screenshot.mjs",
 ];
 
+// eslint-plugin-svelte 3 adds these rules to its recommended preset. Keep the
+// established v2 lint contract during the security migration; adopting the
+// additional rules requires dedicated code changes and regression tests.
+const SVELTE_V2_RECOMMENDED_COMPAT = {
+  "svelte/infinite-reactive-loop": "off",
+  "svelte/no-immutable-reactive-statements": "off",
+  "svelte/no-navigation-without-resolve": "off",
+  "svelte/prefer-svelte-reactivity": "off",
+  "svelte/require-each-key": "off",
+};
+
 export default [
   {
     ignores: IGNORE,
@@ -26,6 +37,7 @@ export default [
       },
     },
     rules: {
+      ...SVELTE_V2_RECOMMENDED_COMPAT,
       "svelte/no-at-html-tags": "error",
     },
   },

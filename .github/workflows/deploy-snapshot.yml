@@ -18,22 +18,28 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
 
       - name: Run Snapshot (Dry Mode)
-        run: |
-          bash scripts/deploy-snapshot.sh
+        run: bash scripts/deploy-snapshot.sh
         env:
           SNAPSHOT_MODE: dry
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
 
       - name: Setup Node.js
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
         with:
           node-version-file: '.node-version'
+          cache: 'pnpm'
+
+      - name: Install pinned schema libraries
+        run: pnpm install --frozen-lockfile
 
       - name: Validate Snapshot Schema
         run: |
-          npx -y ajv-cli@5.0.0 validate \
-            -s docs/deploy/deploy.snapshot.schema.json \
-            -d artifacts/deploy.snapshot.json \
-            -c ajv-formats
+          node scripts/json-schema-check.mjs validate \
+            --schema docs/deploy/deploy.snapshot.schema.json \
+            --data artifacts/deploy.snapshot.json \
+            --spec draft7
 
       - name: Upload Snapshot
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1

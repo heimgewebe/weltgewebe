@@ -244,6 +244,42 @@ Deploymentbeleg fehlt, repariert der Reconciler die Zustandszeiger mit einem
 Webartefakt-Hash oder Startzeit ausdrücklich als unbekannt ausgewiesen und nicht
 erfunden.
 
+Schema-5-Belege werden fehlgeschlossen gegen eine geschlossene Feldmatrix
+validiert. Beide Ergebnisarten enthalten ausschließlich
+`schema_version`, `environment`, `commit`, `web_artifact_sha256`, `started_at`,
+`completed_at`, `api_commit`, `frontend_commit`,
+`observed_main_after_deploy`, `migration_completed_at`, `lock_domain`,
+`lock_owner_entrypoint`, `lock_handoff`, `result` und
+`deploy_invocation_id`. Nur `verified_observed` ergänzt `evidence_boundary`.
+Unbekannte Zusatzfelder machen den Beleg ungültig.
+
+| Schema-5-Ergebnis | Zeitvertrag | Evidenzgrenze |
+| --- | --- | --- |
+| `verified` | `started_at`, `migration_completed_at` und `completed_at` sind zeitzonenbehaftete ISO-Zeitpunkte; nach sicherer UTC-Normalisierung gilt `started_at <= migration_completed_at <= completed_at` | Webartefakt-Hash ist ein kleingeschriebener SHA-256; direkter Lock besitzt keine Aufruf-ID, geerbter Lock eine SHA-256-gebundene Aufruf-ID |
+| `verified_observed` | nur `completed_at` ist ein zeitzonenbehafteter ISO-Zeitpunkt; `started_at` und `migration_completed_at` bleiben ausdrücklich `null` | Webartefakt-Hash und Aufruf-ID bleiben `null`; `evidence_boundary` ist ein nichtleerer Text und begrenzt die Aussage auf den öffentlichen Readback |
+
+Zeitpunkte ohne Zeitzone, syntaktisch ungültige Werte, UTC-Überläufe und eine
+widersprüchliche Reihenfolge werden nicht als aktueller Deploymentbeleg
+akzeptiert. Der Reconciler ersetzt einen solchen, dateisystemseitig sicheren
+Beleg erst nach einem frischen öffentlichen Readback durch `verified_observed`.
+
+Für bestehende Deploymentbelege des Schemas 4 gilt eine enge Migrationsmatrix:
+
+| Schema-4-Ergebnis | Lock-Übergabe | Schema-5-Behandlung |
+| --- | --- | --- |
+| `verified` mit vollständigen kanonischen Feldern | `deploy-helper` / `direct` | verlustfreie Migration; alle Evidenzfelder bleiben erhalten, `deploy_invocation_id` wird explizit `null` |
+| `verified` | `reconciler` / `inherited` | keine Aufwertung ohne historische Aufruf-ID; nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
+| nichtterminal, widersprüchlich, unvollständig oder mit unbekannten Feldern | beliebig | keine semantische Migration; nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
+| syntaktisch beschädigt, aber dateisystemseitig sicher | beliebig | nach frischem öffentlichen Readback Ersatz durch `verified_observed` |
+| dateisystemseitig unsicher | beliebig | fehlgeschlossen; keine Zustandsreparatur |
+
+Die direkte Migration ist nur erlaubt, wenn Commit, API, Frontend, beobachtetes
+`main`, Lockdomäne, Ergebnis, Zeitfelder und Webartefakt-Hash vollständig zum
+Schema-4-Vertrag passen. Insbesondere wird für geerbte Handoffs keine
+`deploy_invocation_id` erfunden. Der ersetzende `verified_observed`-Beleg
+beansprucht ausschließlich den frischen öffentlichen Readback und verwirft
+unbestätigte Legacy-Metadaten bewusst.
+
 `verified` belegt die Code- und Webartefaktidentität. Laufzeitkonfiguration und
 Karteninhalt bleiben bewusst außerhalb dieser Commitidentität; ihre Belegung
 erfolgt über die bestehenden Produktions- und Kartenmanifeste.

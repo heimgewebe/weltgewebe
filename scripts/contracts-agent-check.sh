@@ -1,16 +1,20 @@
 #!/usr/bin/env bash
-# Validate repository-owned agent contracts with the pinned AJV toolchain.
+# Validate repository-owned agent contracts with the pinned AJV libraries.
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-AJV_BIN="${AJV_BIN:-node_modules/.bin/ajv}"
-if [[ ! -x "$AJV_BIN" ]]; then
-  echo "error: pinned AJV executable not found at $AJV_BIN; run pnpm install first" >&2
+if ! command -v node > /dev/null 2>&1; then
+  echo "error: node is required; install the repository Node toolchain first" >&2
+  exit 2
+fi
+if [[ ! -d node_modules/ajv || ! -d node_modules/ajv-formats ]]; then
+  echo "error: pinned AJV libraries are missing; run pnpm install first" >&2
   exit 2
 fi
 
+SCHEMA_CHECK=(node scripts/json-schema-check.mjs)
 TASK_SCHEMA="contracts/agent/task.schema.json"
 HANDOFF_SCHEMA="contracts/agent/handoff.schema.json"
 VALIDATION_SCHEMA="contracts/agent/validation.schema.json"
@@ -23,7 +27,7 @@ TMP_DIR="$(mktemp -d)"
 INVALID_HANDOFF="$TMP_DIR/handoff-invalid.json"
 INVALID_VALIDATION="$TMP_DIR/validation-invalid.json"
 INVALID_RUN_RESULT="$TMP_DIR/run-result-invalid.json"
-AJV_OUTPUT="$TMP_DIR/agent-contract-invalid.out"
+CHECK_OUTPUT="$TMP_DIR/agent-contract-invalid.out"
 trap 'rm -rf -- "${TMP_DIR:?}"' EXIT
 
 INVALID_HANDOFF="$INVALID_HANDOFF" \
@@ -60,14 +64,14 @@ PY
 
 for schema in "$TASK_SCHEMA" "$HANDOFF_SCHEMA" "$VALIDATION_SCHEMA" "$RUN_RESULT_SCHEMA"; do
   echo "==> compile $schema"
-  "$AJV_BIN" compile -s "$schema" --spec=draft7 --strict=false
+  "${SCHEMA_CHECK[@]}" compile --schema "$schema" --spec draft7
 done
 
 echo "==> validate positive agent fixtures"
-"$AJV_BIN" validate -s "$TASK_SCHEMA" -d "$TASK_FIXTURE" --spec=draft7 --strict=false
-"$AJV_BIN" validate -s "$HANDOFF_SCHEMA" -d "$VALID_HANDOFF" --spec=draft7 --strict=false
-"$AJV_BIN" validate -s "$VALIDATION_SCHEMA" -d "$VALID_VALIDATION" --spec=draft7 --strict=false
-"$AJV_BIN" validate -s "$RUN_RESULT_SCHEMA" -d "$VALID_RUN_RESULT" --spec=draft7 --strict=false
+"${SCHEMA_CHECK[@]}" validate --schema "$TASK_SCHEMA" --data "$TASK_FIXTURE" --spec draft7
+"${SCHEMA_CHECK[@]}" validate --schema "$HANDOFF_SCHEMA" --data "$VALID_HANDOFF" --spec draft7
+"${SCHEMA_CHECK[@]}" validate --schema "$VALIDATION_SCHEMA" --data "$VALID_VALIDATION" --spec draft7
+"${SCHEMA_CHECK[@]}" validate --schema "$RUN_RESULT_SCHEMA" --data "$VALID_RUN_RESULT" --spec draft7
 
 expect_invalid() {
   local schema="$1"
@@ -75,12 +79,12 @@ expect_invalid() {
   local label="$3"
   echo "==> require $label to fail schema validation"
   set +e
-  "$AJV_BIN" validate -s "$schema" -d "$fixture" --spec=draft7 --strict=false > "$AJV_OUTPUT" 2>&1
+  "${SCHEMA_CHECK[@]}" validate --schema "$schema" --data "$fixture" --spec draft7 > "$CHECK_OUTPUT" 2>&1
   local rc=$?
   set -e
   if [[ "$rc" -ne 1 ]]; then
-    cat "$AJV_OUTPUT" >&2 || true
-    echo "error: expected AJV exit 1 for $fixture, got $rc" >&2
+    cat "$CHECK_OUTPUT" >&2 || true
+    echo "error: expected schema-check exit 1 for $fixture, got $rc" >&2
     exit 1
   fi
 }

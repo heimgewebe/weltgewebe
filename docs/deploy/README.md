@@ -101,6 +101,14 @@ Der Guard listet alle blockierenden Container mit Name, Projekt-Label und Config
   - `compose.observ.yml` – Observability / Zusatzdienste
   - `compose.ops.override.yml` – Lokale Entwicklungs-/Ops-Umgebung (NATS + API-Port-Mapping für Debugging)
 
+Der Web-Service des `dev`-Profils besitzt absichtlich kein eigenes `git` und
+leitet deshalb keine Versionsidentität aus dem Containerdateisystem ab. Der
+Aufrufer muss den vollständigen Quellcommit als `GIT_COMMIT_SHA` binden:
+`make up` verwendet `git rev-parse HEAD`, der GitHub-Compose-Smoke den exakten
+`github.sha`. Direkte Compose-Aufrufe müssen denselben Wert ausdrücklich
+setzen. Fehlt er, bleibt die Client-Buildidentität fail-closed; ein erfundener
+oder zeitabhängiger Ersatzcommit ist unzulässig.
+
 Der nur im `dev`-Profil verwendete PgBouncer-Container ist in
 `compose.core.yml` sowohl auf eine veröffentlichte Version als auch auf den
 OCI-Manifest-Digest gepinnt. Bei Aktualisierungen müssen Registry-Existenz,

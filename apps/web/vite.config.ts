@@ -38,7 +38,7 @@ function createLocalBasemapMiddleware() {
   ) => {
     if (!req.url) return next();
 
-    let pathname = "";
+    let pathname: string;
     try {
       pathname = decodeURIComponent(req.url.split("?")[0]);
       if (pathname.includes("\0")) throw new Error("Null bytes not allowed");
@@ -52,15 +52,10 @@ function createLocalBasemapMiddleware() {
       .replace(/^\/+/, "")
       .replace(/^local-basemap\//, "");
 
-    let baseDir = "";
-    if (
-      safeRelPath.endsWith(".pmtiles") ||
-      safeRelPath.endsWith(".meta.json")
-    ) {
-      baseDir = buildBasemapDir;
-    } else {
-      baseDir = mapStyleDir;
-    }
+    const baseDir =
+      safeRelPath.endsWith(".pmtiles") || safeRelPath.endsWith(".meta.json")
+        ? buildBasemapDir
+        : mapStyleDir;
 
     const targetPath = path.resolve(path.join(baseDir, safeRelPath));
     if (!targetPath.startsWith(baseDir + path.sep) && targetPath !== baseDir) {

@@ -37,8 +37,6 @@ async fn test_state() -> Result<ApiState> {
     })?;
 
     let config = AppConfig {
-        fade_days: 7,
-        ron_days: 84,
         anonymize_opt_in: true,
         delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,
@@ -381,6 +379,121 @@ async fn invalid_input_returns_400() -> Result<()> {
         ))
         .await?;
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn create_profile_fields_are_bounded_and_normalised_before_jsonl_side_effects() -> Result<()>
+{
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = app_with_operator(&in_dir, "admin1", Role::Admin).await?;
+
+    let invalid_payloads = [
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555551",
+            "title": "Summary too long",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "summary": "x".repeat(501)
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555552",
+            "title": "Too many tags",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": (0..65).map(|index| format!("tag-{index}" )).collect::<Vec<_>>()
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555553",
+            "title": "Tag too long",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": ["x".repeat(65)]
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555555",
+            "title": "Object summary",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "summary": {"text": "wrong type"}
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555556",
+            "title": "String tags",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": "wrong type"
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555557",
+            "title": "Mixed tags",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": ["valid", 7, "also-valid"]
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555558",
+            "title": "Null summary",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "summary": null
+        }),
+        serde_json::json!({
+            "id": "55555555-5555-4555-8555-555555555559",
+            "title": "Null tags",
+            "location": {"lat": 53.55, "lon": 9.99},
+            "tags": null
+        }),
+    ];
+
+    for payload in invalid_payloads {
+        let id = payload["id"].as_str().context("invalid payload id")?;
+        let response = app
+            .clone()
+            .oneshot(post_accounts(Some(&cookie), &payload.to_string()))
+            .await?;
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert!(state.accounts.read().await.get(id).is_none());
+    }
+    assert!(
+        !in_dir.join("demo.accounts.jsonl").exists(),
+        "invalid profile fields must not append JSONL"
+    );
+
+    let id = "55555555-5555-4555-8555-555555555554";
+    let international_tag = "🐋".repeat(64);
+    let expected_tags = vec![
+        "alpha".to_string(),
+        "beta".to_string(),
+        international_tag.clone(),
+    ];
+    let expected_tags_json = serde_json::to_value(&expected_tags)?;
+    let payload = serde_json::json!({
+        "id": id,
+        "title": "Normalised",
+        "location": {"lat": 53.55, "lon": 9.99},
+        "summary": "  Gemeinsame Dinge  ",
+        "tags": [" alpha ", "alpha", "", " beta ", international_tag]
+    });
+    let response = app
+        .clone()
+        .oneshot(post_accounts(Some(&cookie), &payload.to_string()))
+        .await?;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&bytes)?;
+    assert_eq!(created["summary"], "Gemeinsame Dinge");
+    assert_eq!(created["tags"], expected_tags_json);
+
+    let cached = state.accounts.read().await;
+    let account = cached.get(id).context("normalised account in cache")?;
+    assert_eq!(account.public.summary.as_deref(), Some("Gemeinsame Dinge"));
+    assert_eq!(account.public.tags, expected_tags);
+    drop(cached);
+
+    let persisted = std::fs::read_to_string(in_dir.join("demo.accounts.jsonl"))?;
+    let record: serde_json::Value = serde_json::from_str(persisted.trim())?;
+    assert_eq!(record["summary"], "Gemeinsame Dinge");
+    assert_eq!(record["tags"], expected_tags_json);
 
     Ok(())
 }
