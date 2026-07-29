@@ -4,6 +4,7 @@ use axum::{
     http::{Request, StatusCode},
     Router,
 };
+use chrono::{Duration, SecondsFormat, Utc};
 mod helpers;
 
 use helpers::{assert_account_has_single_node_relation, read_account_details, test_node};
@@ -23,6 +24,15 @@ use weltgewebe_api::{
     state::{ApiState, OrderedCache},
     telemetry::{BuildInfo, Metrics},
 };
+
+fn active_faden_timestamps() -> (String, String) {
+    let created_at = Utc::now() - Duration::hours(1);
+    let expires_at = created_at + Duration::hours(168);
+    (
+        created_at.to_rfc3339_opts(SecondsFormat::Micros, true),
+        expires_at.to_rfc3339_opts(SecondsFormat::Micros, true),
+    )
+}
 
 async fn test_state() -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
@@ -432,7 +442,7 @@ async fn accounts_cursor_limit_zero_is_bad_request() -> Result<()> {
 async fn account_details_project_outgoing_relation_without_public_note() -> Result<()> {
     const ACCOUNT_ID: &str = "account-1";
     const NODE_ID: &str = "node-1";
-    const CREATED_AT: &str = "2026-07-11T11:11:50.322307+00:00";
+    let (created_at, expires_at) = active_faden_timestamps();
 
     let mut state = test_state().await?;
     let mut accounts = AccountStore::new();
@@ -460,8 +470,8 @@ async fn account_details_project_outgoing_relation_without_public_note() -> Resu
             target_type: Some("node".to_string()),
             edge_kind: "reference".to_string(),
             note: Some("nicht öffentlich".to_string()),
-            created_at: Some(CREATED_AT.to_string().into()),
-            expires_at: None,
+            created_at: Some(created_at.clone().into()),
+            expires_at: Some(expires_at.into()),
         },
     );
     state.edges = Arc::new(RwLock::new(edges));
@@ -478,7 +488,7 @@ async fn account_details_project_outgoing_relation_without_public_note() -> Resu
         "reference",
         "Hat den Knoten \"fairschenkbox\" geknüpft.",
     );
-    assert_eq!(projected_at, CREATED_AT);
+    assert_eq!(projected_at, created_at);
 
     Ok(())
 }
@@ -529,7 +539,7 @@ async fn account_details_omit_expired_faden_projection() -> Result<()> {
 async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result<()> {
     const ACCOUNT_ID: &str = "account-incoming";
     const NODE_ID: &str = "node-incoming";
-    const CREATED_AT: &str = "2026-07-12T12:00:00+00:00";
+    let (created_at, expires_at) = active_faden_timestamps();
 
     let mut state = test_state().await?;
     let mut accounts = AccountStore::new();
@@ -554,8 +564,8 @@ async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result
             target_type: Some("account".to_string()),
             edge_kind: "reference".to_string(),
             note: Some("interne Importnotiz".to_string()),
-            created_at: Some(CREATED_AT.to_string().into()),
-            expires_at: None,
+            created_at: Some(created_at.clone().into()),
+            expires_at: Some(expires_at.into()),
         },
     );
     state.edges = Arc::new(RwLock::new(edges));
@@ -570,7 +580,7 @@ async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result
         "reference",
         "Wurde über einen Faden mit dem Knoten \"Importknoten\" verknüpft.",
     );
-    assert_eq!(projected_at, CREATED_AT);
+    assert_eq!(projected_at, created_at);
 
     Ok(())
 }

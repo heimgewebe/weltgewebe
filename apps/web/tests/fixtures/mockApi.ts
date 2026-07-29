@@ -4,6 +4,7 @@ import {
   demoAccounts,
   demoEdges,
 } from "../../src/lib/demo/demoData";
+import { FADEN_LIFETIME_MS } from "../../src/lib/map/edgeLifecycle";
 
 /**
  * Mock API responses for E2E tests.
@@ -98,6 +99,14 @@ export async function mockApiResponses(
   // the mock. There is deliberately no direct edge-create request surface.
   const createdNodes: Record<string, unknown>[] = [];
   const createdEdges: Record<string, unknown>[] = [];
+  const activeDemoCreatedAtMs = Date.now() - 60_000;
+  const activeDemoEdges = demoEdges.map((edge) => ({
+    ...edge,
+    created_at: new Date(activeDemoCreatedAtMs).toISOString(),
+    expires_at: new Date(
+      activeDemoCreatedAtMs + FADEN_LIFETIME_MS,
+    ).toISOString(),
+  }));
   const mutableDemoNodes: Record<string, unknown>[] = demoNodes.map((node) => ({
     ...node,
     address: "Musterstraße 1",
@@ -196,6 +205,9 @@ export async function mockApiResponses(
           target_type: "node",
           edge_kind: "reference",
           created_at: now,
+          expires_at: new Date(
+            Date.parse(now) + FADEN_LIFETIME_MS,
+          ).toISOString(),
         });
       }
       return route.fulfill({
@@ -446,7 +458,7 @@ export async function mockApiResponses(
     }
 
     if (new URL(url).pathname === "/api/edges" && method === "GET") {
-      const edges = [...demoEdges, ...createdEdges].filter(
+      const edges = [...activeDemoEdges, ...createdEdges].filter(
         (edge) =>
           (typeof edge.source_id !== "string" ||
             !deletedNodeIds.has(edge.source_id)) &&
