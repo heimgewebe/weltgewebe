@@ -438,6 +438,7 @@ export function measureRoute({ buildDir, routeId, routeFile }) {
     const gzipBytes = gzipSync(bytes, { level: 9, mtime: 0 }).byteLength;
     metrics.assets.push({
       href,
+      path: relative(buildDir, assetPath).split(sep).join("/"),
       kind,
       raw_bytes: bytes.byteLength,
       gzip_bytes: gzipBytes,
@@ -457,6 +458,72 @@ export function measureRoute({ buildDir, routeId, routeFile }) {
     }
   }
   return metrics;
+}
+
+function summarizeAssets(assets) {
+  const ordered = [...assets].sort((left, right) =>
+    left.path < right.path ? -1 : left.path > right.path ? 1 : 0,
+  );
+  return {
+    asset_count: ordered.length,
+    raw_bytes: ordered.reduce((sum, asset) => sum + asset.raw_bytes, 0),
+    gzip_bytes: ordered.reduce((sum, asset) => sum + asset.gzip_bytes, 0),
+    assets: ordered.map(({ href, path, kind, raw_bytes, gzip_bytes }) => ({
+      href,
+      path,
+      kind,
+      raw_bytes,
+      gzip_bytes,
+    })),
+  };
+}
+
+export function collectSharedInitialAssets(routeMetrics) {
+  const sharedForKind = (kind) => {
+    if (routeMetrics.length === 0) return summarizeAssets([]);
+    const [first, ...rest] = routeMetrics;
+    const shared = first.assets.filter(
+      (asset) =>
+        asset.kind === kind &&
+        rest.every((metrics) =>
+          metrics.assets.some(
+            (candidate) =>
+              candidate.kind === kind &&
+              candidate.path === asset.path &&
+              candidate.raw_bytes === asset.raw_bytes &&
+              candidate.gzip_bytes === asset.gzip_bytes,
+          ),
+        ),
+    );
+    return summarizeAssets(shared);
+  };
+  return { js: sharedForKind("js"), css: sharedForKind("css") };
+}
+
+export function evaluateRouteHeadroom(metrics, budget, warningPolicy) {
+  const observed = metrics.initial_js_gzip_bytes;
+  const maximum = budget.max_initial_js_gzip_bytes;
+  const remainingBytes = maximum - observed;
+  if (remainingBytes < 0) return [];
+  const remainingRatio = maximum === 0 ? 1 : remainingBytes / maximum;
+  if (
+    remainingBytes >= warningPolicy.minimum_remaining_bytes &&
+    remainingRatio >= warningPolicy.minimum_remaining_ratio
+  ) {
+    return [];
+  }
+  return [
+    {
+      route: metrics.route,
+      kind: "js",
+      observed_gzip_bytes: observed,
+      maximum_gzip_bytes: maximum,
+      remaining_bytes: remainingBytes,
+      remaining_ratio: remainingRatio,
+      minimum_remaining_bytes: warningPolicy.minimum_remaining_bytes,
+      minimum_remaining_ratio: warningPolicy.minimum_remaining_ratio,
+    },
+  ];
 }
 
 function assetContext(metrics, kind) {
@@ -653,23 +720,70 @@ export function runBudgetCheck({
         budgetPath,
         contractRoot,
       });
-  const reports = [];
-  const errors = [];
-  for (const { routeId, routeFile, budget } of routeEntries) {
-    const metrics = measureRoute({
+  const measuredRoutes = routeEntries.map(({ routeId, routeFile, budget }) => ({
+    budget,
+    metrics: measureRoute({
       buildDir: resolvedBuildDir,
       routeId,
       routeFile,
-    });
+    }),
+  }));
+  const sharedInitialAssets = collectSharedInitialAssets(
+    measuredRoutes.map(({ metrics }) => metrics),
+  );
+  const sharedPaths = {
+    js: new Set(sharedInitialAssets.js.assets.map((asset) => asset.path)),
+    css: new Set(sharedInitialAssets.css.assets.map((asset) => asset.path)),
+  };
+  const reports = [];
+  const warnings = [];
+  const errors = [];
+  for (const { budget, metrics } of measuredRoutes) {
+    const routeWarnings = evaluateRouteHeadroom(
+      metrics,
+      budget,
+      parsed.initial_js_headroom_warning,
+    );
+    warnings.push(...routeWarnings);
+    const routeSpecificJs = summarizeAssets(
+      metrics.assets.filter(
+        (asset) => asset.kind === "js" && !sharedPaths.js.has(asset.path),
+      ),
+    );
+    const routeSpecificCss = summarizeAssets(
+      metrics.assets.filter(
+        (asset) => asset.kind === "css" && !sharedPaths.css.has(asset.path),
+      ),
+    );
     reports.push({
-      route: routeId,
-      route_file: routeFile,
+      route: metrics.route,
+      route_file: metrics.route_file,
       initial_js_asset_count: metrics.initial_js_asset_count,
       initial_js_raw_bytes: metrics.initial_js_raw_bytes,
       initial_js_gzip_bytes: metrics.initial_js_gzip_bytes,
+      initial_js_budget_bytes: budget.max_initial_js_gzip_bytes,
+      initial_js_headroom_bytes:
+        budget.max_initial_js_gzip_bytes - metrics.initial_js_gzip_bytes,
+      initial_js_headroom_ratio:
+        budget.max_initial_js_gzip_bytes === 0
+          ? 1
+          : (budget.max_initial_js_gzip_bytes - metrics.initial_js_gzip_bytes) /
+            budget.max_initial_js_gzip_bytes,
+      route_specific_js: routeSpecificJs,
       initial_css_asset_count: metrics.initial_css_asset_count,
       initial_css_raw_bytes: metrics.initial_css_raw_bytes,
       initial_css_gzip_bytes: metrics.initial_css_gzip_bytes,
+      initial_css_budget_bytes: budget.max_initial_css_gzip_bytes,
+      initial_css_headroom_bytes:
+        budget.max_initial_css_gzip_bytes - metrics.initial_css_gzip_bytes,
+      initial_css_headroom_ratio:
+        budget.max_initial_css_gzip_bytes === 0
+          ? 1
+          : (budget.max_initial_css_gzip_bytes -
+              metrics.initial_css_gzip_bytes) /
+            budget.max_initial_css_gzip_bytes,
+      route_specific_css: routeSpecificCss,
+      warnings: routeWarnings,
       assets: metrics.assets,
     });
     if (!reportOnly) errors.push(...validateRouteBudget(metrics, budget));
@@ -709,7 +823,7 @@ export function runBudgetCheck({
     );
   }
   return {
-    schema_version: 2,
+    schema_version: 3,
     contract_id: contract.contract_id,
     contract_status: contract.measurements.web_build.status,
     source_revision: revisionEvidence.sourceRevision,
@@ -726,6 +840,9 @@ export function runBudgetCheck({
     artifact_file_count: artifactEvidence.fileCount ?? null,
     build_directory: resolvedBuildDir,
     measurement: parsed.measurement,
+    initial_js_headroom_warning: parsed.initial_js_headroom_warning,
+    shared_initial_assets: sharedInitialAssets,
+    warnings,
     report_only: reportOnly,
     revision_evidence_required: requireRevisionEvidence,
     does_not_establish: [...new Set(limitations)],
@@ -745,6 +862,19 @@ export function formatTextReport(result) {
   for (const limitation of result.does_not_establish) {
     lines.push("does not establish: " + limitation);
   }
+  if (result.shared_initial_assets) {
+    lines.push(
+      "shared initial shell: JS " +
+        result.shared_initial_assets.js.gzip_bytes +
+        " B gzip (" +
+        result.shared_initial_assets.js.asset_count +
+        " assets) / CSS " +
+        result.shared_initial_assets.css.gzip_bytes +
+        " B gzip (" +
+        result.shared_initial_assets.css.asset_count +
+        " assets)",
+    );
+  }
   for (const report of result.routes) {
     lines.push(
       report.route +
@@ -758,7 +888,24 @@ export function formatTextReport(result) {
         report.initial_css_gzip_bytes +
         " B gzip (" +
         report.initial_css_asset_count +
-        " assets)",
+        " assets) / headroom JS " +
+        report.initial_js_headroom_bytes +
+        " B / route delta JS " +
+        report.route_specific_js.gzip_bytes +
+        " B gzip",
+    );
+  }
+  for (const warning of result.warnings ?? []) {
+    lines.push(
+      "warning: " +
+        warning.route +
+        " " +
+        warning.kind.toUpperCase() +
+        " headroom " +
+        warning.remaining_bytes +
+        " B (" +
+        (warning.remaining_ratio * 100).toFixed(2) +
+        "%)",
     );
   }
   return lines.join("\n");

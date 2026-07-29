@@ -20,9 +20,13 @@ import {
 
 function validRouteBudget() {
   return {
-    schema_version: 2,
+    schema_version: 3,
     measurement: "test route assets",
     output_directories: ["build"],
+    initial_js_headroom_warning: {
+      minimum_remaining_bytes: 1024,
+      minimum_remaining_ratio: 0.02,
+    },
     routes: {
       "/map": {
         max_initial_js_gzip_bytes: 100,

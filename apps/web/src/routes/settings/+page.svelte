@@ -1,5 +1,4 @@
 <script lang="ts">
-  import VersionDiagnostics from "$lib/components/VersionDiagnostics.svelte";
   import AccountSection from "$lib/components/AccountSection.svelte";
   import MyGarnrolleSection from "$lib/components/MyGarnrolleSection.svelte";
   import type { PageData } from "./$types";
@@ -25,9 +24,11 @@
     <AccountSection />
   </div>
 
-  <div class="card diagnostics-card">
-    <VersionDiagnostics />
-  </div>
+  <p class="diagnostics-link">
+    <a href="/build" data-testid="build-diagnostics-link">
+      Technische Build-Diagnose
+    </a>
+  </p>
 </div>
 
 <style>
@@ -64,7 +65,7 @@
     padding: 24px;
   }
 
-  .diagnostics-card {
-    padding: 16px 24px;
+  .diagnostics-link {
+    margin: 0;
   }
 </style>

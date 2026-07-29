@@ -23,6 +23,8 @@ import {
   validatePerformanceBudget,
 } from "./route-performance-budget-config.mjs";
 import {
+  collectSharedInitialAssets,
+  evaluateRouteHeadroom,
   formatTextReport,
   measureRoute,
   readBuildRevisionEvidence,
@@ -54,9 +56,13 @@ function routeBudget(overrides = {}) {
 
 function validBudget(overrides = {}) {
   return {
-    schema_version: 2,
+    schema_version: 3,
     measurement: "test",
     output_directories: ["build", ".vercel/output/static"],
+    initial_js_headroom_warning: {
+      minimum_remaining_bytes: 1024,
+      minimum_remaining_ratio: 0.02,
+    },
     routes: { "/login": routeBudget() },
     emitted_assets: {},
     ...overrides,
@@ -229,7 +235,7 @@ test("maps clean route IDs to adapter-static HTML paths", () => {
 });
 
 test("validates the complete schema instead of accepting magic fields", () => {
-  assert.equal(validatePerformanceBudget(validBudget()).schema_version, 2);
+  assert.equal(validatePerformanceBudget(validBudget()).schema_version, 3);
   assert.throws(
     () => validatePerformanceBudget(validBudget({ routes: {} })),
     /at least one route/,
@@ -247,6 +253,38 @@ test("validates the complete schema instead of accepting magic fields", () => {
         validBudget({ output_directories: ["../build"] }),
       ),
     /safe relative directory/,
+  );
+  assert.throws(
+    () =>
+      validatePerformanceBudget(
+        validBudget({ initial_js_headroom_warning: undefined }),
+      ),
+    /must define initial_js_headroom_warning/,
+  );
+  assert.throws(
+    () =>
+      validatePerformanceBudget(
+        validBudget({
+          initial_js_headroom_warning: {
+            minimum_remaining_bytes: 1024,
+            minimum_remaining_ratio: 0,
+          },
+        }),
+      ),
+    /minimum_remaining_ratio must be a finite number > 0 and <= 1/,
+  );
+  assert.throws(
+    () =>
+      validatePerformanceBudget(
+        validBudget({
+          initial_js_headroom_warning: {
+            minimum_remaining_bytes: 1024,
+            minimum_remaining_ratio: 0.02,
+            typo: true,
+          },
+        }),
+      ),
+    /initial_js_headroom_warning: unsupported field "typo"/,
   );
   assert.throws(() => parsePerformanceBudget("{not-json"), /not valid JSON/);
 });
@@ -277,6 +315,148 @@ test("keeps positive discovery minima as a parser liveness guard", () => {
     "/login: initial_js_asset_count 0 is below 1",
     "/login: initial_css_asset_count 0 is below 1",
   ]);
+});
+
+test("reports shared shell, route deltas and deterministic low-headroom warnings", () => {
+  const shared = {
+    href: "./shared.js",
+    path: "shared.js",
+    kind: "js",
+    raw_bytes: 100,
+    gzip_bytes: 60,
+  };
+  const first = {
+    route: "/first",
+    initial_js_gzip_bytes: 9_500,
+    initial_css_gzip_bytes: 100,
+    assets: [
+      shared,
+      {
+        href: "./first.js",
+        path: "first.js",
+        kind: "js",
+        raw_bytes: 40,
+        gzip_bytes: 20,
+      },
+    ],
+  };
+  const second = {
+    route: "/second",
+    initial_js_gzip_bytes: 9_900,
+    initial_css_gzip_bytes: 100,
+    assets: [shared],
+  };
+  const shell = collectSharedInitialAssets([first, second]);
+  assert.equal(shell.js.asset_count, 1);
+  assert.equal(shell.js.gzip_bytes, 60);
+  assert.deepEqual(
+    shell.js.assets.map((asset) => asset.path),
+    ["shared.js"],
+  );
+
+  const policy = {
+    minimum_remaining_bytes: 1024,
+    minimum_remaining_ratio: 0.02,
+  };
+  assert.equal(
+    evaluateRouteHeadroom(first, routeBudget(), policy).length,
+    1,
+    "500 bytes warns even though the ratio remains above two percent",
+  );
+  assert.equal(
+    evaluateRouteHeadroom(
+      { ...first, initial_js_gzip_bytes: 9_800 },
+      routeBudget({ max_initial_js_gzip_bytes: 10_000 }),
+      { minimum_remaining_bytes: 100, minimum_remaining_ratio: 0.03 },
+    ).length,
+    1,
+    "two-percent headroom warns when the ratio threshold is three percent",
+  );
+  assert.deepEqual(
+    evaluateRouteHeadroom(
+      { ...first, initial_js_gzip_bytes: 8_000 },
+      routeBudget(),
+      policy,
+    ),
+    [],
+  );
+  assert.deepEqual(
+    evaluateRouteHeadroom(
+      { ...first, initial_js_gzip_bytes: 10_001 },
+      routeBudget(),
+      policy,
+    ),
+    [],
+    "hard failures remain errors, not duplicate warnings",
+  );
+});
+
+test("runBudgetCheck separates the common shell from route-specific assets", (t) => {
+  const root = temporaryDirectory(t, "route-budget-shell-");
+  const buildDir = join(root, "build");
+  mkdirSync(join(buildDir, "_app"), { recursive: true });
+  writeFileSync(
+    join(buildDir, "login.html"),
+    '<link rel="modulepreload" href="./_app/shared.js"><link rel="modulepreload" href="./_app/login.js"><link rel="stylesheet" href="./_app/shared.css">',
+  );
+  writeFileSync(
+    join(buildDir, "settings.html"),
+    '<link rel="modulepreload" href="./_app/shared.js"><link rel="modulepreload" href="./_app/settings.js"><link rel="stylesheet" href="./_app/shared.css">',
+  );
+  writeFileSync(
+    join(buildDir, "_app/shared.js"),
+    "export const shared = true;\n",
+  );
+  writeFileSync(
+    join(buildDir, "_app/login.js"),
+    "export const login = true;\n",
+  );
+  writeFileSync(
+    join(buildDir, "_app/settings.js"),
+    "export const settings = true;\n",
+  );
+  writeFileSync(join(buildDir, "_app/shared.css"), ".shared{display:block}\n");
+
+  const contract = JSON.parse(readFileSync(defaultPerformanceContractPath));
+  contract.measurements.web_build.budget = validBudget({
+    output_directories: ["build"],
+    routes: {
+      "/login": routeBudget(),
+      "/settings": routeBudget(),
+    },
+  });
+  const budgetPath = join(root, "performance.v1.json");
+  writeFileSync(budgetPath, JSON.stringify(contract));
+
+  const report = runBudgetCheck({
+    buildDir,
+    budgetPath,
+    contractRoot: root,
+    requireRevisionEvidence: false,
+    buildEvidence: { verified: false, status: "fixture" },
+    checkoutRevision: null,
+    checkoutClean: null,
+    revisionEnvironment: {},
+  });
+  assert.equal(report.schema_version, 3);
+  assert.deepEqual(
+    report.shared_initial_assets.js.assets.map((asset) => asset.path),
+    ["_app/shared.js"],
+  );
+  assert.deepEqual(
+    report.shared_initial_assets.css.assets.map((asset) => asset.path),
+    ["_app/shared.css"],
+  );
+  const settings = report.routes.find((route) => route.route === "/settings");
+  assert.deepEqual(
+    settings.route_specific_js.assets.map((asset) => asset.path),
+    ["_app/settings.js"],
+  );
+  assert.equal(
+    settings.initial_js_gzip_bytes,
+    report.shared_initial_assets.js.gzip_bytes +
+      settings.route_specific_js.gzip_bytes,
+  );
 });
 
 test("reports oversized route assets with per-file context", () => {
