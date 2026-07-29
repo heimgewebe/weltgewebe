@@ -202,10 +202,10 @@ where
                 "failed to acquire node activity projection guard".to_string(),
             )
         })?;
-    let node = current_node_for_precondition(state, node_id).await;
-    let outcome = match node {
-        Ok(Some(_)) => projection.await,
-        Ok(None) => Ok(()),
+    let node_exists = node_exists_for_activity_projection(state, node_id).await;
+    let outcome = match node_exists {
+        Ok(true) => projection.await,
+        Ok(false) => Ok(()),
         Err(response) => Err((
             response.status(),
             "failed to verify node before activity projection".to_string(),
@@ -223,6 +223,35 @@ pub async fn create_node_serialized(
     nodes::create_node(State(state), Extension(auth), Json(payload))
         .await
         .into_response()
+}
+
+async fn node_exists_for_activity_projection(state: &ApiState, id: &str) -> Result<bool, Response> {
+    if uses_postgres_node_persistence(state) {
+        let pool = state.db_pool.as_ref().ok_or_else(|| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "PostgreSQL pool unavailable for node activity projection",
+            )
+                .into_response()
+        })?;
+        return sqlx::query_scalar::<_, bool>(
+            "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)",
+        )
+        .bind(id)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, node_id = %id, "failed to verify node existence for activity projection");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to verify node before activity projection",
+            )
+                .into_response()
+        });
+    }
+
+    let cache = state.nodes.read().await;
+    Ok(cache.get(id).is_some())
 }
 
 async fn current_node_for_precondition(
