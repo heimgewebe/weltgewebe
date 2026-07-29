@@ -58,6 +58,65 @@ test("compiles draft-07 and validates positive and negative data", () => {
   }
 });
 
+test("edge lifecycle schema couples explicit null timestamps", () => {
+  const directory = fixtureDirectory();
+  try {
+    const schema = join(
+      repositoryRoot,
+      "contracts",
+      "domain",
+      "edge.schema.json",
+    );
+    const baseEdge = {
+      id: "d3f6c9b1-4e2a-4d7f-8b1c-2a9e5f6d7c8b",
+      source_type: "account",
+      source_id: "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
+      target_type: "node",
+      target_id: "b52be17c-4ab7-4434-98ce-520f86290cf0",
+      edge_kind: "reference",
+    };
+    const undated = join(directory, "undated.json");
+    const datedLegacy = join(directory, "dated-legacy.json");
+    const datedNullExpiry = join(directory, "dated-null-expiry.json");
+    writeFileSync(
+      undated,
+      JSON.stringify({ ...baseEdge, created_at: null, expires_at: null }),
+    );
+    writeFileSync(
+      datedLegacy,
+      JSON.stringify({ ...baseEdge, created_at: "2026-07-29T12:00:00Z" }),
+    );
+    writeFileSync(
+      datedNullExpiry,
+      JSON.stringify({
+        ...baseEdge,
+        created_at: "2026-07-29T12:00:00Z",
+        expires_at: null,
+      }),
+    );
+
+    assert.equal(
+      run("validate", "--schema", schema, "--data", undated).status,
+      0,
+    );
+    assert.equal(
+      run("validate", "--schema", schema, "--data", datedLegacy).status,
+      0,
+    );
+    const rejected = run(
+      "validate",
+      "--schema",
+      schema,
+      "--data",
+      datedNullExpiry,
+    );
+    assert.equal(rejected.status, 1);
+    assert.match(rejected.stderr, /invalid/);
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
 test("auto-detects draft 2020-12 and loads formats", () => {
   const directory = fixtureDirectory();
   try {

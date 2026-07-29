@@ -61,6 +61,19 @@
         },
         "required": ["expires_at"]
       }
+    },
+    {
+      "if": {
+        "properties": {
+          "expires_at": { "type": "null" }
+        },
+        "required": ["expires_at"]
+      },
+      "then": {
+        "properties": {
+          "created_at": { "type": "null" }
+        }
+      }
     }
   ]
 }
