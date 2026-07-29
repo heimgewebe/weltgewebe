@@ -1,5 +1,6 @@
 <script lang="ts">
   import { createEventDispatcher, onDestroy } from "svelte";
+  import InfoHeading from "$lib/components/InfoHeading.svelte";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
   import {
     buildSimilarNodeQuery,
@@ -86,15 +87,15 @@
 <section
   class="similar-nodes"
   aria-labelledby="similar-nodes-heading"
-  aria-describedby="similar-nodes-explainer"
   aria-busy={requested && loading}
 >
-  <h4 id="similar-nodes-heading">Ähnliche Knoten</h4>
-  <p id="similar-nodes-explainer" class="similar-explainer">
-    Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet. Das sind
-    Vorschläge – keine Fäden, keine kuratierten Beziehungen und keine Aussage
-    über gemeinsame Autorenschaft.
-  </p>
+  <InfoHeading id="similar-nodes-heading" label="Ähnliche Knoten" level={4}>
+    <p class="similar-explainer">
+      Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet. Das sind
+      Vorschläge – keine Fäden, keine kuratierten Beziehungen und keine Aussage
+      über gemeinsame Autorenschaft.
+    </p>
+  </InfoHeading>
   {#if !requested}
     <button
       class="similar-trigger"
@@ -125,11 +126,10 @@
     {/if}
     {#if similarNodes.length > 0}
       <p class="similar-result-status" role="status" aria-live="polite">
-        {similarNodes.length} maschinell berechnete {similarNodes.length === 1
-          ? "Ähnlichkeit"
-          : "Ähnlichkeiten"} gefunden.
+        {similarNodes.length}
+        {similarNodes.length === 1 ? "Vorschlag" : "Vorschläge"}
       </p>
-      <ul aria-label="Maschinell berechnete ähnliche Knoten">
+      <ul aria-label="Vorgeschlagene ähnliche Knoten">
         {#each similarNodes as similar}
           <li>
             <button
@@ -161,8 +161,7 @@
     padding-top: 1rem;
     border-top: 1px solid var(--panel-border);
   }
-  h4 {
-    margin: 0;
+  .similar-nodes :global(.info-heading-title) {
     font-size: 1rem;
   }
   .similar-explainer,
@@ -175,7 +174,7 @@
     color: var(--muted);
   }
   .similar-result-status {
-    margin-top: 0;
+    margin-top: 0.65rem;
   }
   .similar-error {
     color: var(--text);

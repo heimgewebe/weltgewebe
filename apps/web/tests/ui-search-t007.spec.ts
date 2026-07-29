@@ -162,6 +162,7 @@ test.describe("T007 authorized server search contract", () => {
   test("loads similar nodes only after explicit request and navigates without mutation", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 800, height: 900 });
     let mutationRequests = 0;
     let similarityRequests = 0;
     await page.route("**/api/search**", async (route) => {
@@ -193,23 +194,60 @@ test.describe("T007 authorized server search contract", () => {
     await page.getByRole("option").first().click();
 
     const section = page.locator("section.similar-nodes");
+    const disclosure = section.locator("details.info-heading");
+    const headingTrigger = disclosure.locator("summary");
+    const explanation = disclosure.getByRole("dialog", {
+      name: "Ähnliche Knoten",
+    });
+
     await expect(
       section.getByRole("heading", { name: "Ähnliche Knoten" }),
     ).toBeVisible();
-    await expect(section).toContainText(
-      "Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet.",
+    await expect(headingTrigger).toHaveAttribute(
+      "aria-controls",
+      "similar-nodes-heading-explanation",
     );
-    await expect(section).toContainText("keine Fäden");
-    await expect(section).toContainText("keine kuratierten Beziehungen");
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await expect(explanation).not.toBeVisible();
     await expect(section).toContainText(
       "Erst beim Anklicken wird eine Suche an den Server gesendet.",
     );
+
+    await headingTrigger.focus();
+    await headingTrigger.press("Enter");
+    await expect(disclosure).toHaveAttribute("open", "");
+    await expect(explanation).toBeVisible();
+    await expect(explanation).toContainText(
+      "Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet.",
+    );
+    await expect(explanation).toContainText("keine Fäden");
+    await expect(explanation).toContainText("keine kuratierten Beziehungen");
+
+    await headingTrigger.press("Escape");
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await expect(explanation).not.toBeVisible();
+    await expect(page.getByTestId("context-panel")).toBeVisible();
+    await expect(headingTrigger).toBeFocused();
+
+    await headingTrigger.dispatchEvent("contextmenu");
+    await expect(disclosure).toHaveAttribute("open", "");
+    await expect(explanation).toBeVisible();
+    const explanationBox = await explanation.boundingBox();
+    expect(explanationBox).not.toBeNull();
+    expect(explanationBox!.x).toBeGreaterThanOrEqual(0);
+    expect(explanationBox!.x + explanationBox!.width).toBeLessThanOrEqual(800);
+    await explanation.getByRole("button", { name: "Schließen" }).click();
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await expect(explanation).not.toBeVisible();
+    await expect(headingTrigger).toBeFocused();
+
     await page.waitForTimeout(SIMILARITY_QUIESCENCE_MS);
     expect(similarityRequests).toBe(0);
 
     await section
       .getByRole("button", { name: "Ähnliche Knoten suchen" })
       .click();
+    await expect(section.getByText("1 Vorschlag")).toBeVisible();
     await expect(
       section.getByRole("button", { name: /Gemeinschaftliche Radstation/ }),
     ).toBeVisible();
