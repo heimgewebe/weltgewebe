@@ -8,6 +8,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tarfile
 import tempfile
 import threading
 import time
@@ -164,6 +165,108 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                     destination,
                 )
             urlopen.assert_not_called()
+
+    def test_tool_archive_extracts_regular_files_into_new_root(self) -> None:
+        payload = b"helm-binary"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "tool.tar.gz"
+            destination = root / "extract"
+            with tarfile.open(archive, "w:gz") as handle:
+                directory = tarfile.TarInfo("linux-amd64")
+                directory.type = tarfile.DIRTYPE
+                handle.addfile(directory)
+                binary = tarfile.TarInfo("linux-amd64/helm")
+                binary.size = len(payload)
+                handle.addfile(binary, io.BytesIO(payload))
+
+            self.bootstrap._safe_extract_tar(archive, destination)
+
+            self.assertEqual((destination / "linux-amd64/helm").read_bytes(), payload)
+
+    def test_tool_archive_rejects_symlink_escape_before_any_write(self) -> None:
+        payload = b"escape"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "attack.tar.gz"
+            destination = root / "extract"
+            outside = root / "outside"
+            outside.mkdir()
+            with tarfile.open(archive, "w:gz") as handle:
+                link = tarfile.TarInfo("link")
+                link.type = tarfile.SYMTYPE
+                link.linkname = "../outside"
+                handle.addfile(link)
+                file_member = tarfile.TarInfo("link/pwned.txt")
+                file_member.size = len(payload)
+                handle.addfile(file_member, io.BytesIO(payload))
+
+            with self.assertRaisesRegex(RuntimeError, "unsupported archive member type"):
+                self.bootstrap._safe_extract_tar(archive, destination)
+
+            self.assertFalse((outside / "pwned.txt").exists())
+            self.assertFalse(destination.exists())
+
+    def test_tool_archive_rejects_links_devices_and_fifo(self) -> None:
+        unsafe_types = {
+            "hardlink": tarfile.LNKTYPE,
+            "character-device": tarfile.CHRTYPE,
+            "block-device": tarfile.BLKTYPE,
+            "fifo": tarfile.FIFOTYPE,
+        }
+        for label, member_type in unsafe_types.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                archive = root / "attack.tar.gz"
+                destination = root / "extract"
+                with tarfile.open(archive, "w:gz") as handle:
+                    member = tarfile.TarInfo("unsafe")
+                    member.type = member_type
+                    if member_type == tarfile.LNKTYPE:
+                        member.linkname = "target"
+                    handle.addfile(member)
+
+                with self.assertRaisesRegex(
+                    RuntimeError, "unsupported archive member type"
+                ):
+                    self.bootstrap._safe_extract_tar(archive, destination)
+                self.assertFalse(destination.exists())
+
+    def test_tool_archive_rejects_parent_traversal_before_any_write(self) -> None:
+        payload = b"escape"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "attack.tar.gz"
+            destination = root / "extract"
+            outside = root / "outside.txt"
+            with tarfile.open(archive, "w:gz") as handle:
+                member = tarfile.TarInfo("../outside.txt")
+                member.size = len(payload)
+                handle.addfile(member, io.BytesIO(payload))
+
+            with self.assertRaisesRegex(RuntimeError, "unsafe archive member path"):
+                self.bootstrap._safe_extract_tar(archive, destination)
+
+            self.assertFalse(outside.exists())
+            self.assertFalse(destination.exists())
+
+    def test_tool_archive_refuses_preexisting_destination(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            archive = root / "tool.tar.gz"
+            destination = root / "extract"
+            destination.mkdir()
+            marker = destination / "marker"
+            marker.write_text("keep", encoding="utf-8")
+            with tarfile.open(archive, "w:gz") as handle:
+                member = tarfile.TarInfo("tool")
+                member.size = 1
+                handle.addfile(member, io.BytesIO(b"x"))
+
+            with self.assertRaisesRegex(RuntimeError, "destination already exists"):
+                self.bootstrap._safe_extract_tar(archive, destination)
+
+            self.assertEqual(marker.read_text(encoding="utf-8"), "keep")
 
     def test_kind_reference_requests_ha_required_kubectl_cnpg_tool(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text(encoding="utf-8")

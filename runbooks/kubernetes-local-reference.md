@@ -72,3 +72,17 @@ Es gibt keine veröffentlichten Zwischenphasen-Subcommands.
 ## Abbruch und Diagnose
 
 Bei Fehlern liegen redigierte Kubernetesdiagnosen unter `.cache/weltgewebe-platform/failures/<cluster>/`. Secretwerte werden nicht in Receipts geschrieben. Ein Cluster ohne gültigen Marker wird niemals durch `down` gelöscht.
+
+## Manuelles eigentumsgebundenes Cleanup
+
+Nur für einen abgebrochenen Lauf mit dem exakten Commit und der im Proof-Receipt gebundenen Owner-ID:
+
+```bash
+python3 scripts/platform/kind_reference.py down \
+  --cluster weltgewebe-reference \
+  --commit <exakter-commit> \
+  --owner-id <exakte-owner-id> \
+  --receipt .cache/weltgewebe-platform/cleanup.json
+```
+
+`--receipt` ist optional, aber für einen revisionsfähigen manuellen Cleanup empfohlen. Ohne exakt passende Bindung für Repository, Cluster, Commit und Owner-ID verweigert der Runner jede Löschung. Verwaiste, fremde oder unlesbare Marker werden nicht übernommen oder automatisch entfernt.

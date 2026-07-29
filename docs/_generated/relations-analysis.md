@@ -16,12 +16,12 @@ Generated automatically. Do not edit.
 | --- | --- |
 | Dokumente gesamt | 186 |
 | Dokumente mit ausgehenden Relationen | 185 |
-| Dokumente als Ziel referenziert | 140 |
-| Relationen gesamt | 658 |
+| Dokumente als Ziel referenziert | 141 |
+| Relationen gesamt | 660 |
 | — depends_on | 25 |
-| — relates_to | 616 |
+| — relates_to | 617 |
 | — supersedes | 12 |
-| — verifies | 5 |
+| — verifies | 6 |
 | Isolierte Dokumente | 0 |
 | depends_on Zyklen | 0 |
 

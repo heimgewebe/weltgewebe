@@ -17,7 +17,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from contextlib import contextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any, Iterator
 
 import yaml
@@ -223,6 +223,7 @@ def _install_executable(source: Path, destination: Path) -> None:
         with tmp_path.open("rb") as handle:
             os.fsync(handle.fileno())
         os.replace(tmp_path, destination)
+        _fsync_directory(destination.parent)
     finally:
         tmp_path.unlink(missing_ok=True)
 
@@ -247,16 +248,82 @@ def _assert_artifact_contract(name: str, path: Path, spec: dict[str, Any]) -> No
         )
 
 
+def _validated_tar_members(
+    handle: tarfile.TarFile,
+) -> list[tuple[tarfile.TarInfo, Path]]:
+    validated: list[tuple[tarfile.TarInfo, Path]] = []
+    member_types: dict[Path, str] = {}
+
+    for member in handle.getmembers():
+        relative = PurePosixPath(member.name)
+        if not member.name or relative.is_absolute() or ".." in relative.parts:
+            raise RuntimeError(f"unsafe archive member path: {member.name}")
+        parts = tuple(part for part in relative.parts if part not in {"", "."})
+        if not parts:
+            if member.isdir():
+                continue
+            raise RuntimeError(f"unsafe archive member path: {member.name}")
+        target = Path(*parts)
+
+        if member.isdir():
+            member_type = "directory"
+        elif member.isfile():
+            member_type = "file"
+        else:
+            raise RuntimeError(f"unsupported archive member type: {member.name}")
+
+        previous = member_types.get(target)
+        if previous is not None and (previous != member_type or member_type == "file"):
+            raise RuntimeError(f"conflicting archive member: {member.name}")
+        member_types[target] = member_type
+        validated.append((member, target))
+
+    for target in member_types:
+        for parent in target.parents:
+            if parent == Path("."):
+                break
+            if member_types.get(parent) == "file":
+                raise RuntimeError(f"archive file shadows parent directory: {parent}")
+
+    return validated
+
+
 def _safe_extract_tar(archive: Path, destination: Path) -> None:
-    destination.mkdir(parents=True, exist_ok=True)
+    if destination.is_symlink() or destination.exists():
+        raise RuntimeError(f"archive destination already exists: {destination}")
+    destination.parent.mkdir(parents=True, exist_ok=True)
+
     with tarfile.open(archive, "r:gz") as handle:
-        root = destination.resolve()
-        members = handle.getmembers()
-        for member in members:
-            target = (destination / member.name).resolve()
-            if root not in target.parents and target != root:
-                raise RuntimeError(f"unsafe archive member: {member.name}")
-        handle.extractall(destination, members=members)
+        members = _validated_tar_members(handle)
+        destination.mkdir(mode=0o700)
+        try:
+            for member, relative in members:
+                target = destination / relative
+                if member.isdir():
+                    target.mkdir(parents=True, exist_ok=True, mode=0o700)
+                    if target.is_symlink() or not target.is_dir():
+                        raise RuntimeError(f"unsafe archive directory: {member.name}")
+                    continue
+
+                target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+                source = handle.extractfile(member)
+                if source is None:
+                    raise RuntimeError(f"archive file is unreadable: {member.name}")
+                flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY
+                if hasattr(os, "O_CLOEXEC"):
+                    flags |= os.O_CLOEXEC
+                if hasattr(os, "O_NOFOLLOW"):
+                    flags |= os.O_NOFOLLOW
+                with source, os.fdopen(os.open(target, flags, 0o600), "wb") as output:
+                    shutil.copyfileobj(source, output)
+                    output.flush()
+                    os.fsync(output.fileno())
+            _fsync_directory(destination)
+            _fsync_directory(destination.parent)
+        except Exception:
+            shutil.rmtree(destination, ignore_errors=True)
+            _fsync_directory(destination.parent)
+            raise
 
 
 def _check_host(lock: dict[str, Any]) -> None:
@@ -307,9 +374,10 @@ def install(
         elif spec["format"] == "tar.gz":
             with tempfile.TemporaryDirectory(dir=cache) as tmp:
                 tmp_dir = Path(tmp)
-                _safe_extract_tar(archive, tmp_dir)
+                extract_root = tmp_dir / "extract"
+                _safe_extract_tar(archive, extract_root)
                 candidate = next(
-                    (path for path in tmp_dir.rglob(spec["binary"]) if path.is_file()),
+                    (path for path in extract_root.rglob(spec["binary"]) if path.is_file()),
                     None,
                 )
                 if candidate is None:

@@ -832,6 +832,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 
+## docs/reports/kubernetes-platform-foundation-status.md
+
+- [relates_to] docs/reports/weltgewebe-os-foundation-status.md
+
 ## docs/reports/map-architekturkritik.md
 
 - [relates_to] docs/blueprints/kartenklarheit-phase6.md
@@ -1340,6 +1344,10 @@ Generated automatically. Do not edit.
 ## scripts/ops/reconcile_public_login_smtp_env.py
 
 - [relates_to] docs/deploy/vps.md
+
+## scripts/platform/ha_reference.py
+
+- [verifies] docs/reports/kubernetes-platform-foundation-status.md
 
 ## scripts/platform/kind_reference.py
 

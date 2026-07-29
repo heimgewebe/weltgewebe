@@ -272,8 +272,8 @@ Später aktivierbar sind weitere Regionen, globale Indizes, lokale KI, GPU-Börs
 
 ## 13. Abgrenzung des heutigen Zustands
 
-Heute belegt sind unter anderem Web, Rust/Axum-API, PostgreSQL-Persistenzpfade, NATS im Stack, Karten- und Produktflächen sowie starke Agenten- und Task-Control-Grundlagen.
+Heute belegt sind unter anderem Web, Rust/Axum-API, PostgreSQL-Persistenzpfade, NATS im Stack, Karten- und Produktflächen, die implementierten Multi-Instanz-Kohärenzpfade, Transactional Outbox sowie starke Agenten- und Task-Control-Grundlagen.
 
-Noch nicht belegt sind vollständige Multi-Instanz-Kohärenz, Transactional Outbox, Kubernetes-Produktionsbetrieb, hochverfügbare Referenzzelle und öffentliche Zellföderation.
+Noch nicht belegt sind Kubernetes-Produktionsbetrieb, eine über mehrere physische Hosts oder vergleichbar unabhängige Fehlerdomänen verteilte HA-Referenzzelle und öffentliche Zellföderation. Der aktuelle kind-Proof simuliert logische Zonen vollständig auf einem einzelnen CI-Host.
 
-Diese Lücke ist ausdrücklich und darf nicht durch Zielarchitekturtexte geglättet werden.
+Diese verbleibende Lücke ist ausdrücklich und darf nicht durch Zielarchitektur- oder Statusberichte geglättet werden.
