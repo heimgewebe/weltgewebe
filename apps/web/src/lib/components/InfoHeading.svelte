@@ -10,9 +10,31 @@
       "",
     );
   }
+
+  function closeDetails(details: HTMLDetailsElement | null) {
+    if (!details) return;
+    details.removeAttribute("open");
+    details.querySelector<HTMLElement>("summary")?.focus();
+  }
+
+  function close(event: MouseEvent) {
+    closeDetails(
+      (event.currentTarget as HTMLElement | null)?.closest("details") ?? null,
+    );
+  }
+
+  function handleKeydown(event: KeyboardEvent) {
+    if (event.key !== "Escape" || event.repeat || event.defaultPrevented)
+      return;
+    const details = event.currentTarget as HTMLDetailsElement;
+    if (!details.open) return;
+    event.preventDefault();
+    event.stopPropagation();
+    closeDetails(details);
+  }
 </script>
 
-<details class="info-heading">
+<details class="info-heading" on:keydown={handleKeydown}>
   <summary
     aria-controls={`${id}-explanation`}
     on:contextmenu={openFromLongPress}
@@ -29,6 +51,7 @@
     aria-labelledby={id}
   >
     <slot />
+    <button type="button" on:click={close}>Schließen</button>
   </div>
 </details>
 
@@ -103,6 +126,24 @@
     margin-bottom: 0;
   }
 
+  button {
+    min-height: 36px;
+    margin: 0.7rem 0 0 auto;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 7px;
+    background: var(--panel-solid);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+    display: block;
+  }
+
+  button:hover,
+  button:focus-visible {
+    border-color: var(--accent);
+  }
+
   @supports (top: anchor(bottom)) {
     .info-heading-panel {
       position-anchor: --info-heading-trigger;
@@ -110,7 +151,10 @@
       right: auto;
       left: anchor(left);
       margin-top: 0.4rem;
-      position-try-fallbacks: flip-block;
+      position-try-fallbacks:
+        flip-inline,
+        flip-block,
+        flip-inline flip-block;
     }
   }
 

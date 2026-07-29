@@ -162,6 +162,7 @@ test.describe("T007 authorized server search contract", () => {
   test("loads similar nodes only after explicit request and navigates without mutation", async ({
     page,
   }) => {
+    await page.setViewportSize({ width: 800, height: 900 });
     let mutationRequests = 0;
     let similarityRequests = 0;
     await page.route("**/api/search**", async (route) => {
@@ -222,17 +223,23 @@ test.describe("T007 authorized server search contract", () => {
     await expect(explanation).toContainText("keine Fäden");
     await expect(explanation).toContainText("keine kuratierten Beziehungen");
 
-    await headingTrigger.press("Enter");
+    await headingTrigger.press("Escape");
     await expect(disclosure).not.toHaveAttribute("open", "");
     await expect(explanation).not.toBeVisible();
+    await expect(page.getByTestId("context-panel")).toBeVisible();
     await expect(headingTrigger).toBeFocused();
 
     await headingTrigger.dispatchEvent("contextmenu");
     await expect(disclosure).toHaveAttribute("open", "");
     await expect(explanation).toBeVisible();
-    await headingTrigger.click();
+    const explanationBox = await explanation.boundingBox();
+    expect(explanationBox).not.toBeNull();
+    expect(explanationBox!.x).toBeGreaterThanOrEqual(0);
+    expect(explanationBox!.x + explanationBox!.width).toBeLessThanOrEqual(800);
+    await explanation.getByRole("button", { name: "Schließen" }).click();
     await expect(disclosure).not.toHaveAttribute("open", "");
     await expect(explanation).not.toBeVisible();
+    await expect(headingTrigger).toBeFocused();
 
     await page.waitForTimeout(SIMILARITY_QUIESCENCE_MS);
     expect(similarityRequests).toBe(0);
