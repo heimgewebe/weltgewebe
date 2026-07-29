@@ -98,7 +98,11 @@ By default, dev-login is restricted to requests originating from **localhost**.
 
 ## Observability
 
-- `GET /health/live` and `GET /health/ready` expose liveness and readiness information.
+- `GET /health/live` is dependency-free liveness and remains suitable for restart decisions.
+- `GET /health/ready` checks PostgreSQL, NATS, and policy availability concurrently. Each check is bounded to
+  750 ms and the complete readiness evaluation to 1,000 ms. A timeout returns `503 Service Unavailable`; in
+  verbose mode the affected check includes a bounded timeout diagnostic. External Docker and Kubernetes probe
+  timeouts must remain above the internal 1,000 ms budget so the API can return the controlled response itself.
 - `GET /metrics` renders Prometheus metrics including `http_requests_total{method,path}` and `build_info`.
 
 ## Database Migrations
