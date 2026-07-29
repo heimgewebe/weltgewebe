@@ -4,8 +4,13 @@ const ROOT_KEYS = new Set([
   "schema_version",
   "measurement",
   "output_directories",
+  "initial_js_headroom_warning",
   "routes",
   "emitted_assets",
+]);
+const INITIAL_JS_HEADROOM_WARNING_KEYS = new Set([
+  "minimum_remaining_bytes",
+  "minimum_remaining_ratio",
 ]);
 const ROUTE_BUDGET_KEYS = new Set([
   "max_initial_js_gzip_bytes",
@@ -38,6 +43,12 @@ function assertExactKeys(value, allowedKeys, label) {
 function assertInteger(value, label, minimum) {
   if (!Number.isInteger(value) || value < minimum) {
     throw new Error(label + " must be an integer >= " + minimum);
+  }
+}
+
+function assertRatio(value, label) {
+  if (!Number.isFinite(value) || value <= 0 || value > 1) {
+    throw new Error(label + " must be a finite number > 0 and <= 1");
   }
 }
 
@@ -168,8 +179,8 @@ export function validatePerformanceBudget(value) {
     throw new Error("Route performance budget must be a JSON object");
   }
   assertExactKeys(value, ROOT_KEYS, "route performance budget");
-  if (value.schema_version !== 2) {
-    throw new Error("Route performance budget must use schema_version 2");
+  if (value.schema_version !== 3) {
+    throw new Error("Route performance budget must use schema_version 3");
   }
   if (typeof value.measurement !== "string" || value.measurement.length === 0) {
     throw new Error("Route performance budget must define measurement");
@@ -178,6 +189,25 @@ export function validatePerformanceBudget(value) {
   for (const directory of value.output_directories) {
     assertSafeRelativeDirectory(directory, "output_directories entry");
   }
+  if (!isPlainObject(value.initial_js_headroom_warning)) {
+    throw new Error(
+      "Route performance budget must define initial_js_headroom_warning",
+    );
+  }
+  assertExactKeys(
+    value.initial_js_headroom_warning,
+    INITIAL_JS_HEADROOM_WARNING_KEYS,
+    "initial_js_headroom_warning",
+  );
+  assertInteger(
+    value.initial_js_headroom_warning.minimum_remaining_bytes,
+    "initial_js_headroom_warning.minimum_remaining_bytes",
+    1,
+  );
+  assertRatio(
+    value.initial_js_headroom_warning.minimum_remaining_ratio,
+    "initial_js_headroom_warning.minimum_remaining_ratio",
+  );
   if (!isPlainObject(value.routes) || Object.keys(value.routes).length === 0) {
     throw new Error("Route performance budget must define at least one route");
   }

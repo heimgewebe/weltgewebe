@@ -361,51 +361,116 @@ fn is_trusted_peer(ip: IpAddr) -> bool {
     get_trusted_proxies().iter().any(|rule| rule.matches(ip))
 }
 
-pub(crate) fn effective_client_ip(peer: SocketAddr, headers: &HeaderMap) -> IpAddr {
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum ClientIpError {
+    AmbiguousXForwardedFor,
+    InvalidXForwardedFor,
+    AmbiguousForwarded,
+    InvalidForwarded,
+}
+
+fn parse_forwarded_for(value: &str) -> Result<IpAddr, ClientIpError> {
+    if value.contains(',') {
+        return Err(ClientIpError::AmbiguousForwarded);
+    }
+
+    let mut forwarded_for = None;
+    for part in value.split(';') {
+        let Some((name, raw_value)) = part.trim().split_once('=') else {
+            continue;
+        };
+        if !name.trim().eq_ignore_ascii_case("for") {
+            continue;
+        }
+        if forwarded_for.is_some() {
+            return Err(ClientIpError::AmbiguousForwarded);
+        }
+        forwarded_for = Some(raw_value.trim().trim_matches('"'));
+    }
+
+    let value = forwarded_for.ok_or(ClientIpError::InvalidForwarded)?;
+    if let Ok(addr) = value.parse::<SocketAddr>() {
+        return Ok(addr.ip());
+    }
+    if let Ok(addr) = value.parse::<IpAddr>() {
+        return Ok(addr);
+    }
+    if value.starts_with('[') && value.ends_with(']') {
+        if let Ok(addr) = value[1..value.len() - 1].parse::<IpAddr>() {
+            return Ok(addr);
+        }
+    }
+    Err(ClientIpError::InvalidForwarded)
+}
+
+/// Resolve one client address only across an explicitly trusted proxy boundary.
+///
+/// Weltgewebe's shipped Caddyfiles replace `X-Forwarded-For` with one public
+/// peer address. Other trusted proxies must provide the same singleton shape.
+/// Multiple header fields or comma-separated chains are rejected instead of
+/// trusting the attacker-controlled left-most element. A present but invalid
+/// XFF value never falls back to `Forwarded`.
+pub(crate) fn effective_client_ip(
+    peer: SocketAddr,
+    headers: &HeaderMap,
+) -> Result<IpAddr, ClientIpError> {
     if !is_trusted_peer(peer.ip()) {
-        return peer.ip();
+        return Ok(peer.ip());
     }
 
-    // The production Caddyfiles overwrite X-Forwarded-For with the public
-    // peer address and remove any client-supplied Forwarded header before the
-    // request reaches this trusted proxy boundary. Prefer that proxy-owned XFF
-    // value and retain RFC 7239 only as a fallback for other trusted proxies.
-    if let Some(xff_val) = headers.get("X-Forwarded-For").and_then(|v| v.to_str().ok()) {
-        if let Some(first) = xff_val.split(',').next() {
-            if let Ok(addr) = first.trim().parse::<IpAddr>() {
-                return addr;
-            }
+    let mut xff_values = headers.get_all("X-Forwarded-For").iter();
+    if let Some(value) = xff_values.next() {
+        if xff_values.next().is_some() {
+            return Err(ClientIpError::AmbiguousXForwardedFor);
+        }
+        let value = value
+            .to_str()
+            .map_err(|_| ClientIpError::InvalidXForwardedFor)?
+            .trim();
+        if value.contains(',') {
+            return Err(ClientIpError::AmbiguousXForwardedFor);
+        }
+        return value
+            .parse::<IpAddr>()
+            .map_err(|_| ClientIpError::InvalidXForwardedFor);
+    }
+
+    let mut forwarded_values = headers.get_all("Forwarded").iter();
+    if let Some(value) = forwarded_values.next() {
+        if forwarded_values.next().is_some() {
+            return Err(ClientIpError::AmbiguousForwarded);
+        }
+        let value = value
+            .to_str()
+            .map_err(|_| ClientIpError::InvalidForwarded)?;
+        return parse_forwarded_for(value);
+    }
+
+    Ok(peer.ip())
+}
+
+/// Keep rate-limit and observability identities bounded when a trusted proxy
+/// sends an invalid forwarding shape. Falling back to the transport peer may
+/// merge clients into one conservative bucket, but never lets an attacker mint
+/// arbitrary buckets through a prepended XFF value.
+pub(crate) fn client_ip_or_peer(
+    peer: SocketAddr,
+    headers: &HeaderMap,
+    consumer: &'static str,
+) -> IpAddr {
+    match effective_client_ip(peer, headers) {
+        Ok(client_ip) => client_ip,
+        Err(error) => {
+            tracing::warn!(
+                event = "client_ip.forwarding_rejected",
+                consumer = consumer,
+                peer_ip = %peer.ip(),
+                error = ?error,
+                "Rejecting ambiguous or invalid trusted-proxy forwarding metadata"
+            );
+            peer.ip()
         }
     }
-
-    // Fallback: Forwarded header (RFC 7239).
-    // Format: Forwarded: for=1.2.3.4, for=5.6.7.8;proto=http
-    if let Some(forwarded_val) = headers.get("Forwarded").and_then(|v| v.to_str().ok()) {
-        if let Some(first_element) = forwarded_val.split(',').next() {
-            for part in first_element.split(';') {
-                let part = part.trim();
-                if part.to_lowercase().starts_with("for=") {
-                    let val = part["for=".len()..].trim();
-                    let val = val.trim_matches('"');
-
-                    if let Ok(addr) = val.parse::<SocketAddr>() {
-                        return addr.ip();
-                    }
-                    if let Ok(addr) = val.parse::<IpAddr>() {
-                        return addr;
-                    }
-                    if val.starts_with('[') && val.ends_with(']') {
-                        let inner = &val[1..val.len() - 1];
-                        if let Ok(addr) = inner.parse::<IpAddr>() {
-                            return addr;
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    peer.ip()
 }
 
 /// Checks if dev-login is enabled and if the request is from an allowed source.
@@ -424,7 +489,15 @@ fn check_dev_login_guard(headers: &HeaderMap, addr: SocketAddr) -> Result<(), St
         .unwrap_or(false);
 
     let is_trusted_proxy = is_trusted_peer(addr.ip());
-    let client_ip = effective_client_ip(addr, headers);
+    let client_ip = effective_client_ip(addr, headers).map_err(|error| {
+        tracing::warn!(
+            event = "dev_login.forwarding_rejected",
+            peer_addr = %addr,
+            error = ?error,
+            "Dev-login rejected ambiguous or invalid trusted-proxy forwarding metadata"
+        );
+        StatusCode::FORBIDDEN
+    })?;
 
     // Check if the client address is localhost (IPv4 or IPv6)
     let is_localhost = match client_ip {
@@ -845,7 +918,7 @@ pub async fn request_login(
     Json(payload): Json<LoginRequestEmail>,
 ) -> impl IntoResponse {
     let request_id = get_request_id(&headers);
-    let client_ip = effective_client_ip(addr, &headers);
+    let client_ip = client_ip_or_peer(addr, &headers, "magic-link-request");
     let proxy_trusted = is_trusted_peer(addr.ip());
 
     if !state.config.auth_public_login {
@@ -1164,7 +1237,7 @@ pub async fn consume_login_post(
     Form(form): Form<ConsumeTokenForm>,
 ) -> impl IntoResponse {
     let request_id = get_request_id(&headers);
-    let client_ip = effective_client_ip(addr, &headers);
+    let client_ip = client_ip_or_peer(addr, &headers, "magic-link-consume");
     let proxy_trusted = is_trusted_peer(addr.ip());
 
     // 1. Check Nonce (and binding)
@@ -2801,7 +2874,7 @@ pub async fn passkey_auth_options(
     // (a single email is throttled across both login methods); the per-IP bucket
     // is global. Same SHA-256 hex-prefix convention.
     let email_norm = email.to_ascii_lowercase();
-    let client_ip = effective_client_ip(addr, &headers);
+    let client_ip = client_ip_or_peer(addr, &headers, "passkey-auth-options");
     let email_hash = {
         let mut hasher = Sha256::new();
         hasher.update(email_norm.as_bytes());
@@ -2999,7 +3072,7 @@ pub async fn passkey_auth_verify(
     // NOTE: the per-IP bucket is global and shared across the pre-session auth
     // endpoints, so a full passkey login (options then verify) can legitimately
     // consume more than one IP rate-limit token.
-    let client_ip = effective_client_ip(addr, &headers);
+    let client_ip = client_ip_or_peer(addr, &headers, "passkey-auth-verify");
     let auth_id_hash = {
         let mut hasher = Sha256::new();
         hasher.update(authentication_id.as_bytes());
@@ -3623,12 +3696,95 @@ mod tests {
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
         assert_eq!(
-            effective_client_ip(addr, &headers),
+            effective_client_ip(addr, &headers).unwrap(),
             "203.0.113.7".parse::<IpAddr>().unwrap()
         );
         assert_eq!(
             check_dev_login_guard(&headers, addr),
             Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxy_rejects_comma_separated_xff_chain() {
+        let _guard = EnvGuard::set("AUTH_DEV_LOGIN", "1");
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Forwarded-For", "127.0.0.1, 203.0.113.7".parse().unwrap());
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+
+        assert_eq!(
+            effective_client_ip(addr, &headers),
+            Err(ClientIpError::AmbiguousXForwardedFor)
+        );
+        assert_eq!(
+            check_dev_login_guard(&headers, addr),
+            Err(StatusCode::FORBIDDEN)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxy_rejects_multiple_xff_header_fields() {
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+        let mut headers = HeaderMap::new();
+        headers.append("X-Forwarded-For", "203.0.113.7".parse().unwrap());
+        headers.append("X-Forwarded-For", "198.51.100.9".parse().unwrap());
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+
+        assert_eq!(
+            effective_client_ip(addr, &headers),
+            Err(ClientIpError::AmbiguousXForwardedFor)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn invalid_xff_never_falls_back_to_forwarded() {
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+        let mut headers = HeaderMap::new();
+        headers.insert("X-Forwarded-For", "not-an-ip".parse().unwrap());
+        headers.insert("Forwarded", "for=127.0.0.1".parse().unwrap());
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+
+        assert_eq!(
+            effective_client_ip(addr, &headers),
+            Err(ClientIpError::InvalidXForwardedFor)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn trusted_proxy_rejects_multi_element_forwarded_header() {
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "Forwarded",
+            "for=127.0.0.1, for=203.0.113.7".parse().unwrap(),
+        );
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+
+        assert_eq!(
+            effective_client_ip(addr, &headers),
+            Err(ClientIpError::AmbiguousForwarded)
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn bounded_consumers_group_ambiguous_xff_under_transport_peer() {
+        let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
+        let mut headers = HeaderMap::new();
+        headers.insert(
+            "X-Forwarded-For",
+            "203.0.113.7, 198.51.100.9".parse().unwrap(),
+        );
+        let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+
+        assert_eq!(
+            client_ip_or_peer(addr, &headers, "test-rate-limit"),
+            addr.ip()
         );
     }
 
@@ -3740,13 +3896,16 @@ mod tests {
         let _guard_proxy = EnvGuard::set("AUTH_TRUSTED_PROXIES", "127.0.0.1");
 
         let mut headers = HeaderMap::new();
-        // Comma separated elements. First one is remote, second is localhost. Should pick first -> Rejected.
         headers.insert(
             "Forwarded".parse::<axum::http::HeaderName>().unwrap(),
             "for=1.2.3.4, for=127.0.0.1".parse().unwrap(),
         );
 
         let addr: SocketAddr = "127.0.0.1:8080".parse().unwrap();
+        assert_eq!(
+            effective_client_ip(addr, &headers),
+            Err(ClientIpError::AmbiguousForwarded)
+        );
         assert_eq!(
             check_dev_login_guard(&headers, addr),
             Err(StatusCode::FORBIDDEN)

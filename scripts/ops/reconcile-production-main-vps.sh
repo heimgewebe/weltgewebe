@@ -320,52 +320,26 @@ def is_lower_hex(value: object, length: int) -> bool:
     )
 
 
-def is_current_verified_receipt(payload: object) -> bool:
-    if not isinstance(payload, dict):
-        return False
-    if (
-        payload.get("schema_version") != 5
-        or payload.get("environment") != "production"
-        or payload.get("commit") != commit
-        or payload.get("lock_domain") != "weltgewebe-production-deployment-v1"
-        or payload.get("api_commit") != commit
-        or payload.get("frontend_commit") != commit
-        or payload.get("observed_main_after_deploy") != commit
-        or not isinstance(payload.get("completed_at"), str)
-    ):
-        return False
-
-    result = payload.get("result")
-    owner = payload.get("lock_owner_entrypoint")
-    handoff = payload.get("lock_handoff")
-    invocation_id = payload.get("deploy_invocation_id")
-    if result == "verified":
-        if (
-            not is_lower_hex(payload.get("web_artifact_sha256"), 64)
-            or not isinstance(payload.get("started_at"), str)
-            or not isinstance(payload.get("migration_completed_at"), str)
-        ):
-            return False
-        return (
-            owner == "deploy-helper"
-            and handoff == "direct"
-            and invocation_id is None
-        ) or (
-            owner == "reconciler"
-            and handoff == "inherited"
-            and is_lower_hex(invocation_id, 64)
-        )
-    if result == "verified_observed":
-        return (
-            owner == "reconciler"
-            and handoff == "public-observation"
-            and invocation_id is None
-            and payload.get("web_artifact_sha256") is None
-            and payload.get("started_at") is None
-            and payload.get("migration_completed_at") is None
-            and isinstance(payload.get("evidence_boundary"), str)
-        )
-    return False
+SCHEMA5_VERIFIED_KEYS = frozenset(
+    {
+        "schema_version",
+        "environment",
+        "commit",
+        "web_artifact_sha256",
+        "started_at",
+        "completed_at",
+        "api_commit",
+        "frontend_commit",
+        "observed_main_after_deploy",
+        "migration_completed_at",
+        "lock_domain",
+        "lock_owner_entrypoint",
+        "lock_handoff",
+        "result",
+        "deploy_invocation_id",
+    }
+)
+SCHEMA5_VERIFIED_OBSERVED_KEYS = SCHEMA5_VERIFIED_KEYS | {"evidence_boundary"}
 
 
 def parse_aware_timestamp(value: object) -> datetime | None:
@@ -379,6 +353,71 @@ def parse_aware_timestamp(value: object) -> datetime | None:
         return parsed.astimezone(timezone.utc)
     except (ValueError, OverflowError):
         return None
+
+
+def is_current_verified_receipt(payload: object) -> bool:
+    if not isinstance(payload, dict):
+        return False
+
+    result = payload.get("result")
+    if result == "verified":
+        expected_keys = SCHEMA5_VERIFIED_KEYS
+    elif result == "verified_observed":
+        expected_keys = SCHEMA5_VERIFIED_OBSERVED_KEYS
+    else:
+        return False
+    if set(payload) != expected_keys:
+        return False
+
+    completed_at = parse_aware_timestamp(payload.get("completed_at"))
+    if (
+        payload.get("schema_version") != 5
+        or payload.get("environment") != "production"
+        or payload.get("commit") != commit
+        or payload.get("lock_domain") != "weltgewebe-production-deployment-v1"
+        or payload.get("api_commit") != commit
+        or payload.get("frontend_commit") != commit
+        or payload.get("observed_main_after_deploy") != commit
+        or completed_at is None
+    ):
+        return False
+
+    owner = payload.get("lock_owner_entrypoint")
+    handoff = payload.get("lock_handoff")
+    invocation_id = payload.get("deploy_invocation_id")
+    if result == "verified":
+        started_at = parse_aware_timestamp(payload.get("started_at"))
+        migration_completed_at = parse_aware_timestamp(
+            payload.get("migration_completed_at")
+        )
+        if (
+            not is_lower_hex(payload.get("web_artifact_sha256"), 64)
+            or started_at is None
+            or migration_completed_at is None
+            or not started_at <= migration_completed_at <= completed_at
+        ):
+            return False
+        return (
+            owner == "deploy-helper"
+            and handoff == "direct"
+            and invocation_id is None
+        ) or (
+            owner == "reconciler"
+            and handoff == "inherited"
+            and is_lower_hex(invocation_id, 64)
+        )
+
+    evidence_boundary = payload.get("evidence_boundary")
+    return (
+        owner == "reconciler"
+        and handoff == "public-observation"
+        and invocation_id is None
+        and payload.get("web_artifact_sha256") is None
+        and payload.get("started_at") is None
+        and payload.get("migration_completed_at") is None
+        and isinstance(evidence_boundary, str)
+        and bool(evidence_boundary.strip())
+    )
 
 
 def migrate_schema4_verified_receipt(payload: object) -> dict[str, object] | None:

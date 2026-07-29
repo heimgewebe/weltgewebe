@@ -42,7 +42,14 @@ Der Normalfall soll ohne manuelle Hasharbeit auskommen:
    Default-Branch-Pfad besitzt die nötige Statusberechtigung.
 3. **R2/R3 – Produktlogik oder sicherheitsrelevante Änderung:** Das automatisch
    erzeugte Reviewpaket verwenden und die vollständigen hashgebundenen Berichte
-   als PR-Kommentare attestieren.
+   als PR-Kommentare attestieren. Zwei verschiedene Prüfer bleiben der bevorzugte
+   Normalfall. Ist ein Fremdreview nach einem dokumentierten Versuch wegen Quote,
+   Authentifizierung, Transport oder Werkzeugausfall nicht verfügbar, darf derselbe
+   Prüfer einen zweiten, methodisch getrennten Self-Review durchführen. Dafür müssen
+   die Belege `review_mode: self-primary` und `review_mode: self-fallback`,
+   unterschiedliche `review_session`-Werte, unterschiedliche Reviewachsen und
+   Berichtshashes sowie ein konkreter `fallback_reason` vorliegen. Diese Ausnahme
+   behauptet keine personelle oder technische Unabhängigkeit.
    Alternativ darf ein in der Attester-Liste autorisierter Maintainer einen von
    außen eingeholten und an den Operator weitergereichten vollständigen Reviewbericht
    mit `weltgewebe-forwarded-review` attestieren. Dieser vereinfachte Beleg muss
@@ -79,8 +86,8 @@ Jeder Pull Request enthält genau einen maschinenlesbaren Marker:
 | --- | --- | --- |
 | R0 | kleine reine Markdown-Änderung, höchstens 50 geänderte Zeilen | keine externe Reviewpflicht |
 | R1 | Konfiguration, Metadaten, sichere Rastergrafiken | eine native GitHub-Freigabe auf dem aktuellen Head oder ein exakter PASS-Beleg |
-| R2 | Produktlogik, API, UI, Persistenz, nichtprivilegierte CI | zwei hashgebundene Berichte, zwei Prüfer und zwei Reviewachsen |
-| R3 | Authentifizierung, Datenschutz, Sicherheit, Migration, Deployment, privilegierte Workflows | mindestens zwei Prüfer und zwei Reviewachsen; mindestens eine Hochrisikoachse |
+| R2 | Produktlogik, API, UI, Persistenz, nichtprivilegierte CI | zwei hashgebundene Berichte und zwei Reviewachsen; zwei Prüfer oder explizites Self-Review-Fallback |
+| R3 | Authentifizierung, Datenschutz, Sicherheit, Migration, Deployment, privilegierte Workflows | zwei Berichte und zwei Reviewachsen; zwei Prüfer oder explizites Self-Review-Fallback; mindestens eine Hochrisikoachse |
 
 Bestimmte Pfade erzwingen automatisch eine Mindestklasse. Eine niedrigere
 Deklaration führt fail-closed zum Gatefehler. R0 ist nur für kleine reine
@@ -140,7 +147,15 @@ Der Beleg folgt genau einmal im selben Kommentar:
 entsprechen. Vor dem Hashen werden `CRLF` und einzelne `CR` auf `LF` normalisiert,
 damit Browser und Betriebssysteme denselben Berichtshash erzeugen. Berichte unter
 120 Byte, mehrere Belegblöcke in einem Kommentar oder doppelt verwendete
-Berichtshashes zählen nicht als unabhängige Reviews.
+Berichtshashes zählen nicht als getrennte Reviews.
+
+Normale und weitergeleitete Fremdreviews benötigen keine Zusatzfelder. Für die
+Self-Review-Ausnahme sind im selben Beleg zusätzlich `review_mode`,
+`review_session` und beim Fallback `fallback_reason` erforderlich. Zulässig sind
+`self-primary` und `self-fallback`. Der Sitzungsbezeichner ist kein Identitätsbeweis,
+sondern erzwingt zwei ausdrücklich getrennte Prüfpässe. Ein Self-Review-Fallback
+ersetzt nur die zweite Prüferidentität; zwei Achsen, zwei Berichtshashes, die
+Hochrisikoachse bei R3 und alle exakten SHA-Bindungen bleiben unverändert.
 
 Für R1 kann statt des Belegblocks eine native GitHub-Review mit `Approve` zählen.
 Sie muss von einem durch GitHub als `OWNER`, `MEMBER` oder `COLLABORATOR`
@@ -199,7 +214,7 @@ manuell:
 1. finalen Head und aktuellen Basiscommit lesen;
 2. vollständigen aktuellen GitHub-Diff und Patch erzeugen;
 3. SHA-256 und Dateiliste sichern;
-4. zwei voneinander unabhängige R3-Reviews einholen;
+4. zwei R3-Reviews einholen; beim dokumentierten Ausfall eines Fremdreviews darf das explizite Self-Review-Fallback verwendet werden;
 5. jeden Beleg an Basis, Head und Diff-SHA-256 binden;
 6. erst danach mergen;
 7. den neuen Workflow gegen einen offenen PR live auslösen;
@@ -227,10 +242,14 @@ Attestierer in den PR übertragen werden. Das Feld `reviewer` bezeichnet dann de
 vom Attestierer benannten Prüfer; der GitHub-Kommentarautor muss zusätzlich in der
 versionierten Allowlist `.github/review-evidence-authorities.json` stehen.
 Repositoryrollen allein reichen nicht aus. Der Hash bindet die Attestation an den
-sichtbaren vollständigen Bericht. Für R2 und R3 müssen Prüferidentität, Reviewachse
-und Berichtshash jeweils verschieden sein. Technisch bewiesen werden die Identität
-des Attestierers, der Berichtshash und dessen Diffbindung – nicht eine unabhängige
-Authentifizierung der frei benannten externen Prüferidentität.
+sichtbaren vollständigen Bericht. Für R2 und R3 müssen Reviewachse und Berichtshash jeweils verschieden sein.
+Im Normalfall müssen auch die Prüferidentitäten verschieden sein. Nur das explizite
+`self-primary`/`self-fallback`-Paar darf dieselbe Prüferidentität verwenden; es
+benötigt zwei verschiedene Sitzungsbezeichner und einen konkreten Ausfallgrund.
+Technisch bewiesen werden die Identität des Attestierers, der Berichtshash, die
+Diffbindung und die formale Trennung der Prüfpässe – nicht eine unabhängige
+Authentifizierung der frei benannten externen Prüferidentität und auch nicht die
+Unabhängigkeit zweier Self-Review-Pässe.
 
 Alle Parser- und Bundlefunktionen stammen aus `main`. API-Daten werden nur als
 Bytes oder JSON geparst. Eine unvollständige Dateiliste, ein SHA-Wechsel, eine
