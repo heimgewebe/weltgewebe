@@ -27,6 +27,26 @@ MAX_SAFE_INTEGER = (1 << 53) - 1
 UNATTESTED_PROVENANCE = "unattested"
 LIMITED_PASS_STATUS = "consistency_pass_unattested"
 LIMITED_PASS_SCOPE = "identity_and_declared_artifact_consistency"
+ARTIFACT_TREE_KEYS = frozenset(
+    {"schema_version", "sha256", "file_count", "compile_revision", "provenance"}
+)
+
+
+class StrictJsonError(ValueError):
+    """Raised when a JSON response is syntactically valid but contract-ambiguous."""
+
+
+def _strict_object_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise StrictJsonError(f"duplicate JSON key: {key}")
+        result[key] = value
+    return result
+
+
+def _reject_nonfinite_constant(value: str) -> None:
+    raise StrictJsonError(f"non-finite JSON number: {value}")
 
 
 @dataclass(frozen=True)
@@ -135,6 +155,12 @@ def _parse_artifact_tree(payload: Mapping[str, Any]) -> ArtifactTreeResult | Non
     raw_compile_revision = raw.get("compile_revision")
     raw_provenance = raw.get("provenance")
     errors: list[str] = []
+    missing_keys = sorted(ARTIFACT_TREE_KEYS - set(raw))
+    unknown_keys = sorted(set(raw) - ARTIFACT_TREE_KEYS)
+    if missing_keys:
+        errors.append(f"missing fields: {', '.join(missing_keys)}")
+    if unknown_keys:
+        errors.append(f"unknown fields: {', '.join(unknown_keys)}")
 
     schema_version = (
         raw_schema_version
@@ -220,8 +246,12 @@ def fetch_endpoint(
         return EndpointResult(url, 0, None, None, {}, str(exc))
 
     try:
-        payload = json.loads(raw)
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        payload = json.loads(
+            raw,
+            object_pairs_hook=_strict_object_pairs,
+            parse_constant=_reject_nonfinite_constant,
+        )
+    except (UnicodeDecodeError, json.JSONDecodeError, StrictJsonError) as exc:
         return EndpointResult(url, status, None, None, headers, f"invalid JSON: {exc}")
 
     if not isinstance(payload, dict):
@@ -391,7 +421,8 @@ def main(argv: list[str] | None = None) -> int:
             artifact_tree = result.frontend.artifact_tree
             artifact_sha256 = artifact_tree.sha256 if artifact_tree else "missing"
             print(
-                "production_release_consistency=ok "
+                "production_release_identity=ok "
+                "production_release_consistency=limited "
                 f"status={result.status} commit={expected} "
                 f"artifact_tree_sha256={artifact_sha256} "
                 f"provenance={result.provenance_status} "

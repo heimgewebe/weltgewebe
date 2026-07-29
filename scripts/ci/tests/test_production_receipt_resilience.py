@@ -61,8 +61,9 @@ class ProductionReceiptResilienceTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, result.stderr)
         repaired = json.loads(receipt.read_text(encoding="utf-8"))
-        self.assertEqual(repaired["schema_version"], 5)
-        self.assertEqual(repaired["result"], "verified_observed")
+        self.assertEqual(repaired["schema_version"], 6)
+        self.assertEqual(repaired["result"], "consistent_observed_unattested")
+        self.assertFalse(repaired["attestation_verified"])
         self.assertEqual(repaired["commit"], fixture.commit)
 
     def test_inherited_contention_survives_shared_slot_overwrite(self) -> None:

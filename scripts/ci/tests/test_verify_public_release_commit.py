@@ -6,7 +6,9 @@ import os
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from email.message import Message
+from io import StringIO
 from pathlib import Path
 from unittest.mock import patch
 
@@ -28,6 +30,7 @@ EndpointResult = MODULE.EndpointResult
 _normalize_headers = MODULE._normalize_headers
 evaluate = MODULE.evaluate
 fetch_endpoint = MODULE.fetch_endpoint
+main = MODULE.main
 validate_commit = MODULE.validate_commit
 write_receipt = MODULE.write_receipt
 
@@ -228,6 +231,84 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
         self.assertIn("schema_version", result.artifact_tree.error or "")
         self.assertIn("file_count", result.artifact_tree.error or "")
         self.assertIn("compile_revision", result.artifact_tree.error or "")
+
+    def test_rejects_duplicate_json_keys_at_every_depth(self) -> None:
+        body = (
+            '{"commit":"%s","version":"%s","artifact_tree":'
+            '{"schema_version":1,"sha256":"%s","file_count":103,'
+            '"compile_revision":"%s","provenance":"unattested",'
+            '"provenance":"unattested"}}'
+            % (self.commit, self.commit[:8], self.tree_sha256, self.commit)
+        ).encode()
+        response = FakeResponse(body)
+        with patch.object(MODULE.urllib.request, "urlopen", return_value=response):
+            result = fetch_endpoint(response.url, timeout=1)
+        self.assertIn("duplicate JSON key: provenance", result.error or "")
+
+    def test_rejects_nonfinite_json_numbers(self) -> None:
+        body = (
+            '{"commit":"%s","version":NaN,"artifact_tree":'
+            '{"schema_version":1,"sha256":"%s","file_count":103,'
+            '"compile_revision":"%s","provenance":"unattested"}}'
+            % (self.commit, self.tree_sha256, self.commit)
+        ).encode()
+        response = FakeResponse(body)
+        with patch.object(MODULE.urllib.request, "urlopen", return_value=response):
+            result = fetch_endpoint(response.url, timeout=1)
+        self.assertIn("non-finite JSON number", result.error or "")
+
+    def test_rejects_unknown_artifact_tree_fields(self) -> None:
+        body = json.dumps(
+            {
+                "commit": self.commit,
+                "version": self.commit[:8],
+                "artifact_tree": {
+                    "schema_version": 1,
+                    "sha256": self.tree_sha256,
+                    "file_count": 103,
+                    "compile_revision": self.commit,
+                    "provenance": "unattested",
+                    "attestation_verified": True,
+                },
+            }
+        ).encode()
+        response = FakeResponse(body)
+        with patch.object(MODULE.urllib.request, "urlopen", return_value=response):
+            result = fetch_endpoint(response.url, timeout=1)
+        self.assertIsNotNone(result.artifact_tree)
+        assert result.artifact_tree is not None
+        self.assertIn(
+            "unknown fields: attestation_verified", result.artifact_tree.error or ""
+        )
+
+    def test_main_preserves_identity_marker_and_labels_limited_consistency(
+        self,
+    ) -> None:
+        with tempfile.TemporaryDirectory() as raw_root:
+            output = Path(raw_root) / "receipt.json"
+            stdout = StringIO()
+            with (
+                patch.object(
+                    MODULE,
+                    "fetch_endpoint",
+                    side_effect=[self.endpoint(), self.endpoint(api=True)],
+                ),
+                redirect_stdout(stdout),
+            ):
+                returncode = main(
+                    [
+                        "--expected-commit",
+                        self.commit,
+                        "--output",
+                        str(output),
+                    ]
+                )
+        self.assertEqual(returncode, 0)
+        rendered = stdout.getvalue()
+        self.assertIn("production_release_identity=ok", rendered)
+        self.assertIn("production_release_consistency=limited", rendered)
+        self.assertIn("status=consistency_pass_unattested", rendered)
+        self.assertIn("attestation_verified=false", rendered)
 
     def test_requires_full_lowercase_sha(self) -> None:
         self.assertEqual(validate_commit(self.commit), self.commit)
