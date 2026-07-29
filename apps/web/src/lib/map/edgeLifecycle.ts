@@ -44,18 +44,26 @@ function parseCanonicalRfc3339Ms(value: string): number | null {
 
 /** Parse lifecycle data once when an edge crosses the API/UI boundary. */
 export function normalizeEdgeLifecycle(edge: Edge): MapEdge {
-  if (edge.expires_at == null) {
-    return { ...edge, lifecycle: { kind: "legacy" } };
-  }
   if (edge.created_at == null) {
-    return { ...edge, lifecycle: { kind: "invalid" } };
+    return {
+      ...edge,
+      lifecycle:
+        edge.expires_at == null ? { kind: "legacy" } : { kind: "invalid" },
+    };
   }
 
   const createdAtMs = parseCanonicalRfc3339Ms(edge.created_at);
-  const expiresAtMs = parseCanonicalRfc3339Ms(edge.expires_at);
+  if (createdAtMs == null) {
+    return { ...edge, lifecycle: { kind: "invalid" } };
+  }
+
+  const expiresAtMs =
+    edge.expires_at == null
+      ? createdAtMs + FADEN_LIFETIME_MS
+      : parseCanonicalRfc3339Ms(edge.expires_at);
   if (
-    createdAtMs == null ||
     expiresAtMs == null ||
+    !Number.isFinite(expiresAtMs) ||
     expiresAtMs - createdAtMs !== FADEN_LIFETIME_MS
   ) {
     return { ...edge, lifecycle: { kind: "invalid" } };

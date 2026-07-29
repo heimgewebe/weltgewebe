@@ -35,13 +35,36 @@ describe("edge lifecycle", () => {
     expect(edgeOpacityAt(edge, createdAt + FADEN_LIFETIME_MS)).toBe(0);
   });
 
-  it("keeps legacy records visible and fails closed for invalid data", () => {
-    const legacy = normalizeEdgeLifecycle({ ...rawEdge, expires_at: null });
-    expect(legacy.lifecycle).toEqual({ kind: "legacy" });
-    expect(edgeOpacityAt(legacy, createdAt)).toBe(1);
+  it("retroactively ages dated legacy records and preserves only undated legacy", () => {
+    const datedLegacy = normalizeEdgeLifecycle({
+      ...rawEdge,
+      expires_at: null,
+    });
+    expect(datedLegacy.lifecycle).toEqual({
+      kind: "faden",
+      createdAtMs: createdAt,
+      expiresAtMs: createdAt + FADEN_LIFETIME_MS,
+    });
+    expect(edgeOpacityAt(datedLegacy, createdAt)).toBe(1);
+    expect(edgeOpacityAt(datedLegacy, createdAt + FADEN_LIFETIME_MS)).toBe(0);
 
+    const undatedLegacy = normalizeEdgeLifecycle({
+      ...rawEdge,
+      created_at: null,
+      expires_at: null,
+    });
+    expect(undatedLegacy.lifecycle).toEqual({ kind: "legacy" });
+    expect(edgeOpacityAt(undatedLegacy, createdAt)).toBe(1);
+  });
+
+  it("fails closed for invalid data", () => {
     for (const invalid of [
       normalizeEdgeLifecycle({ ...rawEdge, created_at: "invalid" }),
+      normalizeEdgeLifecycle({
+        ...rawEdge,
+        created_at: "invalid",
+        expires_at: null,
+      }),
       normalizeEdgeLifecycle({ ...rawEdge, created_at: "2026-07-17" }),
       normalizeEdgeLifecycle({
         ...rawEdge,

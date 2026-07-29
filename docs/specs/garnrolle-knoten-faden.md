@@ -188,10 +188,15 @@ noch Ende vorgeben.
    sofern fachlich vorgesehen, eine neue Projektion mit eigener Uhr.
 4. Die zugrunde liegende Webungsaktion und ihre Chronik bleiben dauerhaft
    erhalten. Aufgelöst wird nur die abgeleitete Fadenprojektion.
-5. Bestehende Datensätze ohne `expires_at` bleiben aus Kompatibilitätsgründen
-   sichtbar. Sie dürfen nicht durch eine rückwirkend geratene Ablaufzeit gelöscht
-   werden.
-6. Ein vorhandener, aber ungültiger oder nicht exakt 168 Stunden langer
+5. Bei bestehenden Datensätzen mit gültigem `created_at`, aber ohne persistiertes
+   `expires_at`, leiten API und Karte die Ablaufgrenze rückwirkend und
+   deterministisch als `created_at + 168 Stunden` ab. Die Persistenz und Chronik
+   werden dabei nicht umgeschrieben.
+6. Vollständig undatierte Legacy-Datensätze ohne `created_at` und `expires_at`
+   bleiben sichtbar, weil ihr Alter nicht ohne Schätzung rekonstruiert werden
+   kann. Ein ungültiges vorhandenes `created_at` wird nicht als undatiert
+   behandelt, sondern fail-closed ausgeblendet.
+7. Ein vorhandener, aber ungültiger oder nicht exakt 168 Stunden langer
    Ablaufvertrag wird in aktiven Projektionen fail-closed ausgeblendet.
 
 Ein verzwirnter, dauerhafter Zusammenhang heißt **Garn** und ist vom Fadenverfall
@@ -200,7 +205,9 @@ nicht Bestandteil dieses Vertragsstands. Bis zu einer eigenen kanonischen
 Spezifikation darf dafür weder ein öffentliches CRUD noch ein geratenes Edge-Feld
 eingeführt werden. `expires_at = null` ist deshalb kein regulärer Erzeugungswert
 für neue Fäden, sondern ausschließlich ein Legacy- und späterer expliziter
-Garn-Kompatibilitätspfad.
+Speicherzustand. Eine künftige Garnrepräsentation muss sich explizit von einem
+unverzwirnten Faden unterscheiden und darf nicht allein aus `expires_at = null`
+abgeleitet werden.
 
 ## Gespräche
 

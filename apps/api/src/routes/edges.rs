@@ -151,10 +151,7 @@ impl From<&Edge> for PublicEdge {
                 .created_at
                 .as_ref()
                 .map(|timestamp| timestamp.as_str().to_owned()),
-            expires_at: edge
-                .expires_at
-                .as_ref()
-                .map(|timestamp| timestamp.as_str().to_owned()),
+            expires_at: projected_faden_expires_at(edge),
         }
     }
 }
@@ -181,57 +178,101 @@ pub(crate) const DEFAULT_MAX_EDGES_CACHE: usize = 500_000;
 /// Canonical lifetime of a newly derived, unverzwirnter Faden.
 ///
 /// The durable Webungsaktion remains the source of truth; only this active
-/// projection expires. Legacy records without `expires_at` remain visible until
-/// a later, explicit Garn/legacy migration can classify them without guessing.
+/// projection expires. Legacy records with a valid `created_at` use the same
+/// deterministic boundary even when the record predates the lifecycle feature.
+/// Only fully undated legacy records remain visible because their age cannot be
+/// reconstructed without guessing.
 pub(crate) const FADEN_LIFETIME_HOURS: i64 = FIXED_FADEN_FADE_DAYS as i64 * 24;
 
+fn checked_faden_expires_at(created_at: DateTime<Utc>) -> Option<DateTime<Utc>> {
+    created_at.checked_add_signed(Duration::hours(FADEN_LIFETIME_HOURS))
+}
+
 fn faden_expires_at(created_at: DateTime<Utc>) -> DateTime<Utc> {
-    created_at + Duration::hours(FADEN_LIFETIME_HOURS)
+    checked_faden_expires_at(created_at)
+        .expect("server-owned creation timestamps always permit a 168-hour lifetime")
+}
+
+/// Publicly project the canonical expiry without rewriting persisted legacy
+/// records. Explicit values retain their original wire representation; a
+/// missing value is deterministically derived only from a valid `created_at`.
+fn projected_faden_expires_at(edge: &Edge) -> Option<String> {
+    if let Some(expires_at) = edge.expires_at.as_ref() {
+        return Some(expires_at.as_str().to_owned());
+    }
+
+    let created_at = edge.created_at.as_ref()?.parsed()?;
+    let expires_at = checked_faden_expires_at(*created_at)?;
+    Some(expires_at.to_rfc3339_opts(SecondsFormat::AutoSi, true))
 }
 
 /// Active-read predicate for Faden projections.
 ///
-/// `None` is the compatibility state for legacy records and a future explicit
-/// Garn representation. A present but malformed timestamp fails closed: it is
-/// never projected as an active Faden. The exact boundary is exclusive, so a
-/// Faden is gone at `now == expires_at`.
+/// A missing `expires_at` is derived from a valid `created_at`, so Fäden created
+/// before the lifecycle feature age exactly like new projections. Only records
+/// with neither timestamp remain visible as undated legacy data. Malformed or
+/// non-canonical lifecycle data fails closed. The exact boundary is exclusive,
+/// so a Faden is gone at `now == expires_at`.
 pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
-    let Some(expires_at) = edge.expires_at.as_ref() else {
-        return true;
-    };
     let Some(created_at) = edge.created_at.as_ref() else {
+        if edge.expires_at.is_none() {
+            return true;
+        }
         tracing::debug!(
             edge_id = %edge.id,
-            expires_at = %expires_at,
+            expires_at = %edge.expires_at.as_ref().expect("checked above"),
             "hiding expiring edge without created_at from active projection"
         );
         return false;
     };
 
-    let (Some(created_at_value), Some(expires_at_value)) =
-        (created_at.parsed(), expires_at.parsed())
-    else {
+    let Some(created_at_value) = created_at.parsed() else {
         tracing::debug!(
             edge_id = %edge.id,
             created_at_raw = %created_at,
-            expires_at_raw = %expires_at,
-            "hiding edge with invalid lifecycle timestamp from active projection"
+            "hiding edge with invalid created_at from active projection"
         );
         return false;
     };
-    if expires_at_value.signed_duration_since(created_at_value)
-        != Duration::hours(FADEN_LIFETIME_HOURS)
-    {
-        tracing::debug!(
-            edge_id = %edge.id,
-            created_at = %created_at_value,
-            expires_at = %expires_at_value,
-            "hiding edge with non-canonical Faden lifetime from active projection"
-        );
-        return false;
-    }
 
-    now >= *created_at_value && now < *expires_at_value
+    let expires_at_value = match edge.expires_at.as_ref() {
+        Some(expires_at) => {
+            let Some(expires_at_value) = expires_at.parsed() else {
+                tracing::debug!(
+                    edge_id = %edge.id,
+                    created_at_raw = %created_at,
+                    expires_at_raw = %expires_at,
+                    "hiding edge with invalid lifecycle timestamp from active projection"
+                );
+                return false;
+            };
+            if expires_at_value.signed_duration_since(created_at_value)
+                != Duration::hours(FADEN_LIFETIME_HOURS)
+            {
+                tracing::debug!(
+                    edge_id = %edge.id,
+                    created_at = %created_at_value,
+                    expires_at = %expires_at_value,
+                    "hiding edge with non-canonical Faden lifetime from active projection"
+                );
+                return false;
+            }
+            *expires_at_value
+        }
+        None => {
+            let Some(expires_at_value) = checked_faden_expires_at(*created_at_value) else {
+                tracing::debug!(
+                    edge_id = %edge.id,
+                    created_at = %created_at_value,
+                    "hiding legacy edge whose derived expiry exceeds the supported timestamp range"
+                );
+                return false;
+            };
+            expires_at_value
+        }
+    };
+
+    now >= *created_at_value && now < expires_at_value
 }
 
 fn edge_matches_list_at(
@@ -1788,8 +1829,8 @@ mod edge_create {
 mod tests {
     use super::{
         build_edge_record, edge_create::ValidatedCreateEdge, edge_is_active_at,
-        edge_matches_list_at, faden_expires_at, max_edges_cache_limit, Edge, LifecycleTimestamp,
-        DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
+        edge_matches_list_at, faden_expires_at, max_edges_cache_limit, projected_faden_expires_at,
+        Edge, LifecycleTimestamp, PublicEdge, DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
     };
     use crate::test_helpers::EnvGuard;
     use chrono::{DateTime, Duration, TimeZone, Utc};
@@ -1871,8 +1912,31 @@ mod tests {
     }
 
     #[test]
-    fn active_projection_uses_exact_boundary_and_legacy_compatibility() {
+    fn public_projection_derives_missing_legacy_expiry_without_mutating_storage() {
+        let edge = lifecycle_edge(Some("2026-07-17T10:00:00Z"), None);
+        let projected = PublicEdge::from(&edge);
+
+        assert_eq!(
+            projected.expires_at.as_deref(),
+            Some("2026-07-24T10:00:00Z")
+        );
+        assert!(edge.expires_at.is_none());
+    }
+
+    #[test]
+    fn legacy_projection_preserves_submicrosecond_timestamp_precision() {
+        let precise = lifecycle_edge(Some("2026-07-17T10:00:00.123456789Z"), None);
+
+        assert_eq!(
+            projected_faden_expires_at(&precise).as_deref(),
+            Some("2026-07-24T10:00:00.123456789Z")
+        );
+    }
+
+    #[test]
+    fn active_projection_uses_exact_boundary_and_retroactive_legacy_expiry() {
         let edge = lifecycle_edge(Some("2026-07-17T10:00:00Z"), Some("2026-07-24T10:00:00Z"));
+        let legacy_with_created_at = lifecycle_edge(Some("2026-07-17T10:00:00Z"), None);
         let before_creation = Utc.with_ymd_and_hms(2026, 7, 17, 9, 59, 59).unwrap();
         let created = Utc.with_ymd_and_hms(2026, 7, 17, 10, 0, 0).unwrap();
         let before_expiry = Utc.with_ymd_and_hms(2026, 7, 24, 9, 59, 59).unwrap();
@@ -1881,6 +1945,9 @@ mod tests {
         assert!(edge_is_active_at(&edge, created));
         assert!(edge_is_active_at(&edge, before_expiry));
         assert!(!edge_is_active_at(&edge, at_expiry));
+        assert!(edge_is_active_at(&legacy_with_created_at, created));
+        assert!(edge_is_active_at(&legacy_with_created_at, before_expiry));
+        assert!(!edge_is_active_at(&legacy_with_created_at, at_expiry));
         assert!(edge_is_active_at(&lifecycle_edge(None, None), at_expiry));
     }
 
@@ -1889,6 +1956,10 @@ mod tests {
         let now = Utc.with_ymd_and_hms(2026, 7, 18, 10, 0, 0).unwrap();
         assert!(!edge_is_active_at(
             &lifecycle_edge(Some("invalid"), Some("2026-07-24T10:00:00Z")),
+            now
+        ));
+        assert!(!edge_is_active_at(
+            &lifecycle_edge(Some("invalid"), None),
             now
         ));
         assert!(!edge_is_active_at(

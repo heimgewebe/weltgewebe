@@ -35,7 +35,7 @@
       "format": "date-time"
     },
     "expires_at": {
-      "description": "Server-owned active-projection boundary. For every newly derived, unverzwirnter Faden this is exactly 168 hours after created_at. Absence is reserved for legacy records or a future explicit durable Garn representation.",
+      "description": "Server-owned active-projection boundary. For every unverzwirnter Faden this is exactly 168 hours after created_at. When a legacy record has created_at but no persisted expires_at, readers derive the same boundary without rewriting history. Complete absence of lifecycle timestamps is reserved for undated legacy data; a future durable Garn requires an explicit representation.",
       "type": "string",
       "format": "date-time"
     },

@@ -269,7 +269,8 @@ async fn edges_invalid_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn expired_edges_are_hidden_before_pagination_and_from_single_get() -> anyhow::Result<()> {
+async fn expired_and_pre_lifecycle_edges_are_hidden_before_pagination_and_single_get(
+) -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     let edges_path = in_dir.join("demo.edges.jsonl");
@@ -279,6 +280,7 @@ async fn expired_edges_are_hidden_before_pagination_and_from_single_get() -> any
         &edges_path,
         &[
             r#"{"id":"e-expired","source_id":"n1","target_id":"n2","edge_kind":"reference","created_at":"2020-01-01T00:00:00Z","expires_at":"2020-01-08T00:00:00Z"}"#,
+            r#"{"id":"e-pre-lifecycle","source_id":"n1","target_id":"n4","edge_kind":"reference","created_at":"2020-01-01T00:00:00Z"}"#,
             r#"{"id":"e-active","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
         ],
     );
@@ -313,7 +315,13 @@ async fn expired_edges_are_hidden_before_pagination_and_from_single_get() -> any
     assert_eq!(items[0]["id"], "e-active");
 
     let res = app
+        .clone()
         .oneshot(Request::get("/edges/e-expired").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    let res = app
+        .oneshot(Request::get("/edges/e-pre-lifecycle").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
 
