@@ -51,6 +51,8 @@ libc = "0.2"
 integration-testing = []
 
 [dev-dependencies]
+# Enables deterministic paused-time tests for readiness deadline ordering.
+tokio = { version = "1", features = ["test-util"] }
 # Already in the dependency tree via webauthn-rs-core; used by the passkey
 # route-level proof to build a real ES256 software authenticator.
 openssl = "0.10"

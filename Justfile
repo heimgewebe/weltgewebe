@@ -47,6 +47,8 @@ ci:
 	fi
 	@echo "==> Root: local CI contract"
 	python3 -m unittest scripts.ci.tests.test_justfile_contract -v
+	@echo "==> Root: readiness deadline contract"
+	python3 -m unittest scripts.ci.tests.test_readiness_deadline_contract -v
 	@echo "==> Root: dependency check"
 	cargo deny check
 

@@ -1,8 +1,10 @@
 use std::{
     env,
+    future::Future,
     path::{Path, PathBuf},
+    time::Duration,
 };
-use tokio::{fs, io::AsyncReadExt};
+use tokio::{fs, io::AsyncReadExt, time::timeout};
 
 use axum::{
     extract::State,
@@ -88,6 +90,8 @@ fn readiness_verbose() -> bool {
 }
 
 const MAX_POLICY_FILE_BYTES: u64 = 64 * 1024;
+const READINESS_CHECK_TIMEOUT_MS: u64 = 750;
+const READINESS_TOTAL_TIMEOUT_MS: u64 = 1_000;
 
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -306,10 +310,93 @@ async fn check_policy() -> CheckResult {
     }
 }
 
-async fn ready(State(state): State<ApiState>) -> Response {
-    let (nats, database, policy) =
-        tokio::join!(check_nats(&state), check_database(&state), check_policy());
+#[derive(Debug)]
+struct ReadinessResults {
+    nats: CheckResult,
+    database: CheckResult,
+    policy: CheckResult,
+}
 
+async fn bounded_check<F>(name: &'static str, budget: Duration, check: F) -> CheckResult
+where
+    F: Future<Output = CheckResult>,
+{
+    match timeout(budget, check).await {
+        Ok(result) => result,
+        Err(_) => {
+            let message = format!("readiness check timed out after {} ms", budget.as_millis());
+            readiness_check_failed(name, &message);
+            CheckResult::failure_with_message(message)
+        }
+    }
+}
+
+async fn run_readiness_checks_with_budgets<N, D, P>(
+    nats: N,
+    database: D,
+    policy: P,
+    check_budget: Duration,
+    total_budget: Duration,
+) -> ReadinessResults
+where
+    N: Future<Output = CheckResult>,
+    D: Future<Output = CheckResult>,
+    P: Future<Output = CheckResult>,
+{
+    let checks = async {
+        let (nats, database, policy) = tokio::join!(
+            bounded_check("nats", check_budget, nats),
+            bounded_check("database", check_budget, database),
+            bounded_check("policy", check_budget, policy),
+        );
+        ReadinessResults {
+            nats,
+            database,
+            policy,
+        }
+    };
+
+    match timeout(total_budget, checks).await {
+        Ok(results) => results,
+        Err(_) => {
+            let message = format!(
+                "readiness checks exceeded total budget of {} ms",
+                total_budget.as_millis()
+            );
+            for name in ["nats", "database", "policy"] {
+                readiness_check_failed(name, &message);
+            }
+            ReadinessResults {
+                nats: CheckResult::failure_with_message(message.clone()),
+                database: CheckResult::failure_with_message(message.clone()),
+                policy: CheckResult::failure_with_message(message),
+            }
+        }
+    }
+}
+
+async fn run_readiness_checks(state: &ApiState) -> ReadinessResults {
+    run_readiness_checks_with_budgets(
+        check_nats(state),
+        check_database(state),
+        check_policy(),
+        Duration::from_millis(READINESS_CHECK_TIMEOUT_MS),
+        Duration::from_millis(READINESS_TOTAL_TIMEOUT_MS),
+    )
+    .await
+}
+
+async fn ready(State(state): State<ApiState>) -> Response {
+    readiness_response(run_readiness_checks(&state).await)
+}
+
+fn readiness_response(
+    ReadinessResults {
+        nats,
+        database,
+        policy,
+    }: ReadinessResults,
+) -> Response {
     let status = if matches!(database.status, CheckStatus::Failed)
         || matches!(nats.status, CheckStatus::Failed)
         || matches!(policy.status, CheckStatus::Failed)
@@ -381,8 +468,8 @@ mod tests {
     use serde_json::Value;
     use serial_test::serial;
     #[cfg(unix)]
-    use std::{ffi::CString, os::unix::ffi::OsStrExt, time::Duration};
-    use std::{io::Write, sync::Arc};
+    use std::{ffi::CString, os::unix::ffi::OsStrExt};
+    use std::{future::pending, io::Write, sync::Arc, time::Duration};
     use tempfile::NamedTempFile;
     use tokio::sync::RwLock;
 
@@ -519,6 +606,68 @@ mod tests {
         assert_eq!(body["checks"]["database"], false);
         assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], false);
+
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn readiness_marks_only_the_stalled_dependency_failed() -> Result<()> {
+        let results = tokio::time::timeout(
+            Duration::from_millis(500),
+            run_readiness_checks_with_budgets(
+                async { CheckResult::ready() },
+                pending::<CheckResult>(),
+                async { CheckResult::ready() },
+                Duration::from_millis(10),
+                Duration::from_millis(100),
+            ),
+        )
+        .await
+        .expect("stalled readiness dependency must be bounded");
+
+        assert!(matches!(results.nats.status, CheckStatus::Ready));
+        assert!(matches!(results.database.status, CheckStatus::Failed));
+        assert!(matches!(results.policy.status, CheckStatus::Ready));
+        assert!(results
+            .database
+            .errors
+            .iter()
+            .any(|message| message.contains("timed out after 10 ms")));
+
+        let response = readiness_response(results);
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let body_bytes = body::to_bytes(response.into_body(), usize::MAX).await?;
+        let body: Value = serde_json::from_slice(&body_bytes)?;
+        assert_eq!(body["status"], "error");
+        assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["nats"], true);
+        assert_eq!(body["checks"]["policy"], true);
+
+        Ok(())
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn readiness_total_budget_is_a_hard_fallback() -> Result<()> {
+        let results = tokio::time::timeout(
+            Duration::from_millis(500),
+            run_readiness_checks_with_budgets(
+                pending::<CheckResult>(),
+                pending::<CheckResult>(),
+                pending::<CheckResult>(),
+                Duration::from_millis(100),
+                Duration::from_millis(10),
+            ),
+        )
+        .await
+        .expect("readiness total budget must bound every check");
+
+        for result in [&results.nats, &results.database, &results.policy] {
+            assert!(matches!(result.status, CheckStatus::Failed));
+            assert!(result
+                .errors
+                .iter()
+                .any(|message| message.contains("exceeded total budget of 10 ms")));
+        }
 
         Ok(())
     }

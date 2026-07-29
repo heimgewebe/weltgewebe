@@ -36,6 +36,20 @@ implementations:
     supersedes: []
     deprecated_by: []
 
+  - id: impl.api.health-readiness
+    path: apps/api/src/routes/health.rs
+    impl_type: service
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - apps/api/README.md
+      - docs/deploy/vps.md
+    verified_by:
+      - .github/workflows/ci.yml
+      - apps/api/src/routes/health.rs
+      - scripts/ci/tests/test_readiness_deadline_contract.py
+
   - id: impl.workflow.ci
     path: .github/workflows/
     impl_type: workflow
