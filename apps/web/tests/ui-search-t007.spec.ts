@@ -193,23 +193,54 @@ test.describe("T007 authorized server search contract", () => {
     await page.getByRole("option").first().click();
 
     const section = page.locator("section.similar-nodes");
+    const disclosure = section.locator("details.info-heading");
+    const headingTrigger = disclosure.locator("summary");
+    const explanation = disclosure.getByRole("dialog", {
+      name: "Ähnliche Knoten",
+    });
+
     await expect(
       section.getByRole("heading", { name: "Ähnliche Knoten" }),
     ).toBeVisible();
-    await expect(section).toContainText(
-      "Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet.",
+    await expect(headingTrigger).toHaveAttribute(
+      "aria-controls",
+      "similar-nodes-heading-explanation",
     );
-    await expect(section).toContainText("keine Fäden");
-    await expect(section).toContainText("keine kuratierten Beziehungen");
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await expect(explanation).not.toBeVisible();
     await expect(section).toContainText(
       "Erst beim Anklicken wird eine Suche an den Server gesendet.",
     );
+
+    await headingTrigger.focus();
+    await headingTrigger.press("Enter");
+    await expect(disclosure).toHaveAttribute("open", "");
+    await expect(explanation).toBeVisible();
+    await expect(explanation).toContainText(
+      "Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet.",
+    );
+    await expect(explanation).toContainText("keine Fäden");
+    await expect(explanation).toContainText("keine kuratierten Beziehungen");
+
+    await headingTrigger.press("Enter");
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await expect(explanation).not.toBeVisible();
+    await expect(headingTrigger).toBeFocused();
+
+    await headingTrigger.dispatchEvent("contextmenu");
+    await expect(disclosure).toHaveAttribute("open", "");
+    await expect(explanation).toBeVisible();
+    await headingTrigger.click();
+    await expect(disclosure).not.toHaveAttribute("open", "");
+    await expect(explanation).not.toBeVisible();
+
     await page.waitForTimeout(SIMILARITY_QUIESCENCE_MS);
     expect(similarityRequests).toBe(0);
 
     await section
       .getByRole("button", { name: "Ähnliche Knoten suchen" })
       .click();
+    await expect(section.getByText("1 Vorschlag")).toBeVisible();
     await expect(
       section.getByRole("button", { name: /Gemeinschaftliche Radstation/ }),
     ).toBeVisible();
