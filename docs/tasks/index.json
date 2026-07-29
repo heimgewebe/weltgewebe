@@ -1896,18 +1896,20 @@
       "id": "WELTGEWEBE-OS-006",
       "title": "Kubernetes- und GitOps-Grundlage reproduzierbar aufbauen",
       "area": "infra",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "effort": "XL",
       "risk": "high",
       "owner": "infra",
       "evidence": [
         "docs/adr/ADR-0010__kubernetes-kanonische-plattform.md",
-        "architecture/weltgewebe-os.md"
+        "platform/README.md",
+        "docs/reports/kubernetes-platform-foundation-status.md",
+        "scripts/platform/validate_platform.py",
+        "scripts/platform/kind_reference.py",
+        ".github/workflows/kubernetes-platform-proof.yml"
       ],
-      "missing_evidence": [
-        "Kanonische platform-Struktur, lokale Clusterreferenz, Flux-, Gateway-, Netzwerk-, Secret-, Policy- und Telemetriebeweise"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "Ein leerer lokaler Cluster wird aus versionierten Artefakten reproduzierbar aufgebaut",
         "Dieselben App-Basen werden in CI und Staging verwendet",
@@ -1919,10 +1921,12 @@
         "prs": [],
         "docs": [
           "docs/adr/ADR-0010__kubernetes-kanonische-plattform.md",
+          "docs/reports/kubernetes-platform-foundation-status.md",
+          "platform/README.md",
           "docs/blueprints/weltgewebe-os-masterplan.md"
         ]
       },
-      "updated_at": "2026-07-16"
+      "updated_at": "2026-07-29"
     },
     {
       "id": "WELTGEWEBE-OS-007",
@@ -1960,17 +1964,19 @@
       "id": "WELTGEWEBE-OS-008",
       "title": "Hochverfügbare Referenzzelle mit Restore und Failover beweisen",
       "area": "infra",
-      "status": "blocked",
+      "status": "done",
       "priority": "medium",
       "effort": "XL",
       "risk": "high",
       "owner": "infra",
       "evidence": [
-        "docs/blueprints/weltgewebe-os-masterplan.md"
+        "docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md",
+        "docs/runbooks/kubernetes-ha-recovery-proof.md",
+        "docs/reports/kubernetes-platform-foundation-status.md",
+        "scripts/platform/ha_reference.py",
+        ".github/workflows/kubernetes-platform-proof.yml"
       ],
-      "missing_evidence": [
-        "Fehlerdomänen, repliziertes PostgreSQL und JetStream, PITR, Blank-Cluster-Restore, gemessene RTO/RPO"
-      ],
+      "missing_evidence": [],
       "acceptance": [
         "API-, Datenbank- und Messagingausfälle wurden kontrolliert geprobt",
         "Kein bestätigter Fachvorgang geht verloren",
@@ -1981,11 +1987,13 @@
         "issues": [],
         "prs": [],
         "docs": [
-          "docs/blueprints/weltgewebe-os-masterplan.md",
+          "docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md",
+          "docs/runbooks/kubernetes-ha-recovery-proof.md",
+          "docs/reports/kubernetes-platform-foundation-status.md",
           "docs/reports/weltgewebe-os-foundation-status.md"
         ]
       },
-      "updated_at": "2026-07-15"
+      "updated_at": "2026-07-29"
     },
     {
       "id": "WELTGEWEBE-OS-009",
