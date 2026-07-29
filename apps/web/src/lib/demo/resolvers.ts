@@ -69,7 +69,14 @@ export function resolveEdge(id: string) {
   return edgeMap.get(id);
 }
 
-/** Public edge shape used by prerendered preview endpoints. */
+/**
+ * Public edge shape used by prerendered preview endpoints.
+ *
+ * The static demo cannot truthfully claim that its relation was created within
+ * the last seven days: a build-time timestamp would eventually expire while a
+ * refreshed timestamp would fabricate activity. Project it explicitly as an
+ * undated, non-authoritative preview relation instead.
+ */
 export function toPublicEdge(edge: DemoEdge) {
   return {
     id: edge.id,
@@ -78,7 +85,8 @@ export function toPublicEdge(edge: DemoEdge) {
     target_id: edge.target_id,
     target_type: edge.target_type,
     edge_kind: edge.edge_kind,
-    created_at: edge.created_at,
+    created_at: null,
+    expires_at: null,
   };
 }
 

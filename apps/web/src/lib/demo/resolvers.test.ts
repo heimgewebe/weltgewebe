@@ -13,6 +13,7 @@ import {
   getEdgeEntries,
 } from "./resolvers";
 import { demoAccounts, demoEdges, demoNodes } from "./demoData";
+import { normalizeEdgeLifecycle } from "../map/edgeLifecycle";
 
 describe("Demo Resolvers", () => {
   describe("Invariant Checks (Edge Index Safety)", () => {
@@ -75,6 +76,16 @@ describe("Demo Resolvers", () => {
       expect(nodeParticipants.every((relation) => !("note" in relation))).toBe(
         true,
       );
+    });
+
+    it("keeps the static public demo relation visible without fabricating recent activity", () => {
+      const [edge] = listPublicEdges();
+      expect(edge).toEqual(
+        expect.objectContaining({ created_at: null, expires_at: null }),
+      );
+      expect(normalizeEdgeLifecycle(edge).lifecycle).toEqual({
+        kind: "legacy",
+      });
     });
 
     it("resolveEdgeParticipants remains consistent for existing and missing IDs", () => {
