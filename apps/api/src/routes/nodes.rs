@@ -943,6 +943,21 @@ pub(crate) async fn ensure_node_activity_faden(
     activity_kind: &str,
     action_id: &str,
 ) -> Result<(), (StatusCode, String)> {
+    super::collective_write_guard::run_node_activity_projection(
+        state,
+        node_id,
+        ensure_node_activity_faden_guarded(state, auth, node_id, activity_kind, action_id),
+    )
+    .await
+}
+
+pub(crate) async fn ensure_node_activity_faden_guarded(
+    state: &ApiState,
+    auth: &AuthContext,
+    node_id: &str,
+    activity_kind: &str,
+    action_id: &str,
+) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
             StatusCode::UNAUTHORIZED,
@@ -2773,12 +2788,12 @@ pub async fn replace_node(
         .cloned()
         .ok_or(NodeMutationError::Status(StatusCode::NOT_FOUND))?;
     let mut node = Node {
-        id: existing.id,
+        id: existing.id.clone(),
         kind: validated.kind,
         title: validated.title,
-        created_at: existing.created_at,
-        updated_at: chrono::Utc::now().to_rfc3339(),
-        created_by_account_id: existing.created_by_account_id,
+        created_at: existing.created_at.clone(),
+        updated_at: existing.updated_at.clone(),
+        created_by_account_id: existing.created_by_account_id.clone(),
         search_visibility: validated
             .search_visibility
             .unwrap_or(existing.search_visibility),
@@ -2791,6 +2806,10 @@ pub async fn replace_node(
             lon: validated.lon,
         },
     };
+    if node == existing {
+        return Ok(Json(existing));
+    }
+    node.updated_at = chrono::Utc::now().to_rfc3339();
 
     match state.config.domain_node_write_source {
         DomainNodeWriteSource::Jsonl => {
@@ -3108,24 +3127,35 @@ async fn patch_node_jsonl(
             if should_update {
                 let mut v: Value =
                     serde_json::from_str(&line).map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                let current_projection = map_json_to_node(&v)
+                    .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
 
-                // Update the field
+                // Compare the public node projection, not just raw JSON shape:
+                // legacy rows without an explicit visibility already mean
+                // `public` and therefore must not advance the version when a
+                // client sends that same effective value.
                 let mut has_changes = false;
                 match &payload.info {
                     Some(Some(s)) => {
-                        v["info"] = Value::String(s.clone());
-                        has_changes = true;
+                        if current_projection.info.as_deref() != Some(s.as_str()) {
+                            v["info"] = Value::String(s.clone());
+                            has_changes = true;
+                        }
                     }
                     Some(None) => {
-                        v["info"] = Value::Null;
-                        has_changes = true;
+                        if current_projection.info.is_some() {
+                            v["info"] = Value::Null;
+                            has_changes = true;
+                        }
                     }
                     None => {} // No-op
                 }
 
                 if let Some(Some(v_enum)) = payload.search_visibility {
-                    v["search_visibility"] = Value::String(v_enum.as_str().to_string());
-                    has_changes = true;
+                    if current_projection.search_visibility != v_enum {
+                        v["search_visibility"] = Value::String(v_enum.as_str().to_string());
+                        has_changes = true;
+                    }
                 }
 
                 // Clean up old "steckbrief" field if it exists (migration logic)

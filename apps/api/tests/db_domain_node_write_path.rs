@@ -1218,6 +1218,47 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
         "an empty patch must not inflate the activity hotspot",
     );
 
+    let identical_info_response = app
+        .clone()
+        .oneshot(patch_node_req(
+            &cookie,
+            node_id,
+            r#"{"info":"Gemeinsam bearbeitet"}"#,
+            &patched_etag,
+        ))
+        .await?;
+    assert_eq!(identical_info_response.status(), StatusCode::OK);
+    let identical_info: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(identical_info_response.into_body(), usize::MAX).await?,
+    )?;
+    assert_eq!(identical_info["updated_at"], patched["updated_at"]);
+
+    let identical_visibility_response = app
+        .clone()
+        .oneshot(patch_node_req(
+            &cookie,
+            node_id,
+            r#"{"search_visibility":"public"}"#,
+            &patched_etag,
+        ))
+        .await?;
+    assert_eq!(identical_visibility_response.status(), StatusCode::OK);
+    let identical_visibility: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(identical_visibility_response.into_body(), usize::MAX).await?,
+    )?;
+    assert_eq!(identical_visibility["updated_at"], patched["updated_at"]);
+    let after_semantic_noops: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_semantic_noops, 2,
+        "identical info and visibility patches must not inflate the activity hotspot",
+    );
+
     let replaced_response = app
         .clone()
         .oneshot(replace_node_req(
@@ -1242,6 +1283,173 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     assert_eq!(
         after_replace_count, 3,
         "a full replacement adds one activity Faden"
+    );
+
+    let replaced_etag = format!(
+        "\"{}\"",
+        replaced["updated_at"]
+            .as_str()
+            .context("replaced node updated_at")?
+    );
+    let identical_replace_response = app
+        .clone()
+        .oneshot(replace_node_req(
+            &cookie,
+            node_id,
+            "Aktiver Knoten – überarbeitet",
+            &replaced_etag,
+        ))
+        .await?;
+    assert_eq!(identical_replace_response.status(), StatusCode::OK);
+    let identical_replace: serde_json::Value = serde_json::from_slice(
+        &body::to_bytes(identical_replace_response.into_body(), usize::MAX).await?,
+    )?;
+    assert_eq!(identical_replace["updated_at"], replaced["updated_at"]);
+    let after_identical_replace: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(
+        after_identical_replace, 3,
+        "an identical full replacement must not inflate the activity hotspot",
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// J2. The post-commit edit projection retains the per-node advisory guard.
+/// A concurrent deletion cannot pass the edit between its durable node write
+/// and the derived Faden; after the edit completes, deletion removes both the
+/// node and every activity edge without leaving an orphan.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_edit_projection_serializes_with_delete() -> Result<()> {
+    const ACTOR_ID: &str = "10000000-0000-4000-8000-000000000014";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, _state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let created_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"Race node","kind":"Werkstatt","address":"Musterstraße 2","location":{"lat":53.56,"lon":9.98}}"#,
+        ))
+        .await?;
+    assert_eq!(created_response.status(), StatusCode::CREATED);
+    let created: serde_json::Value =
+        serde_json::from_slice(&body::to_bytes(created_response.into_body(), usize::MAX).await?)?;
+    let node_id = created["id"]
+        .as_str()
+        .context("created race node id")?
+        .to_string();
+    let created_version = created["updated_at"]
+        .as_str()
+        .context("created race node updated_at")?
+        .to_string();
+    let created_etag = format!("\"{created_version}\"");
+
+    // Hold the edge table after node creation. The patch can commit its node
+    // row, but its derived edge must wait while the outer node guard remains held.
+    let mut edge_blocker = pool.begin().await.context("begin edge blocker")?;
+    sqlx::query("LOCK TABLE domain_edges IN ACCESS EXCLUSIVE MODE")
+        .execute(&mut *edge_blocker)
+        .await
+        .context("block activity edge projection")?;
+
+    let patch_app = app.clone();
+    let patch_cookie = cookie.clone();
+    let patch_node_id = node_id.clone();
+    let mut patch_task = tokio::spawn(async move {
+        patch_app
+            .oneshot(patch_node_req(
+                &patch_cookie,
+                &patch_node_id,
+                r#"{"info":"race update"}"#,
+                &created_etag,
+            ))
+            .await
+    });
+
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    loop {
+        let current: chrono::DateTime<chrono::Utc> =
+            sqlx::query_scalar("SELECT updated_at FROM domain_nodes WHERE id = $1")
+                .bind(&node_id)
+                .fetch_one(&pool)
+                .await?;
+        if current.to_rfc3339() != created_version {
+            break;
+        }
+        if tokio::time::Instant::now() >= deadline {
+            anyhow::bail!("patch did not commit its node update before projection timeout");
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert!(
+        tokio::time::timeout(Duration::from_millis(100), &mut patch_task)
+            .await
+            .is_err(),
+        "patch must still be waiting for the blocked Faden projection",
+    );
+
+    let delete_pool = pool.clone();
+    let delete_node_id = node_id.clone();
+    let mut delete_task = tokio::spawn(async move {
+        let mut guard = delete_pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(node_mutation_lock_key(&delete_node_id))
+            .execute(&mut *guard)
+            .await?;
+        let outcome = delete_node_with_edges_in_postgres(&delete_pool, &delete_node_id).await?;
+        guard.commit().await?;
+        Ok::<_, anyhow::Error>(outcome)
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut delete_task)
+            .await
+            .is_err(),
+        "delete must wait while edit projection owns the per-node guard",
+    );
+
+    edge_blocker
+        .commit()
+        .await
+        .context("release edge blocker")?;
+    let patch_response = patch_task.await.context("join guarded patch")??;
+    assert_eq!(patch_response.status(), StatusCode::OK);
+
+    let delete_outcome = delete_task.await.context("join serialized delete")??;
+    assert!(
+        !delete_outcome.removed_edge_ids.is_empty(),
+        "serialized delete must remove the projected activity edges",
+    );
+    let node_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(&node_id)
+            .fetch_one(&pool)
+            .await?;
+    let edge_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM domain_edges WHERE target_id = $1")
+            .bind(&node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!node_exists, "serialized delete must remove the node");
+    assert_eq!(
+        edge_count, 0,
+        "serialized delete must leave no orphan Faden"
     );
 
     clean_all_nodes(&pool).await;

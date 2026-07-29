@@ -709,12 +709,16 @@ pub async fn patch_node_in_postgres(
 
         match &patch.info {
             Some(Some(s)) => {
-                obj.insert("info".to_string(), serde_json::Value::String(s.clone()));
-                has_changes = true;
+                if obj.get("info").and_then(serde_json::Value::as_str) != Some(s.as_str()) {
+                    obj.insert("info".to_string(), serde_json::Value::String(s.clone()));
+                    has_changes = true;
+                }
             }
             Some(None) => {
-                obj.remove("info");
-                has_changes = true;
+                if obj.get("info").is_some_and(|value| !value.is_null()) {
+                    obj.remove("info");
+                    has_changes = true;
+                }
             }
             None => {}
         }

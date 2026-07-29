@@ -182,6 +182,39 @@ where
     outcome
 }
 
+/// Serialize a post-commit activity projection with node deletion. The node is
+/// re-read after the guard is acquired: a projection that lost the race to a
+/// completed deletion becomes a no-op, while a later deletion waits until the
+/// new edge is durable and then removes it in the normal cascade.
+pub(crate) async fn run_node_activity_projection<F>(
+    state: &ApiState,
+    node_id: &str,
+    projection: F,
+) -> Result<(), (StatusCode, String)>
+where
+    F: Future<Output = Result<(), (StatusCode, String)>>,
+{
+    let guard = acquire_node_mutation_guard(state, node_id)
+        .await
+        .map_err(|response| {
+            (
+                response.status(),
+                "failed to acquire node activity projection guard".to_string(),
+            )
+        })?;
+    let node = current_node_for_precondition(state, node_id).await;
+    let outcome = match node {
+        Ok(Some(_)) => projection.await,
+        Ok(None) => Ok(()),
+        Err(response) => Err((
+            response.status(),
+            "failed to verify node before activity projection".to_string(),
+        )),
+    };
+    release_node_mutation_guard(guard).await;
+    outcome
+}
+
 pub async fn create_node_serialized(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -295,37 +328,40 @@ pub async fn patch_node_serialized(
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return Err(*response);
         }
-        let Json(node) = nodes::patch_node(State(mutation_state), Path(mutation_id), Json(payload))
+        let Json(node) = nodes::patch_node(
+            State(mutation_state.clone()),
+            Path(mutation_id),
+            Json(payload),
+        )
+        .await
+        .map_err(|error| error.into_response())?;
+        if node.updated_at != previous_updated_at {
+            if let Err((status, message)) = nodes::ensure_node_activity_faden_guarded(
+                &mutation_state,
+                &projection_auth,
+                &node.id,
+                "node_edit",
+                &node.updated_at,
+            )
             .await
-            .map_err(|error| error.into_response())?;
-        Ok((node, previous_updated_at))
+            {
+                tracing::error!(
+                    event = "node.edit_faden_projection.failed",
+                    node_id = %node.id,
+                    %status,
+                    error = %message,
+                    "Node edit remains successful because it is already durable; the derived Faden is missing"
+                );
+            }
+        }
+        Ok(node)
     })
     .await;
 
-    let (node, previous_updated_at) = match outcome {
-        Ok(outcome) => outcome,
-        Err(response) => return response,
-    };
-    if node.updated_at != previous_updated_at {
-        if let Err((status, message)) = nodes::ensure_node_activity_faden(
-            &state,
-            &projection_auth,
-            &node.id,
-            "node_edit",
-            &node.updated_at,
-        )
-        .await
-        {
-            tracing::error!(
-                event = "node.edit_faden_projection.failed",
-                node_id = %node.id,
-                %status,
-                error = %message,
-                "Node edit remains successful because it is already durable; the derived Faden is missing"
-            );
-        }
+    match outcome {
+        Ok(node) => Json(node).into_response(),
+        Err(response) => response,
     }
-    Json(node).into_response()
 }
 
 pub async fn replace_node_serialized(
@@ -350,39 +386,44 @@ pub async fn replace_node_serialized(
         if let Err((status, message)) = authorize_node_mutation(&mutation_auth, current) {
             return Err((status, message).into_response());
         }
+        let previous_updated_at = current.updated_at.clone();
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return Err(*response);
         }
-        let Json(node) =
-            nodes::replace_node(State(mutation_state), Path(mutation_id), Json(payload))
-                .await
-                .map_err(|error| error.into_response())?;
+        let Json(node) = nodes::replace_node(
+            State(mutation_state.clone()),
+            Path(mutation_id),
+            Json(payload),
+        )
+        .await
+        .map_err(|error| error.into_response())?;
+        if node.updated_at != previous_updated_at {
+            if let Err((status, message)) = nodes::ensure_node_activity_faden_guarded(
+                &mutation_state,
+                &projection_auth,
+                &node.id,
+                "node_edit",
+                &node.updated_at,
+            )
+            .await
+            {
+                tracing::error!(
+                    event = "node.edit_faden_projection.failed",
+                    node_id = %node.id,
+                    %status,
+                    error = %message,
+                    "Node replacement remains successful because it is already durable; the derived Faden is missing"
+                );
+            }
+        }
         Ok(node)
     })
     .await;
 
-    let node = match outcome {
-        Ok(node) => node,
-        Err(response) => return response,
-    };
-    if let Err((status, message)) = nodes::ensure_node_activity_faden(
-        &state,
-        &projection_auth,
-        &node.id,
-        "node_edit",
-        &node.updated_at,
-    )
-    .await
-    {
-        tracing::error!(
-            event = "node.edit_faden_projection.failed",
-            node_id = %node.id,
-            %status,
-            error = %message,
-            "Node replacement remains successful because it is already durable; the derived Faden is missing"
-        );
+    match outcome {
+        Ok(node) => Json(node).into_response(),
+        Err(response) => response,
     }
-    Json(node).into_response()
 }
 
 pub async fn delete_node_serialized(
