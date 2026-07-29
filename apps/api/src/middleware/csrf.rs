@@ -123,30 +123,9 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
             return StatusCode::FORBIDDEN.into_response();
         }
 
-        let (origin_domain, origin_port_raw) = parse_host_header(origin_host_raw);
+        let (origin_domain, origin_port) = parse_host_header(origin_host_raw);
         let domains_match = host_domain.eq_ignore_ascii_case(&origin_domain);
-
-        let origin_port = if let Some(p) = origin_port_raw {
-            Some(p)
-        } else {
-            match origin_scheme {
-                "http" => Some(80),
-                "https" => Some(443),
-                _ => None,
-            }
-        };
-
-        // Strict Port Matching Rule
-        let ports_match = match (host_port, origin_port) {
-            (Some(h), Some(o)) => h == o,
-            (Some(_), None) => false,
-            (None, None) => true,
-            (None, Some(o)) => {
-                // Host implied (80 or 443). Origin explicit.
-                // Origin MUST be 80 or 443 to match implied Host.
-                o == 80 || o == 443
-            }
-        };
+        let ports_match = same_effective_port(host_port, origin_port, origin_scheme);
 
         if !domains_match || !ports_match {
             tracing::warn!(?origin, ?host_raw, uri = ?uri_path, "CSRF check failed: Origin mismatch");
@@ -185,13 +164,7 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
         };
 
         let domains_match = host_domain.eq_ignore_ascii_case(&ref_host);
-
-        let ports_match = match (host_port, ref_port) {
-            (Some(h), Some(o)) => h == o,
-            (Some(_), None) => false,
-            (None, None) => true,
-            (None, Some(o)) => o == 80 || o == 443,
-        };
+        let ports_match = same_effective_port(host_port, ref_port, ref_scheme);
 
         if !domains_match || !ports_match {
             tracing::warn!(?referer, ?host_raw, uri = ?uri_path, "CSRF check failed: Referer mismatch");
@@ -203,6 +176,21 @@ pub async fn require_csrf(jar: CookieJar, req: Request<Body>, next: Next) -> Res
     // 8. Block if neither is present
     tracing::warn!(method = ?method, ?host_raw, uri = ?uri_path, "CSRF check failed: Missing Origin and Referer");
     StatusCode::FORBIDDEN.into_response()
+}
+
+/// Compare ports as part of a complete `(scheme, host, effective port)` origin.
+///
+/// A missing port does not mean "either standard port": its effective value is
+/// determined by the presented Origin/Referer scheme. Consequently, an HTTPS
+/// origin without a port is equivalent to an explicit `:443`, never `:80`.
+fn same_effective_port(host_port: Option<u16>, candidate_port: Option<u16>, scheme: &str) -> bool {
+    let default_port = match scheme {
+        "http" => 80,
+        "https" => 443,
+        _ => return false,
+    };
+
+    host_port.unwrap_or(default_port) == candidate_port.unwrap_or(default_port)
 }
 
 /// Helper to parse host:port string using http::Uri logic.
@@ -226,9 +214,12 @@ fn is_magic_link_consume_post(method: &Method, path: &str) -> bool {
     *method == Method::POST
         && (path == "/auth/magic-link/consume" || path == "/api/auth/magic-link/consume")
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use axum::{middleware::from_fn, routing::post, Router};
+    use tower::ServiceExt;
 
     #[test]
     fn test_parse_host_header() {
@@ -315,27 +306,175 @@ mod tests {
     }
 
     #[test]
-    fn test_strict_port_matching() {
-        let check_ports = |host_port: Option<u16>, origin_port: Option<u16>| -> bool {
-            match (host_port, origin_port) {
-                (Some(h), Some(o)) => h == o,
-                (Some(_), None) => false,
-                (None, None) => true,
-                (None, Some(o)) => o == 80 || o == 443,
-            }
-        };
+    fn effective_port_is_bound_to_the_scheme() {
+        // HTTPS without an explicit port is exactly port 443.
+        assert!(same_effective_port(None, None, "https"));
+        assert!(same_effective_port(None, Some(443), "https"));
+        assert!(!same_effective_port(None, Some(80), "https"));
+        assert!(!same_effective_port(None, Some(8443), "https"));
 
-        // Host has no port (implied standard), Origin has non-standard port -> FAIL
-        assert!(!check_ports(None, Some(1234)));
+        // HTTP without an explicit port is exactly port 80.
+        assert!(same_effective_port(None, None, "http"));
+        assert!(same_effective_port(None, Some(80), "http"));
+        assert!(!same_effective_port(None, Some(443), "http"));
 
-        // Host has no port, Origin has standard port -> PASS
-        assert!(check_ports(None, Some(80)));
-        assert!(check_ports(None, Some(443)));
+        // Explicit request and candidate ports must remain identical.
+        assert!(same_effective_port(Some(8080), Some(8080), "http"));
+        assert!(!same_effective_port(Some(8080), Some(9090), "http"));
 
-        // Host has explicit port, Origin has same port -> PASS
-        assert!(check_ports(Some(8080), Some(8080)));
+        // Unknown schemes are never treated as same-origin.
+        assert!(!same_effective_port(None, None, ""));
+        assert!(!same_effective_port(None, None, "ftp"));
+    }
 
-        // Host has explicit port, Origin has different port -> FAIL
-        assert!(!check_ports(Some(8080), Some(9090)));
+    fn csrf_test_app() -> Router {
+        async fn accepted() -> StatusCode {
+            StatusCode::NO_CONTENT
+        }
+
+        Router::new()
+            .route("/auth/logout-all", post(accepted))
+            .route("/api/auth/logout-all", post(accepted))
+            .layer(from_fn(require_csrf))
+    }
+
+    async fn csrf_status(path: &str, host: &str, header: &str, value: &str) -> StatusCode {
+        let request = Request::post(path)
+            .header("host", host)
+            .header("cookie", format!("{SESSION_COOKIE_NAME}=test-session"))
+            .header(header, value)
+            .body(Body::empty())
+            .expect("CSRF test request builds");
+
+        csrf_test_app()
+            .oneshot(request)
+            .await
+            .expect("CSRF test app responds")
+            .status()
+    }
+
+    #[tokio::test]
+    async fn origin_effective_https_port_is_enforced_under_both_auth_mounts() {
+        for path in ["/auth/logout-all", "/api/auth/logout-all"] {
+            assert_eq!(
+                csrf_status(path, "weltgewebe.net", "origin", "https://weltgewebe.net").await,
+                StatusCode::NO_CONTENT
+            );
+            assert_eq!(
+                csrf_status(
+                    path,
+                    "weltgewebe.net",
+                    "origin",
+                    "https://weltgewebe.net:443"
+                )
+                .await,
+                StatusCode::NO_CONTENT
+            );
+            assert_eq!(
+                csrf_status(
+                    path,
+                    "weltgewebe.net",
+                    "origin",
+                    "https://weltgewebe.net:80"
+                )
+                .await,
+                StatusCode::FORBIDDEN
+            );
+            assert_eq!(
+                csrf_status(
+                    path,
+                    "weltgewebe.net",
+                    "origin",
+                    "https://weltgewebe.net:8443"
+                )
+                .await,
+                StatusCode::FORBIDDEN
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn referer_effective_https_port_is_enforced_under_both_auth_mounts() {
+        for path in ["/auth/logout-all", "/api/auth/logout-all"] {
+            assert_eq!(
+                csrf_status(
+                    path,
+                    "weltgewebe.net",
+                    "referer",
+                    "https://weltgewebe.net/account"
+                )
+                .await,
+                StatusCode::NO_CONTENT
+            );
+            assert_eq!(
+                csrf_status(
+                    path,
+                    "weltgewebe.net",
+                    "referer",
+                    "https://weltgewebe.net:443/account"
+                )
+                .await,
+                StatusCode::NO_CONTENT
+            );
+            assert_eq!(
+                csrf_status(
+                    path,
+                    "weltgewebe.net",
+                    "referer",
+                    "https://weltgewebe.net:80/account"
+                )
+                .await,
+                StatusCode::FORBIDDEN
+            );
+            assert_eq!(
+                csrf_status(
+                    path,
+                    "weltgewebe.net",
+                    "referer",
+                    "https://weltgewebe.net:8443/account"
+                )
+                .await,
+                StatusCode::FORBIDDEN
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn localhost_http_and_loopback_addresses_keep_exact_port_support() {
+        for (host, origin) in [
+            ("localhost", "http://localhost"),
+            ("localhost:5173", "http://localhost:5173"),
+            ("127.0.0.1", "http://127.0.0.1"),
+            ("[::1]", "http://[::1]"),
+        ] {
+            assert_eq!(
+                csrf_status("/auth/logout-all", host, "origin", origin).await,
+                StatusCode::NO_CONTENT,
+                "matching local HTTP origin {origin} must remain supported"
+            );
+        }
+
+        assert_eq!(
+            csrf_status(
+                "/auth/logout-all",
+                "localhost",
+                "origin",
+                "http://localhost:443"
+            )
+            .await,
+            StatusCode::FORBIDDEN,
+            "local HTTP must not collapse port 443 into the implicit port 80"
+        );
+        assert_eq!(
+            csrf_status(
+                "/auth/logout-all",
+                "localhost:5173",
+                "origin",
+                "http://localhost:5174"
+            )
+            .await,
+            StatusCode::FORBIDDEN,
+            "explicit local development ports must match exactly"
+        );
     }
 }
