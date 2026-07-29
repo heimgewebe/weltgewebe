@@ -36,10 +36,9 @@ describe("edge lifecycle", () => {
   });
 
   it("retroactively ages dated legacy records and preserves only undated legacy", () => {
-    const datedLegacy = normalizeEdgeLifecycle({
-      ...rawEdge,
-      expires_at: null,
-    });
+    const datedLegacyEdge = { ...rawEdge };
+    delete datedLegacyEdge.expires_at;
+    const datedLegacy = normalizeEdgeLifecycle(datedLegacyEdge);
     expect(datedLegacy.lifecycle).toEqual({
       kind: "faden",
       createdAtMs: createdAt,
@@ -65,6 +64,7 @@ describe("edge lifecycle", () => {
         created_at: "invalid",
         expires_at: null,
       }),
+      normalizeEdgeLifecycle({ ...rawEdge, expires_at: null }),
       normalizeEdgeLifecycle({ ...rawEdge, created_at: "2026-07-17" }),
       normalizeEdgeLifecycle({
         ...rawEdge,

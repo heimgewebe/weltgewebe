@@ -57,8 +57,12 @@ export function normalizeEdgeLifecycle(edge: Edge): MapEdge {
     return { ...edge, lifecycle: { kind: "invalid" } };
   }
 
+  if (edge.expires_at === null) {
+    return { ...edge, lifecycle: { kind: "invalid" } };
+  }
+
   const expiresAtMs =
-    edge.expires_at == null
+    edge.expires_at === undefined
       ? createdAtMs + FADEN_LIFETIME_MS
       : parseCanonicalRfc3339Ms(edge.expires_at);
   if (
