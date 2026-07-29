@@ -33,7 +33,7 @@ Dieser Bericht verhindert, dass langfristige Architektur, Referenzbeweise und la
 - Multi-Instance-Zwischenzustände, Transactional Outbox, idempotente Konsumenten und Zwei-API-Kohärenz sind revisionsgebunden belegt.
 - Die Kubernetes-/GitOps-Grundlage ist aus versionierten Artefakten direkt und über Flux reproduzierbar.
 - Gateway API, Cilium/Hubble, Network Policies, restricted Pod Security, Secret- und Imagepromotionsverträge sind vorhanden.
-- Eine zonierte HA-Referenzzelle hat PostgreSQL-/JetStream-Failover, Barman-Backup, WAL-Archivierung, PITR und Blank-Cluster-Restore bestanden.
+- Eine logisch zonierte kind-Referenzzelle auf einem einzelnen CI-Host hat PostgreSQL-/JetStream-Failover, Barman-Backup, WAL-Archivierung, PITR und Blank-Cluster-Restore bestanden.
 - RTO, archivierungsgebundene RPO-Obergrenze, Upgrade, Rollback und Referenzfehlerbudget wurden gemessen.
 - Proofkritische OCI-Eingaben werden aus einem kontrollierten privaten Digest-Mirror geladen und anschließend offline verifiziert.
 - Der Föderationskern mit Signaturen, Inbox/Outbox, Quarantäne und unabhängigen Zellgrenzen ist implementiert; ein öffentlicher Produktionscutover bleibt davon getrennt.
@@ -46,7 +46,7 @@ Dieser Bericht verhindert, dass langfristige Architektur, Referenzbeweise und la
 | Weltgewebe-OS-Verfassung | belegt | Architektur und ADRs sind kanonisch; spätere Aktivierung bleibt gategebunden |
 | Multi-Instance- und Ereignisgrundlage | belegt | gemeinsamer Zustand, Outbox und Zwei-API-Kohärenz; Produktionskapazität separat |
 | Kubernetes-/GitOps-Referenzpfad | belegt | Kustomize, Flux, Gateway, Policies, Direct-/GitOps-Proof; kein Produktionscluster |
-| HA- und Recovery-Referenzzelle | belegt | ein Zonenausfall, PostgreSQL/JetStream, PITR, Blank-Cluster-Restore und Messwerte; keine Produktionslast-HA |
+| HA- und Recovery-Referenzzelle | teilweise | logische Zonen in einem Single-Host-kind-Setup belegen Failover, PITR, Blank-Cluster-Restore und Messwerte; ein physisch verteilter Fehlerdomänenbeweis fehlt |
 | Föderationskern | belegt | Protokoll- und Zwei-Zellen-Referenzgrenzen; kein öffentlicher Cutover |
 | Observability- und Operator-Spine | teilweise | Telemetrieverträge und Proof-Receipts vorhanden; vollständige SLO-/Chronik-/Leitstandprojektion offen |
 | Kubernetes-Staging | offen | echter Cluster, externe Secrets, Imagepromotion, Storage, TLS/DNS/LB und produktionsnahe Lastbelege fehlen |
@@ -68,7 +68,7 @@ Ein leerer Cluster wird aus versionierten Artefakten aufgebaut; CI und Umgebungs
 
 ### Gate E — HA und Recovery
 
-Mehrere Fehlerdomänen, PostgreSQL-/JetStream-Failover, PITR, Blank-Cluster-Restore sowie RTO/RPO-, Upgrade- und Rollbackmessungen sind in der Referenzzelle belegt.
+Mehrere logisch getrennte Fehlerdomänen, PostgreSQL-/JetStream-Failover, PITR, Blank-Cluster-Restore sowie RTO/RPO-, Upgrade- und Rollbackmessungen sind in einer Single-Host-kind-Referenz belegt. Das erfüllt nicht das unveränderte Akzeptanzkriterium eines über unabhängige physische Hosts verteilten HA-Belegs.
 
 ### Gate F — Föderationsreferenz
 
@@ -80,6 +80,7 @@ Dieser Bericht etabliert nicht:
 
 - Produktionsfreigabe oder laufenden Betrieb auf Kubernetes;
 - einen ausgewählten endgültigen Kubernetes-Anbieter;
+- einen über mehrere physische Hosts oder vergleichbar unabhängige Fehlerdomänen verteilten HA-Beweis;
 - reale Multi-Region- oder Multi-Cloud-HA;
 - RTO/RPO unter repräsentativer Produktionslast;
 - die sichere gleichzeitige Zerstörung zweier Fehlerdomänen;

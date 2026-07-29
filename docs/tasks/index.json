@@ -1964,7 +1964,7 @@
       "id": "WELTGEWEBE-OS-008",
       "title": "Hochverfügbare Referenzzelle mit Restore und Failover beweisen",
       "area": "infra",
-      "status": "done",
+      "status": "partial",
       "priority": "medium",
       "effort": "XL",
       "risk": "high",
@@ -1976,7 +1976,9 @@
         "scripts/platform/ha_reference.py",
         ".github/workflows/kubernetes-platform-proof.yml"
       ],
-      "missing_evidence": [],
+      "missing_evidence": [
+        "HA-Proof über mindestens zwei physische Hosts oder vergleichbar unabhängige Fehlerdomänen; der aktuelle kind-Proof läuft vollständig auf einem einzelnen CI-Host"
+      ],
       "acceptance": [
         "API-, Datenbank- und Messagingausfälle wurden kontrolliert geprobt",
         "Kein bestätigter Fachvorgang geht verloren",
