@@ -12,7 +12,7 @@ Generated automatically. Do not edit.
 
 > This report is metadata-based. It does not infer semantic staleness from prose.
 
-Explicitly stale documents: **38**
+Explicitly stale documents: **39**
 
 | Document | status | lifecycle_state |
 | --- | --- | --- |
@@ -52,5 +52,6 @@ Explicitly stale documents: **38**
 | `docs/reports/report-lifecycle-restbestand-triage.md` | deprecated | archived |
 | `docs/runbooks/domain-mail-cutover.md` | deprecated | — |
 | `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md` | deprecated | — |
+| `docs/specs/contract.md` | active | superseded |
 | `docs/specs/privacy-ui.md` | deprecated | — |
 | `docs/zusammenstellung.md` | deprecated | — |

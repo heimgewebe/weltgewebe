@@ -2,11 +2,7 @@
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
-  import {
-    ApiRequestError,
-    deleteNode,
-    replaceNode,
-  } from "$lib/api/domainWrites";
+  import { ApiRequestError, replaceNode } from "$lib/api/domainWrites";
   import {
     buildPanelEndpoint,
     createPanelDetailsLoader,
@@ -19,7 +15,7 @@
   type DomainChanged = {
     kind: "node";
     id: string;
-    action: "updated" | "deleted";
+    action: "updated" | "deleted" | "archived";
   };
 
   const dispatch = createEventDispatcher<{
@@ -42,6 +38,7 @@
   let saving = false;
   let deleting = false;
   let mutationError = "";
+  let archiveHref = "";
   let formTitle = "";
   let formKind = "";
   let formSummary = "";
@@ -89,6 +86,7 @@
     saving = false;
     deleting = false;
     mutationError = "";
+    archiveHref = "";
   }
 
   const detailsLoader = createPanelDetailsLoader<NodeDetails>(selection, {
@@ -276,15 +274,21 @@
     const id = nodeDetails?.id || $selection?.id;
     if (!id) return;
     const confirmed = window.confirm(
-      "Knoten wirklich löschen? Alle Fäden, die mit ihm verbunden sind, werden ebenfalls gelöscht.",
+      "Aus dem Gewebe entfernen? Alle verbundenen Fäden werden entfernt. Bestehende Gesprächsbeiträge bleiben als schreibgeschütztes Archiv erhalten.",
     );
     if (!confirmed) return;
 
     deleting = true;
     mutationError = "";
     try {
-      await deleteNode(id, nodeDetails?.updated_at);
-      dispatch("domainChanged", { kind: "node", id, action: "deleted" });
+      const { deleteNode } = await import("$lib/api/nodeDelete");
+      const receipt = await deleteNode(id, nodeDetails?.updated_at);
+      let action: DomainChanged["action"] = "deleted";
+      if (receipt.conversation.effect === "archived") {
+        archiveHref = `/archive?id=${encodeURIComponent(receipt.conversation.archive_id)}`;
+        action = "archived";
+      }
+      dispatch("domainChanged", { kind: "node", id, action });
     } catch (error) {
       if (
         error instanceof ApiRequestError &&
@@ -307,292 +311,299 @@
 </script>
 
 <div class="node-mode" class:editing>
-  <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
-  {#if summary}<p class="summary node-summary">{summary}</p>{/if}
-  <div
-    class="compact-node-summary"
-    data-testid="node-compact-summary"
-    role="region"
-    aria-label="Knotenübersicht"
-  >
-    <p><strong>Knotenart:</strong> {kind}</p>
-  </div>
-
-  {#if editing}
-    <form
-      class="edit-form node-full-content"
-      on:submit|preventDefault={saveNode}
-    >
-      <label>
-        Titel
-        <input
-          bind:this={titleInput}
-          bind:value={formTitle}
-          maxlength="200"
-          required
-        />
-      </label>
-      <label>
-        Knotenart
-        <input bind:value={formKind} maxlength="100" required />
-      </label>
-      <label>
-        Kurzbeschreibung
-        <textarea bind:value={formSummary} maxlength="500" rows="3"></textarea>
-      </label>
-      <label>
-        Ausführliche Information
-        <textarea bind:value={formInfo} maxlength="20000" rows="6"></textarea>
-      </label>
-      <label>
-        Adresse
-        <input bind:value={formAddress} maxlength="500" required />
-      </label>
-      <div class="coordinate-grid">
-        <label>
-          Breitengrad
-          <input bind:value={formLat} inputmode="decimal" required />
-        </label>
-        <label>
-          Längengrad
-          <input bind:value={formLon} inputmode="decimal" required />
-        </label>
-      </div>
-      <label>
-        Schlagwörter, durch Kommas getrennt
-        <input bind:value={formTags} />
-      </label>
-
-      {#if mutationError}<p class="error" role="alert">{mutationError}</p>{/if}
-      {#if conflictNode}
-        <section class="conflict-current" aria-label="Aktueller Serverstand">
-          <strong>Aktueller Stand im Weltgewebe</strong>
-          <dl>
-            <div>
-              <dt>Titel</dt>
-              <dd>{conflictNode.title}</dd>
-            </div>
-            <div>
-              <dt>Knotenart</dt>
-              <dd>{conflictNode.kind}</dd>
-            </div>
-            {#if conflictNode.summary}<div>
-                <dt>Kurzbeschreibung</dt>
-                <dd>{conflictNode.summary}</dd>
-              </div>{/if}
-            {#if conflictNode.info}<div>
-                <dt>Information</dt>
-                <dd>{conflictNode.info}</dd>
-              </div>{/if}
-            {#if conflictNode.address}<div>
-                <dt>Adresse</dt>
-                <dd>{conflictNode.address}</dd>
-              </div>{/if}
-            {#if conflictNode.tags?.length}<div>
-                <dt>Schlagwörter</dt>
-                <dd>{conflictNode.tags.join(", ")}</dd>
-              </div>{/if}
-          </dl>
-        </section>
-      {/if}
-      <div class="form-actions">
-        <button
-          type="button"
-          class="secondary"
-          on:click={cancelEdit}
-          disabled={saving}>Abbrechen</button
-        >
-        <button type="submit" class="primary" disabled={saving}
-          >{saving ? "Speichert…" : "Änderungen speichern"}</button
-        >
-      </div>
-    </form>
+  {#if archiveHref}
+    <a href={archiveHref} aria-live="polite">Knoten entfernt: Archiv öffnen</a>
   {:else}
+    <h3>{nodeDetails?.title || $selection?.data?.title || $selection?.id}</h3>
+    {#if summary}<p class="summary node-summary">{summary}</p>{/if}
     <div
-      class="tabs node-tabs node-full-content"
-      role="tablist"
-      aria-label="Knoten-Tabs"
+      class="compact-node-summary"
+      data-testid="node-compact-summary"
+      role="region"
+      aria-label="Knotenübersicht"
     >
-      <button
-        class:active={activeTab === "uebersicht"}
-        on:click={() => setTab("uebersicht")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "uebersicht"}
-        aria-controls="panel-uebersicht"
-        id="tab-uebersicht"
-        bind:this={overviewTab}
-        tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
-      >
-      <button
-        class:active={activeTab === "gespraech"}
-        on:click={() => setTab("gespraech")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "gespraech"}
-        aria-controls="panel-gespraech"
-        id="tab-gespraech"
-        tabindex={activeTab === "gespraech" ? 0 : -1}>Gespräch</button
-      >
-      <button
-        class:active={activeTab === "verlauf"}
-        on:click={() => setTab("verlauf")}
-        on:keydown={handleKeydown}
-        role="tab"
-        aria-selected={activeTab === "verlauf"}
-        aria-controls="panel-verlauf"
-        id="tab-verlauf"
-        tabindex={activeTab === "verlauf" ? 0 : -1}>Verlauf</button
-      >
-      {#if canMutate}
-        <button
-          class:active={activeTab === "bearbeiten"}
-          on:click={() => setTab("bearbeiten")}
-          on:keydown={handleKeydown}
-          role="tab"
-          aria-selected={activeTab === "bearbeiten"}
-          aria-controls="panel-bearbeiten"
-          id="tab-bearbeiten"
-          bind:this={editTab}
-          tabindex={activeTab === "bearbeiten" ? 0 : -1}>Bearbeiten</button
-        >
-      {/if}
+      <p><strong>Knotenart:</strong> {kind}</p>
     </div>
 
-    <div class="tab-content node-full-content">
-      {#if activeTab === "uebersicht"}
-        <div
-          class="overview"
-          id="panel-uebersicht"
-          role="tabpanel"
-          aria-labelledby="tab-uebersicht"
-          tabindex="0"
-        >
-          {#if isLoadingDetails}<p class="ghost">Lade Details…</p>
-          {:else}
-            {#if nodeDetails?.created_at || $selection?.data?.created_at}<p>
-                <strong>Geknüpft am:</strong>
-                {formatDate(
-                  nodeDetails?.created_at || $selection?.data?.created_at,
-                )}
-              </p>{/if}
-            <p><strong>Knotenart:</strong> {kind}</p>
-            {#if nodeDetails?.address}<p>
-                <strong>Adresse:</strong>
-                {nodeDetails.address}
-              </p>{/if}
-            {#if nodeDetails?.info}<p class="long-info">
-                <strong>Information:</strong>
-                {nodeDetails.info}
-              </p>{/if}
-            {#if nodeDetails?.tags?.length}<p>
-                <strong>Schlagwörter:</strong>
-                {nodeDetails.tags.join(", ")}
-              </p>{/if}
-            {#if nodeDetails?.participants?.length}
-              <div class="participants">
-                <p><strong>Beteiligte Garnrollen</strong></p>
-                <ul>
-                  {#each nodeDetails.participants as participant}<li>
-                      <button
-                        type="button"
-                        on:click={() =>
-                          dispatch("selectRelated", {
-                            type: "garnrolle",
-                            id: participant.account_id,
-                          })}
-                        >{participant.account_title ||
-                          participant.account_id}</button
-                      >
-                    </li>{/each}
-                </ul>
+    {#if editing}
+      <form
+        class="edit-form node-full-content"
+        on:submit|preventDefault={saveNode}
+      >
+        <label>
+          Titel
+          <input
+            bind:this={titleInput}
+            bind:value={formTitle}
+            maxlength="200"
+            required
+          />
+        </label>
+        <label>
+          Knotenart
+          <input bind:value={formKind} maxlength="100" required />
+        </label>
+        <label>
+          Kurzbeschreibung
+          <textarea bind:value={formSummary} maxlength="500" rows="3"
+          ></textarea>
+        </label>
+        <label>
+          Ausführliche Information
+          <textarea bind:value={formInfo} maxlength="20000" rows="6"></textarea>
+        </label>
+        <label>
+          Adresse
+          <input bind:value={formAddress} maxlength="500" required />
+        </label>
+        <div class="coordinate-grid">
+          <label>
+            Breitengrad
+            <input bind:value={formLat} inputmode="decimal" required />
+          </label>
+          <label>
+            Längengrad
+            <input bind:value={formLon} inputmode="decimal" required />
+          </label>
+        </div>
+        <label>
+          Schlagwörter, durch Kommas getrennt
+          <input bind:value={formTags} />
+        </label>
+
+        {#if mutationError}<p class="error" role="alert">
+            {mutationError}
+          </p>{/if}
+        {#if conflictNode}
+          <section class="conflict-current" aria-label="Aktueller Serverstand">
+            <strong>Aktueller Stand im Weltgewebe</strong>
+            <dl>
+              <div>
+                <dt>Titel</dt>
+                <dd>{conflictNode.title}</dd>
               </div>
-            {/if}
-            {#if SimilarNodesComponent}
-              <svelte:component
-                this={SimilarNodesComponent}
-                sourceId={nodeDetails?.id || $selection?.id || ""}
-                title={nodeDetails?.title || $selection?.data?.title}
-                kind={nodeDetails?.kind || $selection?.data?.kind}
-                summary={nodeDetails?.summary || $selection?.data?.summary}
-                info={nodeDetails?.info || $selection?.data?.info}
-                tags={nodeDetails?.tags || $selection?.data?.tags}
-                on:select={(event) => dispatch("selectRelated", event.detail)}
-              />
-            {/if}
-          {/if}
-        </div>
-      {:else if activeTab === "gespraech"}
-        <div
-          id="panel-gespraech"
-          role="tabpanel"
-          aria-labelledby="tab-gespraech"
-        >
-          {#key nodeDetails?.id || $selection?.id || ""}
-            <NodeConversation
-              nodeId={nodeDetails?.id || $selection?.id || ""}
-            />
-          {/key}
-        </div>
-      {:else if activeTab === "verlauf"}
-        <div
-          id="panel-verlauf"
-          role="tabpanel"
-          aria-labelledby="tab-verlauf"
-          tabindex="0"
-        >
-          {#if isLoadingDetails}<p class="ghost">Lade Verlauf…</p>
-          {:else if timelineEvents.length}<ul class="timeline">
-              {#each timelineEvents as event}<li>
-                  <span class="date">{formatDate(event.date)}</span><span
-                    class="event">{event.event}</span
-                  >
-                  {#if event.kind === "created" && currentCreatorTitle && nodeCreator}<span
-                      class="creator"
-                    >
-                      <span>Urheber:</span>
-                      <button
-                        type="button"
-                        aria-label={`Garnrolle ${currentCreatorTitle} öffnen`}
-                        on:click={() =>
-                          dispatch("selectRelated", {
-                            type: "garnrolle",
-                            id: nodeCreator,
-                            title: currentCreatorTitle,
-                          })}>{currentCreatorTitle}</button
-                      >
-                    </span>{/if}
-                </li>{/each}
-            </ul>
-          {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
-        </div>
-      {:else if activeTab === "bearbeiten" && canMutate}
-        <div
-          class="mutation-actions"
-          id="panel-bearbeiten"
-          role="tabpanel"
-          aria-labelledby="tab-bearbeiten"
-        >
-          {#if mutationError}<p class="error" role="alert">
-              {mutationError}
-            </p>{/if}
-          <button type="button" class="secondary" on:click={beginEdit}
-            >Bearbeiten</button
-          >
+              <div>
+                <dt>Knotenart</dt>
+                <dd>{conflictNode.kind}</dd>
+              </div>
+              {#if conflictNode.summary}<div>
+                  <dt>Kurzbeschreibung</dt>
+                  <dd>{conflictNode.summary}</dd>
+                </div>{/if}
+              {#if conflictNode.info}<div>
+                  <dt>Information</dt>
+                  <dd>{conflictNode.info}</dd>
+                </div>{/if}
+              {#if conflictNode.address}<div>
+                  <dt>Adresse</dt>
+                  <dd>{conflictNode.address}</dd>
+                </div>{/if}
+              {#if conflictNode.tags?.length}<div>
+                  <dt>Schlagwörter</dt>
+                  <dd>{conflictNode.tags.join(", ")}</dd>
+                </div>{/if}
+            </dl>
+          </section>
+        {/if}
+        <div class="form-actions">
           <button
             type="button"
-            class="danger"
-            on:click={removeNode}
-            disabled={deleting}
-            >{deleting ? "Löscht…" : "Knoten löschen"}</button
+            class="secondary"
+            on:click={cancelEdit}
+            disabled={saving}>Abbrechen</button
           >
-          <p class="collective-note">
-            Eigene Knoten kannst du selbst pflegen. Weber können zusätzlich
-            gemeinschaftliche Knoten weiterentwickeln.
-          </p>
+          <button type="submit" class="primary" disabled={saving}
+            >{saving ? "Speichert…" : "Änderungen speichern"}</button
+          >
         </div>
-      {/if}
-    </div>
+      </form>
+    {:else}
+      <div
+        class="tabs node-tabs node-full-content"
+        role="tablist"
+        aria-label="Knoten-Tabs"
+      >
+        <button
+          class:active={activeTab === "uebersicht"}
+          on:click={() => setTab("uebersicht")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "uebersicht"}
+          aria-controls="panel-uebersicht"
+          id="tab-uebersicht"
+          bind:this={overviewTab}
+          tabindex={activeTab === "uebersicht" ? 0 : -1}>Übersicht</button
+        >
+        <button
+          class:active={activeTab === "gespraech"}
+          on:click={() => setTab("gespraech")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "gespraech"}
+          aria-controls="panel-gespraech"
+          id="tab-gespraech"
+          tabindex={activeTab === "gespraech" ? 0 : -1}>Gespräch</button
+        >
+        <button
+          class:active={activeTab === "verlauf"}
+          on:click={() => setTab("verlauf")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "verlauf"}
+          aria-controls="panel-verlauf"
+          id="tab-verlauf"
+          tabindex={activeTab === "verlauf" ? 0 : -1}>Verlauf</button
+        >
+        {#if canMutate}
+          <button
+            class:active={activeTab === "bearbeiten"}
+            on:click={() => setTab("bearbeiten")}
+            on:keydown={handleKeydown}
+            role="tab"
+            aria-selected={activeTab === "bearbeiten"}
+            aria-controls="panel-bearbeiten"
+            id="tab-bearbeiten"
+            bind:this={editTab}
+            tabindex={activeTab === "bearbeiten" ? 0 : -1}>Bearbeiten</button
+          >
+        {/if}
+      </div>
+
+      <div class="tab-content node-full-content">
+        {#if activeTab === "uebersicht"}
+          <div
+            class="overview"
+            id="panel-uebersicht"
+            role="tabpanel"
+            aria-labelledby="tab-uebersicht"
+            tabindex="0"
+          >
+            {#if isLoadingDetails}<p class="ghost">Lade Details…</p>
+            {:else}
+              {#if nodeDetails?.created_at || $selection?.data?.created_at}<p>
+                  <strong>Geknüpft am:</strong>
+                  {formatDate(
+                    nodeDetails?.created_at || $selection?.data?.created_at,
+                  )}
+                </p>{/if}
+              <p><strong>Knotenart:</strong> {kind}</p>
+              {#if nodeDetails?.address}<p>
+                  <strong>Adresse:</strong>
+                  {nodeDetails.address}
+                </p>{/if}
+              {#if nodeDetails?.info}<p class="long-info">
+                  <strong>Information:</strong>
+                  {nodeDetails.info}
+                </p>{/if}
+              {#if nodeDetails?.tags?.length}<p>
+                  <strong>Schlagwörter:</strong>
+                  {nodeDetails.tags.join(", ")}
+                </p>{/if}
+              {#if nodeDetails?.participants?.length}
+                <div class="participants">
+                  <p><strong>Beteiligte Garnrollen</strong></p>
+                  <ul>
+                    {#each nodeDetails.participants as participant}<li>
+                        <button
+                          type="button"
+                          on:click={() =>
+                            dispatch("selectRelated", {
+                              type: "garnrolle",
+                              id: participant.account_id,
+                            })}
+                          >{participant.account_title ||
+                            participant.account_id}</button
+                        >
+                      </li>{/each}
+                  </ul>
+                </div>
+              {/if}
+              {#if SimilarNodesComponent}
+                <svelte:component
+                  this={SimilarNodesComponent}
+                  sourceId={nodeDetails?.id || $selection?.id || ""}
+                  title={nodeDetails?.title || $selection?.data?.title}
+                  kind={nodeDetails?.kind || $selection?.data?.kind}
+                  summary={nodeDetails?.summary || $selection?.data?.summary}
+                  info={nodeDetails?.info || $selection?.data?.info}
+                  tags={nodeDetails?.tags || $selection?.data?.tags}
+                  on:select={(event) => dispatch("selectRelated", event.detail)}
+                />
+              {/if}
+            {/if}
+          </div>
+        {:else if activeTab === "gespraech"}
+          <div
+            id="panel-gespraech"
+            role="tabpanel"
+            aria-labelledby="tab-gespraech"
+          >
+            {#key nodeDetails?.id || $selection?.id || ""}
+              <NodeConversation
+                nodeId={nodeDetails?.id || $selection?.id || ""}
+              />
+            {/key}
+          </div>
+        {:else if activeTab === "verlauf"}
+          <div
+            id="panel-verlauf"
+            role="tabpanel"
+            aria-labelledby="tab-verlauf"
+            tabindex="0"
+          >
+            {#if isLoadingDetails}<p class="ghost">Lade Verlauf…</p>
+            {:else if timelineEvents.length}<ul class="timeline">
+                {#each timelineEvents as event}<li>
+                    <span class="date">{formatDate(event.date)}</span><span
+                      class="event">{event.event}</span
+                    >
+                    {#if event.kind === "created" && currentCreatorTitle && nodeCreator}<span
+                        class="creator"
+                      >
+                        <span>Urheber:</span>
+                        <button
+                          type="button"
+                          aria-label={`Garnrolle ${currentCreatorTitle} öffnen`}
+                          on:click={() =>
+                            dispatch("selectRelated", {
+                              type: "garnrolle",
+                              id: nodeCreator,
+                              title: currentCreatorTitle,
+                            })}>{currentCreatorTitle}</button
+                        >
+                      </span>{/if}
+                  </li>{/each}
+              </ul>
+            {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
+          </div>
+        {:else if activeTab === "bearbeiten" && canMutate}
+          <div
+            class="mutation-actions"
+            id="panel-bearbeiten"
+            role="tabpanel"
+            aria-labelledby="tab-bearbeiten"
+          >
+            {#if mutationError}<p class="error" role="alert">
+                {mutationError}
+              </p>{/if}
+            <button type="button" class="secondary" on:click={beginEdit}
+              >Bearbeiten</button
+            >
+            <button
+              type="button"
+              class="danger"
+              on:click={removeNode}
+              disabled={deleting}
+              >{deleting ? "Entfernt…" : "Aus dem Gewebe entfernen"}</button
+            >
+            <p class="collective-note">
+              Eigene Knoten kannst du selbst pflegen. Weber können zusätzlich
+              gemeinschaftliche Knoten weiterentwickeln.
+            </p>
+          </div>
+        {/if}
+      </div>
+    {/if}
   {/if}
 </div>
 

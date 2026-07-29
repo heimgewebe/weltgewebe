@@ -484,7 +484,7 @@
   }
 
   async function handleDomainChanged(
-    event: CustomEvent<{ action: "updated" | "deleted" }>,
+    event: CustomEvent<{ action: "updated" | "deleted" | "archived" }>,
   ) {
     if (event.detail.action === "deleted") leaveToNavigation();
     await invalidate("weltgewebe:domain-data");

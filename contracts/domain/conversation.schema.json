@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://weltgewebe.org/schemas/domain/conversation.schema.json",
   "title": "Conversation",
-  "description": "The single public conversation space belonging to a node.",
+  "description": "A public node or governance conversation in its canonical lifecycle state.",
   "type": "object",
   "properties": {
     "id": {
@@ -11,11 +11,24 @@
     },
     "conversation_type": {
       "type": "string",
-      "const": "node"
+      "enum": ["node", "governance_proposal"]
+    },
+    "lifecycle_state": {
+      "type": "string",
+      "enum": ["active", "archived"]
     },
     "node_id": {
-      "type": "string",
+      "type": ["string", "null"],
       "minLength": 1
+    },
+    "node_id_snapshot": {
+      "type": ["string", "null"],
+      "minLength": 1
+    },
+    "node_title_snapshot": {
+      "type": ["string", "null"],
+      "minLength": 1,
+      "maxLength": 200
     },
     "visibility": {
       "type": "string",
@@ -29,6 +42,10 @@
       "type": "string",
       "format": "date-time"
     },
+    "archived_at": {
+      "type": ["string", "null"],
+      "format": "date-time"
+    },
     "deleted_at": {
       "type": ["string", "null"],
       "format": "date-time"
@@ -37,11 +54,72 @@
   "required": [
     "id",
     "conversation_type",
+    "lifecycle_state",
     "node_id",
+    "node_id_snapshot",
+    "node_title_snapshot",
     "visibility",
     "created_at",
     "updated_at",
+    "archived_at",
     "deleted_at"
+  ],
+  "allOf": [
+    {
+      "if": {
+        "required": ["conversation_type", "lifecycle_state"],
+        "properties": {
+          "conversation_type": { "const": "node" },
+          "lifecycle_state": { "const": "active" }
+        }
+      },
+      "then": {
+        "properties": {
+          "node_id": { "type": "string", "minLength": 1 },
+          "node_id_snapshot": { "type": "null" },
+          "node_title_snapshot": { "type": "null" },
+          "archived_at": { "type": "null" }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["conversation_type", "lifecycle_state"],
+        "properties": {
+          "conversation_type": { "const": "node" },
+          "lifecycle_state": { "const": "archived" }
+        }
+      },
+      "then": {
+        "properties": {
+          "node_id": { "type": "null" },
+          "node_id_snapshot": { "type": "string", "minLength": 1 },
+          "node_title_snapshot": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 200
+          },
+          "archived_at": { "type": "string", "format": "date-time" }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["conversation_type"],
+        "properties": {
+          "conversation_type": { "const": "governance_proposal" }
+        }
+      },
+      "then": {
+        "properties": {
+          "lifecycle_state": { "const": "active" },
+          "node_id": { "type": "null" },
+          "node_id_snapshot": { "type": "null" },
+          "node_title_snapshot": { "type": "null" },
+          "archived_at": { "type": "null" }
+        }
+      }
+    }
   ],
   "additionalProperties": false
 }

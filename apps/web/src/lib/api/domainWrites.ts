@@ -5,13 +5,11 @@ import type { GarnrolleMapState, Location, Node } from "$lib/map/types";
  * German, user-facing message without leaking backend/internal detail.
  */
 export class ApiRequestError extends Error {
-  status: number;
-  body?: unknown;
-  constructor(status: number, body?: unknown) {
-    super(`API request failed with status ${status}`);
-    this.name = "ApiRequestError";
-    this.status = status;
-    this.body = body;
+  constructor(
+    public status: number,
+    public body?: unknown,
+  ) {
+    super(`API request failed: ${status}`);
   }
 }
 
@@ -27,7 +25,7 @@ function isNodeVersionConflictBody(body: unknown, expectedId: string): boolean {
   );
 }
 
-async function readErrorBody(response: Response): Promise<unknown> {
+export async function readErrorBody(response: Response): Promise<unknown> {
   const text = await response.text().catch(() => "");
   if (!text) return undefined;
 
@@ -38,7 +36,7 @@ async function readErrorBody(response: Response): Promise<unknown> {
   }
 }
 
-function preserveOnlyMatchingNodeConflict(
+export function preserveOnlyMatchingNodeConflict(
   error: unknown,
   expectedId: string,
 ): never {
@@ -95,21 +93,6 @@ async function putJson<T>(
   etag?: string,
 ): Promise<T> {
   return requestJson<T>(path, "PUT", payload, etag);
-}
-
-async function deleteResource(path: string, etag?: string): Promise<void> {
-  const headers: HeadersInit = {};
-  if (etag) {
-    headers["If-Match"] = `"${etag}"`;
-  }
-  const res = await fetch(path, {
-    method: "DELETE",
-    headers,
-    credentials: "include",
-  });
-  if (!res.ok) {
-    throw new ApiRequestError(res.status, await readErrorBody(res));
-  }
 }
 
 async function getJson<T>(path: string, signal?: AbortSignal): Promise<T> {
@@ -201,9 +184,13 @@ export function replaceNode(
   ).catch((error) => preserveOnlyMatchingNodeConflict(error, id));
 }
 
-/** DELETE /api/nodes/:id — delete a node and its derived connected edges. */
-export function deleteNode(id: string, etag?: string): Promise<void> {
-  return deleteResource(`/api/nodes/${encodeURIComponent(id)}`, etag).catch(
-    (error) => preserveOnlyMatchingNodeConflict(error, id),
-  );
+export type {
+  NodeDeleteConversationEffect,
+  NodeDeleteReceipt,
+} from "./nodeDelete";
+
+/** Lazily load node removal so unrelated routes do not ship its receipt parser. */
+export async function deleteNode(id: string, etag?: string) {
+  const { deleteNode: remove } = await import("./nodeDelete");
+  return remove(id, etag);
 }

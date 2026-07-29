@@ -42,7 +42,9 @@ if [[ ${#EXAMPLES[@]} -eq 0 ]]; then
 else
   for example in "${EXAMPLES[@]}"; do
     filename="$(basename "$example")"
-    entity="${filename%.example.json}"
+    # Variant examples such as conversation.archived.example.json and
+    # conversation.governance.example.json share conversation.schema.json.
+    entity="${filename%%.*}"
     schema="contracts/domain/${entity}.schema.json"
     echo "  - $example -> $schema"
     "${SCHEMA_CHECK[@]}" validate --schema "$schema" --data "$example" --spec draft7

@@ -15,6 +15,8 @@ depends_on: []
 relations:
   - type: relates_to
     target: docs/specs/governance-antraege.md
+  - type: relates_to
+    target: docs/specs/objektlebenszyklen-und-loeschwirkungen.md
   - type: supersedes
     target: docs/konzepte/garnrolle-und-verortung.md
   - type: supersedes
@@ -211,6 +213,25 @@ eine aktive Accountbindung:
 - Autor oder Administrator dürfen ihn entfernen;
 - beim Löschen eines Accounts wird die aktive Accountbindung entfernt, der
   historische Anzeigename und der Beitrag bleiben erhalten.
+
+Ein Knoten darf unabhängig von vorhandenen Gesprächsbeiträgen aus dem aktiven
+Gewebe gelöscht werden. Dabei gelten drei getrennte Wirkungen:
+
+- der Knoten und seine verbundenen Fadenprojektionen werden regulär entfernt;
+- ein leerer, automatisch erzeugter Gesprächsraum wird mit dem Knoten gelöscht;
+- ein Gesprächsraum mit Beiträgen wird im selben Datenbankvorgang vom Knoten
+  entkoppelt, mit Knoten-ID und letztem Knotentitel gekennzeichnet und als
+  schreibgeschütztes Archiv erhalten.
+
+Das Archiv bleibt über seine stabile Gesprächs-ID öffentlich lesbar. Nach der
+Archivierung sind neue Beiträge und normale Inhaltsänderungen ausgeschlossen.
+Autoren dürfen eigene Beiträge weiterhin zurückziehen, Administratoren dürfen
+sie moderativ entfernen; beides erzeugt einen Tombstone statt einer physischen
+Löschung. Beim Accountaustritt wird weiterhin nur die aktive Accountbindung
+gelöst. Die frühere Diskussion darf nicht durch das Entfernen ihres Kartenobjekts
+verschwinden oder nachträglich wiederbeschrieben werden. Die übergreifenden
+Begriffe und Purgegrenzen normiert
+`docs/specs/objektlebenszyklen-und-loeschwirkungen.md`.
 
 ## Aufnahme als Weber
 
