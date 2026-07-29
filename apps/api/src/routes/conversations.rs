@@ -30,7 +30,10 @@ use crate::{
     auth::role::Role, config::DomainReadSource, middleware::auth::AuthContext, state::ApiState,
 };
 
-use super::query::{decode_cursor, encode_cursor};
+use super::{
+    nodes::ensure_node_activity_faden,
+    query::{decode_cursor, encode_cursor},
+};
 
 const DEFAULT_MESSAGE_PAGE_SIZE: usize = 20;
 const MAX_MESSAGE_PAGE_SIZE: usize = 50;
@@ -224,6 +227,29 @@ fn account_id(auth: &AuthContext) -> Result<&str, ConversationApiError> {
             "an authenticated account is required",
         )
     })
+}
+
+async fn project_message_participation_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    node_id: Option<&str>,
+    message_id: &str,
+) {
+    let Some(node_id) = node_id else {
+        return;
+    };
+    if let Err((status, message)) =
+        ensure_node_activity_faden(state, auth, node_id, "conversation_message", message_id).await
+    {
+        tracing::error!(
+            event = "conversation.message_faden_projection.failed",
+            node_id,
+            message_id,
+            %status,
+            error = %message,
+            "Message remains successful because it is already durable; the derived Faden is missing"
+        );
+    }
 }
 
 fn validate_content(content: &str) -> Result<String, ConversationApiError> {
@@ -741,6 +767,12 @@ pub async fn create_message(
         .await
         .map_err(|error| database_error("begin create message", error))?;
     require_conversation_writable(&mut tx, &conversation_id).await?;
+    let node_id: Option<String> =
+        sqlx::query_scalar("SELECT node_id FROM domain_conversations WHERE id = $1::uuid")
+            .bind(&conversation_id)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|error| database_error("load conversation node for participation", error))?;
 
     let author_title: Option<String> =
         sqlx::query_scalar("SELECT title FROM domain_accounts WHERE id = $1")
@@ -789,9 +821,11 @@ pub async fn create_message(
                 "the Idempotency-Key was already used for a different message",
             ));
         }
+        let message_id = existing.id.clone();
         tx.commit()
             .await
             .map_err(|error| database_error("commit idempotent message replay", error))?;
+        project_message_participation_faden(&state, &auth, node_id.as_deref(), &message_id).await;
         return Ok((StatusCode::OK, Json(existing)));
     }
 
@@ -832,11 +866,13 @@ pub async fn create_message(
     .fetch_one(&mut *tx)
     .await
     .map_err(|error| database_error("insert message", error))?;
+    let message = message_from_row(row);
 
     tx.commit()
         .await
         .map_err(|error| database_error("commit message create", error))?;
-    Ok((StatusCode::CREATED, Json(message_from_row(row))))
+    project_message_participation_faden(&state, &auth, node_id.as_deref(), &message.id).await;
+    Ok((StatusCode::CREATED, Json(message)))
 }
 
 #[derive(Debug, Deserialize)]

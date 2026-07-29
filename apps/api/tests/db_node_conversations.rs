@@ -32,11 +32,11 @@ use weltgewebe_api::{
     telemetry::{BuildInfo, Metrics},
 };
 
-const AUTHOR_ID: &str = "conversation-proof-author";
-const OTHER_ID: &str = "conversation-proof-other";
-const ADMIN_ID: &str = "conversation-proof-admin";
-const GUEST_ID: &str = "conversation-proof-guest";
-const NODE_ID: &str = "conversation-proof-node";
+const AUTHOR_ID: &str = "61000000-0000-4000-8000-000000000001";
+const OTHER_ID: &str = "61000000-0000-4000-8000-000000000002";
+const ADMIN_ID: &str = "61000000-0000-4000-8000-000000000003";
+const GUEST_ID: &str = "61000000-0000-4000-8000-000000000004";
+const NODE_ID: &str = "61000000-0000-4000-8000-000000000005";
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
@@ -333,7 +333,7 @@ async fn node_conversation_vertical_slice() {
         "new canonical accounts must satisfy the author snapshot title contract"
     );
 
-    const EMPTY_NODE_ID: &str = "conversation-proof-empty-node";
+    const EMPTY_NODE_ID: &str = "61000000-0000-4000-8000-000000000006";
     sqlx::query("DELETE FROM domain_conversations WHERE node_id = $1")
         .bind(EMPTY_NODE_ID)
         .execute(&pool)
@@ -572,6 +572,21 @@ async fn node_conversation_vertical_slice() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(first["id"], replay["id"]);
+
+    let participation_after_replay: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges
+         WHERE target_id = $1
+           AND payload ->> 'target_type' = 'node'
+           AND payload ->> 'source_type' = 'account'",
+    )
+    .bind(NODE_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("count message participation Fäden after replay");
+    assert_eq!(
+        participation_after_replay, 2,
+        "guest contribution plus first author contribution create two Fäden; replay creates none",
+    );
 
     let (status, conflict) = json_response(
         &app,
@@ -843,7 +858,11 @@ async fn node_conversation_vertical_slice() {
             .fetch_one(&pool)
             .await
             .expect("projection version after messages");
-    assert_eq!(version_after_messages, version_after_node);
+    assert_eq!(
+        version_after_messages,
+        version_after_node + 4,
+        "four distinct contributions create four active map Fäden",
+    );
     let payloads: Vec<String> = sqlx::query_scalar(
         "SELECT payload::text FROM domain_outbox
          WHERE aggregate_type = 'message' AND aggregate_id = $1",
@@ -941,6 +960,21 @@ async fn node_conversation_vertical_slice() {
         "idempotency must include the client key"
     );
 
+    let active_participation_faden_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges
+         WHERE target_id = $1
+           AND payload ->> 'target_type' = 'node'
+           AND payload ->> 'source_type' = 'account'",
+    )
+    .bind(NODE_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("count all active participation Fäden");
+    assert_eq!(
+        active_participation_faden_count, 11,
+        "each distinct accepted contribution adds one Faden; replays and rejected writes add none",
+    );
+
     // Binding check (account exit): a hard account delete must not be blocked by
     // existing public contributions, and the author snapshot must survive so the
     // history stays readable.
@@ -1027,7 +1061,11 @@ async fn node_conversation_vertical_slice() {
     let outcome = delete_node_with_edges_in_postgres(&pool, NODE_ID)
         .await
         .expect("node deletion must archive a non-empty public conversation");
-    assert!(outcome.removed_edge_ids.is_empty());
+    assert_eq!(
+        outcome.removed_edge_ids.len(),
+        11,
+        "node deletion removes every active participation Faden",
+    );
     assert_eq!(
         outcome.conversation,
         NodeConversationDeleteEffect::Archived {
