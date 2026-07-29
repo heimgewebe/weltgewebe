@@ -283,12 +283,12 @@
     try {
       const { deleteNode } = await import("$lib/api/nodeDelete");
       const receipt = await deleteNode(id, nodeDetails?.updated_at);
+      let action: DomainChanged["action"] = "deleted";
       if (receipt.conversation.effect === "archived") {
         archiveHref = `/archive?id=${encodeURIComponent(receipt.conversation.archive_id)}`;
-        dispatch("domainChanged", { kind: "node", id, action: "archived" });
-      } else {
-        dispatch("domainChanged", { kind: "node", id, action: "deleted" });
+        action = "archived";
       }
+      dispatch("domainChanged", { kind: "node", id, action });
     } catch (error) {
       if (
         error instanceof ApiRequestError &&

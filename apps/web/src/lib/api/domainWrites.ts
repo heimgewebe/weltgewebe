@@ -5,12 +5,11 @@ import type { GarnrolleMapState, Location, Node } from "$lib/map/types";
  * German, user-facing message without leaking backend/internal detail.
  */
 export class ApiRequestError extends Error {
-  status: number;
-  body?: unknown;
-  constructor(status: number, body?: unknown) {
+  constructor(
+    public status: number,
+    public body?: unknown,
+  ) {
     super(`API request failed: ${status}`);
-    this.status = status;
-    this.body = body;
   }
 }
 
