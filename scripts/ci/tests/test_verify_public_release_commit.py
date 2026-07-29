@@ -23,6 +23,7 @@ SPEC.loader.exec_module(MODULE)
 
 SECURE_IO = sys.modules["weltgewebe_secure_receipt_io"]
 
+ArtifactTreeResult = MODULE.ArtifactTreeResult
 EndpointResult = MODULE.EndpointResult
 _normalize_headers = MODULE._normalize_headers
 evaluate = MODULE.evaluate
@@ -57,9 +58,33 @@ class FakeResponse:
 
 class VerifyPublicReleaseCommitTests(unittest.TestCase):
     commit = "7b65127e852561997fa6a45b8cb3bfcef38e1eb8"
+    tree_sha256 = "a" * 64
+
+    def artifact_tree(
+        self,
+        *,
+        commit: str | None = None,
+        provenance: str = "unattested",
+        error: str | None = None,
+    ) -> ArtifactTreeResult:
+        resolved = self.commit if commit is None else commit
+        return ArtifactTreeResult(
+            schema_version=1,
+            sha256=self.tree_sha256,
+            file_count=103,
+            compile_revision=resolved,
+            provenance=provenance,
+            error=error,
+        )
 
     def endpoint(
-        self, *, api: bool = False, commit: str | None = None
+        self,
+        *,
+        api: bool = False,
+        commit: str | None = None,
+        include_artifact_tree: bool | None = None,
+        artifact_compile_revision: str | None = None,
+        provenance: str = "unattested",
     ) -> EndpointResult:
         resolved = self.commit if commit is None else commit
         headers = (
@@ -70,18 +95,39 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
             if api
             else {"cache-control": "public, no-store"}
         )
+        include_tree = (
+            not api if include_artifact_tree is None else include_artifact_tree
+        )
+        tree = (
+            self.artifact_tree(
+                commit=artifact_compile_revision or resolved,
+                provenance=provenance,
+            )
+            if include_tree
+            else None
+        )
         return EndpointResult(
             url="https://example.invalid/version",
             status=200,
             commit=resolved,
             version="0.1.0" if api else resolved[:8],
             headers=headers,
+            artifact_tree=tree,
         )
 
-    def test_accepts_exact_frontend_and_api_identity(self) -> None:
+    def test_accepts_exact_identity_as_limited_unattested_pass(self) -> None:
         result = evaluate(self.commit, self.endpoint(), self.endpoint(api=True))
         self.assertTrue(result.pass_)
+        self.assertEqual(result.status, "consistency_pass_unattested")
+        self.assertEqual(
+            result.pass_scope, "identity_and_declared_artifact_consistency"
+        )
+        self.assertTrue(result.identity_verified)
+        self.assertTrue(result.artifact_tree_declaration_verified)
+        self.assertFalse(result.attestation_verified)
+        self.assertEqual(result.provenance_status, "unattested")
         self.assertEqual(result.reasons, [])
+        self.assertIn("explicitly unattested", " ".join(result.limitations))
 
     def test_rejects_stale_frontend_commit(self) -> None:
         result = evaluate(
@@ -90,6 +136,7 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
             self.endpoint(api=True),
         )
         self.assertFalse(result.pass_)
+        self.assertEqual(result.status, "failed")
         self.assertTrue(
             any("frontend commit mismatch" in reason for reason in result.reasons)
         )
@@ -102,6 +149,85 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
         self.assertTrue(
             any("API build header mismatch" in reason for reason in result.reasons)
         )
+
+    def test_rejects_missing_frontend_artifact_tree(self) -> None:
+        result = evaluate(
+            self.commit,
+            self.endpoint(include_artifact_tree=False),
+            self.endpoint(api=True),
+        )
+        self.assertFalse(result.pass_)
+        self.assertTrue(result.identity_verified)
+        self.assertFalse(result.artifact_tree_declaration_verified)
+        self.assertEqual(result.provenance_status, "missing")
+        self.assertIn("artifact_tree declaration is missing", " ".join(result.reasons))
+
+    def test_rejects_artifact_compile_revision_mismatch(self) -> None:
+        result = evaluate(
+            self.commit,
+            self.endpoint(artifact_compile_revision="1" * 40),
+            self.endpoint(api=True),
+        )
+        self.assertFalse(result.pass_)
+        self.assertIn("compile_revision mismatch", " ".join(result.reasons))
+
+    def test_rejects_unimplemented_attestation_claim(self) -> None:
+        result = evaluate(
+            self.commit,
+            self.endpoint(provenance="slsa-v1"),
+            self.endpoint(api=True),
+        )
+        self.assertFalse(result.pass_)
+        self.assertFalse(result.attestation_verified)
+        self.assertIn("provenance is unsupported", " ".join(result.reasons))
+
+    def test_fetches_structured_artifact_tree_evidence(self) -> None:
+        body = json.dumps(
+            {
+                "commit": self.commit,
+                "version": self.commit[:8],
+                "artifact_tree": {
+                    "schema_version": 1,
+                    "sha256": self.tree_sha256,
+                    "file_count": 103,
+                    "compile_revision": self.commit,
+                    "provenance": "unattested",
+                },
+            }
+        ).encode()
+        response = FakeResponse(body)
+        with patch.object(MODULE.urllib.request, "urlopen", return_value=response):
+            result = fetch_endpoint(response.url, timeout=1)
+        self.assertIsNotNone(result.artifact_tree)
+        assert result.artifact_tree is not None
+        self.assertIsNone(result.artifact_tree.error)
+        self.assertEqual(result.artifact_tree.sha256, self.tree_sha256)
+        self.assertEqual(result.artifact_tree.file_count, 103)
+        self.assertEqual(result.artifact_tree.compile_revision, self.commit)
+        self.assertEqual(result.artifact_tree.provenance, "unattested")
+
+    def test_marks_malformed_artifact_tree_invalid(self) -> None:
+        body = json.dumps(
+            {
+                "commit": self.commit,
+                "version": self.commit[:8],
+                "artifact_tree": {
+                    "schema_version": 2,
+                    "sha256": "not-a-digest",
+                    "file_count": True,
+                    "compile_revision": "short",
+                    "provenance": "",
+                },
+            }
+        ).encode()
+        response = FakeResponse(body)
+        with patch.object(MODULE.urllib.request, "urlopen", return_value=response):
+            result = fetch_endpoint(response.url, timeout=1)
+        self.assertIsNotNone(result.artifact_tree)
+        assert result.artifact_tree is not None
+        self.assertIn("schema_version", result.artifact_tree.error or "")
+        self.assertIn("file_count", result.artifact_tree.error or "")
+        self.assertIn("compile_revision", result.artifact_tree.error or "")
 
     def test_requires_full_lowercase_sha(self) -> None:
         self.assertEqual(validate_commit(self.commit), self.commit)
@@ -142,6 +268,11 @@ class VerifyPublicReleaseCommitTests(unittest.TestCase):
             self.assertEqual(receipt.stat().st_mode & 0o777, 0o600)
             payload = json.loads(receipt.read_text(encoding="utf-8"))
             self.assertTrue(payload["pass"])
+            self.assertEqual(payload["status"], "consistency_pass_unattested")
+            self.assertFalse(payload["attestation_verified"])
+            self.assertEqual(
+                payload["frontend"]["artifact_tree"]["sha256"], self.tree_sha256
+            )
 
     def test_receipt_writer_rejects_precreated_temporary_symlink(self) -> None:
         with tempfile.TemporaryDirectory() as raw_root:
