@@ -16,6 +16,9 @@
   <h2>Veröffentlichte Angaben</h2>
   <p>Je nach eigener Auswahl können Name, Ortsangabe, Knoten, Garnrollen und Beziehungen öffentlich sichtbar sein. Eine als exakt freigegebene Position wird entsprechend präzise veröffentlicht. Sichtbarkeit und Inhalte können geändert oder zurückgezogen werden.</p>
 
+  <h2>Private Nachrichten</h2>
+  <p>Private Nachrichten sind nur für die beiden beteiligten Konten zugänglich und werden nicht öffentlich auf der Karte oder in der Suche angezeigt. Sie werden verschlüsselt übertragen und auf dem Server gespeichert, sind aber nicht Ende-zu-Ende verschlüsselt. Beim Auflösen eines Kontos wird dessen aktive Kontobindung entfernt; der bisherige Nachrichtenverlauf kann für das verbleibende Konto erhalten bleiben.</p>
+
   <h2>Serverprotokolle</h2>
   <p>Beim Aufruf können technisch notwendige Verbindungsdaten kurzfristig verarbeitet werden, um Betrieb, Sicherheit und Fehlerdiagnose zu ermöglichen. Eine Nutzung zu Werbezwecken findet nicht statt.</p>
 

@@ -36,8 +36,9 @@ use self::{
         replace_node_serialized,
     },
     conversations::{
-        create_message, delete_message, get_conversation, get_node_conversation, list_messages,
-        update_message,
+        block_direct_conversation, create_direct_conversation, create_message, delete_message,
+        get_conversation, get_node_conversation, list_direct_conversations, list_messages,
+        mark_direct_conversation_read, unblock_direct_conversation, update_message,
     },
     edges::{get_edge, list_edges},
     governance::{
@@ -70,6 +71,22 @@ pub fn api_router() -> Router<ApiState> {
                     axum::routing::delete(delete_node_serialized)
                         .route_layer(from_fn(require_authenticated)),
                 ),
+        )
+        .route(
+            "/direct-conversations",
+            get(list_direct_conversations)
+                .merge(post(create_direct_conversation))
+                .route_layer(from_fn(require_authenticated)),
+        )
+        .route(
+            "/direct-conversations/{id}/read",
+            post(mark_direct_conversation_read).route_layer(from_fn(require_authenticated)),
+        )
+        .route(
+            "/direct-conversations/{id}/block",
+            axum::routing::put(block_direct_conversation)
+                .delete(unblock_direct_conversation)
+                .route_layer(from_fn(require_authenticated)),
         )
         .route("/nodes/{id}/conversation", get(get_node_conversation))
         .route("/conversations/{id}", get(get_conversation))

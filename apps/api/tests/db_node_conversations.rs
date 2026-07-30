@@ -1460,3 +1460,353 @@ async fn governance_conversation_write_gate_blocks_legacy_and_allows_canonical_h
         .expect("restore legacy governance source");
     database.cleanup().await;
 }
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn private_direct_conversation_enforces_participants_unread_block_and_identity_exit() {
+    const FIRST_KEY: &str = "84000000-0000-4000-8000-000000000001";
+    const SECOND_KEY: &str = "84000000-0000-4000-8000-000000000002";
+    const OUTSIDER_KEY: &str = "84000000-0000-4000-8000-000000000003";
+    const ADMIN_PARTICIPANT_KEY: &str = "84000000-0000-4000-8000-000000000004";
+    const EXITED_COUNTERPART_KEY: &str = "84000000-0000-4000-8000-000000000005";
+
+    let database = pool().await;
+    let pool = database.app_pool();
+    seed_account(&pool, AUTHOR_ID, "Autorin", "weber").await;
+    seed_account(&pool, OTHER_ID, "Anderer Weber", "weber").await;
+    seed_account(&pool, ADMIN_ID, "Administration", "admin").await;
+    seed_account(&pool, GUEST_ID, "Gast", "gast").await;
+
+    let (app, author, other, admin, _) = app(pool.clone()).await;
+
+    let (status, anonymous_inbox) = json_response(
+        &app,
+        request("GET", "/direct-conversations", None, None, None, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::UNAUTHORIZED);
+    assert_eq!(anonymous_inbox["code"], "authentication_required");
+
+    let (status, created) = json_response(
+        &app,
+        request(
+            "POST",
+            "/direct-conversations",
+            Some(&author),
+            Some(&format!(r#"{{"recipient_account_id":"{OTHER_ID}"}}"#)),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["counterpart_account_id"], OTHER_ID);
+    assert_eq!(created["counterpart_title"], "Anderer Weber");
+    let conversation_id = created["id"]
+        .as_str()
+        .expect("private conversation id")
+        .to_string();
+
+    let (status, reverse_open) = json_response(
+        &app,
+        request(
+            "POST",
+            "/direct-conversations",
+            Some(&other),
+            Some(&format!(r#"{{"recipient_account_id":"{AUTHOR_ID}"}}"#)),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(reverse_open["id"], conversation_id);
+
+    let metadata_path = format!("/conversations/{conversation_id}");
+    for cookie in [None, Some(admin.as_str())] {
+        let (status, hidden) = json_response(
+            &app,
+            request("GET", &metadata_path, cookie, None, None, None),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND);
+        assert_eq!(hidden["code"], "conversation_not_found");
+    }
+    let (status, metadata) = json_response(
+        &app,
+        request("GET", &metadata_path, Some(&author), None, None, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(metadata["conversation_type"], "direct");
+    assert_eq!(metadata["visibility"], "participants");
+
+    let message_path = format!("/conversations/{conversation_id}/messages");
+    let (status, first_message) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Hallo, das ist privat."}"#),
+            Some(FIRST_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(first_message["content"], "Hallo, das ist privat.");
+
+    let (status, outsider_write) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&admin),
+            Some(r#"{"content":"Nicht erlaubt"}"#),
+            Some(OUTSIDER_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(outsider_write["code"], "conversation_not_found");
+
+    let (status, recipient_inbox) = json_response(
+        &app,
+        request(
+            "GET",
+            "/direct-conversations",
+            Some(&other),
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(recipient_inbox["items"][0]["id"], conversation_id);
+    assert_eq!(recipient_inbox["items"][0]["unread_count"], 1);
+    assert_eq!(
+        recipient_inbox["items"][0]["last_message_preview"],
+        "Hallo, das ist privat."
+    );
+
+    let (status, recipient_messages) = json_response(
+        &app,
+        request("GET", &message_path, Some(&other), None, None, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        recipient_messages["items"][0]["content"],
+        "Hallo, das ist privat."
+    );
+
+    let read_path = format!("/direct-conversations/{conversation_id}/read");
+    let (status, read_body) = json_response(
+        &app,
+        request(
+            "POST",
+            &read_path,
+            Some(&other),
+            Some(&format!(
+                r#"{{"through_message_id":"{}"}}"#,
+                first_message["id"].as_str().expect("first message id")
+            )),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    assert!(read_body.is_null());
+    let (_, recipient_inbox) = json_response(
+        &app,
+        request(
+            "GET",
+            "/direct-conversations",
+            Some(&other),
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(recipient_inbox["items"][0]["unread_count"], 0);
+
+    let block_path = format!("/direct-conversations/{conversation_id}/block");
+    let (status, blocked) = json_response(
+        &app,
+        request("PUT", &block_path, Some(&other), None, None, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(blocked["blocked"], true);
+
+    let (status, blocked_send) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Darf nicht zugestellt werden"}"#),
+            Some(SECOND_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(blocked_send["code"], "direct_conversation_blocked");
+
+    let (status, unblocked) = json_response(
+        &app,
+        request("DELETE", &block_path, Some(&other), None, None, None),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(unblocked["blocked"], false);
+    let (status, _) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Wieder erlaubt"}"#),
+            Some(SECOND_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let (status, after_boundary_message) = json_response(
+        &app,
+        request(
+            "GET",
+            "/direct-conversations",
+            Some(&other),
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        after_boundary_message["items"][0]["unread_count"], 1,
+        "the read marker must stop at the exact loaded message boundary"
+    );
+
+    let (status, admin_conversation) = json_response(
+        &app,
+        request(
+            "POST",
+            "/direct-conversations",
+            Some(&author),
+            Some(&format!(r#"{{"recipient_account_id":"{ADMIN_ID}"}}"#)),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let admin_conversation_id = admin_conversation["id"]
+        .as_str()
+        .expect("admin participant conversation id");
+    let admin_message_path = format!("/conversations/{admin_conversation_id}/messages");
+    let (status, author_message) = json_response(
+        &app,
+        request(
+            "POST",
+            &admin_message_path,
+            Some(&author),
+            Some(r#"{"content":"Auch ein beteiligter Administrator ist nicht mein Autor."}"#),
+            Some(ADMIN_PARTICIPANT_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    let admin_delete_path = format!(
+        "/conversations/{admin_conversation_id}/messages/{}",
+        author_message["id"].as_str().expect("author message id")
+    );
+    let (status, admin_delete) = json_response(
+        &app,
+        request(
+            "DELETE",
+            &admin_delete_path,
+            Some(&admin),
+            None,
+            None,
+            author_message["updated_at"].as_str(),
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::FORBIDDEN);
+    assert_eq!(admin_delete["code"], "message_author_required");
+
+    sqlx::query("DELETE FROM domain_accounts WHERE id = $1")
+        .bind(OTHER_ID)
+        .execute(&pool)
+        .await
+        .expect("remove direct-message counterpart from canonical domain store");
+    let (status, after_exit) = json_response(
+        &app,
+        request(
+            "GET",
+            "/direct-conversations",
+            Some(&author),
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let exited_conversation = after_exit["items"]
+        .as_array()
+        .expect("private inbox items")
+        .iter()
+        .find(|item| item["id"].as_str() == Some(conversation_id.as_str()))
+        .expect("conversation with exited counterpart");
+    assert!(exited_conversation["counterpart_account_id"].is_null());
+    assert_eq!(exited_conversation["counterpart_title"], "Anderer Weber");
+
+    let (status, exited_send) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Darf kein aufgelöstes Konto erreichen"}"#),
+            Some(EXITED_COUNTERPART_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        exited_send["code"],
+        "direct_conversation_counterpart_unavailable"
+    );
+
+    seed_account(&pool, OTHER_ID, "Neues Konto mit alter Kennung", "weber").await;
+    let (status, retired_pair) = json_response(
+        &app,
+        request(
+            "POST",
+            "/direct-conversations",
+            Some(&author),
+            Some(&format!(r#"{{"recipient_account_id":"{OTHER_ID}"}}"#)),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(retired_pair["code"], "direct_conversation_pair_retired");
+
+    database.cleanup().await;
+}
