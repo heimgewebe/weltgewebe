@@ -102,19 +102,21 @@ fn payload_string(payload: &Value, key: &str) -> Option<String> {
 /// Read a lifecycle timestamp field while preserving the distinction between
 /// an omitted key (`None`) and an explicit `null` (`Some(None)`), matching
 /// `Edge::expires_at`'s tri-state deserialization. A present non-string,
-/// non-null value is malformed and is treated the same as an explicit `null`
-/// so it fails closed instead of silently deriving an expiry from garbage
-/// payload data.
+/// non-null value is structurally malformed payload data — returning `Err`
+/// lets the caller reject the whole row instead of coercing it into the
+/// explicit-null state, which would let a corrupted value pass as the
+/// legitimate fully-undated legacy pairing when `created_at` is also absent.
 fn payload_lifecycle_field(
     payload: &Value,
     key: &str,
-) -> Option<Option<crate::routes::edges::LifecycleTimestamp>> {
+) -> Result<Option<Option<crate::routes::edges::LifecycleTimestamp>>, ()> {
     match payload.get(key) {
-        None => None,
-        Some(Value::String(s)) => Some(Some(crate::routes::edges::LifecycleTimestamp::from(
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(Value::String(s)) => Ok(Some(Some(crate::routes::edges::LifecycleTimestamp::from(
             s.as_str(),
-        ))),
-        Some(_) => Some(None),
+        )))),
+        Some(_) => Err(()),
     }
 }
 
@@ -187,6 +189,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
 
     let mut cache = OrderedCache::new();
     let mut seen = 0usize;
+    let mut skipped = 0usize;
     let mut truncated = false;
     while let Some((id, source_id, target_id, edge_kind, created_at, payload_text)) = rows
         .try_next()
@@ -199,6 +202,11 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
         }
 
         let payload = parse_payload(&payload_text);
+        let Ok(expires_at) = payload_lifecycle_field(&payload, "expires_at") else {
+            tracing::warn!(edge_id = %id, "skipping domain edge with malformed expires_at payload");
+            skipped += 1;
+            continue;
+        };
         let edge = Edge {
             id: id.clone(),
             source_id,
@@ -208,7 +216,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             edge_kind,
             note: payload_string(&payload, "note"),
             created_at: created_at.map(LifecycleTimestamp::from_datetime),
-            expires_at: payload_lifecycle_field(&payload, "expires_at"),
+            expires_at,
         };
         cache.insert(id, edge);
         seen += 1;
@@ -221,6 +229,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
     }
     tracing::info!(
         count = cache.len(),
+        skipped,
         truncated,
         "Loaded edges from PostgreSQL"
     );
@@ -625,6 +634,8 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
 fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
     let (id, source_id, target_id, edge_kind, created_at, payload_text) = row;
     let payload = parse_payload(&payload_text);
+    let expires_at = payload_lifecycle_field(&payload, "expires_at")
+        .map_err(|()| anyhow::anyhow!("edge {id} has malformed expires_at payload value"))?;
     Ok(Edge {
         id,
         source_id,
@@ -634,7 +645,7 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
         edge_kind,
         note: payload_string(&payload, "note"),
         created_at: created_at.map(LifecycleTimestamp::from_datetime),
-        expires_at: payload_lifecycle_field(&payload, "expires_at"),
+        expires_at,
     })
 }
 
@@ -2094,6 +2105,55 @@ mod edge_write_path_tests {
         edge.created_at = Some("yesterday".into());
         let err = NewDomainEdgeRow::from_edge(&edge).unwrap_err();
         assert!(err.to_string().contains("not RFC3339"));
+    }
+
+    #[test]
+    fn payload_lifecycle_field_distinguishes_omitted_null_and_value() {
+        let omitted = serde_json::json!({});
+        assert_eq!(payload_lifecycle_field(&omitted, "expires_at"), Ok(None));
+
+        let explicit_null = serde_json::json!({ "expires_at": null });
+        assert_eq!(
+            payload_lifecycle_field(&explicit_null, "expires_at"),
+            Ok(Some(None))
+        );
+
+        let dated = serde_json::json!({ "expires_at": "2026-06-19T10:00:00+00:00" });
+        assert_eq!(
+            payload_lifecycle_field(&dated, "expires_at"),
+            Ok(Some(Some("2026-06-19T10:00:00+00:00".into())))
+        );
+    }
+
+    /// A structurally malformed `expires_at` (neither absent, `null`, nor a
+    /// string) must not be silently coerced into the explicit-null state.
+    /// Doing so would let it pass as the legitimate fully-undated legacy
+    /// pairing whenever `created_at` is also absent, defeating fail-closed
+    /// handling of corrupted payload data.
+    #[test]
+    fn payload_lifecycle_field_rejects_structurally_malformed_value() {
+        for malformed in [
+            serde_json::json!({ "expires_at": 12345 }),
+            serde_json::json!({ "expires_at": true }),
+            serde_json::json!({ "expires_at": {} }),
+            serde_json::json!({ "expires_at": [] }),
+        ] {
+            assert_eq!(payload_lifecycle_field(&malformed, "expires_at"), Err(()));
+        }
+    }
+
+    #[test]
+    fn edge_from_row_rejects_row_with_malformed_expires_at_payload() {
+        let row: EdgeRow = (
+            "edge-malformed".to_string(),
+            "source".to_string(),
+            "target".to_string(),
+            "reference".to_string(),
+            None,
+            r#"{"expires_at": 12345}"#.to_string(),
+        );
+        let err = edge_from_row(row).unwrap_err();
+        assert!(err.to_string().contains("malformed expires_at"));
     }
 }
 

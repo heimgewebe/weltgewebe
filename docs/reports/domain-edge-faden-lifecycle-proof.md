@@ -49,8 +49,8 @@ Lesen abgeleitet, ohne gespeicherte Daten oder die Chronik umzuschreiben.
 | Aktive Projektion | Filterung erfolgt vor Offset- und Cursor-Paginierung; Einzelabruf liefert nach Ablauf 404. |
 | Nebenprojektion | Account-Details verwenden denselben aktiven Fadenprädikat. |
 | Darstellung | Die lineare Deckkraft wird aus vorgeparsten Millisekunden berechnet und minütlich neu projiziert; ein separater Einmal-Timer entfernt den nächsten Faden exakt bei `expires_at`. |
-| Legacy | Fehlt nur `expires_at`, wird es aus einem gültigen `created_at` exakt abgeleitet. Vollständig undatierte Datensätze bleiben sichtbar; Persistenz und Chronik werden nicht verändert. |
-| Korruption | Ungültige vorhandene Zeitstempel sowie explizite, nicht exakt 168 Stunden auseinanderliegende Grenzen werden fail-closed ausgeblendet. |
+| Legacy | Fehlt das `expires_at`-Feld ganz, wird es aus einem gültigen `created_at` exakt abgeleitet. Vollständig undatierte Datensätze bleiben sichtbar; Persistenz und Chronik werden nicht verändert. |
+| Korruption | Ungültige vorhandene Zeitstempel, ein explizites `expires_at: null` bei datiertem `created_at`, strukturell fehlerhafte PostgreSQL-Payload-Werte sowie explizite, nicht exakt 168 Stunden auseinanderliegende Grenzen werden fail-closed ausgeblendet beziehungsweise beim Laden übersprungen — keiner dieser Fälle wird mit dem legitimen, fehlenden Feld verwechselt. |
 | Garn | Dauerhaft und ausgenommen, aber ohne geratenes Feld oder öffentliches CRUD; eigener Folgeauftrag. |
 
 ## Revalidierung 2026-07-29
@@ -68,6 +68,45 @@ Lesen abgeleitet, ohne gespeicherte Daten oder die Chronik umzuschreiben.
 Nicht als neue lokale Evidenz behauptet werden der vollständige Web-Build, das
 gesamte API-Testkorpus, `cargo deny` und die Remote-CI. Diese Prüfungen bleiben
 den repositoryweiten beziehungsweise PR-gebundenen Gates vorbehalten.
+
+## Revalidierung 2026-07-30
+
+Drei von Codex gemeldete Befunde auf dem vorherigen Head sind behoben:
+
+- P2: Die API unterschied beim JSONL- und PostgreSQL-Laden ein fehlendes
+  `expires_at` nicht von einem explizit gespeicherten `expires_at: null`,
+  wodurch ein datierter Legacy-Faden mit explizitem `null` fälschlich eine
+  rückwirkend abgeleitete Ablaufzeit erhielt statt fail-closed ausgeblendet zu
+  werden. `Edge.expires_at` ist jetzt ein Tri-State
+  (`Option<Option<LifecycleTimestamp>>`), rund-trip-fest für beide
+  Persistenzpfade.
+- P2: Die Kartengrenze (`edgeLifecycle.ts`) behandelte ein fehlendes
+  `created_at` wie den undatierten Legacy-Zustand statt es als nichtkonform
+  abzulehnen; sie unterscheidet jetzt `undefined` (immer ungültig) von einem
+  expliziten `null` (nur mit explizitem `expires_at: null` gültig).
+- P3: Eine strukturell fehlerhafte (weder fehlende, `null`- noch String-)
+  `expires_at`-Nutzlast im PostgreSQL-JSONB-Payload wurde zuvor stillschweigend
+  wie ein explizites `null` behandelt; bei fehlendem `created_at` hätte das
+  denselben Datensatz wie einen legitimen, dauerhaft sichtbaren undatierten
+  Altbestand erscheinen lassen. Der PostgreSQL-Ladepfad überspringt solche
+  Zeilen jetzt mit einer Warnung, statt sie zu maskieren.
+
+Aktualisierte lokale Prüfbelege:
+
+- API-Lifecycle-Unit-Tests (`routes::edges::tests`): 10 bestanden, 0
+  fehlgeschlagen (zuvor 9; neuer Test deckt das explizite `null` bei
+  datiertem `created_at` ab).
+- Neue PostgreSQL-Payload-Unit-Tests (`domain_db::edge_write_path_tests`): 3
+  zusätzliche Tests für die Tri-State-Unterscheidung und das Verwerfen
+  strukturell fehlerhafter Nutzlasten.
+- Karten-Lifecycle-Tests: 6 bestanden, 0 fehlgeschlagen (zuvor 5; neuer Test
+  deckt das fehlende `created_at` an der Kartengrenze ab).
+- Vollständige lokale Rust-Bibliothekstests (470 bestanden), `cargo clippy
+  --all-targets -- -D warnings` und `cargo fmt --check`: bestanden.
+- Vollständige lokale Web-Vitest-Suite (275 bestanden über 36 Dateien),
+  `svelte-check` (0 Fehler) und `pnpm lint`: bestanden.
+- `just contracts-domain-check`: alle sechs Schemata und Beispielinstanzen
+  weiterhin gültig; dieser Fix ändert kein Schema.
 
 ## Grenzen und Folgetasks
 
