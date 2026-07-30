@@ -96,7 +96,16 @@ gelesen; eine gleichzeitig eintreffende spätere Nachricht bleibt ungelesen.
 Jeder Teilnehmer kann die Unterhaltung für sich blockieren. Solange mindestens
 einer der beiden Teilnehmer blockiert hat, dürfen beide Seiten keine neue
 Nachricht senden. Bereits vorhandene Nachrichten bleiben für beide Teilnehmer
-lesbar. Ein Teilnehmer kann nur den eigenen Blockierzustand aufheben.
+lesbar; ihr jeweiliger Autor darf sie weiterhin ändern oder entfernen. Die
+Sperre gilt ausschließlich für neue Nachrichten. Ein Teilnehmer kann nur den
+eigenen Blockierzustand aufheben.
+
+Beide Seiten erfahren beim Laden der Unterhaltung, ob gesendet werden darf. Die
+Unterhaltung führt dafür eine ausdrückliche Sendeerlaubnis, die genau dann gilt,
+wenn beide Konten aktiv sind und keine Seite blockiert hat. Sie nennt nicht,
+welche Seite blockiert hat: Der eigene Blockierzustand ist gesondert sichtbar,
+eine Blockade des Gegenübers erscheint nur als fehlende Sendeerlaubnis. Damit
+bietet die Oberfläche keine Eingabe an, die der Server anschließend ablehnt.
 
 ## Missbrauchsgrenzen
 
@@ -117,6 +126,13 @@ Unterhaltung entfernt. Der Anzeigename-Snapshot und die bisherige Historie
 bleiben für den noch vorhandenen Teilnehmer lesbar. Neue Nachrichten setzen
 zwei weiterhin aktive Accountbindungen voraus und werden nach dem Austritt
 eines Teilnehmers serverseitig abgelehnt.
+
+Ein stillgelegtes Konto gilt dabei als ausgeschieden. Es kann sich nicht mehr
+anmelden und deshalb weder lesen noch senden; für den verbleibenden Teilnehmer
+verhält sich die Unterhaltung wie nach einer Löschung. Darstellung und
+Sendeprüfung verwenden dieselbe Grenze, damit die Oberfläche keine Zustellung
+anbietet, die der Server ablehnt. Wird das Konto später wieder aktiviert, lebt
+die bestehende Unterhaltung unverändert weiter.
 
 Wird dieselbe textuelle Account-ID später erneut vergeben, erhält das neue
 Konto keinen Zugriff auf die alte Unterhaltung. Das frühere Kontopaar gilt als

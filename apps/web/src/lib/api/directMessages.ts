@@ -17,6 +17,12 @@ export interface DirectConversation {
   last_message_preview: string | null;
   last_message_at: string | null;
   blocked_by_me: boolean;
+  /**
+   * Whether the server currently accepts a new message. It is false as soon as
+   * the counterpart has left or either side blocks, so the composer never
+   * promises delivery the server would refuse.
+   */
+  can_send: boolean;
 }
 
 interface DirectConversationList {
@@ -94,15 +100,19 @@ export function markDirectConversationRead(
   );
 }
 
-export async function setDirectConversationBlocked(
+/**
+ * Toggle the caller's own block flag. The server answers with the refreshed
+ * conversation because releasing one's own block does not necessarily restore
+ * `can_send` — the counterpart may still block or may have left.
+ */
+export function setDirectConversationBlocked(
   conversationId: string,
   blocked: boolean,
-): Promise<boolean> {
-  const result = await request<{ blocked: boolean }>(
+): Promise<DirectConversation> {
+  return request<DirectConversation>(
     `/api/direct-conversations/${encodeURIComponent(conversationId)}/block`,
     { method: blocked ? "PUT" : "DELETE" },
   );
-  return result.blocked;
 }
 
 export function listDirectMessages(
