@@ -18,9 +18,9 @@ use crate::config::{
 };
 use crate::domain_db::{
     delete_node_with_edges_in_postgres, insert_domain_node_and_faden_with_creator_limit,
-    patch_node_in_postgres, replace_node_in_postgres, CreateOperationKey,
-    NodeConversationDeleteEffect, NodeCreateError, NodeFadenCreateError, NodePatchInput,
-    NodeWriteError,
+    lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres,
+    CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodeFadenCreateError,
+    NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
@@ -1275,18 +1275,51 @@ pub async fn create_node(
             }
         };
 
-        // Publish the Faden cache entry first. Durable state is already atomic;
-        // this ordering also prevents an in-process reader from briefly seeing
-        // the node without its required origin Faden between the two cache locks.
+        // Commit releases the transaction-scoped creation locks. Reacquire the
+        // canonical node-mutation lock before touching caches and read the
+        // post-commit truth under that lock. If delete or guest exit won the
+        // narrow gap, their state is preserved instead of being overwritten by
+        // the stale create outcome. The guard remains held through both cache
+        // writes, matching edit/delete serialization across API instances.
+        let publication = lock_node_faden_cache_publication(
+            pool,
+            &outcome.node.id,
+            operation_key,
+            &outcome.edge,
+        )
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, node_id = %outcome.node.id, "failed to lock canonical node/Faden cache publication");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "node and origin Faden committed, but cache publication could not be reconciled; retry the same operation"
+                    .to_string(),
+            )
+        })?;
+        let canonical_node = publication.node.clone();
+        let canonical_edge = publication.edge.clone();
+
+        // Publish the Faden cache entry first. Removing the original ids before
+        // inserting the canonical snapshots also handles a deletion that won
+        // the post-commit gap.
         {
             let mut edges = state.edges.write().await;
-            edges.insert(outcome.edge.id.clone(), outcome.edge.clone());
+            edges.remove(&outcome.edge.id);
+            if let Some(edge) = canonical_edge.as_ref() {
+                edges.insert(edge.id.clone(), edge.clone());
+            }
             state.metrics.set_edges_cache_count(edges.len() as i64);
         }
         {
             let mut nodes = state.nodes.write().await;
-            nodes.insert(outcome.node.id.clone(), outcome.node.clone());
+            nodes.remove(&outcome.node.id);
+            if let Some(node) = canonical_node.as_ref() {
+                nodes.insert(node.id.clone(), node.clone());
+            }
             state.metrics.set_nodes_cache_count(nodes.len() as i64);
+        }
+        if let Err(error) = publication.release().await {
+            tracing::error!(%error, node_id = %outcome.node.id, "failed to release node/Faden cache publication lock");
         }
 
         let status = if outcome.created {
@@ -1294,6 +1327,7 @@ pub async fn create_node(
         } else {
             StatusCode::OK
         };
+        let response_node = canonical_node.unwrap_or_else(|| outcome.node.clone());
         tracing::info!(
             event = "node.created",
             node_id = %outcome.node.id,
@@ -1303,7 +1337,7 @@ pub async fn create_node(
             replay = !outcome.created,
             "Node and origin Faden committed atomically"
         );
-        return Ok((status, Json(outcome.node)));
+        return Ok((status, Json(response_node)));
     }
 
     match state.config.domain_node_write_source {

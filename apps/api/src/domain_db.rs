@@ -2202,6 +2202,84 @@ where
     }
 }
 
+/// Holds the same cross-instance node-mutation lock used by edit and delete
+/// routes while the create handler reconciles and publishes its cache state.
+/// The snapshots are read only after the lock is acquired, so a deletion or
+/// guest exit that wins the post-commit gap is observed instead of overwritten
+/// by the stale create response.
+pub struct NodeFadenCachePublicationGuard {
+    transaction: Transaction<'static, Postgres>,
+    pub node: Option<Node>,
+    pub edge: Option<Edge>,
+}
+
+impl NodeFadenCachePublicationGuard {
+    pub async fn release(self) -> Result<(), sqlx::Error> {
+        self.transaction.commit().await
+    }
+}
+
+pub async fn lock_node_faden_cache_publication(
+    pool: &PgPool,
+    node_id: &str,
+    operation: &CreateOperationKey,
+    expected_edge: &Edge,
+) -> Result<NodeFadenCachePublicationGuard, NodeFadenCreateError> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(NodeCreateError::Database)
+        .map_err(NodeFadenCreateError::Node)?;
+
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(crate::advisory_lock::node_mutation_lock_key(node_id))
+        .execute(&mut *transaction)
+        .await
+        .map_err(NodeCreateError::Database)?;
+
+    let node = sqlx::query_as::<_, NodeRow>(
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
+         FROM domain_nodes WHERE id = $1",
+    )
+    .bind(node_id)
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(NodeCreateError::Database)?
+    .map(node_from_row)
+    .transpose()
+    .map_err(NodeCreateError::Mapping)?;
+
+    let edge = if node.is_some() {
+        let edge = sqlx::query_as::<_, EdgeRow>(
+            "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
+             FROM domain_edges \
+             WHERE create_actor_id = $1 AND create_operation_id = $2",
+        )
+        .bind(&operation.actor_id)
+        .bind(&operation.operation_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(EdgeWriteError::Database)?
+        .map(edge_from_row)
+        .transpose()
+        .map_err(EdgeWriteError::Mapping)?;
+        if let Some(existing) = edge.as_ref() {
+            if !edge_matches_projection(existing, expected_edge) {
+                return Err(NodeFadenCreateError::EdgeOperationConflict);
+            }
+        }
+        edge
+    } else {
+        None
+    };
+
+    Ok(NodeFadenCachePublicationGuard {
+        transaction,
+        node,
+        edge,
+    })
+}
+
 #[cfg(test)]
 mod edge_write_path_tests {
     use super::*;

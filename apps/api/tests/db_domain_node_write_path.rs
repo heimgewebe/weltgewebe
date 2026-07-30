@@ -43,8 +43,9 @@ use weltgewebe_api::{
     },
     domain_db::{
         delete_node_with_edges_in_postgres, insert_domain_node, load_nodes_from_postgres,
-        patch_node_in_postgres, replace_node_in_postgres, NodeConversationDeleteEffect,
-        NodeCreateError, NodePatchInput, NodeWriteError,
+        lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres,
+        CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodePatchInput,
+        NodeWriteError,
     },
     governance::delete_guest_account,
     middleware::{
@@ -2249,6 +2250,141 @@ async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<
         state.nodes.read().await.get(&node_id).is_none(),
         "conflicting replay must not leave a stale node in cache"
     );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K2h. Post-commit cache publication re-reads canonical state under the same
+/// node lock as edit/delete. A deletion that wins the commit→cache gap is
+/// observed, while a later deletion waits until publication releases the lock.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn node_faden_cache_publication_is_delete_race_safe() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000095";
+    const OPERATION_ONE: &str = "30000000-0000-4000-8000-000000000095";
+    const OPERATION_TWO: &str = "30000000-0000-4000-8000-000000000096";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+
+    let create = |title: &str, operation_id: &str| {
+        serde_json::json!({
+            "title": title,
+            "kind": "Werkstatt",
+            "address": "Publikationsweg 1",
+            "location": {"lat": 53.5, "lon": 10.0},
+            "operation_id": operation_id
+        })
+        .to_string()
+    };
+
+    let first_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            &create("Delete wins", OPERATION_ONE),
+        ))
+        .await?;
+    assert_eq!(first_response.status(), StatusCode::CREATED);
+    let first_body = body::to_bytes(first_response.into_body(), usize::MAX).await?;
+    let first: serde_json::Value = serde_json::from_slice(&first_body)?;
+    let first_node_id = first["id"].as_str().context("first node id")?.to_string();
+    let first_edge = state
+        .edges
+        .read()
+        .await
+        .iter_in_order()
+        .find(|edge| edge.source_id == ACTOR_ID && edge.target_id == first_node_id)
+        .cloned()
+        .context("first origin Faden")?;
+    let first_operation = CreateOperationKey {
+        actor_id: ACTOR_ID.to_string(),
+        operation_id: OPERATION_ONE.to_string(),
+    };
+
+    delete_node_with_edges_in_postgres(&pool, &first_node_id)
+        .await
+        .context("delete before cache publication readback")?;
+    let deleted_snapshot =
+        lock_node_faden_cache_publication(&pool, &first_node_id, &first_operation, &first_edge)
+            .await
+            .context("lock deleted publication snapshot")?;
+    assert!(deleted_snapshot.node.is_none());
+    assert!(deleted_snapshot.edge.is_none());
+    deleted_snapshot.release().await?;
+
+    let second_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            &create("Delete waits", OPERATION_TWO),
+        ))
+        .await?;
+    assert_eq!(second_response.status(), StatusCode::CREATED);
+    let second_body = body::to_bytes(second_response.into_body(), usize::MAX).await?;
+    let second: serde_json::Value = serde_json::from_slice(&second_body)?;
+    let second_node_id = second["id"].as_str().context("second node id")?.to_string();
+    let second_edge = state
+        .edges
+        .read()
+        .await
+        .iter_in_order()
+        .find(|edge| edge.source_id == ACTOR_ID && edge.target_id == second_node_id)
+        .cloned()
+        .context("second origin Faden")?;
+    let second_operation = CreateOperationKey {
+        actor_id: ACTOR_ID.to_string(),
+        operation_id: OPERATION_TWO.to_string(),
+    };
+
+    let publication =
+        lock_node_faden_cache_publication(&pool, &second_node_id, &second_operation, &second_edge)
+            .await
+            .context("lock live publication snapshot")?;
+    assert!(publication.node.is_some());
+    assert!(publication.edge.is_some());
+
+    let delete_pool = pool.clone();
+    let delete_id = second_node_id.clone();
+    let mut delete_task = tokio::spawn(async move {
+        let mut transaction = delete_pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(node_mutation_lock_key(&delete_id))
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+            .bind(&delete_id)
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut delete_task)
+            .await
+            .is_err(),
+        "node deletion must wait while cache publication owns the node lock"
+    );
+    publication.release().await?;
+    tokio::time::timeout(Duration::from_secs(5), delete_task)
+        .await
+        .context("delete completes after publication lock release")?
+        .context("join publication-race delete")??;
+
+    let second_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(&second_node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!second_exists);
 
     clean_all_nodes(&pool).await;
     Ok(())
