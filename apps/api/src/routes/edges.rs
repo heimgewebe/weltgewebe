@@ -235,56 +235,46 @@ fn projected_faden_expires_at(edge: &Edge) -> Option<String> {
     Some(expires_at.to_rfc3339_opts(SecondsFormat::AutoSi, true))
 }
 
-/// Active-read predicate for Faden projections.
+/// The time-bound window during which an edge is active, or [`Unbounded`]
+/// for the fully undated legacy state that has no expiry at all.
 ///
-/// A missing `expires_at` is derived from a valid `created_at`, so Fäden created
-/// before the lifecycle feature age exactly like new projections. Only records
-/// with neither timestamp remain visible as undated legacy data. Malformed or
-/// non-canonical lifecycle data fails closed. The exact boundary is exclusive,
-/// so a Faden is gone at `now == expires_at`.
-pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
+/// [`Unbounded`]: EdgeLifecycleWindow::Unbounded
+enum EdgeLifecycleWindow {
+    Unbounded,
+    Bounded {
+        start: DateTime<Utc>,
+        end: DateTime<Utc>,
+    },
+}
+
+/// Resolve an edge's lifecycle window, or `Err` with a short reason when the
+/// edge is invalid or non-canonical and therefore can never be active for
+/// *any* `now`. Shared by [`edge_is_active_at`] (the per-request read gate)
+/// and [`edge_is_permanently_unreachable`] (the PostgreSQL loader's
+/// cache-admission gate), so both agree on exactly which persisted rows can
+/// never surface through any read endpoint.
+fn edge_lifecycle_window(edge: &Edge) -> Result<EdgeLifecycleWindow, &'static str> {
     let Some(created_at) = edge.created_at.as_ref() else {
-        let Some(Some(expires_at)) = edge.expires_at.as_ref() else {
-            return true;
+        return if matches!(edge.expires_at, Some(Some(_))) {
+            Err("expiring edge without created_at")
+        } else {
+            Ok(EdgeLifecycleWindow::Unbounded)
         };
-        tracing::debug!(
-            edge_id = %edge.id,
-            expires_at = %expires_at,
-            "hiding expiring edge without created_at from active projection"
-        );
-        return false;
     };
 
     let Some(created_at_value) = created_at.parsed() else {
-        tracing::debug!(
-            edge_id = %edge.id,
-            created_at_raw = %created_at,
-            "hiding edge with invalid created_at from active projection"
-        );
-        return false;
+        return Err("invalid created_at");
     };
 
     let expires_at_value = match edge.expires_at.as_ref() {
         Some(Some(expires_at)) => {
             let Some(expires_at_value) = expires_at.parsed() else {
-                tracing::debug!(
-                    edge_id = %edge.id,
-                    created_at_raw = %created_at,
-                    expires_at_raw = %expires_at,
-                    "hiding edge with invalid lifecycle timestamp from active projection"
-                );
-                return false;
+                return Err("invalid lifecycle timestamp");
             };
-            if expires_at_value.signed_duration_since(created_at_value)
+            if expires_at_value.signed_duration_since(*created_at_value)
                 != Duration::hours(FADEN_LIFETIME_HOURS)
             {
-                tracing::debug!(
-                    edge_id = %edge.id,
-                    created_at = %created_at_value,
-                    expires_at = %expires_at_value,
-                    "hiding edge with non-canonical Faden lifetime from active projection"
-                );
-                return false;
+                return Err("non-canonical Faden lifetime");
             }
             *expires_at_value
         }
@@ -293,28 +283,47 @@ pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
         // tell a dated Faden with an intentionally unbounded lifetime apart
         // from one whose expiry was simply never persisted. Fail closed
         // instead of silently treating it as the omitted/derive case.
-        Some(None) => {
-            tracing::debug!(
-                edge_id = %edge.id,
-                created_at = %created_at_value,
-                "hiding edge with explicit null expires_at paired with a dated created_at from active projection"
-            );
-            return false;
-        }
+        Some(None) => return Err("explicit null expires_at paired with a dated created_at"),
         None => {
             let Some(expires_at_value) = checked_faden_expires_at(*created_at_value) else {
-                tracing::debug!(
-                    edge_id = %edge.id,
-                    created_at = %created_at_value,
-                    "hiding legacy edge whose derived expiry exceeds the supported timestamp range"
-                );
-                return false;
+                return Err("derived expiry exceeds the supported timestamp range");
             };
             expires_at_value
         }
     };
 
-    now >= *created_at_value && now < expires_at_value
+    Ok(EdgeLifecycleWindow::Bounded {
+        start: *created_at_value,
+        end: expires_at_value,
+    })
+}
+
+/// Active-read predicate for Faden projections.
+///
+/// A missing `expires_at` is derived from a valid `created_at`, so Fäden created
+/// before the lifecycle feature age exactly like new projections. Only records
+/// with neither timestamp remain visible as undated legacy data. Malformed or
+/// non-canonical lifecycle data fails closed. The exact boundary is exclusive,
+/// so a Faden is gone at `now == expires_at`.
+pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
+    match edge_lifecycle_window(edge) {
+        Err(reason) => {
+            tracing::debug!(edge_id = %edge.id, reason, "hiding edge from active projection");
+            false
+        }
+        Ok(EdgeLifecycleWindow::Unbounded) => true,
+        Ok(EdgeLifecycleWindow::Bounded { start, end }) => now >= start && now < end,
+    }
+}
+
+/// `true` when an edge can never be active for *any* `now` — invalid or
+/// non-canonical lifecycle data (for example a dated `created_at` paired
+/// with an explicit `expires_at: null`). Such a row can never be surfaced by
+/// any read endpoint, so the PostgreSQL loader excludes it from the
+/// fixed-size edge cache instead of letting it occupy a slot that a
+/// genuinely reachable edge would need.
+pub(crate) fn edge_is_permanently_unreachable(edge: &Edge) -> bool {
+    edge_lifecycle_window(edge).is_err()
 }
 
 fn edge_matches_list_at(
@@ -1879,8 +1888,9 @@ mod edge_create {
 mod tests {
     use super::{
         build_edge_record, edge_create::ValidatedCreateEdge, edge_is_active_at,
-        edge_matches_list_at, faden_expires_at, max_edges_cache_limit, projected_faden_expires_at,
-        Edge, LifecycleTimestamp, PublicEdge, DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
+        edge_is_permanently_unreachable, edge_matches_list_at, faden_expires_at,
+        max_edges_cache_limit, projected_faden_expires_at, Edge, LifecycleTimestamp, PublicEdge,
+        DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
     };
     use crate::test_helpers::EnvGuard;
     use chrono::{DateTime, Duration, TimeZone, Utc};
@@ -2051,6 +2061,37 @@ mod tests {
             &lifecycle_edge_with_null_expiry(None),
             now
         ));
+    }
+
+    /// `edge_is_permanently_unreachable` must agree with `edge_is_active_at`
+    /// on exactly which edges can never be active for any `now`. A loader
+    /// that used a different rule could admit a permanently-invalid row into
+    /// a fixed-size cache, wasting a slot a genuinely reachable edge needs.
+    #[test]
+    fn permanently_unreachable_matches_every_always_inactive_shape() {
+        let now = Utc.with_ymd_and_hms(2026, 7, 18, 10, 0, 0).unwrap();
+
+        let always_unreachable = [
+            lifecycle_edge_with_null_expiry(Some("2026-07-17T10:00:00Z")),
+            lifecycle_edge(Some("invalid"), Some("2026-07-24T10:00:00Z")),
+            lifecycle_edge(Some("invalid"), None),
+            lifecycle_edge(None, Some("2026-07-24T10:00:00Z")),
+            lifecycle_edge(Some("2026-07-17T10:00:00Z"), Some("2026-07-25T10:00:00Z")),
+        ];
+        for edge in always_unreachable {
+            assert!(edge_is_permanently_unreachable(&edge));
+            assert!(!edge_is_active_at(&edge, now));
+        }
+
+        let reachable = [
+            lifecycle_edge(None, None),
+            lifecycle_edge_with_null_expiry(None),
+            lifecycle_edge(Some("2026-07-17T10:00:00Z"), None),
+            lifecycle_edge(Some("2026-07-17T10:00:00Z"), Some("2026-07-24T10:00:00Z")),
+        ];
+        for edge in reachable {
+            assert!(!edge_is_permanently_unreachable(&edge));
+        }
     }
 
     /// Undated legacy edges must project as an explicit JSON null/null pair

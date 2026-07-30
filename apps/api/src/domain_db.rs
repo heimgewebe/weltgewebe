@@ -19,7 +19,7 @@ use crate::routes::accounts::{
     MIN_RADIUS_M, RADIUS_PROJECTION_KEY,
 };
 use crate::routes::auth::MAX_EMAIL_LEN;
-use crate::routes::edges::{Edge, LifecycleTimestamp};
+use crate::routes::edges::{edge_is_permanently_unreachable, Edge, LifecycleTimestamp};
 use crate::routes::nodes::{normalize_account_id, Location, Node, SearchVisibility};
 use crate::state::OrderedCache;
 
@@ -205,11 +205,6 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             continue;
         };
 
-        if seen >= max_edges {
-            truncated = true;
-            break;
-        }
-
         let edge = Edge {
             id: id.clone(),
             source_id,
@@ -221,6 +216,24 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             created_at: created_at.map(LifecycleTimestamp::from_datetime),
             expires_at,
         };
+        // Checked before the cache-limit gate for the same reason as the
+        // malformed-payload check above: a row that can never be active for
+        // any `now` must never consume one of the `max_edges` slots that a
+        // genuinely reachable edge would need.
+        if edge_is_permanently_unreachable(&edge) {
+            tracing::warn!(
+                edge_id = %edge.id,
+                "skipping domain edge that can never be active under any lifecycle rule"
+            );
+            skipped += 1;
+            continue;
+        }
+
+        if seen >= max_edges {
+            truncated = true;
+            break;
+        }
+
         cache.insert(id, edge);
         seen += 1;
     }
