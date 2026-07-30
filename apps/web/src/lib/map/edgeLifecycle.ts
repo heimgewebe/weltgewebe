@@ -16,8 +16,7 @@ function parseCanonicalRfc3339Ms(value: string): number | null {
   const hour = Number(match[4]);
   const minute = Number(match[5]);
   const second = Number(match[6]);
-  // The sign is intentionally left to Date.parse; these groups only enforce
-  // RFC3339 offset bounds.
+  // Offset groups only enforce RFC3339 bounds; Date.parse owns the sign.
   const offsetHour = match[7] == null ? 0 : Number(match[7]);
   const offsetMinute = match[8] == null ? 0 : Number(match[8]);
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -36,29 +35,38 @@ function parseCanonicalRfc3339Ms(value: string): number | null {
     return null;
   }
 
-  // The regex captures only the offset magnitude for bounds checking; the
-  // sign and absolute-instant calculation remain delegated to Date.parse.
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function invalid(edge: Edge): MapEdge {
+  return { ...edge, lifecycle: { kind: "invalid" } };
+}
+
 /** Parse lifecycle data once when an edge crosses the API/UI boundary. */
 export function normalizeEdgeLifecycle(edge: Edge): MapEdge {
-  if (edge.expires_at == null) {
-    return { ...edge, lifecycle: { kind: "legacy" } };
-  }
-  if (edge.created_at == null) {
-    return { ...edge, lifecycle: { kind: "invalid" } };
+  // Public contract always includes created_at. Omitted ≠ undated legacy:
+  // undated requires explicit null/null. Fail closed on non-canonical pairs.
+  const created = edge.created_at;
+  const expires = edge.expires_at;
+  if (created === undefined) return invalid(edge);
+  if (created === null) {
+    return {
+      ...edge,
+      lifecycle: { kind: expires === null ? "legacy" : "invalid" },
+    };
   }
 
-  const createdAtMs = parseCanonicalRfc3339Ms(edge.created_at);
-  const expiresAtMs = parseCanonicalRfc3339Ms(edge.expires_at);
-  if (
-    createdAtMs == null ||
-    expiresAtMs == null ||
-    expiresAtMs - createdAtMs !== FADEN_LIFETIME_MS
-  ) {
-    return { ...edge, lifecycle: { kind: "invalid" } };
+  const createdAtMs = parseCanonicalRfc3339Ms(created);
+  if (createdAtMs == null || expires === null) return invalid(edge);
+
+  const expiresAtMs =
+    expires === undefined
+      ? createdAtMs + FADEN_LIFETIME_MS
+      : parseCanonicalRfc3339Ms(expires);
+  // Derived path is finite when createdAtMs is; parse path already rejects NaN.
+  if (expiresAtMs == null || expiresAtMs - createdAtMs !== FADEN_LIFETIME_MS) {
+    return invalid(edge);
   }
 
   return {

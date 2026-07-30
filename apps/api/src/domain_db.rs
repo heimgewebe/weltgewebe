@@ -19,7 +19,7 @@ use crate::routes::accounts::{
     MIN_RADIUS_M, RADIUS_PROJECTION_KEY,
 };
 use crate::routes::auth::MAX_EMAIL_LEN;
-use crate::routes::edges::{Edge, LifecycleTimestamp};
+use crate::routes::edges::{edge_is_permanently_unreachable, Edge, LifecycleTimestamp};
 use crate::routes::nodes::{normalize_account_id, Location, Node, SearchVisibility};
 use crate::state::OrderedCache;
 
@@ -99,6 +99,27 @@ fn payload_string(payload: &Value, key: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Read a lifecycle timestamp field while preserving the distinction between
+/// an omitted key (`None`) and an explicit `null` (`Some(None)`), matching
+/// `Edge::expires_at`'s tri-state deserialization. A present non-string,
+/// non-null value is structurally malformed payload data — returning `Err`
+/// lets the caller reject the whole row instead of coercing it into the
+/// explicit-null state, which would let a corrupted value pass as the
+/// legitimate fully-undated legacy pairing when `created_at` is also absent.
+fn payload_lifecycle_field(
+    payload: &Value,
+    key: &str,
+) -> Result<Option<Option<crate::routes::edges::LifecycleTimestamp>>, ()> {
+    match payload.get(key) {
+        None => Ok(None),
+        Some(Value::Null) => Ok(Some(None)),
+        Some(Value::String(s)) => Ok(Some(Some(crate::routes::edges::LifecycleTimestamp::from(
+            s.as_str(),
+        )))),
+        Some(_) => Err(()),
+    }
+}
+
 fn payload_string_array(payload: &Value, key: &str) -> Vec<String> {
     payload
         .get(key)
@@ -158,28 +179,32 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
 
 pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge>> {
     let max_edges = crate::routes::edges::max_edges_cache_limit();
-    let fetch_limit = max_edges.saturating_add(1).min(i64::MAX as usize) as i64;
+    // No SQL-side LIMIT: rejected rows must not consume a physical row slot
+    // that a later valid row would need. The loop below bounds physical reads
+    // itself, breaking as soon as it has examined `max_edges + 1` *accepted*
+    // rows (the `+ 1` only confirms truncation; it is never cached).
     let mut rows = sqlx::query_as::<_, EdgeRow>(
         "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
-         FROM domain_edges ORDER BY id ASC LIMIT $1",
+         FROM domain_edges ORDER BY id ASC",
     )
-    .bind(fetch_limit)
     .fetch(pool);
 
     let mut cache = OrderedCache::new();
     let mut seen = 0usize;
+    let mut skipped = 0usize;
     let mut truncated = false;
     while let Some((id, source_id, target_id, edge_kind, created_at, payload_text)) = rows
         .try_next()
         .await
         .context("failed to load edges from domain_edges")?
     {
-        if seen >= max_edges {
-            truncated = true;
-            break;
-        }
-
         let payload = parse_payload(&payload_text);
+        let Ok(expires_at) = payload_lifecycle_field(&payload, "expires_at") else {
+            tracing::warn!(edge_id = %id, "skipping domain edge with malformed expires_at payload");
+            skipped += 1;
+            continue;
+        };
+
         let edge = Edge {
             id: id.clone(),
             source_id,
@@ -189,8 +214,26 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             edge_kind,
             note: payload_string(&payload, "note"),
             created_at: created_at.map(LifecycleTimestamp::from_datetime),
-            expires_at: payload_string(&payload, "expires_at").map(LifecycleTimestamp::from),
+            expires_at,
         };
+        // Checked before the cache-limit gate for the same reason as the
+        // malformed-payload check above: a row that can never be active for
+        // any `now` must never consume one of the `max_edges` slots that a
+        // genuinely reachable edge would need.
+        if edge_is_permanently_unreachable(&edge) {
+            tracing::warn!(
+                edge_id = %edge.id,
+                "skipping domain edge that can never be active under any lifecycle rule"
+            );
+            skipped += 1;
+            continue;
+        }
+
+        if seen >= max_edges {
+            truncated = true;
+            break;
+        }
+
         cache.insert(id, edge);
         seen += 1;
     }
@@ -202,6 +245,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
     }
     tracing::info!(
         count = cache.len(),
+        skipped,
         truncated,
         "Loaded edges from PostgreSQL"
     );
@@ -606,6 +650,8 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
 fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
     let (id, source_id, target_id, edge_kind, created_at, payload_text) = row;
     let payload = parse_payload(&payload_text);
+    let expires_at = payload_lifecycle_field(&payload, "expires_at")
+        .map_err(|()| anyhow::anyhow!("edge {id} has malformed expires_at payload value"))?;
     Ok(Edge {
         id,
         source_id,
@@ -615,7 +661,7 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
         edge_kind,
         note: payload_string(&payload, "note"),
         created_at: created_at.map(LifecycleTimestamp::from_datetime),
-        expires_at: payload_string(&payload, "expires_at").map(LifecycleTimestamp::from),
+        expires_at,
     })
 }
 
@@ -1847,7 +1893,7 @@ impl NewDomainEdgeRow {
         if let Some(note) = &edge.note {
             payload_map.insert("note".to_string(), Value::String(note.clone()));
         }
-        if let Some(expires_at) = &edge.expires_at {
+        if let Some(Some(expires_at)) = &edge.expires_at {
             payload_map.insert(
                 "expires_at".to_string(),
                 Value::String(expires_at.as_str().to_owned()),
@@ -1943,11 +1989,58 @@ pub async fn insert_domain_edge(
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     let max_edges_i64 = i64::try_from(max_edges).unwrap_or(i64::MAX);
 
-    let (limit_reached,): (bool,) = sqlx::query_as("SELECT COUNT(*) >= $1 FROM domain_edges")
-        .bind(max_edges_i64)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(EdgeWriteError::Database)?;
+    // Mirrors `edge_is_permanently_unreachable` for every case that is safe
+    // to check without parsing the payload's `expires_at` string as a
+    // timestamp (which `jsonb_typeof` never needs to do, so this can never
+    // throw regardless of what a corrupted row contains):
+    //   - a present `expires_at` that is neither `null` nor a string is
+    //     malformed and never becomes a valid `Edge` at all;
+    //   - a dated `created_at` paired with an explicit `expires_at: null`;
+    //   - an absent `created_at` paired with a concrete `expires_at` string.
+    // `payload ? 'expires_at'` is a definite boolean (never SQL NULL), so a
+    // missing key short-circuits every branch to a definite `false` instead
+    // of the `->` operator's SQL NULL silently propagating through equality
+    // checks (as an earlier version of this condition did).
+    //
+    // The whole exclusion is additionally guarded on the payload actually
+    // being a JSON object. `?` matches array *elements*, not just object
+    // keys, so a non-object payload such as `["expires_at"]` would otherwise
+    // make `payload ? 'expires_at'` true while `payload -> 'expires_at'`
+    // returns SQL NULL — `jsonb_typeof(NULL)` is itself NULL, propagating
+    // through the same three-valued-logic trap the `?` operator was meant to
+    // avoid. `payload_string`/`payload_lifecycle_field` only ever look up
+    // keys via `Value::get`, which returns `None` for any non-object value
+    // regardless of its contents, so the loader treats a non-object payload
+    // exactly like `{}` (a reachable, omitted-expiry edge) — the capacity
+    // count must agree instead of quietly excluding it.
+    //
+    // Deliberately not covered: a dated `created_at` with a present string
+    // `expires_at` that is unparseable or not exactly the canonical 168-hour
+    // duration. Validating that would require casting the payload string to
+    // a timestamp, which raises a hard error for any non-timestamp string
+    // anywhere in the table instead of evaluating to a boolean — turning a
+    // conservative over-count into a query failure that blocks every create.
+    // Closing that gap needs a safe-cast SQL helper (a schema migration),
+    // not a WHERE clause; the loader already fails such rows closed at read
+    // time, so at worst a persisted row that could never occur through this
+    // API's own write path (which always emits a canonical duration) counts
+    // toward capacity a little too eagerly.
+    let (limit_reached,): (bool,) = sqlx::query_as(
+        "SELECT COUNT(*) >= $1 FROM domain_edges \
+         WHERE NOT (\
+             jsonb_typeof(payload) = 'object' \
+             AND payload ? 'expires_at' \
+             AND (\
+                 jsonb_typeof(payload -> 'expires_at') NOT IN ('null', 'string') \
+                 OR (created_at IS NOT NULL AND jsonb_typeof(payload -> 'expires_at') = 'null') \
+                 OR (created_at IS NULL AND jsonb_typeof(payload -> 'expires_at') = 'string')\
+             )\
+         )",
+    )
+    .bind(max_edges_i64)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(EdgeWriteError::Database)?;
 
     if limit_reached {
         tx.rollback().await.ok();
@@ -2020,7 +2113,7 @@ mod edge_write_path_tests {
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-06-12T10:00:00+00:00".into()),
-            expires_at: Some("2026-06-19T10:00:00+00:00".into()),
+            expires_at: Some(Some("2026-06-19T10:00:00+00:00".into())),
         }
     }
 
@@ -2075,6 +2168,55 @@ mod edge_write_path_tests {
         edge.created_at = Some("yesterday".into());
         let err = NewDomainEdgeRow::from_edge(&edge).unwrap_err();
         assert!(err.to_string().contains("not RFC3339"));
+    }
+
+    #[test]
+    fn payload_lifecycle_field_distinguishes_omitted_null_and_value() {
+        let omitted = serde_json::json!({});
+        assert_eq!(payload_lifecycle_field(&omitted, "expires_at"), Ok(None));
+
+        let explicit_null = serde_json::json!({ "expires_at": null });
+        assert_eq!(
+            payload_lifecycle_field(&explicit_null, "expires_at"),
+            Ok(Some(None))
+        );
+
+        let dated = serde_json::json!({ "expires_at": "2026-06-19T10:00:00+00:00" });
+        assert_eq!(
+            payload_lifecycle_field(&dated, "expires_at"),
+            Ok(Some(Some("2026-06-19T10:00:00+00:00".into())))
+        );
+    }
+
+    /// A structurally malformed `expires_at` (neither absent, `null`, nor a
+    /// string) must not be silently coerced into the explicit-null state.
+    /// Doing so would let it pass as the legitimate fully-undated legacy
+    /// pairing whenever `created_at` is also absent, defeating fail-closed
+    /// handling of corrupted payload data.
+    #[test]
+    fn payload_lifecycle_field_rejects_structurally_malformed_value() {
+        for malformed in [
+            serde_json::json!({ "expires_at": 12345 }),
+            serde_json::json!({ "expires_at": true }),
+            serde_json::json!({ "expires_at": {} }),
+            serde_json::json!({ "expires_at": [] }),
+        ] {
+            assert_eq!(payload_lifecycle_field(&malformed, "expires_at"), Err(()));
+        }
+    }
+
+    #[test]
+    fn edge_from_row_rejects_row_with_malformed_expires_at_payload() {
+        let row: EdgeRow = (
+            "edge-malformed".to_string(),
+            "source".to_string(),
+            "target".to_string(),
+            "reference".to_string(),
+            None,
+            r#"{"expires_at": 12345}"#.to_string(),
+        );
+        let err = edge_from_row(row).unwrap_err();
+        assert!(err.to_string().contains("malformed expires_at"));
     }
 }
 

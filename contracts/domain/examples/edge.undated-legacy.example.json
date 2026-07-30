@@ -1,0 +1,10 @@
+{
+  "id": "d3f6c9b1-4e2a-4d7f-8b1c-2a9e5f6d7c8b",
+  "source_type": "account",
+  "source_id": "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8",
+  "target_type": "node",
+  "target_id": "b52be17c-4ab7-4434-98ce-520f86290cf0",
+  "edge_kind": "reference",
+  "created_at": null,
+  "expires_at": null
+}

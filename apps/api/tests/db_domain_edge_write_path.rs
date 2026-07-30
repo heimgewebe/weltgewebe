@@ -928,3 +928,240 @@ async fn postgres_edge_create_rejects_when_cache_limit_reached() -> Result<()> {
     clean(&pool).await;
     Ok(())
 }
+
+/// A dated row with an explicit `expires_at: null` payload is permanently
+/// unreachable per `edge_is_active_at` and the read loader excludes it from
+/// cache capacity; the write-capacity check must not still count it, or a
+/// row declared not to consume cache capacity would permanently block
+/// otherwise-valid creates.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_edge_create_admits_when_limit_filled_by_permanently_unreachable_row() -> Result<()>
+{
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let (base_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM domain_edges")
+        .fetch_one(&pool)
+        .await?;
+
+    let target_limit = base_count + 1;
+    let _env_guard = EnvVarGuard::set("MAX_EDGES_CACHE", target_limit.to_string());
+
+    // Fill the "limit" with a permanently unreachable row instead of a
+    // genuinely reachable one.
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', '2026-06-01T00:00:00Z', '{\"expires_at\": null}'::jsonb)",
+    )
+    .bind(EDGE_ID_DUP)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("seed permanently unreachable edge row");
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = edge_write_app(
+        pool.clone(),
+        "writepath-edge-writer-limit-unreachable",
+        Role::Admin,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    assert!(state.edges.read().await.get(EDGE_ID_DUP).is_none());
+
+    let res = app
+        .oneshot(post_edges_req(&cookie, &create_body(EDGE_ID_A, None)))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    assert!(state.edges.read().await.get(EDGE_ID_A).is_some());
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// Same as above, but the permanently unreachable row carries a malformed
+/// (non-string, non-null) `expires_at` payload value instead of an explicit
+/// `null` — `edge_is_permanently_unreachable` rejects this shape via the
+/// same `jsonb_typeof` check regardless of `created_at`.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_edge_create_admits_when_limit_filled_by_malformed_expiry_row() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let (base_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM domain_edges")
+        .fetch_one(&pool)
+        .await?;
+
+    let target_limit = base_count + 1;
+    let _env_guard = EnvVarGuard::set("MAX_EDGES_CACHE", target_limit.to_string());
+
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', '2026-06-01T00:00:00Z', '{\"expires_at\": 12345}'::jsonb)",
+    )
+    .bind(EDGE_ID_DUP)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("seed malformed edge row");
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = edge_write_app(
+        pool.clone(),
+        "writepath-edge-writer-limit-malformed",
+        Role::Admin,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    assert!(state.edges.read().await.get(EDGE_ID_DUP).is_none());
+
+    let res = app
+        .oneshot(post_edges_req(&cookie, &create_body(EDGE_ID_A, None)))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    assert!(state.edges.read().await.get(EDGE_ID_A).is_some());
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// Same as above, but the permanently unreachable row is undated
+/// (`created_at IS NULL`) with a concrete `expires_at` string — the
+/// "expiring edge without created_at" shape `edge_is_permanently_unreachable`
+/// also rejects.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_edge_create_admits_when_limit_filled_by_undated_row_with_expiry() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let (base_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM domain_edges")
+        .fetch_one(&pool)
+        .await?;
+
+    let target_limit = base_count + 1;
+    let _env_guard = EnvVarGuard::set("MAX_EDGES_CACHE", target_limit.to_string());
+
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', NULL, \
+         '{\"expires_at\": \"2026-06-08T00:00:00Z\"}'::jsonb)",
+    )
+    .bind(EDGE_ID_DUP)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("seed undated edge row with a concrete expiry");
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = edge_write_app(
+        pool.clone(),
+        "writepath-edge-writer-limit-undated",
+        Role::Admin,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    assert!(state.edges.read().await.get(EDGE_ID_DUP).is_none());
+
+    let res = app
+        .oneshot(post_edges_req(&cookie, &create_body(EDGE_ID_A, None)))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    assert!(state.edges.read().await.get(EDGE_ID_A).is_some());
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// A dated row whose payload is a JSON *array* rather than an object (e.g.
+/// `["expires_at"]`) is not permanently unreachable: `payload_lifecycle_field`
+/// looks up keys via `Value::get`, which returns `None` for any non-object
+/// value regardless of content, so the loader treats it exactly like an
+/// empty object payload — a reachable dated legacy edge with an omitted
+/// expiry. The write-capacity check must count it too (unlike the
+/// permanently-unreachable rows above), so a create at capacity must still
+/// be rejected.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_edge_create_rejects_when_limit_filled_by_non_object_payload_row() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let (base_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM domain_edges")
+        .fetch_one(&pool)
+        .await?;
+
+    let target_limit = base_count + 1;
+    let _env_guard = EnvVarGuard::set("MAX_EDGES_CACHE", target_limit.to_string());
+
+    // A non-object payload happening to contain the string "expires_at" as
+    // an array element: PostgreSQL's `?` operator matches array elements as
+    // well as object keys, which is exactly the trap a naive exclusion falls
+    // into.
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', '2026-06-01T00:00:00Z', '[\"expires_at\"]'::jsonb)",
+    )
+    .bind(EDGE_ID_DUP)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("seed non-object-payload edge row");
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = edge_write_app(
+        pool.clone(),
+        "writepath-edge-writer-limit-nonobject",
+        Role::Admin,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    // The loader admits this row as a reachable dated legacy edge, occupying
+    // the single available slot.
+    assert!(state.edges.read().await.get(EDGE_ID_DUP).is_some());
+
+    let res = app
+        .oneshot(post_edges_req(&cookie, &create_body(EDGE_ID_A, None)))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CONFLICT);
+    let text = read_text_body(res).await?;
+    assert!(text.contains("edge cache limit reached"), "body: {text}");
+    assert!(state.edges.read().await.get(EDGE_ID_A).is_none());
+
+    clean(&pool).await;
+    Ok(())
+}

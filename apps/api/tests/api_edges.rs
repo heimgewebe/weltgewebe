@@ -269,7 +269,8 @@ async fn edges_invalid_limit() -> anyhow::Result<()> {
 
 #[tokio::test]
 #[serial]
-async fn expired_edges_are_hidden_before_pagination_and_from_single_get() -> anyhow::Result<()> {
+async fn expired_and_pre_lifecycle_edges_are_hidden_before_pagination_and_single_get(
+) -> anyhow::Result<()> {
     let tmp = make_tmp_dir();
     let in_dir = tmp.path().join("in");
     let edges_path = in_dir.join("demo.edges.jsonl");
@@ -279,6 +280,7 @@ async fn expired_edges_are_hidden_before_pagination_and_from_single_get() -> any
         &edges_path,
         &[
             r#"{"id":"e-expired","source_id":"n1","target_id":"n2","edge_kind":"reference","created_at":"2020-01-01T00:00:00Z","expires_at":"2020-01-08T00:00:00Z"}"#,
+            r#"{"id":"e-pre-lifecycle","source_id":"n1","target_id":"n4","edge_kind":"reference","created_at":"2020-01-01T00:00:00Z"}"#,
             r#"{"id":"e-active","source_id":"n1","target_id":"n3","edge_kind":"reference"}"#,
         ],
     );
@@ -313,7 +315,13 @@ async fn expired_edges_are_hidden_before_pagination_and_from_single_get() -> any
     assert_eq!(items[0]["id"], "e-active");
 
     let res = app
+        .clone()
         .oneshot(Request::get("/edges/e-expired").body(body::Body::empty())?)
+        .await?;
+    assert_eq!(res.status(), StatusCode::NOT_FOUND);
+
+    let res = app
+        .oneshot(Request::get("/edges/e-pre-lifecycle").body(body::Body::empty())?)
         .await?;
     assert_eq!(res.status(), StatusCode::NOT_FOUND);
 
@@ -859,7 +867,13 @@ async fn post_edges_creates_edge_in_jsonl_mode() -> Result<()> {
         let cache = state.edges.read().await;
         let cached = cache.get(&id).context("edge must be in cache")?;
         assert_eq!(cached.created_at.as_deref(), Some(created_at.as_str()));
-        assert_eq!(cached.expires_at.as_deref(), Some(expires_at.as_str()));
+        assert_eq!(
+            cached
+                .expires_at
+                .as_ref()
+                .and_then(|inner| inner.as_deref()),
+            Some(expires_at.as_str())
+        );
         assert_eq!(cached.source_type.as_deref(), Some("node"));
         assert_eq!(cached.target_type.as_deref(), Some("node"));
     }
@@ -1398,6 +1412,40 @@ async fn post_edges_rejects_create_when_edge_cache_limit_reached() -> Result<()>
         assert_eq!(cache.len(), 1);
         assert!(cache.get(OLD_ID).is_some());
     }
+
+    Ok(())
+}
+
+/// A dated edge with an explicit `expires_at: null` is structurally
+/// well-formed but permanently unreachable per `edge_is_active_at` — it must
+/// not fill the cache-limit slot that a genuinely reachable edge would need,
+/// so a create must succeed instead of hitting the cache-limit gate.
+#[tokio::test]
+#[serial]
+async fn post_edges_admits_create_when_limit_filled_by_permanently_unreachable_row() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+    let _limit = EnvGuard::set("MAX_EDGES_CACHE", "1");
+
+    const UNREACHABLE_ID: &str = "00000000-0000-0000-0000-0000000000ad";
+    let unreachable_line = format!(
+        r#"{{"id":"{UNREACHABLE_ID}","source_id":"{CREATE_SOURCE_ID}","target_id":"{CREATE_TARGET_ID}","edge_kind":"reference","created_at":"2026-06-01T00:00:00Z","expires_at":null}}"#
+    );
+    write_lines(&edges_path, &[unreachable_line.as_str()]);
+
+    let (app, cookie, state) = app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+    // The permanently unreachable row does not consume the single slot.
+    assert_eq!(state.edges.read().await.len(), 0);
+
+    let res = app
+        .oneshot(post_edges(Some(&cookie), &valid_create_body()))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+
+    assert_eq!(jsonl_lines(&edges_path).len(), 2);
+    assert_eq!(state.edges.read().await.len(), 1);
 
     Ok(())
 }
