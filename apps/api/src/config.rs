@@ -294,7 +294,6 @@ impl AutoProvisionRole {
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub anonymize_opt_in: bool,
-    pub delegation_expire_days: u32,
 
     /// Maximum number of nodes a guest account may own at once. Loaded once
     /// at startup so request handlers never re-read process environment state.
@@ -391,7 +390,7 @@ impl AppConfig {
     fn parse_yaml(raw: &str) -> Result<Self> {
         let value: serde_yaml::Value =
             serde_yaml::from_str(raw).context("failed to parse YAML configuration")?;
-        for removed_key in ["fade_days", "ron_days"] {
+        for removed_key in ["fade_days", "ron_days", "delegation_expire_days"] {
             let key = serde_yaml::Value::String(removed_key.to_string());
             if value
                 .as_mapping()
@@ -406,6 +405,11 @@ impl AppConfig {
                     "ron_days" => anyhow::bail!(concat!(
                         "ron_days has been removed from runtime configuration; ",
                         "no runtime RON retention consumer exists, so the setting must not be ",
+                        "presented as operator-tunable"
+                    )),
+                    "delegation_expire_days" => anyhow::bail!(concat!(
+                        "delegation_expire_days has been removed from runtime configuration; ",
+                        "no runtime delegation-expiry consumer exists, so the setting must not be ",
                         "presented as operator-tunable"
                     )),
                     _ => unreachable!(),
@@ -464,8 +468,13 @@ impl AppConfig {
                 "no runtime RON retention consumer exists for this setting"
             ));
         }
+        if env::var_os("HA_DELEGATION_EXPIRE_DAYS").is_some() {
+            anyhow::bail!(concat!(
+                "HA_DELEGATION_EXPIRE_DAYS has been removed; ",
+                "no runtime delegation-expiry consumer exists for this setting"
+            ));
+        }
         apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
-        apply_env_override!(self, delegation_expire_days, "HA_DELEGATION_EXPIRE_DAYS");
         apply_env_override!(self, max_guest_owned_nodes, "MAX_GUEST_OWNED_NODES");
 
         if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_READ_SOURCE") {
@@ -889,7 +898,6 @@ mod tests {
 
     const YAML: &str = r#"
 anonymize_opt_in: true
-delegation_expire_days: 28
 "#;
 
     #[test]
@@ -921,6 +929,33 @@ delegation_expire_days: 28
 
     #[test]
     #[serial]
+    fn delegation_expire_days_yaml_key_is_rejected_as_removed_setting() {
+        let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
+        let yaml = format!("delegation_expire_days: 28\n{YAML}");
+
+        let error = AppConfig::load_from_str(&yaml)
+            .expect_err("the removed delegation_expire_days YAML key must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("delegation_expire_days has been removed"));
+        assert!(error.contains("no runtime delegation-expiry consumer exists"));
+    }
+
+    #[test]
+    #[serial]
+    fn delegation_expire_days_env_override_is_rejected_as_removed_setting() {
+        let _delegation = EnvGuard::set("HA_DELEGATION_EXPIRE_DAYS", "28");
+
+        let error = AppConfig::load_from_str(YAML)
+            .expect_err("the removed HA_DELEGATION_EXPIRE_DAYS override must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("HA_DELEGATION_EXPIRE_DAYS has been removed"));
+        assert!(error.contains("no runtime delegation-expiry consumer exists"));
+    }
+
+    #[test]
+    #[serial]
     fn load_from_path_reads_defaults() -> Result<()> {
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let file = NamedTempFile::new()?;
@@ -929,13 +964,11 @@ delegation_expire_days: 28
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
-        let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
         let _guest_nodes = EnvGuard::unset("MAX_GUEST_OWNED_NODES");
         let _cookie_secure = EnvGuard::unset("AUTH_COOKIE_SECURE");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(cfg.anonymize_opt_in);
-        assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.max_guest_owned_nodes, 1_000);
         assert!(cfg.auth_cookie_secure);
 
@@ -1023,13 +1056,11 @@ delegation_expire_days: 28
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
-        let _delegation = EnvGuard::set("HA_DELEGATION_EXPIRE_DAYS", "14");
         let _guest_nodes = EnvGuard::set("MAX_GUEST_OWNED_NODES", "321");
         let _cookie_secure = EnvGuard::set("AUTH_COOKIE_SECURE", "false");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(!cfg.anonymize_opt_in);
-        assert_eq!(cfg.delegation_expire_days, 14);
         assert_eq!(cfg.max_guest_owned_nodes, 321);
         assert!(!cfg.auth_cookie_secure);
 
@@ -1046,7 +1077,6 @@ delegation_expire_days: 28
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
-        let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
         let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
         let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
         let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
@@ -1054,7 +1084,6 @@ delegation_expire_days: 28
 
         let cfg = AppConfig::load()?;
         assert!(cfg.anonymize_opt_in);
-        assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
 
         Ok(())
@@ -1137,7 +1166,6 @@ delegation_expire_days: 28
         let file = NamedTempFile::new()?;
         let invalid_yaml = r#"
 anonymize_opt_in: false
-delegation_expire_days: 365
 domain_read_source: jsonl
 domain_account_write_source: postgres
 "#;
@@ -1168,7 +1196,6 @@ domain_account_write_source: postgres
         let file = NamedTempFile::new()?;
         let valid_yaml = r#"
 anonymize_opt_in: true
-delegation_expire_days: 28
 "#;
         std::fs::write(file.path(), valid_yaml)?;
 
@@ -1178,7 +1205,6 @@ delegation_expire_days: 28
         );
         let _ron = EnvGuard::unset("HA_RON_DAYS");
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
-        let _delegation = EnvGuard::unset("HA_DELEGATION_EXPIRE_DAYS");
         let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
         let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
         let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
@@ -1186,7 +1212,6 @@ delegation_expire_days: 28
 
         let cfg = AppConfig::load()?;
         assert!(cfg.anonymize_opt_in);
-        assert_eq!(cfg.delegation_expire_days, 28);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
         assert_eq!(
             cfg.domain_account_write_source,
