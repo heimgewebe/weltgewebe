@@ -179,12 +179,14 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
 
 pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge>> {
     let max_edges = crate::routes::edges::max_edges_cache_limit();
-    let fetch_limit = max_edges.saturating_add(1).min(i64::MAX as usize) as i64;
+    // No SQL-side LIMIT: rejected rows must not consume a physical row slot
+    // that a later valid row would need. The loop below bounds physical reads
+    // itself, breaking as soon as it has examined `max_edges + 1` *accepted*
+    // rows (the `+ 1` only confirms truncation; it is never cached).
     let mut rows = sqlx::query_as::<_, EdgeRow>(
         "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
-         FROM domain_edges ORDER BY id ASC LIMIT $1",
+         FROM domain_edges ORDER BY id ASC",
     )
-    .bind(fetch_limit)
     .fetch(pool);
 
     let mut cache = OrderedCache::new();
@@ -196,17 +198,18 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
         .await
         .context("failed to load edges from domain_edges")?
     {
-        if seen >= max_edges {
-            truncated = true;
-            break;
-        }
-
         let payload = parse_payload(&payload_text);
         let Ok(expires_at) = payload_lifecycle_field(&payload, "expires_at") else {
             tracing::warn!(edge_id = %id, "skipping domain edge with malformed expires_at payload");
             skipped += 1;
             continue;
         };
+
+        if seen >= max_edges {
+            truncated = true;
+            break;
+        }
+
         let edge = Edge {
             id: id.clone(),
             source_id,

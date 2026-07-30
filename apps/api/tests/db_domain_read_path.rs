@@ -97,6 +97,49 @@ async fn edges_loader_respects_max_edges_cache_limit() {
 #[tokio::test]
 #[ignore]
 #[serial]
+async fn edges_loader_skips_malformed_rows_without_losing_later_valid_edges() {
+    let pool = prepare_pool().await;
+    let _limit = EnvGuard::set("MAX_EDGES_CACHE", "2");
+    // Sort before the valid rows (id ascending) and carry a structurally
+    // malformed expires_at payload (neither absent, null, nor a string).
+    for id in ["rp-edge-a", "rp-edge-b"] {
+        sqlx::query(
+            "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, payload) \
+             VALUES ($1, 'rp-node-a', 'rp-node-b', 'relates', '{\"expires_at\": 12345}'::jsonb)",
+        )
+        .bind(id)
+        .execute(&pool)
+        .await
+        .expect("insert malformed edge");
+    }
+    for id in ["rp-edge-c", "rp-edge-d"] {
+        sqlx::query(
+            "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, payload) \
+             VALUES ($1, 'rp-node-a', 'rp-node-b', 'relates', '{}'::jsonb)",
+        )
+        .bind(id)
+        .execute(&pool)
+        .await
+        .expect("insert valid edge");
+    }
+
+    let cache = load_edges_from_postgres(&pool).await.expect("load edges");
+
+    assert_eq!(
+        cache.len(),
+        2,
+        "two malformed rows sorting before two valid rows must not prevent \
+         both later valid edges from loading, even though the cache limit \
+         equals the number of valid edges"
+    );
+    assert!(cache.get("rp-edge-c").is_some());
+    assert!(cache.get("rp-edge-d").is_some());
+    clean(&pool).await;
+}
+
+#[tokio::test]
+#[ignore]
+#[serial]
 async fn accounts_loader_rebuilds_email_index_and_rejects_removed_fields() {
     let pool = prepare_pool().await;
     sqlx::query(

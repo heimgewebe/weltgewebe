@@ -71,7 +71,7 @@ den repositoryweiten beziehungsweise PR-gebundenen Gates vorbehalten.
 
 ## Revalidierung 2026-07-30
 
-Drei von Codex gemeldete Befunde auf dem vorherigen Head sind behoben:
+Vier von Codex gemeldete Befunde auf vorherigen Heads sind behoben:
 
 - P2: Die API unterschied beim JSONL- und PostgreSQL-Laden ein fehlendes
   `expires_at` nicht von einem explizit gespeicherten `expires_at: null`,
@@ -90,6 +90,15 @@ Drei von Codex gemeldete Befunde auf dem vorherigen Head sind behoben:
   denselben Datensatz wie einen legitimen, dauerhaft sichtbaren undatierten
   Altbestand erscheinen lassen. Der PostgreSQL-Ladepfad überspringt solche
   Zeilen jetzt mit einer Warnung, statt sie zu maskieren.
+- P2: Der vorherige Fix für den obigen Befund führte selbst eine Paginierungs-
+  Regression ein: `load_edges_from_postgres` überspringt fehlerhafte Zeilen,
+  ohne `seen` zu erhöhen, während die SQL-Abfrage die physischen Zeilen
+  weiterhin fest auf `max_edges + 1` begrenzte. Sortierten mehrere fehlerhafte
+  Zeilen vor gültigen und überschritt die Tabelle das Cache-Limit, gingen
+  dadurch gültige Fäden stillschweigend verloren und `truncated` blieb
+  fälschlich `false`. Die Abfrage begrenzt die Zeilenzahl jetzt nicht mehr per
+  SQL; die Schleife selbst bricht erst ab, sobald `max_edges + 1` **gültige**
+  Zeilen untersucht wurden.
 
 Aktualisierte lokale Prüfbelege:
 
@@ -103,6 +112,13 @@ Aktualisierte lokale Prüfbelege:
   deckt das fehlende `created_at` an der Kartengrenze ab).
 - Vollständige lokale Rust-Bibliothekstests (470 bestanden), `cargo clippy
   --all-targets -- -D warnings` und `cargo fmt --check`: bestanden.
+- Neuer PostgreSQL-Integrationstest
+  `edges_loader_skips_malformed_rows_without_losing_later_valid_edges`
+  (`db_domain_read_path`) reproduziert exakt das von Codex beschriebene
+  Szenario (Cache-Limit 2, zwei fehlerhafte Zeilen vor zwei gültigen) gegen
+  eine disponible lokale PostgreSQL-16-Instanz; zusammen mit den bestehenden
+  `db_domain_read_path`- (10 bestanden) und `db_domain_edge_write_path`-Tests
+  (8 bestanden) grün.
 - Vollständige lokale Web-Vitest-Suite (275 bestanden über 36 Dateien),
   `svelte-check` (0 Fehler) und `pnpm lint`: bestanden.
 - `just contracts-domain-check`: alle sechs Schemata und Beispielinstanzen
