@@ -920,9 +920,7 @@ mod tests {
     #[test]
     #[serial]
     fn build_webauthn_returns_none_when_unconfigured() {
-        let config =
-            AppConfig::load_from_str("anonymize_opt_in: true\ndelegation_expire_days: 28\n")
-                .unwrap();
+        let config = AppConfig::load_from_str("anonymize_opt_in: true\n").unwrap();
         let result = build_webauthn(&config).unwrap();
         assert!(
             result.is_none(),
@@ -935,7 +933,6 @@ mod tests {
     fn build_webauthn_succeeds_with_valid_config() {
         let yaml = "\
 anonymize_opt_in: true\n\
-delegation_expire_days: 28\n\
 webauthn_rp_id: localhost\n\
 webauthn_rp_origin: \"http://localhost:3000\"\n";
         let config = AppConfig::load_from_str(yaml).unwrap();
@@ -948,7 +945,6 @@ webauthn_rp_origin: \"http://localhost:3000\"\n";
     fn build_webauthn_fails_when_only_rp_id_set() {
         let yaml = "\
 anonymize_opt_in: true\n\
-delegation_expire_days: 28\n\
 webauthn_rp_id: example.com\n";
         // Config validation should catch this, but build_webauthn also guards:
         // load_from_str runs validate(), which bails on mismatch.

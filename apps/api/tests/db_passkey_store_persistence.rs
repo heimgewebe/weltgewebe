@@ -116,7 +116,6 @@ async fn cleanup_account(pool: &sqlx::PgPool, account_id: &str) {
 fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
     let config = AppConfig {
         anonymize_opt_in: true,
-        delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,

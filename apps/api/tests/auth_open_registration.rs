@@ -35,7 +35,6 @@ fn test_state_open_reg() -> Result<ApiState> {
     // - Rate Limits: Set (> 0)
     let config = AppConfig {
         anonymize_opt_in: true,
-        delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,
         domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
         domain_account_write_source: weltgewebe_api::config::DomainAccountWriteSource::Jsonl,

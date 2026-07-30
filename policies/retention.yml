@@ -1,6 +1,5 @@
 ---
 data_lifecycle:
-  delegation_expire_days: 28
   anonymize_opt_in_default: true
 forget_pipeline:
   - name: primary_accounts
