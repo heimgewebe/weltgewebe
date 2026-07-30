@@ -16,8 +16,7 @@ function parseCanonicalRfc3339Ms(value: string): number | null {
   const hour = Number(match[4]);
   const minute = Number(match[5]);
   const second = Number(match[6]);
-  // The sign is intentionally left to Date.parse; these groups only enforce
-  // RFC3339 offset bounds.
+  // Offset groups only enforce RFC3339 bounds; Date.parse owns the sign.
   const offsetHour = match[7] == null ? 0 : Number(match[7]);
   const offsetMinute = match[8] == null ? 0 : Number(match[8]);
   const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
@@ -36,50 +35,38 @@ function parseCanonicalRfc3339Ms(value: string): number | null {
     return null;
   }
 
-  // The regex captures only the offset magnitude for bounds checking; the
-  // sign and absolute-instant calculation remain delegated to Date.parse.
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+function invalid(edge: Edge): MapEdge {
+  return { ...edge, lifecycle: { kind: "invalid" } };
+}
+
 /** Parse lifecycle data once when an edge crosses the API/UI boundary. */
 export function normalizeEdgeLifecycle(edge: Edge): MapEdge {
-  // The canonical public contract always includes `created_at`; an omitted
-  // key is a noncanonical remote response, not the undated-legacy state,
-  // which requires an explicit `null` (paired with an explicit `expires_at:
-  // null`). Fail closed instead of conflating "absent" with "explicitly
-  // undated".
-  if (edge.created_at === undefined) {
-    return { ...edge, lifecycle: { kind: "invalid" } };
-  }
-
-  if (edge.created_at === null) {
+  // Public contract always includes created_at. Omitted ≠ undated legacy:
+  // undated requires explicit null/null. Fail closed on non-canonical pairs.
+  const created = edge.created_at;
+  const expires = edge.expires_at;
+  if (created === undefined) return invalid(edge);
+  if (created === null) {
     return {
       ...edge,
-      lifecycle:
-        edge.expires_at === null ? { kind: "legacy" } : { kind: "invalid" },
+      lifecycle: { kind: expires === null ? "legacy" : "invalid" },
     };
   }
 
-  const createdAtMs = parseCanonicalRfc3339Ms(edge.created_at);
-  if (createdAtMs == null) {
-    return { ...edge, lifecycle: { kind: "invalid" } };
-  }
-
-  if (edge.expires_at === null) {
-    return { ...edge, lifecycle: { kind: "invalid" } };
-  }
+  const createdAtMs = parseCanonicalRfc3339Ms(created);
+  if (createdAtMs == null || expires === null) return invalid(edge);
 
   const expiresAtMs =
-    edge.expires_at === undefined
+    expires === undefined
       ? createdAtMs + FADEN_LIFETIME_MS
-      : parseCanonicalRfc3339Ms(edge.expires_at);
-  if (
-    expiresAtMs == null ||
-    !Number.isFinite(expiresAtMs) ||
-    expiresAtMs - createdAtMs !== FADEN_LIFETIME_MS
-  ) {
-    return { ...edge, lifecycle: { kind: "invalid" } };
+      : parseCanonicalRfc3339Ms(expires);
+  // Derived path is finite when createdAtMs is; parse path already rejects NaN.
+  if (expiresAtMs == null || expiresAtMs - createdAtMs !== FADEN_LIFETIME_MS) {
+    return invalid(edge);
   }
 
   return {

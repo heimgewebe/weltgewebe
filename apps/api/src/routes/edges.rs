@@ -2053,6 +2053,24 @@ mod tests {
         ));
     }
 
+    /// Undated legacy edges must project as an explicit JSON null/null pair
+    /// (keys present, values null), not omit the fields. Clients and AJV
+    /// couple the two nulls; omitted keys would look like "derive expires_at".
+    #[test]
+    fn public_undated_legacy_serializes_explicit_null_lifecycle_pair() {
+        let edge = lifecycle_edge_with_null_expiry(None);
+        let projected = PublicEdge::from(&edge);
+        assert_eq!(projected.created_at, None);
+        assert_eq!(projected.expires_at, None);
+
+        let value = serde_json::to_value(&projected).expect("serialize public edge");
+        assert_eq!(value.get("created_at"), Some(&serde_json::Value::Null));
+        assert_eq!(value.get("expires_at"), Some(&serde_json::Value::Null));
+        // Keys must be present; absence would violate the schema coupling.
+        assert!(value.as_object().expect("object").contains_key("created_at"));
+        assert!(value.as_object().expect("object").contains_key("expires_at"));
+    }
+
     #[test]
     fn expiry_filter_precedes_pagination() {
         let now = Utc.with_ymd_and_hms(2026, 7, 24, 10, 0, 0).unwrap();
