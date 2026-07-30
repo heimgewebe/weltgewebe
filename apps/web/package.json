@@ -52,6 +52,7 @@
     "test": "playwright test",
     "test:proof:auth-passkey-register": "playwright test --config=playwright.auth.proof.config.ts --reporter=dot,html,junit",
     "test:proof:auth-session-persistence": "playwright test --config=playwright.auth-session.proof.config.ts",
+    "test:proof:governance-full-flow": "playwright test --config=playwright.governance.proof.config.ts",
     "test:proof:basemap-real": "playwright test --config=playwright.proof.config.ts --reporter=dot,html,junit",
     "test:proof:web-runtime": "playwright test --config=playwright.performance.config.ts",
     "assert:proof:web-runtime": "node scripts/assert-web-runtime-evidence.mjs",

@@ -21,6 +21,7 @@ verifies_with:
   - apps/api/tests/db_governance.rs
   - apps/web/src/lib/api/governance.test.ts
   - apps/web/tests/governance.spec.ts
+  - apps/web/tests/proofs/governance-full-flow.proof.ts
 ---
 
 # Anträge, Konsent, Veto und Abstimmung
@@ -225,6 +226,13 @@ fehlende Zählung aus einer älteren API-Version sicher als null.
 
 Die Oberfläche darf keine Rechte simulieren. Jeder Schutz wird zusätzlich auf
 dem Server durchgesetzt.
+
+Der releasegebundene Governance-Vollflussbeweis startet Browser, Web-App und echte
+API gegen eine Wegwerf-PostgreSQL-Datenbank. Er belegt sowohl die automatische
+Annahme ohne Veto als auch Veto, änderbare Stimme, Ja-Mehrheit, Ausschluss der
+Selbstentscheidung und den atomaren Rollenwechsel unter Beibehaltung der
+Account-ID. Seine Hilfsrouten werden ausschließlich mit dem Cargo-Feature
+`integration-testing` kompiliert und existieren nicht im Produktions-Binary.
 
 ## Erweiterung auf weitere Antragstypen
 
