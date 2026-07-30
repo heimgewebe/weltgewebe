@@ -1989,26 +1989,39 @@ pub async fn insert_domain_edge(
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     let max_edges_i64 = i64::try_from(max_edges).unwrap_or(i64::MAX);
 
-    // A dated row whose payload carries an explicit `expires_at: null` is
-    // exactly the state `edge_is_permanently_unreachable` excludes from the
-    // loader's cache: it can never be active for any `now`, so it never
-    // occupies a cache slot and must not count against write capacity
-    // either. This mirrors only that concrete, cheaply-indexable case rather
-    // than the full Rust-side lifecycle predicate (which would need a full
-    // per-row payload fetch on every create); the rarer cases already left
-    // unhandled by simple existence-based counting before this fix (an
-    // invalid timestamp string, or a non-canonical explicit duration) remain
-    // out of scope here, unchanged from prior behavior.
+    // Mirrors `edge_is_permanently_unreachable` for every case that is safe
+    // to check without parsing the payload's `expires_at` string as a
+    // timestamp (which `jsonb_typeof` never needs to do, so this can never
+    // throw regardless of what a corrupted row contains):
+    //   - a present `expires_at` that is neither `null` nor a string is
+    //     malformed and never becomes a valid `Edge` at all;
+    //   - a dated `created_at` paired with an explicit `expires_at: null`;
+    //   - an absent `created_at` paired with a concrete `expires_at` string.
     // `payload ? 'expires_at'` is a definite boolean (never SQL NULL), so a
-    // missing key short-circuits the AND chain to a definite `false` instead
-    // of the `->` operator's SQL NULL propagating through `= 'null'::jsonb`
-    // and silently excluding every row that merely omits the key.
+    // missing key short-circuits every branch to a definite `false` instead
+    // of the `->` operator's SQL NULL silently propagating through equality
+    // checks (as an earlier version of this condition did).
+    //
+    // Deliberately not covered: a dated `created_at` with a present string
+    // `expires_at` that is unparseable or not exactly the canonical 168-hour
+    // duration. Validating that would require casting the payload string to
+    // a timestamp, which raises a hard error for any non-timestamp string
+    // anywhere in the table instead of evaluating to a boolean — turning a
+    // conservative over-count into a query failure that blocks every create.
+    // Closing that gap needs a safe-cast SQL helper (a schema migration),
+    // not a WHERE clause; the loader already fails such rows closed at read
+    // time, so at worst a persisted row that could never occur through this
+    // API's own write path (which always emits a canonical duration) counts
+    // toward capacity a little too eagerly.
     let (limit_reached,): (bool,) = sqlx::query_as(
         "SELECT COUNT(*) >= $1 FROM domain_edges \
          WHERE NOT (\
-             created_at IS NOT NULL \
-             AND payload ? 'expires_at' \
-             AND payload -> 'expires_at' = 'null'::jsonb\
+             payload ? 'expires_at' \
+             AND (\
+                 jsonb_typeof(payload -> 'expires_at') NOT IN ('null', 'string') \
+                 OR (created_at IS NOT NULL AND jsonb_typeof(payload -> 'expires_at') = 'null') \
+                 OR (created_at IS NULL AND jsonb_typeof(payload -> 'expires_at') = 'string')\
+             )\
          )",
     )
     .bind(max_edges_i64)

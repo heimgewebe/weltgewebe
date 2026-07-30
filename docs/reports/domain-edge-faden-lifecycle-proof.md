@@ -194,6 +194,32 @@ dieser Datei weiterhin grün). Vollständige lokale Rust-Bibliothekstests (472
 bestanden), `cargo clippy --all-targets -- -D warnings` und
 `cargo fmt --check`: bestanden.
 
+Codex bemängelte anschließend zurecht, dass die gezielte SQL-Bedingung nur
+den einen konkreten Fall (datiert + explizites `null`) abdeckte, während
+`edge_is_permanently_unreachable` auch undatierte Zeilen mit konkretem
+`expires_at`-String sowie strukturell fehlerhafte (weder `null` noch
+String-)Werte ausschließt. Die Bedingung deckt jetzt zusätzlich beide sicher
+prüfbaren Fälle über `jsonb_typeof` ab (das nie einen Laufzeitfehler wirft,
+unabhängig vom Zellinhalt). Bewusst weiterhin nicht abgedeckt bleibt ein
+datiertes `created_at` mit einem vorhandenen, aber nicht exakt 168 Stunden
+entfernten oder unparsebaren `expires_at`-String: Eine Prüfung dieses Falls
+würde einen Cast des Payload-Strings auf einen Zeitstempel erfordern, der
+bei irgendeiner nicht-Zeitstempel-Zeichenkette in der gesamten Tabelle einen
+harten Datenbankfehler auslöst statt zu einem Boolean auszuwerten — aus einer
+konservativen Überzählung würde ein Query-Ausfall. Das Schließen dieser
+Lücke bräuchte eine sichere Cast-Funktion (eine Schemamigration), keine
+WHERE-Bedingung; der Leseweg weist einen solchen Datensatz ohnehin schon
+beim Laden fail-closed ab, sodass im schlimmsten Fall eine Zeile, die über
+diesen API-eigenen Schreibpfad (der stets eine kanonische Dauer erzeugt)
+gar nicht entstehen kann, die Kapazität etwas zu früh als erschöpft zählt.
+
+Zwei weitere Regressionstests: `postgres_edge_create_admits_when_limit_filled_by_malformed_expiry_row`
+und `postgres_edge_create_admits_when_limit_filled_by_undated_row_with_expiry`
+(`db_domain_edge_write_path`, jetzt 11 bestanden, gegen eine disponible
+lokale PostgreSQL-16-Instanz verifiziert). Vollständige lokale
+Rust-Bibliothekstests (472 bestanden), `cargo clippy --all-targets -- -D
+warnings` und `cargo fmt --check`: weiterhin bestanden.
+
 ## Grenzen und Folgetasks
 
 - Vollständig undatierte Legacy-Projektionen bleiben sichtbar, weil ihr Alter
