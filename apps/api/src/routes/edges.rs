@@ -2067,8 +2067,14 @@ mod tests {
         assert_eq!(value.get("created_at"), Some(&serde_json::Value::Null));
         assert_eq!(value.get("expires_at"), Some(&serde_json::Value::Null));
         // Keys must be present; absence would violate the schema coupling.
-        assert!(value.as_object().expect("object").contains_key("created_at"));
-        assert!(value.as_object().expect("object").contains_key("expires_at"));
+        assert!(value
+            .as_object()
+            .expect("object")
+            .contains_key("created_at"));
+        assert!(value
+            .as_object()
+            .expect("object")
+            .contains_key("expires_at"));
     }
 
     #[test]
