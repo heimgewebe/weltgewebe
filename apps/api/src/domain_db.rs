@@ -99,6 +99,25 @@ fn payload_string(payload: &Value, key: &str) -> Option<String> {
         .map(|s| s.to_string())
 }
 
+/// Read a lifecycle timestamp field while preserving the distinction between
+/// an omitted key (`None`) and an explicit `null` (`Some(None)`), matching
+/// `Edge::expires_at`'s tri-state deserialization. A present non-string,
+/// non-null value is malformed and is treated the same as an explicit `null`
+/// so it fails closed instead of silently deriving an expiry from garbage
+/// payload data.
+fn payload_lifecycle_field(
+    payload: &Value,
+    key: &str,
+) -> Option<Option<crate::routes::edges::LifecycleTimestamp>> {
+    match payload.get(key) {
+        None => None,
+        Some(Value::String(s)) => Some(Some(crate::routes::edges::LifecycleTimestamp::from(
+            s.as_str(),
+        ))),
+        Some(_) => Some(None),
+    }
+}
+
 fn payload_string_array(payload: &Value, key: &str) -> Vec<String> {
     payload
         .get(key)
@@ -189,7 +208,7 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             edge_kind,
             note: payload_string(&payload, "note"),
             created_at: created_at.map(LifecycleTimestamp::from_datetime),
-            expires_at: payload_string(&payload, "expires_at").map(LifecycleTimestamp::from),
+            expires_at: payload_lifecycle_field(&payload, "expires_at"),
         };
         cache.insert(id, edge);
         seen += 1;
@@ -615,7 +634,7 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
         edge_kind,
         note: payload_string(&payload, "note"),
         created_at: created_at.map(LifecycleTimestamp::from_datetime),
-        expires_at: payload_string(&payload, "expires_at").map(LifecycleTimestamp::from),
+        expires_at: payload_lifecycle_field(&payload, "expires_at"),
     })
 }
 
@@ -1847,7 +1866,7 @@ impl NewDomainEdgeRow {
         if let Some(note) = &edge.note {
             payload_map.insert("note".to_string(), Value::String(note.clone()));
         }
-        if let Some(expires_at) = &edge.expires_at {
+        if let Some(Some(expires_at)) = &edge.expires_at {
             payload_map.insert(
                 "expires_at".to_string(),
                 Value::String(expires_at.as_str().to_owned()),
@@ -2020,7 +2039,7 @@ mod edge_write_path_tests {
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2026-06-12T10:00:00+00:00".into()),
-            expires_at: Some("2026-06-19T10:00:00+00:00".into()),
+            expires_at: Some(Some("2026-06-19T10:00:00+00:00".into())),
         }
     }
 

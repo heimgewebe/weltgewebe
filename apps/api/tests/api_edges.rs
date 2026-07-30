@@ -867,7 +867,13 @@ async fn post_edges_creates_edge_in_jsonl_mode() -> Result<()> {
         let cache = state.edges.read().await;
         let cached = cache.get(&id).context("edge must be in cache")?;
         assert_eq!(cached.created_at.as_deref(), Some(created_at.as_str()));
-        assert_eq!(cached.expires_at.as_deref(), Some(expires_at.as_str()));
+        assert_eq!(
+            cached
+                .expires_at
+                .as_ref()
+                .and_then(|inner| inner.as_deref()),
+            Some(expires_at.as_str())
+        );
         assert_eq!(cached.source_type.as_deref(), Some("node"));
         assert_eq!(cached.target_type.as_deref(), Some("node"));
     }

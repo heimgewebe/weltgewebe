@@ -86,6 +86,24 @@ describe("edge lifecycle", () => {
     }
   });
 
+  it("rejects an omitted created_at instead of treating it as undated legacy", () => {
+    const omittedCreatedAt = { ...rawEdge };
+    delete omittedCreatedAt.created_at;
+    delete omittedCreatedAt.expires_at;
+    expect(normalizeEdgeLifecycle(omittedCreatedAt).lifecycle).toEqual({
+      kind: "invalid",
+    });
+
+    const omittedCreatedAtWithNullExpiry = {
+      ...rawEdge,
+      expires_at: null,
+    };
+    delete omittedCreatedAtWithNullExpiry.created_at;
+    expect(
+      normalizeEdgeLifecycle(omittedCreatedAtWithNullExpiry).lifecycle,
+    ).toEqual({ kind: "invalid" });
+  });
+
   it("accepts signed offsets and rejects out-of-range offsets", () => {
     const offsetEdge = normalizeEdgeLifecycle({
       ...rawEdge,

@@ -110,6 +110,21 @@ impl<'de> Deserialize<'de> for LifecycleTimestamp {
     }
 }
 
+/// Deserialize a present field (including an explicit JSON `null`) as `Some`,
+/// so pairing this with `#[serde(default)]` distinguishes an omitted key
+/// (`None`, via the `default`) from an explicit `null` (`Some(None)`). Used for
+/// `Edge::expires_at`, where that distinction is load-bearing: an omitted key
+/// means "derive the canonical expiry retroactively", while an explicit `null`
+/// paired with a dated `created_at` is a non-canonical state that must fail
+/// closed instead of being silently treated as omitted.
+fn deserialize_some<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Deserialize::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Edge {
     pub id: String,
@@ -121,7 +136,16 @@ pub struct Edge {
     pub edge_kind: String,
     pub note: Option<String>,
     pub created_at: Option<LifecycleTimestamp>,
-    pub expires_at: Option<LifecycleTimestamp>,
+    /// `None` means the JSONL/PostgreSQL record omitted the key (legacy dated
+    /// Fäden predating the lifecycle feature); `Some(None)` means the record
+    /// carried an explicit `null`. Only the omitted state derives a retroactive
+    /// expiry — see [`edge_is_active_at`].
+    #[serde(
+        default,
+        deserialize_with = "deserialize_some",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub expires_at: Option<Option<LifecycleTimestamp>>,
 }
 
 /// Public edge projection. Free-text notes remain persisted authoring metadata
@@ -197,8 +221,13 @@ fn faden_expires_at(created_at: DateTime<Utc>) -> DateTime<Utc> {
 /// records. Explicit values retain their original wire representation; a
 /// missing value is deterministically derived only from a valid `created_at`.
 fn projected_faden_expires_at(edge: &Edge) -> Option<String> {
-    if let Some(expires_at) = edge.expires_at.as_ref() {
-        return Some(expires_at.as_str().to_owned());
+    match edge.expires_at.as_ref() {
+        Some(Some(expires_at)) => return Some(expires_at.as_str().to_owned()),
+        // Explicit `null` paired with a dated `created_at` is non-canonical;
+        // `edge_is_active_at` already hides such records from every read
+        // surface that reaches this projection, so there is nothing to derive.
+        Some(None) => return None,
+        None => {}
     }
 
     let created_at = edge.created_at.as_ref()?.parsed()?;
@@ -215,12 +244,12 @@ fn projected_faden_expires_at(edge: &Edge) -> Option<String> {
 /// so a Faden is gone at `now == expires_at`.
 pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
     let Some(created_at) = edge.created_at.as_ref() else {
-        if edge.expires_at.is_none() {
+        let Some(Some(expires_at)) = edge.expires_at.as_ref() else {
             return true;
-        }
+        };
         tracing::debug!(
             edge_id = %edge.id,
-            expires_at = %edge.expires_at.as_ref().expect("checked above"),
+            expires_at = %expires_at,
             "hiding expiring edge without created_at from active projection"
         );
         return false;
@@ -236,7 +265,7 @@ pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
     };
 
     let expires_at_value = match edge.expires_at.as_ref() {
-        Some(expires_at) => {
+        Some(Some(expires_at)) => {
             let Some(expires_at_value) = expires_at.parsed() else {
                 tracing::debug!(
                     edge_id = %edge.id,
@@ -258,6 +287,19 @@ pub(crate) fn edge_is_active_at(edge: &Edge, now: DateTime<Utc>) -> bool {
                 return false;
             }
             *expires_at_value
+        }
+        // An explicit `null` paired with a dated `created_at` is exactly the
+        // pairing the domain contract rejects: readers must not be able to
+        // tell a dated Faden with an intentionally unbounded lifetime apart
+        // from one whose expiry was simply never persisted. Fail closed
+        // instead of silently treating it as the omitted/derive case.
+        Some(None) => {
+            tracing::debug!(
+                edge_id = %edge.id,
+                created_at = %created_at_value,
+                "hiding edge with explicit null expires_at paired with a dated created_at from active projection"
+            );
+            return false;
         }
         None => {
             let Some(expires_at_value) = checked_faden_expires_at(*created_at_value) else {
@@ -801,7 +843,7 @@ fn build_edge_record(
         edge_kind: validated.edge_kind,
         note: validated.note,
         created_at: Some(LifecycleTimestamp::from_datetime(created_at)),
-        expires_at: Some(LifecycleTimestamp::from_datetime(expires_at)),
+        expires_at: Some(Some(LifecycleTimestamp::from_datetime(expires_at))),
     };
 
     let mut record = serde_json::Map::new();
@@ -812,7 +854,15 @@ fn build_edge_record(
     record.insert("target_type".into(), json!(edge.target_type));
     record.insert("edge_kind".into(), json!(edge.edge_kind));
     record.insert("created_at".into(), json!(edge.created_at));
-    record.insert("expires_at".into(), json!(edge.expires_at));
+    // `json!` serializes the bare `Option<Option<_>>` value directly rather
+    // than through `Edge`'s field-level `skip_serializing_if`, so both the
+    // omitted and explicit-null states would otherwise collapse to a literal
+    // `null` here. A freshly created edge always carries a concrete server-
+    // derived expiry, so flatten to the inner timestamp before serializing.
+    record.insert(
+        "expires_at".into(),
+        json!(edge.expires_at.clone().flatten()),
+    );
     if let Some(note) = &edge.note {
         record.insert("note".into(), json!(note));
     }
@@ -1836,6 +1886,8 @@ mod tests {
     use chrono::{DateTime, Duration, TimeZone, Utc};
     use serial_test::serial;
 
+    /// `expires_at: None` models an omitted key (legacy dated Fäden); use
+    /// [`lifecycle_edge_with_null_expiry`] to model an explicit `null`.
     fn lifecycle_edge(created_at: Option<&str>, expires_at: Option<&str>) -> Edge {
         Edge {
             id: "00000000-0000-0000-0000-0000000000e1".to_string(),
@@ -1846,8 +1898,16 @@ mod tests {
             edge_kind: "reference".to_string(),
             note: None,
             created_at: created_at.map(LifecycleTimestamp::from),
-            expires_at: expires_at.map(LifecycleTimestamp::from),
+            expires_at: expires_at.map(|value| Some(LifecycleTimestamp::from(value))),
         }
+    }
+
+    /// Models a persisted record carrying an explicit `expires_at: null`,
+    /// distinct from the omitted key that [`lifecycle_edge`] produces.
+    fn lifecycle_edge_with_null_expiry(created_at: Option<&str>) -> Edge {
+        let mut edge = lifecycle_edge(created_at, None);
+        edge.expires_at = Some(None);
+        edge
     }
 
     #[test]
@@ -1896,7 +1956,7 @@ mod tests {
             Some("2026-07-17T10:00:00.123456Z")
         );
         assert_eq!(
-            edge.expires_at.as_deref(),
+            edge.expires_at.clone().flatten().as_deref(),
             Some("2026-07-24T10:00:00.123456Z")
         );
         assert_eq!(
@@ -1905,7 +1965,7 @@ mod tests {
         );
         assert_eq!(
             record.get("expires_at"),
-            Some(&serde_json::json!(edge.expires_at))
+            Some(&serde_json::json!(edge.expires_at.clone().flatten()))
         );
         let round_trip: Edge = serde_json::from_value(record).expect("JSONL round trip");
         assert_eq!(round_trip.expires_at, edge.expires_at);
@@ -1968,6 +2028,27 @@ mod tests {
         ));
         assert!(!edge_is_active_at(
             &lifecycle_edge(Some("2026-07-17T10:00:00Z"), Some("2026-07-25T10:00:00Z"),),
+            now
+        ));
+    }
+
+    /// A JSONL/PostgreSQL record whose stored `expires_at` is an explicit
+    /// `null` — as opposed to the field simply being omitted — must not be
+    /// treated as "no stored expiry, derive one". That noncanonical pairing
+    /// is exactly what the domain schema rejects, so it has to fail closed
+    /// instead of silently reusing the omitted-key derivation path.
+    #[test]
+    fn dated_edge_with_explicit_null_expiry_fails_closed() {
+        let now = Utc.with_ymd_and_hms(2026, 7, 18, 10, 0, 0).unwrap();
+        let dated_explicit_null = lifecycle_edge_with_null_expiry(Some("2026-07-17T10:00:00Z"));
+        assert_eq!(dated_explicit_null.expires_at, Some(None));
+        assert!(!edge_is_active_at(&dated_explicit_null, now));
+        assert_eq!(projected_faden_expires_at(&dated_explicit_null), None);
+
+        // Paired with an equally undated `created_at`, an explicit null
+        // expiry remains the accepted fully-undated legacy state.
+        assert!(edge_is_active_at(
+            &lifecycle_edge_with_null_expiry(None),
             now
         ));
     }

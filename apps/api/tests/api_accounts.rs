@@ -471,7 +471,7 @@ async fn account_details_project_outgoing_relation_without_public_note() -> Resu
             edge_kind: "reference".to_string(),
             note: Some("nicht öffentlich".to_string()),
             created_at: Some(created_at.clone().into()),
-            expires_at: Some(expires_at.into()),
+            expires_at: Some(Some(expires_at.into())),
         },
     );
     state.edges = Arc::new(RwLock::new(edges));
@@ -522,7 +522,7 @@ async fn account_details_omit_expired_faden_projection() -> Result<()> {
             edge_kind: "reference".to_string(),
             note: None,
             created_at: Some("2020-01-01T00:00:00Z".to_string().into()),
-            expires_at: Some("2020-01-08T00:00:00Z".to_string().into()),
+            expires_at: Some(Some("2020-01-08T00:00:00Z".to_string().into())),
         },
     );
     state.edges = Arc::new(RwLock::new(edges));
@@ -565,7 +565,7 @@ async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result
             edge_kind: "reference".to_string(),
             note: Some("interne Importnotiz".to_string()),
             created_at: Some(created_at.clone().into()),
-            expires_at: Some(expires_at.into()),
+            expires_at: Some(Some(expires_at.into())),
         },
     );
     state.edges = Arc::new(RwLock::new(edges));

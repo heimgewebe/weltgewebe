@@ -44,11 +44,20 @@ function parseCanonicalRfc3339Ms(value: string): number | null {
 
 /** Parse lifecycle data once when an edge crosses the API/UI boundary. */
 export function normalizeEdgeLifecycle(edge: Edge): MapEdge {
-  if (edge.created_at == null) {
+  // The canonical public contract always includes `created_at`; an omitted
+  // key is a noncanonical remote response, not the undated-legacy state,
+  // which requires an explicit `null` (paired with an explicit `expires_at:
+  // null`). Fail closed instead of conflating "absent" with "explicitly
+  // undated".
+  if (edge.created_at === undefined) {
+    return { ...edge, lifecycle: { kind: "invalid" } };
+  }
+
+  if (edge.created_at === null) {
     return {
       ...edge,
       lifecycle:
-        edge.expires_at == null ? { kind: "legacy" } : { kind: "invalid" },
+        edge.expires_at === null ? { kind: "legacy" } : { kind: "invalid" },
     };
   }
 
