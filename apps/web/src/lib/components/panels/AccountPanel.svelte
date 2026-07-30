@@ -1,16 +1,18 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from "svelte";
+  import { createEventDispatcher, onDestroy, onMount } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import {
     buildPanelEndpoint,
     createPanelDetailsLoader,
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
+  import { authStore } from "$lib/auth/store";
 
   const dispatch = createEventDispatcher<{
     selectRelated: { type: "node"; id: string };
   }>();
   let activeTab = "profil";
+  let heading: HTMLHeadingElement;
 
   interface AccountDetails {
     id: string;
@@ -37,6 +39,7 @@
   const accountDetailsStore = detailsLoader.details;
   const isLoadingDetailsStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
+  onMount(() => heading.focus());
 
   $: accountDetails = $accountDetailsStore;
   $: isLoadingDetails = $isLoadingDetailsStore;
@@ -90,10 +93,13 @@
 </script>
 
 <div class="account-mode">
-  <h3 tabindex="-1" data-testid="account-heading">
+  <h3 bind:this={heading} tabindex="-1" data-testid="account-heading">
     {accountDetails?.title || $selection?.data?.title || "Garnrolle"}
   </h3>
   {#if summary}<p class="summary">{summary}</p>{/if}
+  {#if $authStore.authenticated && $selection?.id && $selection.id !== $authStore.account_id}
+    <a class="message-link" href={`/nachrichten?mit=${encodeURIComponent($selection.id)}`}>Private Nachricht</a>
+  {/if}
 
   <div
     class="compact-account-summary"
@@ -237,6 +243,23 @@
   .summary {
     color: var(--muted);
     margin: 0.5rem 0 1.25rem;
+  }
+  .message-link {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    margin: 0.75rem 0 1rem;
+    padding: 0 0.9rem;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 999px;
+    background: var(--panel-solid);
+    color: var(--text);
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .message-link:hover,
+  .message-link:focus-visible {
+    border-color: var(--accent);
   }
   .ghost {
     color: var(--muted);

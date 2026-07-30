@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://weltgewebe.org/schemas/domain/conversation.schema.json",
   "title": "Conversation",
-  "description": "A public node or governance conversation in its canonical lifecycle state.",
+  "description": "A canonical public node/governance conversation or a participants-only direct conversation.",
   "type": "object",
   "properties": {
     "id": {
@@ -11,7 +11,7 @@
     },
     "conversation_type": {
       "type": "string",
-      "enum": ["node", "governance_proposal"]
+      "enum": ["node", "governance_proposal", "direct"]
     },
     "lifecycle_state": {
       "type": "string",
@@ -32,7 +32,7 @@
     },
     "visibility": {
       "type": "string",
-      "const": "public"
+      "enum": ["public", "participants"]
     },
     "created_at": {
       "type": "string",
@@ -78,7 +78,8 @@
           "node_id": { "type": "string", "minLength": 1 },
           "node_id_snapshot": { "type": "null" },
           "node_title_snapshot": { "type": "null" },
-          "archived_at": { "type": "null" }
+          "archived_at": { "type": "null" },
+          "visibility": { "const": "public" }
         }
       }
     },
@@ -99,7 +100,8 @@
             "minLength": 1,
             "maxLength": 200
           },
-          "archived_at": { "type": "string", "format": "date-time" }
+          "archived_at": { "type": "string", "format": "date-time" },
+          "visibility": { "const": "public" }
         }
       }
     },
@@ -116,6 +118,25 @@
           "node_id": { "type": "null" },
           "node_id_snapshot": { "type": "null" },
           "node_title_snapshot": { "type": "null" },
+          "archived_at": { "type": "null" },
+          "visibility": { "const": "public" }
+        }
+      }
+    },
+    {
+      "if": {
+        "required": ["conversation_type"],
+        "properties": {
+          "conversation_type": { "const": "direct" }
+        }
+      },
+      "then": {
+        "properties": {
+          "lifecycle_state": { "const": "active" },
+          "node_id": { "type": "null" },
+          "node_id_snapshot": { "type": "null" },
+          "node_title_snapshot": { "type": "null" },
+          "visibility": { "const": "participants" },
           "archived_at": { "type": "null" }
         }
       }

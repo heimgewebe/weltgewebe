@@ -12,6 +12,7 @@
 
 <div class="auth-slot">
   {#if authView.showAccountLink}
+    <a class="login-entry" href="/nachrichten" aria-label="Private Nachrichten">✉</a>
     <a
       class="garnrolle-link"
       href="/settings#meine-garnrolle"

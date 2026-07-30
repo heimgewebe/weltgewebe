@@ -1,0 +1,121 @@
+import type {
+  ConversationMessage,
+  MessagePage,
+} from "$lib/api/nodeConversation";
+import {
+  createConversationMessage,
+  listConversationMessages,
+} from "$lib/api/nodeConversation";
+
+export interface DirectConversation {
+  id: string;
+  counterpart_account_id: string | null;
+  counterpart_title: string;
+  created_at: string;
+  updated_at: string;
+  unread_count: number;
+  last_message_preview: string | null;
+  last_message_at: string | null;
+  blocked_by_me: boolean;
+}
+
+interface DirectConversationList {
+  items: DirectConversation[];
+}
+
+interface ErrorPayload {
+  code?: unknown;
+  message?: unknown;
+}
+
+export class DirectMessagesApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "DirectMessagesApiError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    credentials: "include",
+    ...init,
+    headers: {
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    },
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as ErrorPayload;
+    throw new DirectMessagesApiError(
+      response.status,
+      typeof payload.code === "string" ? payload.code : "request_failed",
+      typeof payload.message === "string"
+        ? payload.message
+        : `HTTP ${response.status}`,
+    );
+  }
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
+export async function listDirectConversations(
+  signal?: AbortSignal,
+): Promise<DirectConversation[]> {
+  const response = await request<DirectConversationList>(
+    "/api/direct-conversations",
+    { signal },
+  );
+  return response.items;
+}
+
+export function openDirectConversation(
+  recipientAccountId: string,
+): Promise<DirectConversation> {
+  return request<DirectConversation>("/api/direct-conversations", {
+    method: "POST",
+    body: JSON.stringify({ recipient_account_id: recipientAccountId }),
+  });
+}
+
+export function markDirectConversationRead(
+  conversationId: string,
+  throughMessageId: string,
+): Promise<void> {
+  return request<void>(
+    `/api/direct-conversations/${encodeURIComponent(conversationId)}/read`,
+    {
+      method: "POST",
+      body: JSON.stringify({ through_message_id: throughMessageId }),
+    },
+  );
+}
+
+export async function setDirectConversationBlocked(
+  conversationId: string,
+  blocked: boolean,
+): Promise<boolean> {
+  const result = await request<{ blocked: boolean }>(
+    `/api/direct-conversations/${encodeURIComponent(conversationId)}/block`,
+    { method: blocked ? "PUT" : "DELETE" },
+  );
+  return result.blocked;
+}
+
+export function listDirectMessages(
+  conversationId: string,
+  signal?: AbortSignal,
+): Promise<MessagePage> {
+  return listConversationMessages(conversationId, null, signal);
+}
+
+export function sendDirectMessage(
+  conversationId: string,
+  content: string,
+  idempotencyKey: string,
+): Promise<ConversationMessage> {
+  return createConversationMessage(conversationId, content, idempotencyKey);
+}

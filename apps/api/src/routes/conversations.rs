@@ -39,6 +39,8 @@ const DEFAULT_MESSAGE_PAGE_SIZE: usize = 20;
 const MAX_MESSAGE_PAGE_SIZE: usize = 50;
 const MAX_MESSAGE_LENGTH: usize = 4_000;
 const MESSAGE_RATE_LIMIT_PER_MINUTE: i64 = 10;
+const DIRECT_MESSAGE_RATE_LIMIT_PER_MINUTE: i64 = 30;
+const DIRECT_CONVERSATION_CREATE_LIMIT_PER_HOUR: i64 = 20;
 
 type ConversationRow = (
     String,
@@ -62,6 +64,18 @@ type MessageRow = (
     DateTime<Utc>,
     DateTime<Utc>,
     Option<DateTime<Utc>>,
+);
+
+type DirectConversationRow = (
+    String,
+    Option<String>,
+    String,
+    DateTime<Utc>,
+    DateTime<Utc>,
+    i64,
+    Option<String>,
+    Option<DateTime<Utc>>,
+    bool,
 );
 
 #[derive(Debug, Clone, Serialize)]
@@ -102,6 +116,29 @@ pub struct MessagePageMeta {
     pub limit: usize,
     pub next_cursor: Option<String>,
     pub has_more: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DirectConversationView {
+    pub id: String,
+    pub counterpart_account_id: Option<String>,
+    pub counterpart_title: String,
+    pub created_at: String,
+    pub updated_at: String,
+    pub unread_count: i64,
+    pub last_message_preview: Option<String>,
+    pub last_message_at: Option<String>,
+    pub blocked_by_me: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DirectConversationList {
+    pub items: Vec<DirectConversationView>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DirectConversationBlockView {
+    pub blocked: bool,
 }
 
 #[derive(Debug)]
@@ -191,6 +228,29 @@ fn message_from_row(row: MessageRow) -> MessageView {
         updated_at: timestamp(row.6),
         deleted_at: row.7.map(timestamp),
     }
+}
+
+fn direct_conversation_from_row(row: DirectConversationRow) -> DirectConversationView {
+    DirectConversationView {
+        id: row.0,
+        counterpart_account_id: row.1,
+        counterpart_title: row.2,
+        created_at: timestamp(row.3),
+        updated_at: timestamp(row.4),
+        unread_count: row.5,
+        last_message_preview: row.6,
+        last_message_at: row.7.map(timestamp),
+        blocked_by_me: row.8,
+    }
+}
+
+fn direct_pair_key(left: &str, right: &str) -> String {
+    let (first, second) = if left <= right {
+        (left, right)
+    } else {
+        (right, left)
+    };
+    format!("{}:{first}{second}", first.len())
 }
 
 fn database_error(context: &'static str, error: sqlx::Error) -> ConversationApiError {
@@ -346,17 +406,116 @@ fn check_precondition(
     }
 }
 
+async fn require_conversation_read_access(
+    pool: &PgPool,
+    conversation_id: &str,
+    auth: &AuthContext,
+) -> Result<(), ConversationApiError> {
+    let target: Option<(String, String)> = sqlx::query_as(
+        "SELECT conversation_type, visibility FROM domain_conversations \
+         WHERE id = $1::uuid AND deleted_at IS NULL",
+    )
+    .bind(conversation_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| database_error("classify conversation read target", error))?;
+
+    let Some((conversation_type, visibility)) = target else {
+        return Err(ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        ));
+    };
+
+    if visibility == "public" {
+        return Ok(());
+    }
+
+    if conversation_type == "direct" && visibility == "participants" {
+        let Some(account_id) = auth.account_id.as_deref() else {
+            return Err(ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "conversation_not_found",
+                "the conversation does not exist",
+            ));
+        };
+        let participant: bool = sqlx::query_scalar(
+            "SELECT EXISTS(\
+                 SELECT 1 FROM domain_direct_conversation_participants \
+                 WHERE conversation_id = $1::uuid AND account_id = $2\
+             )",
+        )
+        .bind(conversation_id)
+        .bind(account_id)
+        .fetch_one(pool)
+        .await
+        .map_err(|error| database_error("authorize direct conversation read", error))?;
+        if participant {
+            return Ok(());
+        }
+        return Err(ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        ));
+    }
+
+    Err(ConversationApiError::new(
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "conversation_visibility_invalid",
+        "the conversation visibility contract is invalid",
+    ))
+}
+
 fn conversation_is_writable(conversation_type: &str, governance_source: Option<&str>) -> bool {
     match conversation_type {
-        "node" => true,
+        "node" | "direct" => true,
         "governance_proposal" => governance_source == Some("canonical"),
         _ => false,
     }
 }
 
+async fn require_direct_message_send_allowed(
+    tx: &mut Transaction<'_, Postgres>,
+    conversation_id: &str,
+) -> Result<(), ConversationApiError> {
+    let participant_states: Vec<(Option<String>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT account_id, blocked_at FROM domain_direct_conversation_participants \
+         WHERE conversation_id = $1::uuid ORDER BY slot FOR SHARE",
+    )
+    .bind(conversation_id)
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|error| database_error("lock direct conversation delivery state", error))?;
+    if participant_states.len() != 2
+        || participant_states
+            .iter()
+            .any(|(participant_account_id, _)| participant_account_id.is_none())
+    {
+        return Err(ConversationApiError::new(
+            StatusCode::CONFLICT,
+            "direct_conversation_counterpart_unavailable",
+            "the private conversation no longer has two active accounts",
+        ));
+    }
+    if participant_states
+        .iter()
+        .any(|(_, blocked_at)| blocked_at.is_some())
+    {
+        return Err(ConversationApiError::new(
+            StatusCode::FORBIDDEN,
+            "direct_conversation_blocked",
+            "new messages are disabled for this private conversation",
+        ));
+    }
+    Ok(())
+}
+
 async fn require_conversation_writable(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: &str,
+    auth: &AuthContext,
 ) -> Result<(), ConversationApiError> {
     // Fast-path node conversations without touching the global governance cutover row.
     // The first read is only a classification hint; the row is locked and re-read below
@@ -411,6 +570,62 @@ async fn require_conversation_writable(
         };
     }
 
+    if observed_type == "direct" {
+        let locked_target: Option<(String, String, Option<DateTime<Utc>>)> = sqlx::query_as(
+            "SELECT conversation_type, visibility, archived_at \
+                 FROM domain_conversations \
+                 WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
+        )
+        .bind(conversation_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|error| database_error("lock direct conversation write target", error))?;
+
+        match locked_target {
+            Some((conversation_type, visibility, None))
+                if conversation_type == "direct" && visibility == "participants" => {}
+            None => {
+                return Err(ConversationApiError::new(
+                    StatusCode::NOT_FOUND,
+                    "conversation_not_found",
+                    "the conversation does not exist",
+                ));
+            }
+            Some(_) => {
+                return Err(ConversationApiError::new(
+                    StatusCode::CONFLICT,
+                    "conversation_write_target_changed",
+                    "the conversation write target changed while the request was in flight",
+                ));
+            }
+        }
+
+        let Some(account_id) = auth.account_id.as_deref() else {
+            return Err(ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "conversation_not_found",
+                "the conversation does not exist",
+            ));
+        };
+        let participant: Option<Option<DateTime<Utc>>> = sqlx::query_scalar(
+            "SELECT blocked_at FROM domain_direct_conversation_participants \
+             WHERE conversation_id = $1::uuid AND account_id = $2 FOR SHARE",
+        )
+        .bind(conversation_id)
+        .bind(account_id)
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|error| database_error("authorize direct conversation write", error))?;
+        if participant.is_none() {
+            return Err(ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "conversation_not_found",
+                "the conversation does not exist",
+            ));
+        }
+        return Ok(());
+    }
+
     // Governance writes use one lock order everywhere: cutover singleton first,
     // conversation row second. This keeps the source stable through commit and
     // prevents a rollback to legacy while an authorized canonical write is in flight.
@@ -459,6 +674,7 @@ async fn require_conversation_writable(
 async fn require_conversation_tombstone_allowed(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: &str,
+    auth: &AuthContext,
 ) -> Result<(), ConversationApiError> {
     let observed_type: Option<String> = sqlx::query_scalar(
         "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid AND deleted_at IS NULL",
@@ -504,7 +720,7 @@ async fn require_conversation_tombstone_allowed(
         };
     }
 
-    require_conversation_writable(tx, conversation_id).await
+    require_conversation_writable(tx, conversation_id, auth).await
 }
 
 async fn load_message_for_update(
@@ -595,9 +811,11 @@ pub async fn get_node_conversation(
 pub async fn get_conversation(
     State(state): State<ApiState>,
     Path(id): Path<String>,
+    Extension(auth): Extension<AuthContext>,
 ) -> Result<Json<ConversationView>, ConversationApiError> {
     let pool = require_pool(&state)?;
     let id = parse_conversation_id(&id)?;
+    require_conversation_read_access(pool, &id, &auth).await?;
     let row: Option<ConversationRow> = sqlx::query_as(
         "SELECT id::text, node_id, node_id_snapshot, node_title_snapshot, \
                 conversation_type, visibility, created_at, updated_at, archived_at, deleted_at \
@@ -627,9 +845,11 @@ pub async fn list_messages(
     State(state): State<ApiState>,
     Path(conversation_id): Path<String>,
     Query(query): Query<MessageListQuery>,
+    Extension(auth): Extension<AuthContext>,
 ) -> Result<Json<MessagePage>, ConversationApiError> {
     let pool = require_pool(&state)?;
     let conversation_id = parse_conversation_id(&conversation_id)?;
+    require_conversation_read_access(pool, &conversation_id, &auth).await?;
     let exists: bool = sqlx::query_scalar(
         "SELECT EXISTS(SELECT 1 FROM domain_conversations \
          WHERE id = $1::uuid AND deleted_at IS NULL)",
@@ -766,13 +986,14 @@ pub async fn create_message(
         .begin()
         .await
         .map_err(|error| database_error("begin create message", error))?;
-    require_conversation_writable(&mut tx, &conversation_id).await?;
-    let node_id: Option<String> =
-        sqlx::query_scalar("SELECT node_id FROM domain_conversations WHERE id = $1::uuid")
-            .bind(&conversation_id)
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(|error| database_error("load conversation node for participation", error))?;
+    require_conversation_writable(&mut tx, &conversation_id, &auth).await?;
+    let (node_id, conversation_type): (Option<String>, String) = sqlx::query_as(
+        "SELECT node_id, conversation_type FROM domain_conversations WHERE id = $1::uuid",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| database_error("load conversation type for message create", error))?;
 
     let author_title: Option<String> =
         sqlx::query_scalar("SELECT title FROM domain_accounts WHERE id = $1")
@@ -789,8 +1010,7 @@ pub async fn create_message(
     })?;
     let author_title = validate_author_title(&author_title)?;
 
-    let rate_limit_key =
-        format!("node-conversation-message-rate:{conversation_id}:{author_account_id}");
+    let rate_limit_key = format!("conversation-message-rate:{conversation_id}:{author_account_id}");
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(&rate_limit_key)
         .fetch_one(&mut *tx)
@@ -829,6 +1049,43 @@ pub async fn create_message(
         return Ok((StatusCode::OK, Json(existing)));
     }
 
+    if conversation_type == "direct" {
+        let delivery_lock_key = format!("direct-conversation-delivery:{conversation_id}");
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(&delivery_lock_key)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|error| database_error("lock private conversation delivery", error))?;
+        require_direct_message_send_allowed(&mut tx, &conversation_id).await?;
+        let global_rate_key = format!("direct-message-global-rate:{author_account_id}");
+        sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+            .bind(&global_rate_key)
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|error| database_error("lock global private message rate window", error))?;
+        let global_recent_count: i64 = sqlx::query_scalar(
+            "SELECT count(*)::bigint
+             FROM domain_messages AS message
+             JOIN domain_conversations AS conversation
+               ON conversation.id = message.conversation_id
+             WHERE conversation.conversation_type = 'direct'
+               AND message.author_account_id = $1
+               AND message.created_at > NOW() - INTERVAL '1 minute'",
+        )
+        .bind(&author_account_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("count global private message rate", error))?;
+        if global_recent_count >= DIRECT_MESSAGE_RATE_LIMIT_PER_MINUTE {
+            return Err(ConversationApiError::new(
+                StatusCode::TOO_MANY_REQUESTS,
+                "direct_message_rate_limited",
+                "at most 30 private messages per minute are allowed across conversations",
+            )
+            .retry_after(60));
+        }
+    }
+
     let recent_count: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM domain_messages
          WHERE conversation_id = $1::uuid
@@ -851,9 +1108,16 @@ pub async fn create_message(
 
     let message_id = Uuid::new_v4().to_string();
     let row: MessageRow = sqlx::query_as(
-        "INSERT INTO domain_messages (
-             id, conversation_id, author_account_id, author_title, content, idempotency_key
-         ) VALUES ($1::uuid, $2::uuid, $3, $4, $5, $6::uuid)
+        "WITH message_stamp AS (
+             SELECT CASE WHEN $7 THEN clock_timestamp() ELSE NOW() END AS value
+         )
+         INSERT INTO domain_messages (
+             id, conversation_id, author_account_id, author_title, content, idempotency_key,
+             created_at, updated_at
+         )
+         SELECT $1::uuid, $2::uuid, $3, $4, $5, $6::uuid,
+                message_stamp.value, message_stamp.value
+         FROM message_stamp
          RETURNING id::text, conversation_id::text, author_account_id, author_title, content,
                    created_at, updated_at, deleted_at",
     )
@@ -863,6 +1127,7 @@ pub async fn create_message(
     .bind(&author_title)
     .bind(&content)
     .bind(&idempotency_key)
+    .bind(conversation_type == "direct")
     .fetch_one(&mut *tx)
     .await
     .map_err(|error| database_error("insert message", error))?;
@@ -896,7 +1161,7 @@ pub async fn update_message(
         .begin()
         .await
         .map_err(|error| database_error("begin message update", error))?;
-    require_conversation_writable(&mut tx, &conversation_id).await?;
+    require_conversation_writable(&mut tx, &conversation_id, &auth).await?;
     let current = load_message_for_update(&mut tx, &conversation_id, &message_id).await?;
     require_author(&auth, &current)?;
     check_precondition(&headers, &current)?;
@@ -940,9 +1205,20 @@ pub async fn delete_message(
         .begin()
         .await
         .map_err(|error| database_error("begin message tombstone", error))?;
-    require_conversation_tombstone_allowed(&mut tx, &conversation_id).await?;
+    require_conversation_tombstone_allowed(&mut tx, &conversation_id, &auth).await?;
+    let conversation_type: String = sqlx::query_scalar(
+        "SELECT conversation_type FROM domain_conversations WHERE id = $1::uuid",
+    )
+    .bind(&conversation_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| database_error("load conversation type for message tombstone", error))?;
     let current = load_message_for_update(&mut tx, &conversation_id, &message_id).await?;
-    require_author_or_admin(&auth, &current)?;
+    if conversation_type == "direct" {
+        require_author(&auth, &current)?;
+    } else {
+        require_author_or_admin(&auth, &current)?;
+    }
     check_precondition(&headers, &current)?;
     if current.deleted_at.is_some() {
         tx.commit()
@@ -970,6 +1246,458 @@ pub async fn delete_message(
     Ok(Json(message_from_row(row)))
 }
 
+async fn load_direct_conversation_for_account(
+    pool: &PgPool,
+    conversation_id: &str,
+    account_id: &str,
+) -> Result<DirectConversationView, ConversationApiError> {
+    let row: Option<DirectConversationRow> = sqlx::query_as(
+        "SELECT conversation.id::text,
+                CASE WHEN counterpart_account.id IS NULL THEN NULL ELSE counterpart.account_id END,
+                COALESCE(counterpart_account.title, counterpart.account_title_snapshot),
+                conversation.created_at,
+                conversation.updated_at,
+                (
+                    SELECT count(*)::bigint
+                    FROM domain_messages AS unread
+                    WHERE unread.conversation_id = conversation.id
+                      AND unread.deleted_at IS NULL
+                      AND unread.author_account_id IS DISTINCT FROM $1
+                      AND unread.created_at > mine.last_read_at
+                ),
+                left(latest.content, 160),
+                latest.created_at,
+                mine.blocked_at IS NOT NULL
+         FROM domain_conversations AS conversation
+         JOIN domain_direct_conversation_participants AS mine
+           ON mine.conversation_id = conversation.id
+         JOIN domain_direct_conversation_participants AS counterpart
+           ON counterpart.conversation_id = conversation.id
+          AND counterpart.slot <> mine.slot
+         LEFT JOIN domain_accounts AS counterpart_account
+           ON counterpart_account.id = counterpart.account_id
+          AND counterpart_account.disabled = FALSE
+         LEFT JOIN LATERAL (
+             SELECT message.content, message.created_at
+             FROM domain_messages AS message
+             WHERE message.conversation_id = conversation.id
+               AND message.deleted_at IS NULL
+             ORDER BY message.created_at DESC, message.id DESC
+             LIMIT 1
+         ) AS latest ON TRUE
+         WHERE conversation.id = $2::uuid
+           AND conversation.conversation_type = 'direct'
+           AND conversation.visibility = 'participants'
+           AND conversation.deleted_at IS NULL
+           AND mine.account_id = $1",
+    )
+    .bind(account_id)
+    .bind(conversation_id)
+    .fetch_optional(pool)
+    .await
+    .map_err(|error| database_error("load private conversation", error))?;
+
+    row.map(direct_conversation_from_row).ok_or_else(|| {
+        ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        )
+    })
+}
+
+pub async fn list_direct_conversations(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<DirectConversationList>, ConversationApiError> {
+    let pool = require_pool(&state)?;
+    let account_id = account_id(&auth)?;
+    let rows: Vec<DirectConversationRow> = sqlx::query_as(
+        "SELECT conversation.id::text,
+                CASE WHEN counterpart_account.id IS NULL THEN NULL ELSE counterpart.account_id END,
+                COALESCE(counterpart_account.title, counterpart.account_title_snapshot),
+                conversation.created_at,
+                conversation.updated_at,
+                (
+                    SELECT count(*)::bigint
+                    FROM domain_messages AS unread
+                    WHERE unread.conversation_id = conversation.id
+                      AND unread.deleted_at IS NULL
+                      AND unread.author_account_id IS DISTINCT FROM $1
+                      AND unread.created_at > mine.last_read_at
+                ),
+                left(latest.content, 160),
+                latest.created_at,
+                mine.blocked_at IS NOT NULL
+         FROM domain_conversations AS conversation
+         JOIN domain_direct_conversation_participants AS mine
+           ON mine.conversation_id = conversation.id
+         JOIN domain_direct_conversation_participants AS counterpart
+           ON counterpart.conversation_id = conversation.id
+          AND counterpart.slot <> mine.slot
+         LEFT JOIN domain_accounts AS counterpart_account
+           ON counterpart_account.id = counterpart.account_id
+          AND counterpart_account.disabled = FALSE
+         LEFT JOIN LATERAL (
+             SELECT message.content, message.created_at
+             FROM domain_messages AS message
+             WHERE message.conversation_id = conversation.id
+               AND message.deleted_at IS NULL
+             ORDER BY message.created_at DESC, message.id DESC
+             LIMIT 1
+         ) AS latest ON TRUE
+         WHERE conversation.conversation_type = 'direct'
+           AND conversation.visibility = 'participants'
+           AND conversation.deleted_at IS NULL
+           AND mine.account_id = $1
+         ORDER BY conversation.updated_at DESC, conversation.id DESC",
+    )
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| database_error("list private conversations", error))?;
+
+    Ok(Json(DirectConversationList {
+        items: rows.into_iter().map(direct_conversation_from_row).collect(),
+    }))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CreateDirectConversationRequest {
+    recipient_account_id: String,
+}
+
+pub async fn create_direct_conversation(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+    Json(request): Json<CreateDirectConversationRequest>,
+) -> Result<(StatusCode, Json<DirectConversationView>), ConversationApiError> {
+    let pool = require_pool(&state)?;
+    let sender_id = account_id(&auth)?.to_string();
+    let recipient_id = request.recipient_account_id.trim().to_string();
+    if recipient_id.is_empty() {
+        return Err(ConversationApiError::new(
+            StatusCode::BAD_REQUEST,
+            "recipient_required",
+            "recipient_account_id is required",
+        ));
+    }
+    if recipient_id == sender_id {
+        return Err(ConversationApiError::new(
+            StatusCode::BAD_REQUEST,
+            "direct_message_self_recipient",
+            "a private conversation requires another account",
+        ));
+    }
+
+    let pair_key = direct_pair_key(&sender_id, &recipient_id);
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| database_error("begin private conversation create", error))?;
+
+    // Lock both accounts in canonical id order. Concurrent A→B and B→A requests
+    // therefore cannot deadlock while creating the same pair.
+    let account_rows: Vec<(String, String)> = sqlx::query_as(
+        "SELECT id, title FROM domain_accounts
+         WHERE id IN ($1, $2) AND disabled = FALSE
+         ORDER BY id
+         FOR SHARE",
+    )
+    .bind(&sender_id)
+    .bind(&recipient_id)
+    .fetch_all(&mut *tx)
+    .await
+    .map_err(|error| database_error("lock private conversation accounts", error))?;
+
+    let sender_title = account_rows
+        .iter()
+        .find(|(id, _)| id == &sender_id)
+        .map(|(_, title)| title.clone())
+        .ok_or_else(|| {
+            ConversationApiError::new(
+                StatusCode::CONFLICT,
+                "author_account_not_persisted",
+                "the authenticated account is not present in the canonical domain store",
+            )
+        })?;
+    let recipient_title = account_rows
+        .iter()
+        .find(|(id, _)| id == &recipient_id)
+        .map(|(_, title)| title.clone())
+        .ok_or_else(|| {
+            ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "recipient_not_found",
+                "the recipient account does not exist",
+            )
+        })?;
+    let sender_title = validate_author_title(&sender_title)?;
+    let recipient_title = validate_author_title(&recipient_title)?;
+
+    let pair_lock_key = format!("direct-conversation-pair:{pair_key}");
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&pair_lock_key)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock private conversation pair", error))?;
+
+    let existing_id: Option<String> = sqlx::query_scalar(
+        "SELECT id::text FROM domain_conversations
+         WHERE conversation_type = 'direct'
+           AND direct_pair_key = $1
+           AND deleted_at IS NULL
+         FOR SHARE",
+    )
+    .bind(&pair_key)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|error| database_error("load existing private conversation", error))?;
+
+    if let Some(existing_id) = existing_id {
+        let active_participants: i64 = sqlx::query_scalar(
+            "SELECT count(*)::bigint
+             FROM domain_direct_conversation_participants
+             WHERE conversation_id = $1::uuid
+               AND account_id IN ($2, $3)",
+        )
+        .bind(&existing_id)
+        .bind(&sender_id)
+        .bind(&recipient_id)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("verify existing private participants", error))?;
+        if active_participants != 2 {
+            return Err(ConversationApiError::new(
+                StatusCode::CONFLICT,
+                "direct_conversation_pair_retired",
+                "this account pair cannot inherit a retired private conversation",
+            ));
+        }
+        tx.commit()
+            .await
+            .map_err(|error| database_error("commit private conversation lookup", error))?;
+        let view = load_direct_conversation_for_account(pool, &existing_id, &sender_id).await?;
+        return Ok((StatusCode::OK, Json(view)));
+    }
+
+    let creator_rate_key = format!("direct-conversation-create-rate:{sender_id}");
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&creator_rate_key)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock private conversation create rate", error))?;
+    let recent_created_count: i64 = sqlx::query_scalar(
+        "SELECT count(*)::bigint FROM domain_conversations
+         WHERE conversation_type = 'direct'
+           AND direct_created_by_account_id = $1
+           AND created_at > NOW() - INTERVAL '1 hour'",
+    )
+    .bind(&sender_id)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(|error| database_error("count private conversations created recently", error))?;
+    if recent_created_count >= DIRECT_CONVERSATION_CREATE_LIMIT_PER_HOUR {
+        return Err(ConversationApiError::new(
+            StatusCode::TOO_MANY_REQUESTS,
+            "direct_conversation_create_rate_limited",
+            "at most 20 new private conversations per hour are allowed",
+        )
+        .retry_after(3600));
+    }
+
+    let conversation_id = Uuid::new_v4().to_string();
+    sqlx::query(
+        "INSERT INTO domain_conversations (
+             id, conversation_type, visibility, direct_pair_key, direct_created_by_account_id
+         ) VALUES ($1::uuid, 'direct', 'participants', $2, $3)",
+    )
+    .bind(&conversation_id)
+    .bind(&pair_key)
+    .bind(&sender_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| database_error("insert private conversation", error))?;
+
+    let (slot_one_id, slot_one_title, slot_two_id, slot_two_title) = if sender_id <= recipient_id {
+        (&sender_id, &sender_title, &recipient_id, &recipient_title)
+    } else {
+        (&recipient_id, &recipient_title, &sender_id, &sender_title)
+    };
+    sqlx::query(
+        "INSERT INTO domain_direct_conversation_participants (
+             conversation_id, slot, account_id, account_title_snapshot
+         ) VALUES
+             ($1::uuid, 1, $2, $3),
+             ($1::uuid, 2, $4, $5)",
+    )
+    .bind(&conversation_id)
+    .bind(slot_one_id)
+    .bind(slot_one_title)
+    .bind(slot_two_id)
+    .bind(slot_two_title)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| database_error("insert private conversation participants", error))?;
+
+    tx.commit()
+        .await
+        .map_err(|error| database_error("commit private conversation create", error))?;
+    let view = load_direct_conversation_for_account(pool, &conversation_id, &sender_id).await?;
+    Ok((StatusCode::CREATED, Json(view)))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct MarkDirectConversationReadRequest {
+    through_message_id: String,
+}
+
+pub async fn mark_direct_conversation_read(
+    State(state): State<ApiState>,
+    Path(conversation_id): Path<String>,
+    Extension(auth): Extension<AuthContext>,
+    Json(request): Json<MarkDirectConversationReadRequest>,
+) -> Result<StatusCode, ConversationApiError> {
+    let pool = require_pool(&state)?;
+    let account_id = account_id(&auth)?;
+    let conversation_id = parse_conversation_id(&conversation_id)?;
+    let through_message_id = parse_message_id(&request.through_message_id)?;
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| database_error("begin private conversation read marker", error))?;
+
+    let delivery_lock_key = format!("direct-conversation-delivery:{conversation_id}");
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(&delivery_lock_key)
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock private conversation read marker", error))?;
+
+    let through_created_at: Option<DateTime<Utc>> = sqlx::query_scalar(
+        "SELECT message.created_at
+         FROM domain_messages AS message
+         JOIN domain_conversations AS conversation
+           ON conversation.id = message.conversation_id
+         JOIN domain_direct_conversation_participants AS participant
+           ON participant.conversation_id = conversation.id
+         WHERE conversation.id = $1::uuid
+           AND conversation.conversation_type = 'direct'
+           AND conversation.visibility = 'participants'
+           AND conversation.deleted_at IS NULL
+           AND participant.account_id = $2
+           AND message.id = $3::uuid
+         FOR SHARE OF conversation, participant, message",
+    )
+    .bind(&conversation_id)
+    .bind(account_id)
+    .bind(&through_message_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|error| database_error("load private conversation read boundary", error))?;
+    let through_created_at = through_created_at.ok_or_else(|| {
+        ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation or read boundary does not exist",
+        )
+    })?;
+
+    let result = sqlx::query(
+        "UPDATE domain_direct_conversation_participants
+         SET last_read_at = GREATEST(last_read_at, $3)
+         WHERE conversation_id = $1::uuid
+           AND account_id = $2",
+    )
+    .bind(&conversation_id)
+    .bind(account_id)
+    .bind(through_created_at)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| database_error("mark private conversation read", error))?;
+    if result.rows_affected() == 0 {
+        return Err(ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        ));
+    }
+    tx.commit()
+        .await
+        .map_err(|error| database_error("commit private conversation read marker", error))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+async fn set_direct_conversation_block(
+    state: &ApiState,
+    auth: &AuthContext,
+    conversation_id: &str,
+    blocked: bool,
+) -> Result<Json<DirectConversationBlockView>, ConversationApiError> {
+    let pool = require_pool(state)?;
+    let account_id = account_id(auth)?;
+    let conversation_id = parse_conversation_id(conversation_id)?;
+    let result = if blocked {
+        sqlx::query(
+            "UPDATE domain_direct_conversation_participants AS participant
+             SET blocked_at = COALESCE(participant.blocked_at, clock_timestamp())
+             FROM domain_conversations AS conversation
+             WHERE participant.conversation_id = conversation.id
+               AND conversation.id = $1::uuid
+               AND conversation.conversation_type = 'direct'
+               AND conversation.deleted_at IS NULL
+               AND participant.account_id = $2",
+        )
+        .bind(&conversation_id)
+        .bind(account_id)
+        .execute(pool)
+        .await
+    } else {
+        sqlx::query(
+            "UPDATE domain_direct_conversation_participants AS participant
+             SET blocked_at = NULL
+             FROM domain_conversations AS conversation
+             WHERE participant.conversation_id = conversation.id
+               AND conversation.id = $1::uuid
+               AND conversation.conversation_type = 'direct'
+               AND conversation.deleted_at IS NULL
+               AND participant.account_id = $2",
+        )
+        .bind(&conversation_id)
+        .bind(account_id)
+        .execute(pool)
+        .await
+    }
+    .map_err(|error| database_error("update private conversation block state", error))?;
+
+    if result.rows_affected() == 0 {
+        return Err(ConversationApiError::new(
+            StatusCode::NOT_FOUND,
+            "conversation_not_found",
+            "the conversation does not exist",
+        ));
+    }
+    Ok(Json(DirectConversationBlockView { blocked }))
+}
+
+pub async fn block_direct_conversation(
+    State(state): State<ApiState>,
+    Path(conversation_id): Path<String>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<DirectConversationBlockView>, ConversationApiError> {
+    set_direct_conversation_block(&state, &auth, &conversation_id, true).await
+}
+
+pub async fn unblock_direct_conversation(
+    State(state): State<ApiState>,
+    Path(conversation_id): Path<String>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Json<DirectConversationBlockView>, ConversationApiError> {
+    set_direct_conversation_block(&state, &auth, &conversation_id, false).await
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -992,6 +1720,7 @@ mod tests {
     #[test]
     fn conversation_write_cutover_keeps_governance_on_legacy_until_canonical() {
         assert!(conversation_is_writable("node", Some("legacy")));
+        assert!(conversation_is_writable("direct", None));
         assert!(!conversation_is_writable(
             "governance_proposal",
             Some("legacy")
@@ -1002,6 +1731,15 @@ mod tests {
         ));
         assert!(!conversation_is_writable("governance_proposal", None));
         assert!(!conversation_is_writable("unknown", Some("canonical")));
+    }
+
+    #[test]
+    fn direct_pair_key_is_symmetric_and_unambiguous() {
+        assert_eq!(
+            direct_pair_key("account-a", "account-b"),
+            direct_pair_key("account-b", "account-a")
+        );
+        assert_ne!(direct_pair_key("ab", "c"), direct_pair_key("a", "bc"));
     }
 
     #[test]
