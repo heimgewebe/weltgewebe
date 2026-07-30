@@ -8,7 +8,7 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Timelike, Utc};
 use futures_util::TryStreamExt;
 use serde_json::{json, Map, Value};
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use crate::auth::accounts::AccountStore;
@@ -1093,8 +1093,8 @@ pub async fn insert_domain_node(
 /// account row is locked `FOR UPDATE`, serializing the count-and-insert decision
 /// across all API instances. Operation replays are resolved before the limit so
 /// a successful prior create remains safely retryable even at the cap.
-pub async fn insert_domain_node_with_creator_limit(
-    pool: &PgPool,
+async fn insert_domain_node_in_transaction(
+    tx: &mut Transaction<'_, Postgres>,
     node: &Node,
     operation: Option<&CreateOperationKey>,
     creator_node_limit: Option<usize>,
@@ -1110,14 +1110,9 @@ pub async fn insert_domain_node_with_creator_limit(
         .map(|dt| dt.with_timezone(&Utc))
         .map_err(NodeCreateError::InvalidTimestamp)?;
 
-    let mut tx = pool.begin().await.map_err(NodeCreateError::Database)?;
-
     // Bind creator identity to a live canonical account for the full create
     // transaction. `FOR KEY SHARE` is compatible with unrelated account
     // updates, but conflicts with the `FOR UPDATE` lock taken by guest exit.
-    // Therefore exactly one ordering wins:
-    // - create commits first, then exit sees and anonymises the node;
-    // - exit commits first, then create observes no active account and fails.
     if let Some(creator_account_id) = node.created_by_account_id.as_deref() {
         let active_creator: Option<String> = if creator_node_limit.is_some() {
             sqlx::query_scalar(
@@ -1125,7 +1120,7 @@ pub async fn insert_domain_node_with_creator_limit(
                  WHERE id = $1 AND disabled = FALSE FOR UPDATE",
             )
             .bind(creator_account_id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&mut **tx)
             .await
             .map_err(NodeCreateError::Database)?
         } else {
@@ -1134,12 +1129,11 @@ pub async fn insert_domain_node_with_creator_limit(
                  WHERE id = $1 AND disabled = FALSE FOR KEY SHARE",
             )
             .bind(creator_account_id)
-            .fetch_optional(&mut *tx)
+            .fetch_optional(&mut **tx)
             .await
             .map_err(NodeCreateError::Database)?
         };
         if active_creator.is_none() {
-            tx.rollback().await.ok();
             return Err(NodeCreateError::CreatorAccountUnavailable);
         }
     }
@@ -1151,7 +1145,7 @@ pub async fn insert_domain_node_with_creator_limit(
         );
         sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
             .bind(lock_key)
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await
             .map_err(NodeCreateError::Database)?;
 
@@ -1162,13 +1156,12 @@ pub async fn insert_domain_node_with_creator_limit(
         )
         .bind(&operation.actor_id)
         .bind(&operation.operation_id)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await
         .map_err(NodeCreateError::Database)?;
 
         if let Some(row) = existing {
             let existing = node_from_row(row).map_err(NodeCreateError::Mapping)?;
-            tx.commit().await.map_err(NodeCreateError::Database)?;
             return Ok(CreateWriteOutcome::Existing(existing));
         }
     }
@@ -1183,11 +1176,10 @@ pub async fn insert_domain_node_with_creator_limit(
                AND weltgewebe_search_node_owner_account_id(payload) = trim($1)",
         )
         .bind(creator_account_id)
-        .fetch_one(&mut *tx)
+        .fetch_one(&mut **tx)
         .await
         .map_err(NodeCreateError::Database)?;
         if owned_count >= max_i64 {
-            tx.rollback().await.ok();
             return Err(NodeCreateError::CreatorNodeLimitReached { max });
         }
     }
@@ -1209,38 +1201,35 @@ pub async fn insert_domain_node_with_creator_limit(
     .bind(operation.map(|value| value.actor_id.as_str()))
     .bind(operation.map(|value| value.operation_id.as_str()))
     .bind(node.search_visibility.as_str())
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await;
 
     match result {
-        Ok(_) => {
-            tx.commit().await.map_err(NodeCreateError::Database)?;
-            Ok(CreateWriteOutcome::Created)
-        }
+        Ok(_) => Ok(CreateWriteOutcome::Created),
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            tx.rollback().await.ok();
-            if let Some(operation) = operation {
-                let existing: Option<NodeRow> = sqlx::query_as(
-                    "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
-                     FROM domain_nodes \
-                     WHERE create_actor_id = $1 AND create_operation_id = $2",
-                )
-                .bind(&operation.actor_id)
-                .bind(&operation.operation_id)
-                .fetch_optional(pool)
-                .await
-                .map_err(NodeCreateError::Database)?;
-                if let Some(row) = existing {
-                    return node_from_row(row)
-                        .map(CreateWriteOutcome::Existing)
-                        .map_err(NodeCreateError::Mapping);
-                }
-            }
             Err(NodeCreateError::DuplicateId)
         }
-        Err(e) => {
+        Err(error) => Err(NodeCreateError::Database(error)),
+    }
+}
+
+pub async fn insert_domain_node_with_creator_limit(
+    pool: &PgPool,
+    node: &Node,
+    operation: Option<&CreateOperationKey>,
+    creator_node_limit: Option<usize>,
+) -> Result<CreateWriteOutcome<Node>, NodeCreateError> {
+    let mut tx = pool.begin().await.map_err(NodeCreateError::Database)?;
+    let outcome =
+        insert_domain_node_in_transaction(&mut tx, node, operation, creator_node_limit).await;
+    match outcome {
+        Ok(outcome) => {
+            tx.commit().await.map_err(NodeCreateError::Database)?;
+            Ok(outcome)
+        }
+        Err(error) => {
             tx.rollback().await.ok();
-            Err(NodeCreateError::Database(e))
+            Err(error)
         }
     }
 }
@@ -1939,20 +1928,18 @@ pub enum EdgeWriteError {
 /// surface as a defensive fallback.
 ///
 /// This function performs no in-memory mutation and writes no JSONL.
-pub async fn insert_domain_edge(
-    pool: &PgPool,
+async fn insert_domain_edge_in_transaction(
+    tx: &mut Transaction<'_, Postgres>,
     edge: &crate::routes::edges::Edge,
     operation: Option<&CreateOperationKey>,
 ) -> Result<CreateWriteOutcome<Edge>, EdgeWriteError> {
     let row = NewDomainEdgeRow::from_edge(edge).map_err(EdgeWriteError::Mapping)?;
 
-    let mut tx = pool.begin().await.map_err(EdgeWriteError::Database)?;
-
-    // The existing edge path already serializes creates for cache-limit and
-    // duplicate-id semantics. The operation lookup belongs inside the same
-    // transaction so a replay cannot race the first insert.
+    // One transaction owns operation replay, duplicate detection, capacity and
+    // insertion. This helper deliberately does not commit so node creation can
+    // include its mandatory origin Faden in the same transaction.
     sqlx::query("LOCK TABLE domain_edges IN EXCLUSIVE MODE")
-        .execute(&mut *tx)
+        .execute(&mut **tx)
         .await
         .map_err(EdgeWriteError::Database)?;
 
@@ -1964,12 +1951,11 @@ pub async fn insert_domain_edge(
         )
         .bind(&operation.actor_id)
         .bind(&operation.operation_id)
-        .fetch_optional(&mut *tx)
+        .fetch_optional(&mut **tx)
         .await
         .map_err(EdgeWriteError::Database)?;
         if let Some(row) = existing {
             let existing = edge_from_row(row).map_err(EdgeWriteError::Mapping)?;
-            tx.commit().await.map_err(EdgeWriteError::Database)?;
             return Ok(CreateWriteOutcome::Existing(existing));
         }
     }
@@ -1977,18 +1963,15 @@ pub async fn insert_domain_edge(
     let (exists,): (bool,) =
         sqlx::query_as("SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = $1)")
             .bind(&row.id)
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut **tx)
             .await
             .map_err(EdgeWriteError::Database)?;
-
     if exists {
-        tx.rollback().await.ok();
         return Err(EdgeWriteError::DuplicateId);
     }
 
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     let max_edges_i64 = i64::try_from(max_edges).unwrap_or(i64::MAX);
-
     // Mirrors `edge_is_permanently_unreachable` for every case that is safe
     // to check without parsing the payload's `expires_at` string as a
     // timestamp (which `jsonb_typeof` never needs to do, so this can never
@@ -2038,12 +2021,10 @@ pub async fn insert_domain_edge(
          )",
     )
     .bind(max_edges_i64)
-    .fetch_one(&mut *tx)
+    .fetch_one(&mut **tx)
     .await
     .map_err(EdgeWriteError::Database)?;
-
     if limit_reached {
-        tx.rollback().await.ok();
         return Err(EdgeWriteError::CacheLimitReached);
     }
 
@@ -2062,40 +2043,241 @@ pub async fn insert_domain_edge(
     .bind(&row.payload)
     .bind(operation.map(|value| value.actor_id.as_str()))
     .bind(operation.map(|value| value.operation_id.as_str()))
-    .execute(&mut *tx)
+    .execute(&mut **tx)
     .await;
 
     match result {
-        Ok(_) => {
-            tx.commit().await.map_err(EdgeWriteError::Database)?;
-            Ok(CreateWriteOutcome::Created)
-        }
+        Ok(_) => Ok(CreateWriteOutcome::Created),
         Err(sqlx::Error::Database(db_err)) if db_err.is_unique_violation() => {
-            tx.rollback().await.ok();
-            if let Some(operation) = operation {
-                let existing: Option<EdgeRow> = sqlx::query_as(
-                    "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
-                     FROM domain_edges \
-                     WHERE create_actor_id = $1 AND create_operation_id = $2",
-                )
-                .bind(&operation.actor_id)
-                .bind(&operation.operation_id)
-                .fetch_optional(pool)
-                .await
-                .map_err(EdgeWriteError::Database)?;
-                if let Some(row) = existing {
-                    return edge_from_row(row)
-                        .map(CreateWriteOutcome::Existing)
-                        .map_err(EdgeWriteError::Mapping);
-                }
-            }
             Err(EdgeWriteError::DuplicateId)
         }
-        Err(e) => {
+        Err(error) => Err(EdgeWriteError::Database(error)),
+    }
+}
+
+pub async fn insert_domain_edge(
+    pool: &PgPool,
+    edge: &crate::routes::edges::Edge,
+    operation: Option<&CreateOperationKey>,
+) -> Result<CreateWriteOutcome<Edge>, EdgeWriteError> {
+    let mut tx = pool.begin().await.map_err(EdgeWriteError::Database)?;
+    let outcome = insert_domain_edge_in_transaction(&mut tx, edge, operation).await;
+    match outcome {
+        Ok(outcome) => {
+            tx.commit().await.map_err(EdgeWriteError::Database)?;
+            Ok(outcome)
+        }
+        Err(error) => {
             tx.rollback().await.ok();
-            Err(EdgeWriteError::Database(e))
+            Err(error)
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct NodeFadenCreateOutcome {
+    pub node: Node,
+    pub edge: Edge,
+    pub created: bool,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum NodeFadenCreateError {
+    #[error(transparent)]
+    Node(#[from] NodeCreateError),
+    #[error(transparent)]
+    Edge(#[from] EdgeWriteError),
+    #[error("node operation id was already used for different data")]
+    OperationConflict,
+    #[error("edge operation id was already used for different data")]
+    EdgeOperationConflict,
+    #[error("replayed node was deleted before its origin Faden could be repaired")]
+    ReplayedNodeDeleted,
+}
+
+fn edge_matches_projection(existing: &Edge, expected: &Edge) -> bool {
+    existing.source_id == expected.source_id
+        && existing.source_type == expected.source_type
+        && existing.target_id == expected.target_id
+        && existing.target_type == expected.target_type
+        && existing.edge_kind == expected.edge_kind
+        && existing.note == expected.note
+}
+
+/// Atomically persist a PostgreSQL node and its mandatory account→node origin
+/// Faden. Operation replays repair an older missing Faden in the same guarded
+/// transaction after validating the original node semantics.
+pub async fn insert_domain_node_and_faden_with_creator_limit<F, G>(
+    pool: &PgPool,
+    node: &Node,
+    operation: &CreateOperationKey,
+    creator_node_limit: Option<usize>,
+    existing_matches: F,
+    edge_for_node: G,
+) -> Result<NodeFadenCreateOutcome, NodeFadenCreateError>
+where
+    F: Fn(&Node) -> bool,
+    G: Fn(&str) -> Edge,
+{
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(NodeCreateError::Database)
+        .map_err(NodeFadenCreateError::Node)?;
+
+    let result: Result<NodeFadenCreateOutcome, NodeFadenCreateError> = async {
+        if let Some(account_id) = node.created_by_account_id.as_deref() {
+            sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+                .bind(crate::advisory_lock::account_lifecycle_lock_key(account_id))
+                .execute(&mut *tx)
+                .await
+                .map_err(NodeCreateError::Database)?;
+        }
+
+        let node_outcome =
+            insert_domain_node_in_transaction(&mut tx, node, Some(operation), creator_node_limit)
+                .await?;
+        let (actual_node, created) = match node_outcome {
+            CreateWriteOutcome::Created => (node.clone(), true),
+            CreateWriteOutcome::Existing(existing) => {
+                if !existing_matches(&existing) {
+                    return Err(NodeFadenCreateError::OperationConflict);
+                }
+                (existing, false)
+            }
+        };
+
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(crate::advisory_lock::node_mutation_lock_key(
+                &actual_node.id,
+            ))
+            .execute(&mut *tx)
+            .await
+            .map_err(NodeCreateError::Database)?;
+        if !created {
+            let node_still_exists: bool =
+                sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+                    .bind(&actual_node.id)
+                    .fetch_one(&mut *tx)
+                    .await
+                    .map_err(NodeCreateError::Database)?;
+            if !node_still_exists {
+                return Err(NodeFadenCreateError::ReplayedNodeDeleted);
+            }
+        }
+
+        let expected_edge = edge_for_node(&actual_node.id);
+        let edge_outcome =
+            insert_domain_edge_in_transaction(&mut tx, &expected_edge, Some(operation)).await?;
+        let actual_edge = match edge_outcome {
+            CreateWriteOutcome::Created => expected_edge,
+            CreateWriteOutcome::Existing(existing) => {
+                if !edge_matches_projection(&existing, &expected_edge) {
+                    return Err(NodeFadenCreateError::EdgeOperationConflict);
+                }
+                existing
+            }
+        };
+
+        Ok(NodeFadenCreateOutcome {
+            node: actual_node,
+            edge: actual_edge,
+            created,
+        })
+    }
+    .await;
+
+    match result {
+        Ok(outcome) => {
+            tx.commit()
+                .await
+                .map_err(NodeCreateError::Database)
+                .map_err(NodeFadenCreateError::Node)?;
+            Ok(outcome)
+        }
+        Err(error) => {
+            tx.rollback().await.ok();
+            Err(error)
+        }
+    }
+}
+
+/// Holds the same cross-instance node-mutation lock used by edit and delete
+/// routes while the create handler reconciles and publishes its cache state.
+/// The snapshots are read only after the lock is acquired, so a deletion or
+/// guest exit that wins the post-commit gap is observed instead of overwritten
+/// by the stale create response.
+pub struct NodeFadenCachePublicationGuard {
+    transaction: Transaction<'static, Postgres>,
+    pub node: Option<Node>,
+    pub edge: Option<Edge>,
+}
+
+impl NodeFadenCachePublicationGuard {
+    pub async fn release(self) -> Result<(), sqlx::Error> {
+        self.transaction.commit().await
+    }
+}
+
+pub async fn lock_node_faden_cache_publication(
+    pool: &PgPool,
+    node_id: &str,
+    operation: &CreateOperationKey,
+    expected_edge: &Edge,
+) -> Result<NodeFadenCachePublicationGuard, NodeFadenCreateError> {
+    let mut transaction = pool
+        .begin()
+        .await
+        .map_err(NodeCreateError::Database)
+        .map_err(NodeFadenCreateError::Node)?;
+
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(crate::advisory_lock::node_mutation_lock_key(node_id))
+        .execute(&mut *transaction)
+        .await
+        .map_err(NodeCreateError::Database)?;
+
+    let node = sqlx::query_as::<_, NodeRow>(
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
+         FROM domain_nodes WHERE id = $1",
+    )
+    .bind(node_id)
+    .fetch_optional(&mut *transaction)
+    .await
+    .map_err(NodeCreateError::Database)?
+    .map(node_from_row)
+    .transpose()
+    .map_err(NodeCreateError::Mapping)?;
+
+    let edge = if node.is_some() {
+        let edge = sqlx::query_as::<_, EdgeRow>(
+            "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
+             FROM domain_edges \
+             WHERE create_actor_id = $1 AND create_operation_id = $2",
+        )
+        .bind(&operation.actor_id)
+        .bind(&operation.operation_id)
+        .fetch_optional(&mut *transaction)
+        .await
+        .map_err(EdgeWriteError::Database)?
+        .map(edge_from_row)
+        .transpose()
+        .map_err(EdgeWriteError::Mapping)?;
+        if let Some(existing) = edge.as_ref() {
+            if !edge_matches_projection(existing, expected_edge) {
+                return Err(NodeFadenCreateError::EdgeOperationConflict);
+            }
+        }
+        edge
+    } else {
+        None
+    };
+
+    Ok(NodeFadenCachePublicationGuard {
+        transaction,
+        node,
+        edge,
+    })
 }
 
 #[cfg(test)]

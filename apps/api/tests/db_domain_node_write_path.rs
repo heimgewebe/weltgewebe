@@ -43,8 +43,9 @@ use weltgewebe_api::{
     },
     domain_db::{
         delete_node_with_edges_in_postgres, insert_domain_node, load_nodes_from_postgres,
-        patch_node_in_postgres, replace_node_in_postgres, NodeConversationDeleteEffect,
-        NodeCreateError, NodePatchInput, NodeWriteError,
+        lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres,
+        CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodePatchInput,
+        NodeWriteError,
     },
     governance::delete_guest_account,
     middleware::{
@@ -213,13 +214,34 @@ fn admin_operator(id: &str) -> AccountInternal {
 }
 
 async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, String, ApiState)> {
-    postgres_write_app_with_guest_limit(pool, operator_id, 1_000).await
+    postgres_write_app_with_account_source(
+        pool,
+        operator_id,
+        1_000,
+        DomainAccountWriteSource::Postgres,
+    )
+    .await
 }
 
 async fn postgres_write_app_with_guest_limit(
     pool: PgPool,
     operator_id: &str,
     max_guest_owned_nodes: usize,
+) -> Result<(Router, String, ApiState)> {
+    postgres_write_app_with_account_source(
+        pool,
+        operator_id,
+        max_guest_owned_nodes,
+        DomainAccountWriteSource::Postgres,
+    )
+    .await
+}
+
+async fn postgres_write_app_with_account_source(
+    pool: PgPool,
+    operator_id: &str,
+    max_guest_owned_nodes: usize,
+    domain_account_write_source: DomainAccountWriteSource,
 ) -> Result<(Router, String, ApiState)> {
     let operator = admin_operator(operator_id);
     sqlx::query(
@@ -248,7 +270,7 @@ async fn postgres_write_app_with_guest_limit(
         delegation_expire_days: 28,
         max_guest_owned_nodes,
         domain_read_source: DomainReadSource::Postgres,
-        domain_account_write_source: DomainAccountWriteSource::Postgres,
+        domain_account_write_source,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
         domain_edge_write_source: DomainEdgeWriteSource::Postgres,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
@@ -1103,6 +1125,70 @@ async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
     Ok(())
 }
 
+/// I2. A staged migration may keep account writes on JSONL/read-only while
+/// PostgreSQL remains the canonical read source and owns node/edge writes.
+/// Node creation must still commit the node and origin Faden atomically.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_allows_jsonl_account_write_source() -> Result<()> {
+    const ACTOR_ID: &str = "10000000-0000-0000-0000-000000000023";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app_with_account_source(
+        pool.clone(),
+        ACTOR_ID,
+        1_000,
+        DomainAccountWriteSource::Jsonl,
+    )
+    .await?;
+    assert_eq!(
+        state.config.domain_account_write_source,
+        DomainAccountWriteSource::Jsonl
+    );
+
+    let response = app
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"Staged Migration Node","kind":"Werkstatt","address":"Migrationsweg 1","location":{"lat":53.55,"lon":9.99},"operation_id":"30000000-0000-4000-8000-000000000123"}"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&response_body)?;
+    let node_id = created["id"].as_str().context("staged migration node id")?;
+
+    let node_count: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_nodes WHERE id = $1")
+        .bind(node_id)
+        .fetch_one(&pool)
+        .await?;
+    let edge_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2 \
+         AND payload ->> 'source_type' = 'account' AND payload ->> 'target_type' = 'node'",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(node_count, 1);
+    assert_eq!(edge_count, 1);
+    assert!(
+        !in_dir.join("demo.nodes.jsonl").exists(),
+        "PostgreSQL node writes must not append JSONL in the staged configuration"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
 /// J. Every real node edit projects one additional seven-day activity Faden.
 /// A semantically empty patch keeps the node version and must not inflate the
 /// hotspot. The initial create Faden is included in the asserted counts.
@@ -1914,9 +2000,9 @@ async fn concurrent_node_creates_preserve_runtime_pool_headroom() -> Result<()> 
     Ok(())
 }
 
-/// K2d. A permanent derived-Faden capacity failure must not leave the newly
-/// created node durable. The create returns an error and compensation removes
-/// both persistence and cache state.
+/// K2d. A permanent derived-Faden capacity failure must roll back the complete
+/// PostgreSQL Webungsaktion: node, trigger-created conversation, domain outbox
+/// records and cache state remain unchanged.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
@@ -1933,12 +2019,17 @@ async fn node_create_rolls_back_when_derived_faden_is_rejected() -> Result<()> {
     .execute(&pool)
     .await?;
     let _edge_limit = EnvVarGuard::set("MAX_EDGES_CACHE", "1");
-
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
     let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let conversations_before: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_conversations")
+        .fetch_one(&pool)
+        .await?;
+    let outbox_before: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_outbox")
+        .fetch_one(&pool)
+        .await?;
 
     let body = serde_json::json!({
         "title": "Rollback Node",
@@ -1959,7 +2050,21 @@ async fn node_create_rolls_back_when_derived_faden_is_rejected() -> Result<()> {
     .await?;
     assert_eq!(
         durable_nodes, 0,
-        "failed Faden projection must compensate node insert"
+        "failed Faden projection must roll back node insert"
+    );
+    let conversations_after: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_conversations")
+        .fetch_one(&pool)
+        .await?;
+    let outbox_after: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_outbox")
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(
+        conversations_after, conversations_before,
+        "node conversation trigger effects must roll back with the failed Faden"
+    );
+    assert_eq!(
+        outbox_after, outbox_before,
+        "node and conversation outbox effects must roll back with the failed Faden"
     );
     assert!(
         state
@@ -1968,7 +2073,7 @@ async fn node_create_rolls_back_when_derived_faden_is_rejected() -> Result<()> {
             .await
             .iter_in_order()
             .all(|node| node.created_by_account_id.as_deref() != Some(ACTOR_ID)),
-        "compensation must remove the failed node from cache"
+        "failed atomic create must not publish the node to cache"
     );
 
     sqlx::query("DELETE FROM domain_edges WHERE id = 'writepath-edge-capacity-sentinel'")
@@ -2235,9 +2340,231 @@ async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<
     Ok(())
 }
 
-/// K3. The real HTTP node-create path owns one account-lifecycle lock from
-/// before the node INSERT until its derived Faden is durable. A concurrent exit
-/// therefore cannot enter the historical gap between the two durable writes.
+/// K2h. Post-commit cache publication re-reads canonical state under the same
+/// node lock as edit/delete. A deletion that wins the commit→cache gap is
+/// observed, while a later deletion waits until publication releases the lock.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn node_faden_cache_publication_is_delete_race_safe() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000095";
+    const OPERATION_ONE: &str = "30000000-0000-4000-8000-000000000095";
+    const OPERATION_TWO: &str = "30000000-0000-4000-8000-000000000096";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+
+    let create = |title: &str, operation_id: &str| {
+        serde_json::json!({
+            "title": title,
+            "kind": "Werkstatt",
+            "address": "Publikationsweg 1",
+            "location": {"lat": 53.5, "lon": 10.0},
+            "operation_id": operation_id
+        })
+        .to_string()
+    };
+
+    let first_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            &create("Delete wins", OPERATION_ONE),
+        ))
+        .await?;
+    assert_eq!(first_response.status(), StatusCode::CREATED);
+    let first_body = body::to_bytes(first_response.into_body(), usize::MAX).await?;
+    let first: serde_json::Value = serde_json::from_slice(&first_body)?;
+    let first_node_id = first["id"].as_str().context("first node id")?.to_string();
+    let first_edge = state
+        .edges
+        .read()
+        .await
+        .iter_in_order()
+        .find(|edge| edge.source_id == ACTOR_ID && edge.target_id == first_node_id)
+        .cloned()
+        .context("first origin Faden")?;
+    let first_operation = CreateOperationKey {
+        actor_id: ACTOR_ID.to_string(),
+        operation_id: OPERATION_ONE.to_string(),
+    };
+
+    delete_node_with_edges_in_postgres(&pool, &first_node_id)
+        .await
+        .context("delete before cache publication readback")?;
+    let deleted_snapshot =
+        lock_node_faden_cache_publication(&pool, &first_node_id, &first_operation, &first_edge)
+            .await
+            .context("lock deleted publication snapshot")?;
+    assert!(deleted_snapshot.node.is_none());
+    assert!(deleted_snapshot.edge.is_none());
+    deleted_snapshot.release().await?;
+
+    let second_response = app
+        .clone()
+        .oneshot(post_node_req(
+            &cookie,
+            &create("Delete waits", OPERATION_TWO),
+        ))
+        .await?;
+    assert_eq!(second_response.status(), StatusCode::CREATED);
+    let second_body = body::to_bytes(second_response.into_body(), usize::MAX).await?;
+    let second: serde_json::Value = serde_json::from_slice(&second_body)?;
+    let second_node_id = second["id"].as_str().context("second node id")?.to_string();
+    let second_edge = state
+        .edges
+        .read()
+        .await
+        .iter_in_order()
+        .find(|edge| edge.source_id == ACTOR_ID && edge.target_id == second_node_id)
+        .cloned()
+        .context("second origin Faden")?;
+    let second_operation = CreateOperationKey {
+        actor_id: ACTOR_ID.to_string(),
+        operation_id: OPERATION_TWO.to_string(),
+    };
+
+    let publication =
+        lock_node_faden_cache_publication(&pool, &second_node_id, &second_operation, &second_edge)
+            .await
+            .context("lock live publication snapshot")?;
+    assert!(publication.node.is_some());
+    assert!(publication.edge.is_some());
+
+    let delete_pool = pool.clone();
+    let delete_id = second_node_id.clone();
+    let mut delete_task = tokio::spawn(async move {
+        let mut transaction = delete_pool.begin().await?;
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(node_mutation_lock_key(&delete_id))
+            .execute(&mut *transaction)
+            .await?;
+        sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+            .bind(&delete_id)
+            .execute(&mut *transaction)
+            .await?;
+        transaction.commit().await
+    });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut delete_task)
+            .await
+            .is_err(),
+        "node deletion must wait while cache publication owns the node lock"
+    );
+    publication.release().await?;
+    tokio::time::timeout(Duration::from_secs(5), delete_task)
+        .await
+        .context("delete completes after publication lock release")?
+        .context("join publication-race delete")??;
+
+    let second_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)")
+            .bind(&second_node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert!(!second_exists);
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K2i. Cache publication acquires both write guards before changing either
+/// projection. Holding a node-cache reader must therefore prevent the origin
+/// Faden from becoming visible on its own.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn node_and_faden_caches_publish_in_one_critical_section() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000096";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+
+    let edges_before = state.edges.read().await.len();
+    let nodes_before = state.nodes.read().await.len();
+    let node_reader = state.nodes.read().await;
+
+    let request = post_node_req(
+        &cookie,
+        r#"{"title":"Atomic Cache Pair","kind":"Werkstatt","address":"Cacheweg 1","location":{"lat":53.5,"lon":10.0},"operation_id":"30000000-0000-4000-8000-000000000097"}"#,
+    );
+    let create_app = app.clone();
+    let mut create_task = tokio::spawn(async move { create_app.oneshot(request).await });
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let durable: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
+            )
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("probe durable node");
+            if durable {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .context("node becomes durable before blocked cache publication")?;
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut create_task)
+            .await
+            .is_err(),
+        "create response must wait while the node cache writer is blocked"
+    );
+    assert_eq!(
+        state.edges.read().await.len(),
+        edges_before,
+        "origin Faden must not publish before the node cache writer is acquired"
+    );
+    assert_eq!(node_reader.len(), nodes_before);
+    drop(node_reader);
+
+    let response = tokio::time::timeout(Duration::from_secs(5), create_task)
+        .await
+        .context("create completes after node cache reader release")?
+        .context("join cache-pair create")??;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&response_body)?;
+    let node_id = created["id"].as_str().context("cache-pair node id")?;
+
+    assert!(state.nodes.read().await.get(node_id).is_some());
+    assert!(
+        state
+            .edges
+            .read()
+            .await
+            .iter_in_order()
+            .any(|edge| edge.source_id == ACTOR_ID && edge.target_id == node_id),
+        "node and origin Faden must both be present after publication"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// K3. The real PostgreSQL HTTP path keeps node and origin Faden in one
+/// transaction while holding the account-lifecycle lock. A concurrent reader
+/// cannot observe the node before the blocked Faden insert, and guest exit must
+/// wait until the complete transaction commits.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
@@ -2266,8 +2593,8 @@ async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> R
     guest.role = Role::Gast;
     state.accounts.write().await.insert(guest);
 
-    // Stop only the derived edge INSERT. Node persistence can complete first,
-    // reproducing the exact historical gap between the two durable writes.
+    // Stop the edge INSERT. Because node and Faden now share the same
+    // transaction, the node must remain invisible to every other connection.
     let mut edge_blocker = pool.begin().await.context("begin edge blocker")?;
     sqlx::query("LOCK TABLE domain_edges IN ACCESS EXCLUSIVE MODE")
         .execute(&mut *edge_blocker)
@@ -2279,29 +2606,26 @@ async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> R
         r#"{"title":"Exit Race Node","kind":"Werkstatt","address":"Race 1","location":{"lat":53.55,"lon":9.99}}"#,
     );
     let create_app = app.clone();
-    let create_task = tokio::spawn(async move { create_app.oneshot(request).await });
-
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let exists: bool = sqlx::query_scalar(
-                "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
-            )
-            .bind(ACTOR_ID)
-            .fetch_one(&pool)
+    let mut create_task = tokio::spawn(async move { create_app.oneshot(request).await });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut create_task)
             .await
-            .expect("probe created node");
-            if exists {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    })
-    .await
-    .context("node must become durable before Faden blocker is released")?;
+            .is_err(),
+        "node create must wait while the edge table is blocked"
+    );
+    let visible_before_faden: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        !visible_before_faden,
+        "atomic create must not expose the node before its origin Faden"
+    );
 
-    // Prove the lifecycle lock is already held immediately after the node is
-    // durable, before the blocked Faden INSERT can complete. This is the exact
-    // historical gap that previously allowed guest exit to win.
+    // The same transaction already owns the account lifecycle lock, so guest
+    // exit cannot overtake the blocked atomic create.
     let lifecycle_key = account_lifecycle_lock_key(ACTOR_ID);
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {
