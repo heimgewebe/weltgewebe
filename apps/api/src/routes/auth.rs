@@ -3277,6 +3277,141 @@ pub async fn passkey_auth_verify(
 }
 
 #[cfg(feature = "integration-testing")]
+#[derive(Debug, Deserialize)]
+pub struct GovernanceTestingBootstrapPayload {
+    pub run_id: String,
+    pub actor: String,
+}
+
+#[cfg(feature = "integration-testing")]
+fn governance_testing_actor(
+    payload: &GovernanceTestingBootstrapPayload,
+) -> Result<(String, String, String, Role), &'static str> {
+    let run_id = payload.run_id.trim();
+    if run_id.is_empty()
+        || run_id.len() > 48
+        || !run_id
+            .chars()
+            .all(|character| character.is_ascii_alphanumeric() || character == '-')
+    {
+        return Err("run_id must contain 1-48 ASCII letters, digits, or hyphens");
+    }
+    let (actor_slug, title, role) = match payload.actor.as_str() {
+        "applicant-consent" => (
+            "applicant-consent",
+            "Governance Proof Applicant Consent",
+            Role::Gast,
+        ),
+        "applicant-voting" => (
+            "applicant-voting",
+            "Governance Proof Applicant Voting",
+            Role::Gast,
+        ),
+        "weber-a" => ("weber-a", "Governance Proof Weber A", Role::Weber),
+        "weber-b" => ("weber-b", "Governance Proof Weber B", Role::Weber),
+        _ => return Err("unknown governance proof actor"),
+    };
+    let account_id = format!("proof-governance-{run_id}-{actor_slug}");
+    let email = format!("{account_id}@example.invalid");
+    Ok((account_id, email, title.to_string(), role))
+}
+
+#[cfg(feature = "integration-testing")]
+/// POST /auth/testing/governance/bootstrap-session
+///
+/// Test-only helper for the real PostgreSQL/browser governance proof. It creates
+/// one isolated actor with the requested product role and returns a genuine
+/// authenticated session cookie. The route does not exist in production builds.
+pub async fn governance_testing_bootstrap_session(
+    State(state): State<ApiState>,
+    jar: CookieJar,
+    Json(payload): Json<GovernanceTestingBootstrapPayload>,
+) -> impl IntoResponse {
+    let (account_id, email, title, role) = match governance_testing_actor(&payload) {
+        Ok(actor) => actor,
+        Err(message) => {
+            return (StatusCode::BAD_REQUEST, Json(json!({"error": message}))).into_response();
+        }
+    };
+    let role_db = match role {
+        Role::Gast => "gast",
+        Role::Weber => "weber",
+        Role::Admin => "admin",
+    };
+    let webauthn_user_id = Uuid::new_v4();
+
+    let Some(pool) = state.db_pool.as_ref() else {
+        return (
+            StatusCode::SERVICE_UNAVAILABLE,
+            Json(json!({"error": "governance proof requires PostgreSQL"})),
+        )
+            .into_response();
+    };
+    if let Err(error) = sqlx::query(
+        "INSERT INTO domain_accounts \
+            (id, kind, title, map_state, radius_m, disabled, role, email, webauthn_user_id, public_payload, private_payload) \
+         VALUES ($1, 'garnrolle', $2, 'not_on_map', 0, false, $3, $4, $5::uuid, '{}'::jsonb, '{}'::jsonb) \
+         ON CONFLICT (id) DO UPDATE SET \
+            title = EXCLUDED.title, disabled = false, role = EXCLUDED.role, \
+            email = EXCLUDED.email, webauthn_user_id = EXCLUDED.webauthn_user_id, updated_at = now()",
+    )
+    .bind(&account_id)
+    .bind(&title)
+    .bind(role_db)
+    .bind(&email)
+    .bind(webauthn_user_id.to_string())
+    .execute(pool)
+    .await
+    {
+        tracing::error!(error = %error, "failed to persist governance proof actor");
+        return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": "database"})))
+            .into_response();
+    }
+
+    {
+        let mut accounts = state.accounts.write().await;
+        accounts.insert(AccountInternal {
+            public: AccountPublic {
+                id: account_id.clone(),
+                kind: "garnrolle".to_string(),
+                title: title.clone(),
+                summary: None,
+                public_pos: None,
+                map_state: crate::routes::accounts::GarnrolleMapState::NotOnMap,
+                radius_m: 0,
+                disabled: false,
+                tags: vec![],
+            },
+            role: role.clone(),
+            email: Some(email.clone()),
+            webauthn_user_id,
+        });
+    }
+
+    let session = match state.sessions.create(account_id.clone(), None).await {
+        Ok(session) => session,
+        Err(error) => {
+            return session_backend_json_response_with_jar(
+                "governance_testing_bootstrap_session.create",
+                &error,
+                jar,
+            );
+        }
+    };
+    let cookie = build_session_cookie(session.id, None, state.config.auth_cookie_secure);
+    (
+        StatusCode::OK,
+        jar.add(cookie),
+        Json(json!({
+            "account_id": account_id,
+            "device_id": session.device_id,
+            "role": role_db,
+        })),
+    )
+        .into_response()
+}
+
+#[cfg(feature = "integration-testing")]
 /// POST /auth/testing/passkeys/bootstrap-session
 ///
 /// Test-only helper for browser proofs. Ensures a deterministic proof account

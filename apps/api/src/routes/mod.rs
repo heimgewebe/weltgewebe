@@ -150,6 +150,17 @@ pub fn api_router() -> Router<ApiState> {
         .route("/auth/passkeys/auth/verify", post(passkey_auth_verify));
 
     #[cfg(feature = "integration-testing")]
+    let router = router
+        .route(
+            "/auth/testing/governance/bootstrap-session",
+            post(auth::governance_testing_bootstrap_session),
+        )
+        .route(
+            "/governance/testing/proposals/{id}/advance",
+            post(governance::governance_testing_advance_proposal),
+        );
+
+    #[cfg(feature = "integration-testing")]
     let router = router.route(
         "/auth/testing/passkeys/bootstrap-session",
         post(auth::passkey_testing_bootstrap_session),

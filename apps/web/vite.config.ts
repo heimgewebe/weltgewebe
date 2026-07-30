@@ -9,6 +9,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const LOCAL_BASEMAP_PREFIX = "/local-basemap/";
+const proofApiProxyTarget =
+  process.env.AUTH_PASSKEY_PROOF_PROXY_TARGET ?? "http://127.0.0.1:8080";
 
 function createLocalBasemapMiddleware() {
   const repoRoot = path.resolve(__dirname, "../../");
@@ -193,7 +195,7 @@ export default defineConfig({
       process.env.AUTH_PASSKEY_PROOF_PROXY === "1"
         ? {
             "/api": {
-              target: "http://127.0.0.1:8080",
+              target: proofApiProxyTarget,
               changeOrigin: true,
             },
           }

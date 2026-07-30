@@ -410,6 +410,9 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("PUT", "/proposals/{id}/vote"),
     ("POST", "/proposals/{id}/messages"),
     ("POST", "/accounts/me/exit"),
+    // Integration-testing-only governance deadline control. It is invoked from
+    // an authenticated browser session and remains behind the normal CSRF layer.
+    ("POST", "/governance/testing/proposals/{id}/advance"),
 ];
 
 const CSRF_EXEMPT_MUTATING_ROUTES: &[(&str, &str)] = &[
@@ -418,6 +421,8 @@ const CSRF_EXEMPT_MUTATING_ROUTES: &[(&str, &str)] = &[
     // Integration-testing-only browser-proof hooks. They do not ship in production builds.
     ("POST", "/auth/testing/passkeys/bootstrap-session"),
     ("POST", "/auth/testing/passkeys/register/grant"),
+    // Test-only pre-session bootstrap: no ambient session authority exists yet.
+    ("POST", "/auth/testing/governance/bootstrap-session"),
     // Magic-link request/consume are pre-session or redirect-driven entry points with their own flow handling.
     ("POST", "/auth/magic-link/request"),
     ("POST", "/auth/magic-link/consume"),

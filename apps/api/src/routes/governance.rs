@@ -16,6 +16,8 @@ use axum::{
     Extension, Json,
 };
 use chrono::{DateTime, Utc};
+#[cfg(feature = "integration-testing")]
+use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgPool;
@@ -198,6 +200,48 @@ pub struct ProposalDetailView {
     pub vetoes: Vec<Veto>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub own_vote: Option<String>,
+}
+
+#[cfg(feature = "integration-testing")]
+#[derive(Debug, Deserialize)]
+pub struct GovernanceTestingAdvancePayload {
+    pub now: DateTime<Utc>,
+}
+
+#[cfg(feature = "integration-testing")]
+/// Advance one proof proposal through the genuine production finalizer at an
+/// explicit test timestamp. The route exists only in integration-testing builds
+/// and refuses non-proof applicants.
+pub async fn governance_testing_advance_proposal(
+    State(state): State<ApiState>,
+    Path(id): Path<String>,
+    Json(payload): Json<GovernanceTestingAdvancePayload>,
+) -> Result<Json<ProposalView>, ApiError> {
+    let pool = require_pool(&state)?;
+    let before = governance::get_proposal(pool, &id)
+        .await
+        .map_err(internal_error("get_proposal"))?
+        .ok_or((StatusCode::NOT_FOUND, "proposal not found".to_string()))?;
+    if !before
+        .applicant_account_id
+        .as_deref()
+        .is_some_and(|account_id| account_id.starts_with("proof-governance-"))
+    {
+        return Err((
+            StatusCode::FORBIDDEN,
+            "testing advance is restricted to governance proof accounts".to_string(),
+        ));
+    }
+
+    let outcomes = governance::finalize_testing_proposal(pool, &id, payload.now)
+        .await
+        .map_err(internal_error("finalize_testing_proposal"))?;
+    governance::apply_promotions_to_store(&state.accounts, &outcomes).await;
+    let after = governance::get_proposal(pool, &id)
+        .await
+        .map_err(internal_error("get_proposal"))?
+        .ok_or((StatusCode::NOT_FOUND, "proposal not found".to_string()))?;
+    Ok(Json(proposal_view(after, payload.now)))
 }
 
 /// GET /proposals — öffentliche Liste, neueste zuerst.

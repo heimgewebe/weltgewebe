@@ -838,6 +838,21 @@ pub async fn finalize_due_proposals(
     Ok(outcomes)
 }
 
+#[cfg(feature = "integration-testing")]
+/// Finalisiere ausschließlich den ausgewählten Antrag für den isolierten
+/// PostgreSQL-/Browser-Beweis. Anders als der produktive Sweeper berührt dieser
+/// Testpfad keine weiteren fälligen Verfahren in derselben Datenbank.
+pub(crate) async fn finalize_testing_proposal(
+    pool: &PgPool,
+    proposal_id: &str,
+    now: DateTime<Utc>,
+) -> Result<Vec<FinalizationOutcome>, sqlx::Error> {
+    Ok(finalize_one(pool, proposal_id, now)
+        .await?
+        .into_iter()
+        .collect())
+}
+
 /// Finalisiere genau einen Antrag, falls er (noch) fällig ist.
 async fn finalize_one(
     pool: &PgPool,
