@@ -1914,9 +1914,9 @@ async fn concurrent_node_creates_preserve_runtime_pool_headroom() -> Result<()> 
     Ok(())
 }
 
-/// K2d. A permanent derived-Faden capacity failure must not leave the newly
-/// created node durable. The create returns an error and compensation removes
-/// both persistence and cache state.
+/// K2d. A permanent derived-Faden capacity failure must roll back the complete
+/// PostgreSQL Webungsaktion: node, trigger-created conversation, domain outbox
+/// records and cache state remain unchanged.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
@@ -1933,12 +1933,17 @@ async fn node_create_rolls_back_when_derived_faden_is_rejected() -> Result<()> {
     .execute(&pool)
     .await?;
     let _edge_limit = EnvVarGuard::set("MAX_EDGES_CACHE", "1");
-
     let tmp = tempfile::tempdir()?;
     let in_dir = tmp.path().join("in");
     std::fs::create_dir_all(&in_dir)?;
     let _env = set_gewebe_in_dir(&in_dir);
     let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+    let conversations_before: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_conversations")
+        .fetch_one(&pool)
+        .await?;
+    let outbox_before: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_outbox")
+        .fetch_one(&pool)
+        .await?;
 
     let body = serde_json::json!({
         "title": "Rollback Node",
@@ -1959,7 +1964,21 @@ async fn node_create_rolls_back_when_derived_faden_is_rejected() -> Result<()> {
     .await?;
     assert_eq!(
         durable_nodes, 0,
-        "failed Faden projection must compensate node insert"
+        "failed Faden projection must roll back node insert"
+    );
+    let conversations_after: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_conversations")
+        .fetch_one(&pool)
+        .await?;
+    let outbox_after: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_outbox")
+        .fetch_one(&pool)
+        .await?;
+    assert_eq!(
+        conversations_after, conversations_before,
+        "node conversation trigger effects must roll back with the failed Faden"
+    );
+    assert_eq!(
+        outbox_after, outbox_before,
+        "node and conversation outbox effects must roll back with the failed Faden"
     );
     assert!(
         state
@@ -1968,7 +1987,7 @@ async fn node_create_rolls_back_when_derived_faden_is_rejected() -> Result<()> {
             .await
             .iter_in_order()
             .all(|node| node.created_by_account_id.as_deref() != Some(ACTOR_ID)),
-        "compensation must remove the failed node from cache"
+        "failed atomic create must not publish the node to cache"
     );
 
     sqlx::query("DELETE FROM domain_edges WHERE id = 'writepath-edge-capacity-sentinel'")
@@ -2235,9 +2254,10 @@ async fn node_create_replay_locks_existing_node_before_faden_repair() -> Result<
     Ok(())
 }
 
-/// K3. The real HTTP node-create path owns one account-lifecycle lock from
-/// before the node INSERT until its derived Faden is durable. A concurrent exit
-/// therefore cannot enter the historical gap between the two durable writes.
+/// K3. The real PostgreSQL HTTP path keeps node and origin Faden in one
+/// transaction while holding the account-lifecycle lock. A concurrent reader
+/// cannot observe the node before the blocked Faden insert, and guest exit must
+/// wait until the complete transaction commits.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
@@ -2266,8 +2286,8 @@ async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> R
     guest.role = Role::Gast;
     state.accounts.write().await.insert(guest);
 
-    // Stop only the derived edge INSERT. Node persistence can complete first,
-    // reproducing the exact historical gap between the two durable writes.
+    // Stop the edge INSERT. Because node and Faden now share the same
+    // transaction, the node must remain invisible to every other connection.
     let mut edge_blocker = pool.begin().await.context("begin edge blocker")?;
     sqlx::query("LOCK TABLE domain_edges IN ACCESS EXCLUSIVE MODE")
         .execute(&mut *edge_blocker)
@@ -2279,29 +2299,26 @@ async fn postgres_node_create_faden_projection_serializes_with_guest_exit() -> R
         r#"{"title":"Exit Race Node","kind":"Werkstatt","address":"Race 1","location":{"lat":53.55,"lon":9.99}}"#,
     );
     let create_app = app.clone();
-    let create_task = tokio::spawn(async move { create_app.oneshot(request).await });
-
-    tokio::time::timeout(Duration::from_secs(5), async {
-        loop {
-            let exists: bool = sqlx::query_scalar(
-                "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
-            )
-            .bind(ACTOR_ID)
-            .fetch_one(&pool)
+    let mut create_task = tokio::spawn(async move { create_app.oneshot(request).await });
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut create_task)
             .await
-            .expect("probe created node");
-            if exists {
-                break;
-            }
-            tokio::time::sleep(Duration::from_millis(20)).await;
-        }
-    })
-    .await
-    .context("node must become durable before Faden blocker is released")?;
+            .is_err(),
+        "node create must wait while the edge table is blocked"
+    );
+    let visible_before_faden: bool = sqlx::query_scalar(
+        "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
+    )
+    .bind(ACTOR_ID)
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        !visible_before_faden,
+        "atomic create must not expose the node before its origin Faden"
+    );
 
-    // Prove the lifecycle lock is already held immediately after the node is
-    // durable, before the blocked Faden INSERT can complete. This is the exact
-    // historical gap that previously allowed guest exit to win.
+    // The same transaction already owns the account lifecycle lock, so guest
+    // exit cannot overtake the blocked atomic create.
     let lifecycle_key = account_lifecycle_lock_key(ACTOR_ID);
     tokio::time::timeout(Duration::from_secs(5), async {
         loop {

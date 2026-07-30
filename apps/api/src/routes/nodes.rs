@@ -12,15 +12,15 @@ use super::{
         MAX_PAGE_SIZE,
     },
 };
-use crate::advisory_lock::{account_lifecycle_lock_key, node_mutation_lock_key};
 use crate::auth::role::Role;
 use crate::config::{
     DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
 };
 use crate::domain_db::{
-    delete_node_with_edges_in_postgres, insert_domain_node_with_creator_limit,
-    patch_node_in_postgres, replace_node_in_postgres, CreateOperationKey, CreateWriteOutcome,
-    NodeConversationDeleteEffect, NodeCreateError, NodePatchInput, NodeWriteError,
+    delete_node_with_edges_in_postgres, insert_domain_node_and_faden_with_creator_limit,
+    patch_node_in_postgres, replace_node_in_postgres, CreateOperationKey,
+    NodeConversationDeleteEffect, NodeCreateError, NodeFadenCreateError, NodePatchInput,
+    NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
@@ -35,27 +35,13 @@ use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path as FsPath, PathBuf};
-use std::sync::OnceLock;
 use tokio::{
     fs::{File, OpenOptions},
     io::{
         AsyncBufReadExt, AsyncReadExt, AsyncSeekExt, AsyncWriteExt, BufReader, BufWriter, SeekFrom,
     },
-    sync::Semaphore,
 };
 use uuid::Uuid;
-
-fn node_create_faden_db_semaphore() -> &'static Semaphore {
-    static SEMAPHORE: OnceLock<Semaphore> = OnceLock::new();
-    SEMAPHORE.get_or_init(|| {
-        // Each projected PostgreSQL create temporarily needs two connections:
-        // one for the account guard and one for the edge transaction. Reserve
-        // one pool slot for unrelated work and admit only pairs that fit.
-        let permits =
-            (((crate::DATABASE_POOL_MAX_CONNECTIONS as usize).saturating_sub(1)) / 2).max(1);
-        Semaphore::new(permits)
-    })
-}
 
 pub enum NodeMutationError {
     Status(StatusCode),
@@ -1104,32 +1090,19 @@ async fn rollback_newly_created_node_after_faden_failure(
     state: &ApiState,
     node_id: &str,
 ) -> Result<(), String> {
-    let removed_edge_ids = match state.config.domain_node_write_source {
-        DomainNodeWriteSource::Jsonl => {
-            // Match normal JSONL create/delete lock order: node persistence
-            // before edge persistence. The journal-backed helper restores both
-            // files together after crashes during compensation.
-            let _node_guard = state.nodes_persist.lock().await;
-            let _edge_guard = edge_create_persist_lock().lock().await;
-            let outcome =
-                delete_node_and_edges_jsonl(node_id, EdgeEndpointCollisionEvidence::default())
-                    .await
-                    .map_err(|error| format!("failed to compensate JSONL node create: {error}"))?;
-            outcome.removed_edge_ids
-        }
-        DomainNodeWriteSource::Postgres => {
-            let pool = state.db_pool.as_ref().ok_or_else(|| {
-                "PostgreSQL pool unavailable during node compensation".to_string()
-            })?;
-            delete_node_with_edges_in_postgres(pool, node_id)
-                .await
-                .map_err(|error| format!("failed to compensate PostgreSQL node create: {error}"))?
-                .removed_edge_ids
-        }
-    };
+    // Only JSONL reaches compensation: PostgreSQL commits the node and its
+    // mandatory origin Faden in one transaction and returns before this path.
+    // Match normal JSONL create/delete lock order: node persistence before edge
+    // persistence. The journal-backed helper restores both files together after
+    // crashes during compensation.
+    let _node_guard = state.nodes_persist.lock().await;
+    let _edge_guard = edge_create_persist_lock().lock().await;
+    let outcome = delete_node_and_edges_jsonl(node_id, EdgeEndpointCollisionEvidence::default())
+        .await
+        .map_err(|error| format!("failed to compensate JSONL node create: {error}"))?;
 
     let mut edges = state.edges.write().await;
-    for edge_id in &removed_edge_ids {
+    for edge_id in &outcome.removed_edge_ids {
         edges.remove(edge_id);
     }
     state.metrics.set_edges_cache_count(edges.len() as i64);
@@ -1152,9 +1125,9 @@ async fn rollback_newly_created_node_after_faden_failure(
 /// JSONL (default): durable JSONL append (fsync), serialized against
 /// concurrent node persistence via `state.nodes_persist`.
 /// PostgreSQL (opt-in via `WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE=postgres`,
-/// requires the PostgreSQL read source): one transaction, a per-operation
-/// advisory lock when `operation_id` is present, an account-scoped partial
-/// unique index, and the final INSERT. No dual-write: JSONL mode never touches
+/// requires the canonical PostgreSQL account/edge sources): one transaction
+/// commits the node, its conversation trigger effects, idempotency binding and
+/// mandatory account→node origin Faden. No dual-write: JSONL mode never touches
 /// PostgreSQL, PostgreSQL mode never appends JSONL.
 pub async fn create_node(
     State(state): State<ApiState>,
@@ -1230,65 +1203,108 @@ pub async fn create_node(
         && state.config.domain_node_write_source == DomainNodeWriteSource::Postgres
         && state.config.domain_edge_write_source == DomainEdgeWriteSource::Postgres;
 
-    // The guard itself occupies one pool connection while node/edge persistence
-    // uses a second. Admit only as many complete create operations as the pool
-    // can sustain, leaving one connection available for unrelated work.
-    let _db_create_permit = if postgres_lifecycle_guarded {
-        Some(
-            node_create_faden_db_semaphore()
-                .acquire()
-                .await
-                .map_err(|_| {
-                    (
-                        StatusCode::SERVICE_UNAVAILABLE,
-                        "node create coordinator unavailable".to_string(),
-                    )
-                })?,
-        )
-    } else {
-        None
-    };
-
-    let mut node_create_lifecycle_guard = if postgres_lifecycle_guarded {
+    // The canonical PostgreSQL configuration writes the node and its mandatory
+    // account→node origin Faden in one transaction. Cache state is published
+    // only after commit. An operation replay can repair an older partial node,
+    // but cannot attach a Faden when the original request semantics differ.
+    if postgres_lifecycle_guarded {
         let pool = state.db_pool.as_ref().ok_or_else(|| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "PostgreSQL pool unavailable for node lifecycle guard".to_string(),
+                "PostgreSQL pool unavailable for atomic node creation".to_string(),
             )
         })?;
-        let mut tx = pool.begin().await.map_err(|error| {
-            tracing::error!(%error, account_id = %creator_account_id, node_id = %node.id, "failed to begin node lifecycle guard");
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to guard node creation lifecycle".to_string(),
-            )
-        })?;
-        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
-            .bind(account_lifecycle_lock_key(&creator_account_id))
-            .execute(&mut *tx)
-            .await
-            .map_err(|error| {
-                tracing::error!(%error, account_id = %creator_account_id, node_id = %node.id, "failed to lock account lifecycle for node create");
-                (
+        let creator_node_limit =
+            (auth.role == Role::Gast).then_some(state.config.max_guest_owned_nodes);
+        let operation_key = operation
+            .as_ref()
+            .expect("validated node create always carries an operation id");
+        let outcome = insert_domain_node_and_faden_with_creator_limit(
+            pool,
+            &node,
+            operation_key,
+            creator_node_limit,
+            |existing| node_matches_create(existing, &semantic_request),
+            |actual_node_id| {
+                super::edges::build_node_origin_faden(&creator_account_id, actual_node_id)
+            },
+        )
+        .await;
+
+        let outcome = match outcome {
+            Ok(outcome) => outcome,
+            Err(NodeFadenCreateError::OperationConflict) => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "node operation id was already used for different data".to_string(),
+                ));
+            }
+            Err(NodeFadenCreateError::EdgeOperationConflict) => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "node operation id has an inconsistent origin Faden".to_string(),
+                ));
+            }
+            Err(NodeFadenCreateError::ReplayedNodeDeleted) => {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "node operation result was deleted before replay completed".to_string(),
+                ));
+            }
+            Err(NodeFadenCreateError::Node(NodeCreateError::DuplicateId)) => {
+                return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
+            }
+            Err(NodeFadenCreateError::Node(NodeCreateError::CreatorAccountUnavailable)) => {
+                return Err((
+                    StatusCode::UNAUTHORIZED,
+                    "creator account is no longer active".to_string(),
+                ));
+            }
+            Err(NodeFadenCreateError::Node(NodeCreateError::CreatorNodeLimitReached { max })) => {
+                return Err((
+                    StatusCode::TOO_MANY_REQUESTS,
+                    format!("guest node limit reached ({max})"),
+                ));
+            }
+            Err(error) => {
+                tracing::error!(%error, node_id = %node.id, "atomic node and origin Faden create failed");
+                return Err((
                     StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to guard node creation lifecycle".to_string(),
-                )
-            })?;
-        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
-            .bind(node_mutation_lock_key(&node.id))
-            .execute(&mut *tx)
-            .await
-            .map_err(|error| {
-                tracing::error!(%error, account_id = %creator_account_id, node_id = %node.id, "failed to lock new node mutation lifecycle");
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to guard node creation lifecycle".to_string(),
-                )
-            })?;
-        Some(tx)
-    } else {
-        None
-    };
+                    "failed to persist node and its origin Faden atomically".to_string(),
+                ));
+            }
+        };
+
+        // Publish the Faden cache entry first. Durable state is already atomic;
+        // this ordering also prevents an in-process reader from briefly seeing
+        // the node without its required origin Faden between the two cache locks.
+        {
+            let mut edges = state.edges.write().await;
+            edges.insert(outcome.edge.id.clone(), outcome.edge.clone());
+            state.metrics.set_edges_cache_count(edges.len() as i64);
+        }
+        {
+            let mut nodes = state.nodes.write().await;
+            nodes.insert(outcome.node.id.clone(), outcome.node.clone());
+            state.metrics.set_nodes_cache_count(nodes.len() as i64);
+        }
+
+        let status = if outcome.created {
+            StatusCode::CREATED
+        } else {
+            StatusCode::OK
+        };
+        tracing::info!(
+            event = "node.created",
+            node_id = %outcome.node.id,
+            write_source = ?state.config.domain_node_write_source,
+            operation_bound = true,
+            atomic_origin_faden = true,
+            replay = !outcome.created,
+            "Node and origin Faden committed atomically"
+        );
+        return Ok((status, Json(outcome.node)));
+    }
 
     match state.config.domain_node_write_source {
         DomainNodeWriteSource::Jsonl => {
@@ -1372,129 +1388,14 @@ pub async fn create_node(
             state.metrics.set_nodes_cache_count(nodes.len() as i64);
         }
         DomainNodeWriteSource::Postgres => {
-            // PostgreSQL mode never appends JSONL. The helper performs the
-            // operation lookup and insert in one transaction.
-            {
-                let nodes = state.nodes.read().await;
-                if nodes.get(&id).is_some() {
-                    return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
-                }
-            }
-
-            // Startup validation normally guarantees this pool; missing
-            // state fails closed rather than falling back to JSONL.
-            let pool = state.db_pool.as_ref().ok_or_else(|| {
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "PostgreSQL pool unavailable for node write".to_string(),
-                )
-            })?;
-            let creator_node_limit =
-                (auth.role == Role::Gast).then_some(state.config.max_guest_owned_nodes);
-            match insert_domain_node_with_creator_limit(
-                pool,
-                &node,
-                operation.as_ref(),
-                creator_node_limit,
-            )
-            .await
-            {
-                Ok(CreateWriteOutcome::Created) => {}
-                Ok(CreateWriteOutcome::Existing(existing)) => {
-                    if !node_matches_create(&existing, &semantic_request) {
-                        return Err((
-                            StatusCode::CONFLICT,
-                            "node operation id was already used for different data".to_string(),
-                        ));
-                    }
-                    if postgres_lifecycle_guarded {
-                        let tx = node_create_lifecycle_guard.as_mut().ok_or_else(|| {
-                            (
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "PostgreSQL node lifecycle guard disappeared during replay"
-                                    .to_string(),
-                            )
-                        })?;
-                        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
-                            .bind(node_mutation_lock_key(&existing.id))
-                            .execute(&mut **tx)
-                            .await
-                            .map_err(|error| {
-                                tracing::error!(%error, node_id = %existing.id, "failed to lock replayed node mutation lifecycle");
-                                (
-                                    StatusCode::INTERNAL_SERVER_ERROR,
-                                    "failed to guard replayed node creation lifecycle".to_string(),
-                                )
-                            })?;
-                        let node_still_exists: bool = sqlx::query_scalar(
-                            "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE id = $1)",
-                        )
-                        .bind(&existing.id)
-                        .fetch_one(&mut **tx)
-                        .await
-                        .map_err(|error| {
-                            tracing::error!(%error, node_id = %existing.id, "failed to recheck replayed node after acquiring mutation lock");
-                            (
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "failed to verify replayed node creation lifecycle".to_string(),
-                            )
-                        })?;
-                        if !node_still_exists {
-                            return Err((
-                                StatusCode::CONFLICT,
-                                "node operation result was deleted before replay completed"
-                                    .to_string(),
-                            ));
-                        }
-                    }
-                    {
-                        let mut nodes = state.nodes.write().await;
-                        nodes.insert(existing.id.clone(), existing.clone());
-                        state.metrics.set_nodes_cache_count(nodes.len() as i64);
-                    }
-                    ensure_node_faden_with_operation_id(
-                        &state,
-                        &auth,
-                        &existing.id,
-                        semantic_request.operation_id.as_deref(),
-                        postgres_lifecycle_guarded,
-                        "node_create",
-                    )
-                    .await?;
-                    if let Some(tx) = node_create_lifecycle_guard.take() {
-                        if let Err(error) = tx.rollback().await {
-                            tracing::warn!(%error, node_id = %existing.id, "node lifecycle guard connection ended while releasing replay locks");
-                        }
-                    }
-                    return Ok((StatusCode::OK, Json(existing)));
-                }
-                Err(NodeCreateError::DuplicateId) => {
-                    return Err((StatusCode::CONFLICT, "node id already exists".to_string()));
-                }
-                Err(NodeCreateError::CreatorAccountUnavailable) => {
-                    return Err((
-                        StatusCode::UNAUTHORIZED,
-                        "creator account is no longer active".to_string(),
-                    ));
-                }
-                Err(NodeCreateError::CreatorNodeLimitReached { max }) => {
-                    return Err((
-                        StatusCode::TOO_MANY_REQUESTS,
-                        format!("guest node limit reached ({max})"),
-                    ));
-                }
-                Err(e) => {
-                    tracing::error!(error = %e, "failed to insert node into domain_nodes");
-                    return Err((
-                        StatusCode::INTERNAL_SERVER_ERROR,
-                        "failed to persist node".to_string(),
-                    ));
-                }
-            }
-
-            let mut nodes = state.nodes.write().await;
-            nodes.insert(id.clone(), node.clone());
-            state.metrics.set_nodes_cache_count(nodes.len() as i64);
+            // Any supported PostgreSQL configuration returned from the atomic
+            // branch above. Reaching this arm means the source contract is
+            // internally inconsistent; never fall back to a partial write.
+            return Err((
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "PostgreSQL node create requires canonical PostgreSQL account and edge sources"
+                    .to_string(),
+            ));
         }
     }
 
@@ -1503,7 +1404,7 @@ pub async fn create_node(
         &auth,
         &node.id,
         semantic_request.operation_id.as_deref(),
-        postgres_lifecycle_guarded,
+        false,
         "node_create",
     )
     .await
@@ -1516,24 +1417,12 @@ pub async fn create_node(
                 %rollback_error,
                 "Derived Faden failed and compensating node rollback also failed"
             );
-            if let Some(tx) = node_create_lifecycle_guard.take() {
-                tx.rollback().await.ok();
-            }
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "derived Faden failed and node rollback could not be completed".to_string(),
             ));
         }
-        if let Some(tx) = node_create_lifecycle_guard.take() {
-            tx.rollback().await.ok();
-        }
         return Err(projection_error);
-    }
-
-    if let Some(tx) = node_create_lifecycle_guard.take() {
-        if let Err(error) = tx.rollback().await {
-            tracing::warn!(%error, node_id = %node.id, "node lifecycle guard connection ended while releasing locks");
-        }
     }
 
     tracing::info!(
@@ -1555,7 +1444,8 @@ pub async fn create_node(
 /// that supplies them gets a deterministic 400 instead of a silently dropped
 /// field. `operation_id` is required and must be a non-null UUID so a client
 /// can safely replay the same account-scoped create action when the derived
-/// Faden projection fails after the node itself became durable.
+/// Faden projection fails after a JSONL node itself became durable.
+/// PostgreSQL commits both records atomically and never enters this state.
 mod node_create {
     use super::{SearchVisibility, NODE_INFO_MAX_LEN};
     use serde::{de, Deserialize, Deserializer};

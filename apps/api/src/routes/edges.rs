@@ -904,6 +904,23 @@ fn build_edge_record(
     (edge, Value::Object(record))
 }
 
+/// Build the canonical account→node Faden for a successful node creation.
+/// PostgreSQL node creation persists this value in the same transaction as the
+/// node; JSONL callers continue through the regular projection writer.
+pub(crate) fn build_node_origin_faden(account_id: &str, node_id: &str) -> Edge {
+    let validated = edge_create::ValidatedCreateEdge {
+        id: None,
+        source_id: account_id.to_string(),
+        target_id: node_id.to_string(),
+        edge_kind: "reference".to_string(),
+        source_type: "account".to_string(),
+        target_type: "node".to_string(),
+        note: None,
+        operation_id: None,
+    };
+    build_edge_record(validated, Uuid::new_v4().to_string(), Utc::now()).0
+}
+
 /// Map an `EdgeCreateValidationError` onto a stable message for the 400 body.
 fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> String {
     use edge_create::EdgeCreateValidationError as E;
