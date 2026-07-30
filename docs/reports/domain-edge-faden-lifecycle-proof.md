@@ -124,6 +124,42 @@ Aktualisierte lokale Prüfbelege:
 - `just contracts-domain-check`: alle sechs Schemata und Beispielinstanzen
   weiterhin gültig; dieser Fix ändert kein Schema.
 
+Fünfter von Codex gemeldeter Befund, ebenfalls behoben: Der vorherige
+Paginierungs-Fix prüfte nur, ob eine Zeile strukturell ladbar war, nicht ob
+die daraus konstruierte Kante überhaupt jemals aktiv sein kann. Ein
+datiertes `created_at` mit explizitem `expires_at: null` ist strukturell
+gültig, aber laut `edge_is_active_at` für jedes `now` zurückgewiesen und
+hätte weiterhin einen Cache-Slot verbraucht. `edge_is_active_at`s Validierung
+ist jetzt in einen gemeinsamen `edge_lifecycle_window`-Helper extrahiert; die
+neue `edge_is_permanently_unreachable`-Funktion nutzt ihn, sodass Leseweg und
+PostgreSQL-Ladeweg exakt übereinstimmen, welche Zeilen niemals sichtbar
+werden können.
+
+- API-Lifecycle-Unit-Tests (`routes::edges::tests`): 12 bestanden, 0
+  fehlgeschlagen (zuvor 10; ein neuer Test prüft die Übereinstimmung von
+  `edge_is_active_at` und `edge_is_permanently_unreachable`, ein weiterer —
+  von @alexdermohr direkt beigetragen — die explizite null/null-Serialisierung
+  der undatierten Legacy-Projektion).
+- Neuer PostgreSQL-Integrationstest
+  `edges_loader_excludes_permanently_unreachable_rows_from_cache_capacity`
+  (`db_domain_read_path`, jetzt 11 bestanden) reproduziert das beschriebene
+  Szenario gegen eine disponible lokale PostgreSQL-16-Instanz.
+- Vollständige lokale Rust-Bibliothekstests: 472 bestanden.
+
+Ein sechster, in derselben Runde gemeldeter Befund ("Exclude already-expired
+rows from startup cache") wurde geprüft und **nicht** übernommen: Der
+PostgreSQL-Ladeweg hält bereits abgelaufene, aber strukturell gültige Fäden
+absichtlich im Cache — der Create-Pfad prüft `edges.get(&edge.id).is_some()`
+für Duplicate-ID-Erkennung und Operation-Replay explizit gegen den
+vollständigen Cache, unabhängig vom Aktivitätsstatus. Ein bereits abgelaufener
+Faden aus dem Cache auszuschließen würde diese Chronik-/Idempotenzgarantie
+brechen (siehe „Grenzen und Folgetasks“: abgelaufene Projektionen bleiben aus
+Chronik- und Idempotenzgründen persistiert). Das allgemeinere Problem — feste
+Cache-Kapazität bei sehr großen Edge-Beständen — bleibt als
+`WELTGEWEBE-EDGE-PROJECTION-INDEX-BENCH-V1` in Bureau-PR #649 registriert und
+erfordert dort eine reproduzierbare 500k-Messung statt einer punktuellen
+Änderung der Admission-Reihenfolge in diesem PR.
+
 ## Grenzen und Folgetasks
 
 - Vollständig undatierte Legacy-Projektionen bleiben sichtbar, weil ihr Alter
