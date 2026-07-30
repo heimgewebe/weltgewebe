@@ -1125,7 +1125,7 @@ async fn rollback_newly_created_node_after_faden_failure(
 /// JSONL (default): durable JSONL append (fsync), serialized against
 /// concurrent node persistence via `state.nodes_persist`.
 /// PostgreSQL (opt-in via `WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE=postgres`,
-/// requires the canonical PostgreSQL account/edge sources): one transaction
+/// requires PostgreSQL reads plus PostgreSQL node/edge writes): one transaction
 /// commits the node, its conversation trigger effects, idempotency binding and
 /// mandatory account→node origin Faden. No dual-write: JSONL mode never touches
 /// PostgreSQL, PostgreSQL mode never appends JSONL.
@@ -1198,8 +1198,11 @@ pub async fn create_node(
         build_node_record(validated, id.clone(), now, creator_account_id.clone());
     add_create_operation_metadata(&mut record, operation.as_ref());
 
-    let postgres_lifecycle_guarded = state.config.domain_read_source == DomainReadSource::Postgres
-        && state.config.domain_account_write_source == DomainAccountWriteSource::Postgres
+    // Account writes may deliberately remain JSONL/read-only during a staged
+    // migration. The creator account is nevertheless canonical PostgreSQL truth
+    // whenever domain reads are PostgreSQL, so atomic node creation depends only
+    // on the read, node-write and edge-write sources.
+    let postgres_atomic_create = state.config.domain_read_source == DomainReadSource::Postgres
         && state.config.domain_node_write_source == DomainNodeWriteSource::Postgres
         && state.config.domain_edge_write_source == DomainEdgeWriteSource::Postgres;
 
@@ -1207,7 +1210,7 @@ pub async fn create_node(
     // account→node origin Faden in one transaction. Cache state is published
     // only after commit. An operation replay can repair an older partial node,
     // but cannot attach a Faden when the original request semantics differ.
-    if postgres_lifecycle_guarded {
+    if postgres_atomic_create {
         let pool = state.db_pool.as_ref().ok_or_else(|| {
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
@@ -1427,7 +1430,7 @@ pub async fn create_node(
             // internally inconsistent; never fall back to a partial write.
             return Err((
                 StatusCode::INTERNAL_SERVER_ERROR,
-                "PostgreSQL node create requires canonical PostgreSQL account and edge sources"
+                "PostgreSQL node create requires PostgreSQL reads plus PostgreSQL node and edge writes"
                     .to_string(),
             ));
         }

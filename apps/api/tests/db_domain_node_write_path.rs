@@ -214,13 +214,34 @@ fn admin_operator(id: &str) -> AccountInternal {
 }
 
 async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, String, ApiState)> {
-    postgres_write_app_with_guest_limit(pool, operator_id, 1_000).await
+    postgres_write_app_with_account_source(
+        pool,
+        operator_id,
+        1_000,
+        DomainAccountWriteSource::Postgres,
+    )
+    .await
 }
 
 async fn postgres_write_app_with_guest_limit(
     pool: PgPool,
     operator_id: &str,
     max_guest_owned_nodes: usize,
+) -> Result<(Router, String, ApiState)> {
+    postgres_write_app_with_account_source(
+        pool,
+        operator_id,
+        max_guest_owned_nodes,
+        DomainAccountWriteSource::Postgres,
+    )
+    .await
+}
+
+async fn postgres_write_app_with_account_source(
+    pool: PgPool,
+    operator_id: &str,
+    max_guest_owned_nodes: usize,
+    domain_account_write_source: DomainAccountWriteSource,
 ) -> Result<(Router, String, ApiState)> {
     let operator = admin_operator(operator_id);
     sqlx::query(
@@ -249,7 +270,7 @@ async fn postgres_write_app_with_guest_limit(
         delegation_expire_days: 28,
         max_guest_owned_nodes,
         domain_read_source: DomainReadSource::Postgres,
-        domain_account_write_source: DomainAccountWriteSource::Postgres,
+        domain_account_write_source,
         domain_node_write_source: DomainNodeWriteSource::Postgres,
         domain_edge_write_source: DomainEdgeWriteSource::Postgres,
         passkey_credential_source: weltgewebe_api::config::PasskeyCredentialSource::InMemory,
@@ -1099,6 +1120,70 @@ async fn postgres_node_create_persists_and_reload_sees_it() -> Result<()> {
     assert_eq!(node.tags, vec!["a".to_string(), "b".to_string()]);
     assert!((node.location.lat - 53.55).abs() < 1e-9);
     assert!((node.location.lon - 9.99).abs() < 1e-9);
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
+/// I2. A staged migration may keep account writes on JSONL/read-only while
+/// PostgreSQL remains the canonical read source and owns node/edge writes.
+/// Node creation must still commit the node and origin Faden atomically.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_node_create_allows_jsonl_account_write_source() -> Result<()> {
+    const ACTOR_ID: &str = "10000000-0000-0000-0000-000000000023";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = postgres_write_app_with_account_source(
+        pool.clone(),
+        ACTOR_ID,
+        1_000,
+        DomainAccountWriteSource::Jsonl,
+    )
+    .await?;
+    assert_eq!(
+        state.config.domain_account_write_source,
+        DomainAccountWriteSource::Jsonl
+    );
+
+    let response = app
+        .oneshot(post_node_req(
+            &cookie,
+            r#"{"title":"Staged Migration Node","kind":"Werkstatt","address":"Migrationsweg 1","location":{"lat":53.55,"lon":9.99},"operation_id":"30000000-0000-4000-8000-000000000123"}"#,
+        ))
+        .await?;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&response_body)?;
+    let node_id = created["id"].as_str().context("staged migration node id")?;
+
+    let node_count: i64 = sqlx::query_scalar("SELECT count(*) FROM domain_nodes WHERE id = $1")
+        .bind(node_id)
+        .fetch_one(&pool)
+        .await?;
+    let edge_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM domain_edges WHERE source_id = $1 AND target_id = $2 \
+         AND payload ->> 'source_type' = 'account' AND payload ->> 'target_type' = 'node'",
+    )
+    .bind(ACTOR_ID)
+    .bind(node_id)
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(node_count, 1);
+    assert_eq!(edge_count, 1);
+    assert!(
+        !in_dir.join("demo.nodes.jsonl").exists(),
+        "PostgreSQL node writes must not append JSONL in the staged configuration"
+    );
 
     clean_all_nodes(&pool).await;
     Ok(())
