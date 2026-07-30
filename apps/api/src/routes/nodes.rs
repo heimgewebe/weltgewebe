@@ -1302,23 +1302,25 @@ pub async fn create_node(
         let canonical_node = publication.node.clone();
         let canonical_edge = publication.edge.clone();
 
-        // Publish the Faden cache entry first. Removing the original ids before
-        // inserting the canonical snapshots also handles a deletion that won
-        // the post-commit gap.
+        // Acquire both cache writers before mutating either projection. Match
+        // `ApiState::refresh_domain_projection_if_stale` lock order (nodes,
+        // then edges) so refresh and create cannot deadlock. Once both guards
+        // are held, readers observe either the old pair or the new pair, never
+        // a Faden whose target node is not yet available from the node cache.
         {
+            let mut nodes = state.nodes.write().await;
             let mut edges = state.edges.write().await;
+
             edges.remove(&outcome.edge.id);
             if let Some(edge) = canonical_edge.as_ref() {
                 edges.insert(edge.id.clone(), edge.clone());
             }
-            state.metrics.set_edges_cache_count(edges.len() as i64);
-        }
-        {
-            let mut nodes = state.nodes.write().await;
             nodes.remove(&outcome.node.id);
             if let Some(node) = canonical_node.as_ref() {
                 nodes.insert(node.id.clone(), node.clone());
             }
+
+            state.metrics.set_edges_cache_count(edges.len() as i64);
             state.metrics.set_nodes_cache_count(nodes.len() as i64);
         }
         if let Err(error) = publication.release().await {

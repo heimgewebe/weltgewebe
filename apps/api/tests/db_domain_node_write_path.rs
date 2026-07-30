@@ -2475,6 +2475,92 @@ async fn node_faden_cache_publication_is_delete_race_safe() -> Result<()> {
     Ok(())
 }
 
+/// K2i. Cache publication acquires both write guards before changing either
+/// projection. Holding a node-cache reader must therefore prevent the origin
+/// Faden from becoming visible on its own.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn node_and_faden_caches_publish_in_one_critical_section() -> Result<()> {
+    const ACTOR_ID: &str = "20000000-0000-0000-0000-000000000096";
+
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean_all_nodes(&pool).await;
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    let (app, cookie, state) = postgres_write_app(pool.clone(), ACTOR_ID).await?;
+
+    let edges_before = state.edges.read().await.len();
+    let nodes_before = state.nodes.read().await.len();
+    let node_reader = state.nodes.read().await;
+
+    let request = post_node_req(
+        &cookie,
+        r#"{"title":"Atomic Cache Pair","kind":"Werkstatt","address":"Cacheweg 1","location":{"lat":53.5,"lon":10.0},"operation_id":"30000000-0000-4000-8000-000000000097"}"#,
+    );
+    let create_app = app.clone();
+    let mut create_task = tokio::spawn(async move { create_app.oneshot(request).await });
+
+    tokio::time::timeout(Duration::from_secs(5), async {
+        loop {
+            let durable: bool = sqlx::query_scalar(
+                "SELECT EXISTS (SELECT 1 FROM domain_nodes WHERE payload ->> 'created_by_account_id' = $1)",
+            )
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await
+            .expect("probe durable node");
+            if durable {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .context("node becomes durable before blocked cache publication")?;
+
+    assert!(
+        tokio::time::timeout(Duration::from_millis(150), &mut create_task)
+            .await
+            .is_err(),
+        "create response must wait while the node cache writer is blocked"
+    );
+    assert_eq!(
+        state.edges.read().await.len(),
+        edges_before,
+        "origin Faden must not publish before the node cache writer is acquired"
+    );
+    assert_eq!(node_reader.len(), nodes_before);
+    drop(node_reader);
+
+    let response = tokio::time::timeout(Duration::from_secs(5), create_task)
+        .await
+        .context("create completes after node cache reader release")?
+        .context("join cache-pair create")??;
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let response_body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let created: serde_json::Value = serde_json::from_slice(&response_body)?;
+    let node_id = created["id"].as_str().context("cache-pair node id")?;
+
+    assert!(state.nodes.read().await.get(node_id).is_some());
+    assert!(
+        state
+            .edges
+            .read()
+            .await
+            .iter_in_order()
+            .any(|edge| edge.source_id == ACTOR_ID && edge.target_id == node_id),
+        "node and origin Faden must both be present after publication"
+    );
+
+    clean_all_nodes(&pool).await;
+    Ok(())
+}
+
 /// K3. The real PostgreSQL HTTP path keeps node and origin Faden in one
 /// transaction while holding the account-lifecycle lock. A concurrent reader
 /// cannot observe the node before the blocked Faden insert, and guest exit must
