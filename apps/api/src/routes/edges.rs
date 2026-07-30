@@ -375,6 +375,27 @@ pub async fn load_edges() -> OrderedCache<Edge> {
     let max_edges = max_edges_cache_limit();
 
     while let Ok(Some(line)) = lines.next_line().await {
+        let edge: Edge = match serde_json::from_str(&line) {
+            Ok(v) => v,
+            Err(e) => {
+                // Secure logging: avoid logging full payload, just length and error
+                tracing::warn!(error = %e, line_len = line.len(), "failed to parse edge JSON");
+                continue;
+            }
+        };
+
+        // Checked before the cache-limit gate, mirroring the PostgreSQL
+        // loader: a record that can never be active for any `now` must not
+        // consume one of the `max_edges` slots that a genuinely reachable
+        // edge would need.
+        if edge_is_permanently_unreachable(&edge) {
+            tracing::warn!(
+                edge_id = %edge.id,
+                "skipping domain edge that can never be active under any lifecycle rule"
+            );
+            continue;
+        }
+
         if records_read >= max_edges {
             tracing::warn!(
                 ?path,
@@ -385,14 +406,6 @@ pub async fn load_edges() -> OrderedCache<Edge> {
         }
         records_read += 1;
 
-        let edge: Edge = match serde_json::from_str(&line) {
-            Ok(v) => v,
-            Err(e) => {
-                // Secure logging: avoid logging full payload, just length and error
-                tracing::warn!(error = %e, line_len = line.len(), "failed to parse edge JSON");
-                continue;
-            }
-        };
         if edges.insert(edge.id.clone(), edge) {
             duplicates_count += 1;
         }
@@ -754,10 +767,14 @@ struct EdgePersistenceStatus {
 }
 
 /// Scan the persisted edges file once before an append, mirroring
-/// [`load_edges`] semantics: every line counts toward the cache limit,
-/// unparseable lines are skipped, and a final unterminated line is still read.
-/// The whole file is scanned — also beyond the limit — so duplicate ids and an
-/// earlier operation result in an unmaterialized suffix remain detectable. A
+/// [`load_edges`] semantics: a line counts toward the cache limit only if it
+/// parses into an edge that could ever be active (matching
+/// [`edge_is_permanently_unreachable`]); unparseable lines are skipped, and a
+/// final unterminated line is still read. The whole file is scanned — also
+/// beyond the limit — so duplicate ids and an earlier operation result in an
+/// unmaterialized suffix remain detectable regardless of lifecycle validity:
+/// an id must never be reusable just because the record that first claimed
+/// it later became lifecycle-invalid or fell out of cache capacity. A
 /// missing file means an empty persistence source. Callers MUST hold the
 /// `edge_create_persist_lock`.
 async fn inspect_edge_persistence_for_create(
@@ -784,7 +801,6 @@ async fn inspect_edge_persistence_for_create(
     let mut existing_operation = None;
 
     while let Some(line) = lines.next_line().await? {
-        lines_read += 1;
         let value: Value = match serde_json::from_str(&line) {
             Ok(value) => value,
             // The loader skips unparseable lines; mirror that instead of
@@ -809,6 +825,11 @@ async fn inspect_edge_persistence_for_create(
             Err(_) => continue,
         };
 
+        // Duplicate-id and operation-replay detection must see every
+        // parseable line regardless of lifecycle validity: an id must stay
+        // permanently claimed even if the record that claimed it can never
+        // be active. Only the cache-limit accounting below mirrors the
+        // loader's admission rule.
         if edge.id == id {
             duplicate_id = true;
         }
@@ -819,7 +840,11 @@ async fn inspect_edge_persistence_for_create(
                     "duplicate edge create operation metadata",
                 ));
             }
-            existing_operation = Some(edge);
+            existing_operation = Some(edge.clone());
+        }
+
+        if !edge_is_permanently_unreachable(&edge) {
+            lines_read += 1;
         }
     }
 

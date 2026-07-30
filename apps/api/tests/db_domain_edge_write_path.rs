@@ -928,3 +928,62 @@ async fn postgres_edge_create_rejects_when_cache_limit_reached() -> Result<()> {
     clean(&pool).await;
     Ok(())
 }
+
+/// A dated row with an explicit `expires_at: null` payload is permanently
+/// unreachable per `edge_is_active_at` and the read loader excludes it from
+/// cache capacity; the write-capacity check must not still count it, or a
+/// row declared not to consume cache capacity would permanently block
+/// otherwise-valid creates.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_edge_create_admits_when_limit_filled_by_permanently_unreachable_row() -> Result<()>
+{
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let (base_count,): (i64,) = sqlx::query_as("SELECT COUNT(*) FROM domain_edges")
+        .fetch_one(&pool)
+        .await?;
+
+    let target_limit = base_count + 1;
+    let _env_guard = EnvVarGuard::set("MAX_EDGES_CACHE", target_limit.to_string());
+
+    // Fill the "limit" with a permanently unreachable row instead of a
+    // genuinely reachable one.
+    sqlx::query(
+        "INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', '2026-06-01T00:00:00Z', '{\"expires_at\": null}'::jsonb)",
+    )
+    .bind(EDGE_ID_DUP)
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .expect("seed permanently unreachable edge row");
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    std::fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+
+    let (app, cookie, state) = edge_write_app(
+        pool.clone(),
+        "writepath-edge-writer-limit-unreachable",
+        Role::Admin,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    assert!(state.edges.read().await.get(EDGE_ID_DUP).is_none());
+
+    let res = app
+        .oneshot(post_edges_req(&cookie, &create_body(EDGE_ID_A, None)))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+    assert!(state.edges.read().await.get(EDGE_ID_A).is_some());
+
+    clean(&pool).await;
+    Ok(())
+}

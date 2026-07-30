@@ -160,6 +160,40 @@ Cache-Kapazität bei sehr großen Edge-Beständen — bleibt als
 erfordert dort eine reproduzierbare 500k-Messung statt einer punktuellen
 Änderung der Admission-Reihenfolge in diesem PR.
 
+Codex fand denselben Konsistenzfehler danach an zwei weiteren Stellen, die
+`edge_is_permanently_unreachable` noch nicht berücksichtigten:
+
+- Der JSONL-Leseloader (`load_edges`) zählte dauerhaft unerreichbare Zeilen
+  weiterhin gegen `MAX_EDGES_CACHE`, bevor er sie verwarf — derselbe Fehler
+  wie zuvor im PostgreSQL-Loader, nur für den JSONL-Pfad. Behoben durch
+  dieselbe Umstellung der Prüfreihenfolge; die Duplicate-ID-/Operation-Scan-
+  Funktion `inspect_edge_persistence_for_create` zählt ebenfalls nur noch
+  erreichbare Zeilen gegen das Limit, erkennt Duplikate und Replays aber
+  weiterhin über die gesamte Datei unabhängig vom Erreichbarkeitsstatus.
+- Der PostgreSQL-Schreibpfad (`insert_domain_edge`) prüfte die Kapazität
+  weiterhin über ein rohes `SELECT COUNT(*)`, das dauerhaft unerreichbare
+  Zeilen mitzählte, obwohl sie keinen Cache-Slot mehr belegen — neue, gültige
+  Fäden wären dadurch dauerhaft blockiert geblieben, sobald die Tabelle genug
+  solcher Zeilen enthielt. Behoben durch eine gezielte SQL-Bedingung, die
+  genau den konkreten, günstig prüfbaren Fall ausschließt (datiertes
+  `created_at` mit explizitem `expires_at: null`) statt das volle
+  Rust-seitige Prädikat je Schreibzugriff nachzubilden (das einen
+  Payload-Volltabellenscan pro Create erfordern würde). Ein erster
+  Implementierungsversuch fiel selbst einer Drei-Werte-Logik-Falle zum Opfer
+  (`payload -> 'expires_at' = 'null'::jsonb` liefert SQL-`NULL`, nicht
+  `false`, wenn der Schlüssel fehlt, wodurch auch reguläre Zeilen ohne
+  `expires_at` fälschlich ausgeschlossen wurden); korrigiert über den
+  `payload ? 'expires_at'`-Existenzoperator, der immer einen definiten
+  Wahrheitswert liefert.
+
+Neue Regressionstests: `post_edges_admits_create_when_limit_filled_by_permanently_unreachable_row`
+(JSONL, `api_edges`), `postgres_edge_create_admits_when_limit_filled_by_permanently_unreachable_row`
+(PostgreSQL, `db_domain_edge_write_path`, gegen eine disponible lokale
+PostgreSQL-16-Instanz verifiziert, zusammen mit den bestehenden 9 Tests
+dieser Datei weiterhin grün). Vollständige lokale Rust-Bibliothekstests (472
+bestanden), `cargo clippy --all-targets -- -D warnings` und
+`cargo fmt --check`: bestanden.
+
 ## Grenzen und Folgetasks
 
 - Vollständig undatierte Legacy-Projektionen bleiben sichtbar, weil ihr Alter

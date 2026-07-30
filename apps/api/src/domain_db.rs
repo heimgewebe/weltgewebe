@@ -1989,11 +1989,32 @@ pub async fn insert_domain_edge(
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     let max_edges_i64 = i64::try_from(max_edges).unwrap_or(i64::MAX);
 
-    let (limit_reached,): (bool,) = sqlx::query_as("SELECT COUNT(*) >= $1 FROM domain_edges")
-        .bind(max_edges_i64)
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(EdgeWriteError::Database)?;
+    // A dated row whose payload carries an explicit `expires_at: null` is
+    // exactly the state `edge_is_permanently_unreachable` excludes from the
+    // loader's cache: it can never be active for any `now`, so it never
+    // occupies a cache slot and must not count against write capacity
+    // either. This mirrors only that concrete, cheaply-indexable case rather
+    // than the full Rust-side lifecycle predicate (which would need a full
+    // per-row payload fetch on every create); the rarer cases already left
+    // unhandled by simple existence-based counting before this fix (an
+    // invalid timestamp string, or a non-canonical explicit duration) remain
+    // out of scope here, unchanged from prior behavior.
+    // `payload ? 'expires_at'` is a definite boolean (never SQL NULL), so a
+    // missing key short-circuits the AND chain to a definite `false` instead
+    // of the `->` operator's SQL NULL propagating through `= 'null'::jsonb`
+    // and silently excluding every row that merely omits the key.
+    let (limit_reached,): (bool,) = sqlx::query_as(
+        "SELECT COUNT(*) >= $1 FROM domain_edges \
+         WHERE NOT (\
+             created_at IS NOT NULL \
+             AND payload ? 'expires_at' \
+             AND payload -> 'expires_at' = 'null'::jsonb\
+         )",
+    )
+    .bind(max_edges_i64)
+    .fetch_one(&mut *tx)
+    .await
+    .map_err(EdgeWriteError::Database)?;
 
     if limit_reached {
         tx.rollback().await.ok();

@@ -1416,6 +1416,40 @@ async fn post_edges_rejects_create_when_edge_cache_limit_reached() -> Result<()>
     Ok(())
 }
 
+/// A dated edge with an explicit `expires_at: null` is structurally
+/// well-formed but permanently unreachable per `edge_is_active_at` — it must
+/// not fill the cache-limit slot that a genuinely reachable edge would need,
+/// so a create must succeed instead of hitting the cache-limit gate.
+#[tokio::test]
+#[serial]
+async fn post_edges_admits_create_when_limit_filled_by_permanently_unreachable_row() -> Result<()> {
+    let tmp = make_tmp_dir();
+    let in_dir = tmp.path().join("in");
+    let edges_path = in_dir.join("demo.edges.jsonl");
+    let _env = set_gewebe_in_dir(&in_dir);
+    let _limit = EnvGuard::set("MAX_EDGES_CACHE", "1");
+
+    const UNREACHABLE_ID: &str = "00000000-0000-0000-0000-0000000000ad";
+    let unreachable_line = format!(
+        r#"{{"id":"{UNREACHABLE_ID}","source_id":"{CREATE_SOURCE_ID}","target_id":"{CREATE_TARGET_ID}","edge_kind":"reference","created_at":"2026-06-01T00:00:00Z","expires_at":null}}"#
+    );
+    write_lines(&edges_path, &[unreachable_line.as_str()]);
+
+    let (app, cookie, state) = app_with_session(Role::Weber, DomainReadSource::Jsonl).await?;
+    // The permanently unreachable row does not consume the single slot.
+    assert_eq!(state.edges.read().await.len(), 0);
+
+    let res = app
+        .oneshot(post_edges(Some(&cookie), &valid_create_body()))
+        .await?;
+    assert_eq!(res.status(), StatusCode::CREATED);
+
+    assert_eq!(jsonl_lines(&edges_path).len(), 2);
+    assert_eq!(state.edges.read().await.len(), 1);
+
+    Ok(())
+}
+
 #[tokio::test]
 #[serial]
 async fn post_edges_rejects_duplicate_id_in_unloaded_edge_suffix() -> Result<()> {
