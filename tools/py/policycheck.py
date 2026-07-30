@@ -45,6 +45,12 @@ def main() -> int:
                 "no runtime RON retention consumer exists"
             )
             return 1
+        if "delegation_expire_days" in mapping:
+            print(
+                f"::error::{source} must not publish delegation_expire_days; "
+                "no runtime delegation-expiry consumer exists"
+            )
+            return 1
 
     print("policy ok")
     return 0
