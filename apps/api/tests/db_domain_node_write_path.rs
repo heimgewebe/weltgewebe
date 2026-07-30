@@ -267,7 +267,6 @@ async fn postgres_write_app_with_account_source(
 
     let config = AppConfig {
         anonymize_opt_in: true,
-        delegation_expire_days: 28,
         max_guest_owned_nodes,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source,
@@ -589,7 +588,6 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
 
     let config = AppConfig {
         anonymize_opt_in: true,
-        delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
@@ -769,7 +767,6 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
 
     let config = AppConfig {
         anonymize_opt_in: true,
-        delegation_expire_days: 28,
         max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,

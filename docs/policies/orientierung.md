@@ -99,9 +99,10 @@ Es beschreibt:
 - Ortsdaten (`ungenauigkeitsradius_m`)
   - Richtwert: individuell einstellbar.
   - Herkunft: zusammenstellung.md, Abschnitt III.
-- Delegation (`delegation_expire_days`)
+- Delegation
   - Richtwert: 28 Tage (4 Wochen).
-  - Herkunft: § IV Delegation.
+  - Kein Runtime-Schalter: `delegation_expire_days` und `HA_DELEGATION_EXPIRE_DAYS` werden als wirkungslose Scheinsteuerung abgewiesen.
+  - Herkunft: § IV Delegation; eine technische Frist benötigt zuerst einen eindeutigen Runtime-Verbraucher.
 
 > **Hinweis:** Die Fadenfrist von 7 Tagen ist verfassungsfest; das 7+7-Tage-Modell
 > für Anträge ist im kanonischen Governance-Vertrag normativ festgelegt. Die
