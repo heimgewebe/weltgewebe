@@ -171,7 +171,7 @@
 
   async function send(): Promise<void> {
     const content = draft.trim();
-    if (!selected || !content || sending || selected.blocked_by_me) return;
+    if (!selected || !content || sending || !selected.can_send) return;
     sending = true;
     error = "";
     try {
@@ -208,13 +208,13 @@
     changingBlock = true;
     error = "";
     try {
-      const blocked = await setDirectConversationBlocked(
+      const updated = await setDirectConversationBlocked(
         selected.id,
         !selected.blocked_by_me,
       );
-      selected = { ...selected, blocked_by_me: blocked };
+      selected = updated;
       conversations = conversations.map((item) =>
-        item.id === selected?.id ? { ...item, blocked_by_me: blocked } : item,
+        item.id === updated.id ? updated : item,
       );
     } catch (cause) {
       error = describeError(cause);
@@ -395,6 +395,11 @@
             <p class="blocked-note">
               An ein aufgelöstes Konto können keine neuen Nachrichten gesendet
               werden.
+            </p>
+          {:else if !selected.can_send}
+            <p class="blocked-note">
+              In dieser Unterhaltung sind neue Nachrichten derzeit deaktiviert.
+              Die bisherigen Nachrichten bleiben lesbar.
             </p>
           {:else}
             <form class="composer" on:submit|preventDefault={send}>

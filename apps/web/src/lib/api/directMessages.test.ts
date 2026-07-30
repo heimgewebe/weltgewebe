@@ -18,6 +18,7 @@ const conversation = {
   last_message_preview: "Hallo",
   last_message_at: "2026-07-30T12:00:00Z",
   blocked_by_me: false,
+  can_send: true,
 };
 
 describe("direct messages API", () => {
@@ -77,16 +78,28 @@ describe("direct messages API", () => {
   });
 
   it("uses PUT to block and DELETE to unblock", async () => {
+    const blockedConversation = {
+      ...conversation,
+      blocked_by_me: true,
+      can_send: false,
+    };
+    // Releasing the own block does not restore sending while the counterpart
+    // still blocks, so the refreshed conversation is the authoritative answer.
+    const releasedConversation = {
+      ...conversation,
+      blocked_by_me: false,
+      can_send: false,
+    };
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ blocked: true }), {
+        new Response(JSON.stringify(blockedConversation), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
       )
       .mockResolvedValueOnce(
-        new Response(JSON.stringify({ blocked: false }), {
+        new Response(JSON.stringify(releasedConversation), {
           status: 200,
           headers: { "Content-Type": "application/json" },
         }),
@@ -95,10 +108,10 @@ describe("direct messages API", () => {
 
     await expect(
       setDirectConversationBlocked("conversation-a", true),
-    ).resolves.toBe(true);
+    ).resolves.toEqual(blockedConversation);
     await expect(
       setDirectConversationBlocked("conversation-a", false),
-    ).resolves.toBe(false);
+    ).resolves.toEqual(releasedConversation);
 
     expect(fetchMock.mock.calls[0]?.[1]).toMatchObject({ method: "PUT" });
     expect(fetchMock.mock.calls[1]?.[1]).toMatchObject({ method: "DELETE" });

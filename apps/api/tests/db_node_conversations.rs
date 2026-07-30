@@ -308,6 +308,44 @@ async fn json_response(
     (status, value)
 }
 
+/// One participant's own projection of a private conversation, read back from the
+/// inbox so assertions see exactly what the client would render.
+async fn direct_conversation_item(
+    app: &Router,
+    cookie: &str,
+    conversation_id: &str,
+) -> serde_json::Value {
+    let (status, inbox) = json_response(
+        app,
+        request(
+            "GET",
+            "/direct-conversations",
+            Some(cookie),
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    inbox["items"]
+        .as_array()
+        .expect("private inbox items")
+        .iter()
+        .find(|item| item["id"].as_str() == Some(conversation_id))
+        .cloned()
+        .expect("private conversation in the participant inbox")
+}
+
+async fn set_account_disabled(pool: &sqlx::PgPool, id: &str, disabled: bool) {
+    sqlx::query("UPDATE domain_accounts SET disabled = $2 WHERE id = $1")
+        .bind(id)
+        .bind(disabled)
+        .execute(pool)
+        .await
+        .expect("switch account activation state");
+}
+
 #[tokio::test]
 #[serial]
 #[ignore = "requires direct PostgreSQL"]
@@ -1470,6 +1508,7 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
     const OUTSIDER_KEY: &str = "84000000-0000-4000-8000-000000000003";
     const ADMIN_PARTICIPANT_KEY: &str = "84000000-0000-4000-8000-000000000004";
     const EXITED_COUNTERPART_KEY: &str = "84000000-0000-4000-8000-000000000005";
+    const DISABLED_COUNTERPART_KEY: &str = "84000000-0000-4000-8000-000000000006";
 
     let database = pool().await;
     let pool = database.app_pool();
@@ -1503,6 +1542,7 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
     assert_eq!(status, StatusCode::CREATED);
     assert_eq!(created["counterpart_account_id"], OTHER_ID);
     assert_eq!(created["counterpart_title"], "Anderer Weber");
+    assert_eq!(created["can_send"], true);
     let conversation_id = created["id"]
         .as_str()
         .expect("private conversation id")
@@ -1643,7 +1683,17 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(blocked["blocked"], true);
+    assert_eq!(blocked["blocked_by_me"], true);
+    assert_eq!(blocked["can_send"], false);
+
+    // The blocked side must learn that sending is impossible before it composes a
+    // message, without being told which participant blocked.
+    let author_blocked_view = direct_conversation_item(&app, &author, &conversation_id).await;
+    assert_eq!(author_blocked_view["blocked_by_me"], false);
+    assert_eq!(
+        author_blocked_view["can_send"], false,
+        "a block by the counterpart must close the composer for both sides"
+    );
 
     let (status, blocked_send) = json_response(
         &app,
@@ -1666,7 +1716,12 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(unblocked["blocked"], false);
+    assert_eq!(unblocked["blocked_by_me"], false);
+    assert_eq!(unblocked["can_send"], true);
+    assert_eq!(
+        direct_conversation_item(&app, &author, &conversation_id).await["can_send"],
+        true
+    );
     let (status, _) = json_response(
         &app,
         request(
@@ -1696,6 +1751,38 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
     assert_eq!(
         after_boundary_message["items"][0]["unread_count"], 1,
         "the read marker must stop at the exact loaded message boundary"
+    );
+
+    // A deactivated counterpart is a factual exit: the projection already hides it,
+    // so the write path must refuse the send instead of accepting a message nobody
+    // can receive.
+    set_account_disabled(&pool, OTHER_ID, true).await;
+    let deactivated_view = direct_conversation_item(&app, &author, &conversation_id).await;
+    assert!(deactivated_view["counterpart_account_id"].is_null());
+    assert_eq!(deactivated_view["counterpart_title"], "Anderer Weber");
+    assert_eq!(deactivated_view["can_send"], false);
+    let (status, deactivated_send) = json_response(
+        &app,
+        request(
+            "POST",
+            &message_path,
+            Some(&author),
+            Some(r#"{"content":"Darf ein stillgelegtes Konto nicht erreichen"}"#),
+            Some(DISABLED_COUNTERPART_KEY),
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        deactivated_send["code"],
+        "direct_conversation_counterpart_unavailable"
+    );
+    set_account_disabled(&pool, OTHER_ID, false).await;
+    assert_eq!(
+        direct_conversation_item(&app, &author, &conversation_id).await["can_send"],
+        true,
+        "reactivating the counterpart restores the private conversation"
     );
 
     let (status, admin_conversation) = json_response(
@@ -1773,6 +1860,7 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
         .expect("conversation with exited counterpart");
     assert!(exited_conversation["counterpart_account_id"].is_null());
     assert_eq!(exited_conversation["counterpart_title"], "Anderer Weber");
+    assert_eq!(exited_conversation["can_send"], false);
 
     let (status, exited_send) = json_response(
         &app,

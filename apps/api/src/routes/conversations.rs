@@ -76,7 +76,60 @@ type DirectConversationRow = (
     Option<String>,
     Option<DateTime<Utc>>,
     bool,
+    bool,
 );
+
+/// Projection of one private conversation as seen by exactly one participant.
+///
+/// `$1` binds the reading account. The counterpart is exposed as a live account
+/// only while that account still exists and is active; a deleted or deactivated
+/// counterpart collapses to the immutable title snapshot, which is the same
+/// boundary [`require_direct_message_send_allowed`] enforces on the write path.
+///
+/// `can_send` folds every reason that blocks new messages — counterpart gone and
+/// either side's block — into one flag, so the client never has to guess whether
+/// the composer is usable. It deliberately does not disclose which side blocked.
+const DIRECT_CONVERSATION_PROJECTION: &str = "\
+         SELECT conversation.id::text,
+                CASE WHEN counterpart_account.id IS NULL THEN NULL ELSE counterpart.account_id END,
+                COALESCE(counterpart_account.title, counterpart.account_title_snapshot),
+                conversation.created_at,
+                conversation.updated_at,
+                (
+                    SELECT count(*)::bigint
+                    FROM domain_messages AS unread
+                    WHERE unread.conversation_id = conversation.id
+                      AND unread.deleted_at IS NULL
+                      AND unread.author_account_id IS DISTINCT FROM $1
+                      AND unread.created_at > mine.last_read_at
+                ),
+                left(latest.content, 160),
+                latest.created_at,
+                mine.blocked_at IS NOT NULL,
+                counterpart_account.id IS NOT NULL
+                    AND mine.blocked_at IS NULL
+                    AND counterpart.blocked_at IS NULL
+         FROM domain_conversations AS conversation
+         JOIN domain_direct_conversation_participants AS mine
+           ON mine.conversation_id = conversation.id
+         JOIN domain_direct_conversation_participants AS counterpart
+           ON counterpart.conversation_id = conversation.id
+          AND counterpart.slot <> mine.slot
+         LEFT JOIN domain_accounts AS counterpart_account
+           ON counterpart_account.id = counterpart.account_id
+          AND counterpart_account.disabled = FALSE
+         LEFT JOIN LATERAL (
+             SELECT message.content, message.created_at
+             FROM domain_messages AS message
+             WHERE message.conversation_id = conversation.id
+               AND message.deleted_at IS NULL
+             ORDER BY message.created_at DESC, message.id DESC
+             LIMIT 1
+         ) AS latest ON TRUE
+         WHERE conversation.conversation_type = 'direct'
+           AND conversation.visibility = 'participants'
+           AND conversation.deleted_at IS NULL
+           AND mine.account_id = $1";
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ConversationView {
@@ -129,16 +182,12 @@ pub struct DirectConversationView {
     pub last_message_preview: Option<String>,
     pub last_message_at: Option<String>,
     pub blocked_by_me: bool,
+    pub can_send: bool,
 }
 
 #[derive(Debug, Serialize)]
 pub struct DirectConversationList {
     pub items: Vec<DirectConversationView>,
-}
-
-#[derive(Debug, Serialize)]
-pub struct DirectConversationBlockView {
-    pub blocked: bool,
 }
 
 #[derive(Debug)]
@@ -241,6 +290,7 @@ fn direct_conversation_from_row(row: DirectConversationRow) -> DirectConversatio
         last_message_preview: row.6,
         last_message_at: row.7.map(timestamp),
         blocked_by_me: row.8,
+        can_send: row.9,
     }
 }
 
@@ -476,13 +526,29 @@ fn conversation_is_writable(conversation_type: &str, governance_source: Option<&
     }
 }
 
+/// A private conversation only carries new messages while both sides are live.
+///
+/// "Live" means the same thing here as in [`DIRECT_CONVERSATION_PROJECTION`]: the
+/// participant row still points at an account row *and* that account is active.
+/// Account deletion severs the binding through `ON DELETE SET NULL`, deactivation
+/// leaves it in place, and both are a factual exit — so both must reject the send.
+/// Otherwise the read projection would hide the composer for a counterpart that
+/// the write path still happily accepts.
 async fn require_direct_message_send_allowed(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: &str,
 ) -> Result<(), ConversationApiError> {
-    let participant_states: Vec<(Option<String>, Option<DateTime<Utc>>)> = sqlx::query_as(
-        "SELECT account_id, blocked_at FROM domain_direct_conversation_participants \
-         WHERE conversation_id = $1::uuid ORDER BY slot FOR SHARE",
+    // Only the participant rows are locked: `FOR SHARE` may not be applied to the
+    // nullable side of the outer join, and the account lifecycle is serialized by
+    // the participant row it would have to update on deletion anyway.
+    let participant_states: Vec<(bool, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT participant_account.id IS NOT NULL, participant.blocked_at \
+         FROM domain_direct_conversation_participants AS participant \
+         LEFT JOIN domain_accounts AS participant_account \
+           ON participant_account.id = participant.account_id \
+          AND participant_account.disabled = FALSE \
+         WHERE participant.conversation_id = $1::uuid \
+         ORDER BY participant.slot FOR SHARE OF participant",
     )
     .bind(conversation_id)
     .fetch_all(&mut **tx)
@@ -491,7 +557,7 @@ async fn require_direct_message_send_allowed(
     if participant_states.len() != 2
         || participant_states
             .iter()
-            .any(|(participant_account_id, _)| participant_account_id.is_none())
+            .any(|(participant_is_active, _)| !participant_is_active)
     {
         return Err(ConversationApiError::new(
             StatusCode::CONFLICT,
@@ -1251,46 +1317,10 @@ async fn load_direct_conversation_for_account(
     conversation_id: &str,
     account_id: &str,
 ) -> Result<DirectConversationView, ConversationApiError> {
-    let row: Option<DirectConversationRow> = sqlx::query_as(
-        "SELECT conversation.id::text,
-                CASE WHEN counterpart_account.id IS NULL THEN NULL ELSE counterpart.account_id END,
-                COALESCE(counterpart_account.title, counterpart.account_title_snapshot),
-                conversation.created_at,
-                conversation.updated_at,
-                (
-                    SELECT count(*)::bigint
-                    FROM domain_messages AS unread
-                    WHERE unread.conversation_id = conversation.id
-                      AND unread.deleted_at IS NULL
-                      AND unread.author_account_id IS DISTINCT FROM $1
-                      AND unread.created_at > mine.last_read_at
-                ),
-                left(latest.content, 160),
-                latest.created_at,
-                mine.blocked_at IS NOT NULL
-         FROM domain_conversations AS conversation
-         JOIN domain_direct_conversation_participants AS mine
-           ON mine.conversation_id = conversation.id
-         JOIN domain_direct_conversation_participants AS counterpart
-           ON counterpart.conversation_id = conversation.id
-          AND counterpart.slot <> mine.slot
-         LEFT JOIN domain_accounts AS counterpart_account
-           ON counterpart_account.id = counterpart.account_id
-          AND counterpart_account.disabled = FALSE
-         LEFT JOIN LATERAL (
-             SELECT message.content, message.created_at
-             FROM domain_messages AS message
-             WHERE message.conversation_id = conversation.id
-               AND message.deleted_at IS NULL
-             ORDER BY message.created_at DESC, message.id DESC
-             LIMIT 1
-         ) AS latest ON TRUE
-         WHERE conversation.id = $2::uuid
-           AND conversation.conversation_type = 'direct'
-           AND conversation.visibility = 'participants'
-           AND conversation.deleted_at IS NULL
-           AND mine.account_id = $1",
-    )
+    let row: Option<DirectConversationRow> = sqlx::query_as(&format!(
+        "{DIRECT_CONVERSATION_PROJECTION}
+           AND conversation.id = $2::uuid"
+    ))
     .bind(account_id)
     .bind(conversation_id)
     .fetch_optional(pool)
@@ -1312,46 +1342,10 @@ pub async fn list_direct_conversations(
 ) -> Result<Json<DirectConversationList>, ConversationApiError> {
     let pool = require_pool(&state)?;
     let account_id = account_id(&auth)?;
-    let rows: Vec<DirectConversationRow> = sqlx::query_as(
-        "SELECT conversation.id::text,
-                CASE WHEN counterpart_account.id IS NULL THEN NULL ELSE counterpart.account_id END,
-                COALESCE(counterpart_account.title, counterpart.account_title_snapshot),
-                conversation.created_at,
-                conversation.updated_at,
-                (
-                    SELECT count(*)::bigint
-                    FROM domain_messages AS unread
-                    WHERE unread.conversation_id = conversation.id
-                      AND unread.deleted_at IS NULL
-                      AND unread.author_account_id IS DISTINCT FROM $1
-                      AND unread.created_at > mine.last_read_at
-                ),
-                left(latest.content, 160),
-                latest.created_at,
-                mine.blocked_at IS NOT NULL
-         FROM domain_conversations AS conversation
-         JOIN domain_direct_conversation_participants AS mine
-           ON mine.conversation_id = conversation.id
-         JOIN domain_direct_conversation_participants AS counterpart
-           ON counterpart.conversation_id = conversation.id
-          AND counterpart.slot <> mine.slot
-         LEFT JOIN domain_accounts AS counterpart_account
-           ON counterpart_account.id = counterpart.account_id
-          AND counterpart_account.disabled = FALSE
-         LEFT JOIN LATERAL (
-             SELECT message.content, message.created_at
-             FROM domain_messages AS message
-             WHERE message.conversation_id = conversation.id
-               AND message.deleted_at IS NULL
-             ORDER BY message.created_at DESC, message.id DESC
-             LIMIT 1
-         ) AS latest ON TRUE
-         WHERE conversation.conversation_type = 'direct'
-           AND conversation.visibility = 'participants'
-           AND conversation.deleted_at IS NULL
-           AND mine.account_id = $1
-         ORDER BY conversation.updated_at DESC, conversation.id DESC",
-    )
+    let rows: Vec<DirectConversationRow> = sqlx::query_as(&format!(
+        "{DIRECT_CONVERSATION_PROJECTION}
+         ORDER BY conversation.updated_at DESC, conversation.id DESC"
+    ))
     .bind(account_id)
     .fetch_all(pool)
     .await
@@ -1630,12 +1624,18 @@ pub async fn mark_direct_conversation_read(
     Ok(StatusCode::NO_CONTENT)
 }
 
+/// Toggle the caller's own block flag and answer with the refreshed projection.
+///
+/// The full view is returned instead of a bare `blocked` flag because releasing
+/// one's own block does not necessarily restore `can_send`: the counterpart may
+/// still block, or may have left. The client would otherwise re-enable its
+/// composer on a state the server rejects.
 async fn set_direct_conversation_block(
     state: &ApiState,
     auth: &AuthContext,
     conversation_id: &str,
     blocked: bool,
-) -> Result<Json<DirectConversationBlockView>, ConversationApiError> {
+) -> Result<Json<DirectConversationView>, ConversationApiError> {
     let pool = require_pool(state)?;
     let account_id = account_id(auth)?;
     let conversation_id = parse_conversation_id(conversation_id)?;
@@ -1679,14 +1679,16 @@ async fn set_direct_conversation_block(
             "the conversation does not exist",
         ));
     }
-    Ok(Json(DirectConversationBlockView { blocked }))
+    load_direct_conversation_for_account(pool, &conversation_id, account_id)
+        .await
+        .map(Json)
 }
 
 pub async fn block_direct_conversation(
     State(state): State<ApiState>,
     Path(conversation_id): Path<String>,
     Extension(auth): Extension<AuthContext>,
-) -> Result<Json<DirectConversationBlockView>, ConversationApiError> {
+) -> Result<Json<DirectConversationView>, ConversationApiError> {
     set_direct_conversation_block(&state, &auth, &conversation_id, true).await
 }
 
@@ -1694,7 +1696,7 @@ pub async fn unblock_direct_conversation(
     State(state): State<ApiState>,
     Path(conversation_id): Path<String>,
     Extension(auth): Extension<AuthContext>,
-) -> Result<Json<DirectConversationBlockView>, ConversationApiError> {
+) -> Result<Json<DirectConversationView>, ConversationApiError> {
     set_direct_conversation_block(&state, &auth, &conversation_id, false).await
 }
 
