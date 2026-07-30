@@ -1114,6 +1114,33 @@ async fn rollback_newly_created_node_after_faden_failure(
     Ok(())
 }
 
+const NODE_CREATE_PUBLICATION_DELETED_MESSAGE: &str =
+    "node was deleted before the create response could be published";
+
+fn published_node_or_conflict(canonical_node: Option<Node>) -> Result<Node, (StatusCode, String)> {
+    canonical_node.ok_or_else(|| {
+        (
+            StatusCode::CONFLICT,
+            NODE_CREATE_PUBLICATION_DELETED_MESSAGE.to_string(),
+        )
+    })
+}
+
+#[cfg(test)]
+mod node_create_publication_tests {
+    use super::{published_node_or_conflict, NODE_CREATE_PUBLICATION_DELETED_MESSAGE};
+    use axum::http::StatusCode;
+
+    #[test]
+    fn deleted_post_commit_node_is_not_reported_as_created() {
+        let (status, message) = published_node_or_conflict(None)
+            .expect_err("deleted canonical node must not fall back to stale create output");
+
+        assert_eq!(status, StatusCode::CONFLICT);
+        assert_eq!(message, NODE_CREATE_PUBLICATION_DELETED_MESSAGE);
+    }
+}
+
 /// Create a node.
 ///
 /// Write path: write gate ([`reject_node_create_unless_writable`]) -> contract
@@ -1332,7 +1359,17 @@ pub async fn create_node(
         } else {
             StatusCode::OK
         };
-        let response_node = canonical_node.unwrap_or_else(|| outcome.node.clone());
+        let response_node = match published_node_or_conflict(canonical_node) {
+            Ok(node) => node,
+            Err(error) => {
+                tracing::warn!(
+                    node_id = %outcome.node.id,
+                    replay = !outcome.created,
+                    "Node was deleted before its create response could be published"
+                );
+                return Err(error);
+            }
+        };
         tracing::info!(
             event = "node.created",
             node_id = %outcome.node.id,
