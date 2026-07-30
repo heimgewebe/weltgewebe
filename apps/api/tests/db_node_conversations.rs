@@ -1508,6 +1508,7 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
     const ADMIN_PARTICIPANT_KEY: &str = "84000000-0000-4000-8000-000000000004";
     const EXITED_COUNTERPART_KEY: &str = "84000000-0000-4000-8000-000000000005";
     const DISABLED_COUNTERPART_KEY: &str = "84000000-0000-4000-8000-000000000006";
+    const CONCURRENT_DISABLED_COUNTERPART_KEY: &str = "84000000-0000-4000-8000-000000000007";
 
     let database = pool().await;
     let pool = database.app_pool();
@@ -1783,6 +1784,54 @@ async fn private_direct_conversation_enforces_participants_unread_block_and_iden
         true,
         "reactivating the counterpart restores the private conversation"
     );
+
+    // A deactivation that is already in flight must serialize with delivery. Without
+    // an account-row lock, the send observes the previously committed active version
+    // and can commit a message before the deactivation transaction commits.
+    let mut deactivation = pool.begin().await.expect("begin concurrent deactivation");
+    sqlx::query("UPDATE domain_accounts SET disabled = TRUE WHERE id = $1")
+        .bind(OTHER_ID)
+        .execute(&mut *deactivation)
+        .await
+        .expect("stage concurrent counterpart deactivation");
+    let race_app = app.clone();
+    let race_author = author.clone();
+    let race_message_path = message_path.clone();
+    let mut concurrent_send = tokio::spawn(async move {
+        json_response(
+            &race_app,
+            request(
+                "POST",
+                &race_message_path,
+                Some(&race_author),
+                Some(r#"{"content":"Darf die Deaktivierung nicht überholen"}"#),
+                Some(CONCURRENT_DISABLED_COUNTERPART_KEY),
+                None,
+            ),
+        )
+        .await
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(200), &mut concurrent_send)
+            .await
+            .is_err(),
+        "delivery must wait for the in-flight account lifecycle decision"
+    );
+    deactivation
+        .commit()
+        .await
+        .expect("commit concurrent counterpart deactivation");
+    let (status, concurrent_deactivated_send) =
+        tokio::time::timeout(std::time::Duration::from_secs(5), concurrent_send)
+            .await
+            .expect("concurrent send must finish after deactivation commits")
+            .expect("concurrent send task");
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        concurrent_deactivated_send["code"],
+        "direct_conversation_counterpart_unavailable"
+    );
+    set_account_disabled(&pool, OTHER_ID, false).await;
 
     let (status, admin_conversation) = json_response(
         &app,

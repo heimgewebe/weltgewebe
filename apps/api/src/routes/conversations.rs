@@ -538,27 +538,43 @@ async fn require_direct_message_send_allowed(
     tx: &mut Transaction<'_, Postgres>,
     conversation_id: &str,
 ) -> Result<(), ConversationApiError> {
-    // Only the participant rows are locked: `FOR SHARE` may not be applied to the
-    // nullable side of the outer join, and the account lifecycle is serialized by
-    // the participant row it would have to update on deletion anyway.
-    let participant_states: Vec<(bool, Option<DateTime<Utc>>)> = sqlx::query_as(
-        "SELECT participant_account.id IS NOT NULL, participant.blocked_at \
+    // Lock participant rows first, then their account rows in canonical id order.
+    // The separate account query is deliberate: PostgreSQL cannot lock the nullable
+    // side of an outer join, while locking only participants would let a concurrent
+    // account deactivation commit after this check but before message delivery.
+    let participant_states: Vec<(Option<String>, Option<DateTime<Utc>>)> = sqlx::query_as(
+        "SELECT participant.account_id, participant.blocked_at \
          FROM domain_direct_conversation_participants AS participant \
-         LEFT JOIN domain_accounts AS participant_account \
-           ON participant_account.id = participant.account_id \
-          AND participant_account.disabled = FALSE \
          WHERE participant.conversation_id = $1::uuid \
          ORDER BY participant.slot FOR SHARE OF participant",
     )
     .bind(conversation_id)
     .fetch_all(&mut **tx)
     .await
-    .map_err(|error| database_error("lock direct conversation delivery state", error))?;
-    if participant_states.len() != 2
-        || participant_states
-            .iter()
-            .any(|(participant_is_active, _)| !participant_is_active)
-    {
+    .map_err(|error| database_error("lock direct conversation participants", error))?;
+    let account_ids: Vec<String> = participant_states
+        .iter()
+        .filter_map(|(account_id, _)| account_id.clone())
+        .collect();
+    if participant_states.len() != 2 || account_ids.len() != 2 {
+        return Err(ConversationApiError::new(
+            StatusCode::CONFLICT,
+            "direct_conversation_counterpart_unavailable",
+            "the private conversation no longer has two active accounts",
+        ));
+    }
+
+    let active_account_ids: Vec<String> = sqlx::query_scalar(
+        "SELECT id FROM domain_accounts \
+         WHERE id IN ($1, $2) AND disabled = FALSE \
+         ORDER BY id FOR SHARE",
+    )
+    .bind(&account_ids[0])
+    .bind(&account_ids[1])
+    .fetch_all(&mut **tx)
+    .await
+    .map_err(|error| database_error("lock direct conversation accounts", error))?;
+    if active_account_ids.len() != 2 {
         return Err(ConversationApiError::new(
             StatusCode::CONFLICT,
             "direct_conversation_counterpart_unavailable",
