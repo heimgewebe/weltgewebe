@@ -220,6 +220,33 @@ lokale PostgreSQL-16-Instanz verifiziert). Vollständige lokale
 Rust-Bibliothekstests (472 bestanden), `cargo clippy --all-targets -- -D
 warnings` und `cargo fmt --check`: weiterhin bestanden.
 
+Codex fand danach einen weiteren, subtilen Fall: Ein datiertes `payload`,
+das selbst kein JSON-Objekt ist (etwa das Array `["expires_at"]`), lässt
+PostgreSQLs `?`-Operator — der auch Array-Elemente statt nur Objektschlüssel
+matcht — fälschlich `true` liefern, während `payload -> 'expires_at'` dabei
+SQL-`NULL` zurückgibt; `jsonb_typeof(NULL)` ist wiederum `NULL`, wodurch die
+gesamte Ausschlussbedingung zu `NULL` auswertet und die Zeile fälschlich von
+der Kapazitätszählung ausgeschlossen wird. `payload_lifecycle_field` sucht
+Schlüssel dagegen über `Value::get`, das für jeden Nicht-Objekt-Wert
+unabhängig vom Inhalt `None` liefert — der Loader behandelt ein
+Nicht-Objekt-Payload also wie `{}` (eine erreichbare, datierte
+Legacy-Kante mit abgeleiteter Ablaufzeit) und zählt sie mit. Die
+Kapazitätsprüfung muss dasselbe tun, sonst kann ein Create trotz vollem
+Cache erfolgreich sein.
+
+Behoben durch eine äußere Bedingung `jsonb_typeof(payload) = 'object'`, die
+der gesamten Ausschlussklausel vorausgeht: Da die Spalte `payload` per
+Schema `NOT NULL` ist, liefert `jsonb_typeof(payload)` immer einen
+definiten Wahrheitswert, wodurch `FALSE AND …` für jeden Nicht-Objekt-Wert
+sicher zu `FALSE` auswertet, statt die SQL-`NULL`-Falle erneut auszulösen.
+Neuer Regressionstest: `postgres_edge_create_rejects_when_limit_filled_by_non_object_payload_row`
+(jetzt 12 Tests in `db_domain_edge_write_path`, gegen eine disponible
+lokale PostgreSQL-16-Instanz verifiziert; erwartet — anders als die
+vorherigen drei „admits“-Tests — eine Ablehnung, da diese Zeile tatsächlich
+einen Cache-Slot belegt). Vollständige lokale Rust-Bibliothekstests (472
+bestanden), `cargo clippy --all-targets -- -D warnings` und
+`cargo fmt --check`: weiterhin bestanden.
+
 ## Grenzen und Folgetasks
 
 - Vollständig undatierte Legacy-Projektionen bleiben sichtbar, weil ihr Alter

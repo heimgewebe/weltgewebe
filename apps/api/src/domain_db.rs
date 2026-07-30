@@ -2002,6 +2002,18 @@ pub async fn insert_domain_edge(
     // of the `->` operator's SQL NULL silently propagating through equality
     // checks (as an earlier version of this condition did).
     //
+    // The whole exclusion is additionally guarded on the payload actually
+    // being a JSON object. `?` matches array *elements*, not just object
+    // keys, so a non-object payload such as `["expires_at"]` would otherwise
+    // make `payload ? 'expires_at'` true while `payload -> 'expires_at'`
+    // returns SQL NULL — `jsonb_typeof(NULL)` is itself NULL, propagating
+    // through the same three-valued-logic trap the `?` operator was meant to
+    // avoid. `payload_string`/`payload_lifecycle_field` only ever look up
+    // keys via `Value::get`, which returns `None` for any non-object value
+    // regardless of its contents, so the loader treats a non-object payload
+    // exactly like `{}` (a reachable, omitted-expiry edge) — the capacity
+    // count must agree instead of quietly excluding it.
+    //
     // Deliberately not covered: a dated `created_at` with a present string
     // `expires_at` that is unparseable or not exactly the canonical 168-hour
     // duration. Validating that would require casting the payload string to
@@ -2016,7 +2028,8 @@ pub async fn insert_domain_edge(
     let (limit_reached,): (bool,) = sqlx::query_as(
         "SELECT COUNT(*) >= $1 FROM domain_edges \
          WHERE NOT (\
-             payload ? 'expires_at' \
+             jsonb_typeof(payload) = 'object' \
+             AND payload ? 'expires_at' \
              AND (\
                  jsonb_typeof(payload -> 'expires_at') NOT IN ('null', 'string') \
                  OR (created_at IS NOT NULL AND jsonb_typeof(payload -> 'expires_at') = 'null') \
