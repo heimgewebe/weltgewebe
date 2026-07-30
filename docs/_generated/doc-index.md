@@ -184,6 +184,7 @@ Generated automatically. Do not edit.
 | specs.objektlebenszyklen-und-loeschwirkungen | Objektlebenszyklen und Löschwirkungen | specification | canonical | docs/specs/objektlebenszyklen-und-loeschwirkungen.md |
 | specs.privacy-api | Garnrollen-Sichtbarkeit API | reference | active | docs/specs/privacy-api.md |
 | specs.privacy-ui | Garnrollen-Sichtbarkeit UI | reference | deprecated | docs/specs/privacy-ui.md |
+| specs.private-nachrichten | Private Nachrichten zwischen Konten | specification | canonical | docs/specs/private-nachrichten.md |
 | specs.ui-interaction | UI-Interaktionsvertrag | specification | canonical | docs/specs/ui-interaction.md |
 | specs.ui-state-machine | UI-Zustandsmaschine | specification | canonical | docs/specs/ui-state-machine.md |
 | tasks.board | Weltgewebe Task Board | task-board | active | docs/tasks/board.md |

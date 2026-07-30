@@ -17,7 +17,6 @@
   import type { MapEntityViewModel } from "$lib/map/types";
 
   import NodePanel from "./panels/NodePanel.svelte";
-  import AccountPanel from "./panels/AccountPanel.svelte";
   import EdgePanel from "./panels/EdgePanel.svelte";
   import KompositionPanel from "./panels/KompositionPanel.svelte";
 
@@ -290,7 +289,14 @@
             on:domainChanged={handleDomainChanged}
           />
         {:else if $selection.type === "account" || $selection.type === "garnrolle"}
-          <AccountPanel on:selectRelated={handleRelated} />
+          {#await import("./panels/AccountPanel.svelte")}
+            <p role="status">Lade Garnrolle…</p>
+          {:then accountPanel}
+            <svelte:component
+              this={accountPanel.default}
+              on:selectRelated={handleRelated}
+            />
+          {/await}
         {:else if $selection.type === "edge"}
           <EdgePanel />
         {/if}

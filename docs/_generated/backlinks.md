@@ -1047,11 +1047,13 @@ Generated automatically. Do not edit.
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
+- [relates_to] docs/specs/private-nachrichten.md
 
 ## docs/specs/privacy-api.md
 
 - [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
 - [relates_to] docs/specs/privacy-ui.md
+- [relates_to] docs/specs/private-nachrichten.md
 
 ## docs/specs/privacy-ui.md
 

@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { createEventDispatcher, onDestroy } from "svelte";
+  import { createEventDispatcher, onDestroy, onMount } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import {
     buildPanelEndpoint,
@@ -12,6 +12,7 @@
     selectRelated: { type: "node"; id: string };
   }>();
   let activeTab = "profil";
+  let heading: HTMLHeadingElement;
 
   interface AccountDetails {
     id: string;
@@ -38,6 +39,7 @@
   const accountDetailsStore = detailsLoader.details;
   const isLoadingDetailsStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
+  onMount(() => heading.focus());
 
   $: accountDetails = $accountDetailsStore;
   $: isLoadingDetails = $isLoadingDetailsStore;
@@ -48,15 +50,6 @@
   $: skills = categoryValues(profileTags, "skill:", true);
   $: goods = categoryValues(profileTags, "good:");
   $: interests = categoryValues(profileTags, "interest:");
-  $: selectedAccountId = accountDetails?.id || $selection?.id;
-  $: canMessage =
-    $authStore.authenticated &&
-    !!selectedAccountId &&
-    selectedAccountId !== $authStore.account_id;
-  $: messageHref =
-    canMessage && selectedAccountId
-      ? `/nachrichten?mit=${encodeURIComponent(selectedAccountId)}`
-      : null;
 
   function categoryValues(
     tags: string[],
@@ -100,12 +93,12 @@
 </script>
 
 <div class="account-mode">
-  <h3 tabindex="-1" data-testid="account-heading">
+  <h3 bind:this={heading} tabindex="-1" data-testid="account-heading">
     {accountDetails?.title || $selection?.data?.title || "Garnrolle"}
   </h3>
   {#if summary}<p class="summary">{summary}</p>{/if}
-  {#if messageHref}
-    <a class="message-link" href={messageHref}>Private Nachricht</a>
+  {#if $authStore.authenticated && $selection?.id && $selection.id !== $authStore.account_id}
+    <a class="message-link" href={`/nachrichten?mit=${encodeURIComponent($selection.id)}`}>Private Nachricht</a>
   {/if}
 
   <div

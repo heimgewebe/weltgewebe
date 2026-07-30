@@ -12,11 +12,7 @@
 
 <div class="auth-slot">
   {#if authView.showAccountLink}
-    <a
-      class="messages-link"
-      href="/nachrichten"
-      aria-label="Private Nachrichten">✉</a
-    >
+    <a class="login-entry" href="/nachrichten" aria-label="Private Nachrichten">✉</a>
     <a
       class="garnrolle-link"
       href="/settings#meine-garnrolle"
@@ -58,19 +54,6 @@
     pointer-events: auto;
   }
 
-  .messages-link {
-    width: 40px;
-    height: 40px;
-    display: grid;
-    place-items: center;
-    border: 1px solid var(--panel-border-strong);
-    border-radius: 999px;
-    background: var(--panel);
-    color: var(--text);
-    text-decoration: none;
-    font-size: 1.1rem;
-  }
-
   .garnrolle-link {
     display: block;
     width: 44px;
@@ -90,7 +73,6 @@
   }
 
   .garnrolle-link:focus-visible,
-  .messages-link:focus-visible,
   .login-entry:focus-visible,
   .auth-retry:focus-visible {
     outline: 2px solid var(--accent, #6aa6ff);
