@@ -1,4 +1,4 @@
-use crate::config::AppConfig;
+use crate::{auth::role::Role, config::AppConfig, node_mutation::NodeMutationOperation};
 use chrono::{TimeZone, Utc};
 use governor::{clock::DefaultClock, state::keyed::DefaultKeyedStateStore, Quota, RateLimiter};
 use sha2::{Digest, Sha256};
@@ -9,6 +9,7 @@ use thiserror::Error;
 
 type IpLimiter = RateLimiter<IpAddr, DefaultKeyedStateStore<IpAddr>, DefaultClock>;
 type EmailLimiter = RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>;
+type AccountLimiter = RateLimiter<String, DefaultKeyedStateStore<String>, DefaultClock>;
 
 #[derive(Debug, Error)]
 pub enum RateLimitError {
@@ -16,8 +17,16 @@ pub enum RateLimitError {
     IpLimited,
     #[error("Too many requests for this identifier")]
     EmailLimited,
+    #[error("Too many collective node mutations for this account")]
+    AccountLimited,
     #[error("Shared rate-limit backend unavailable: {0}")]
     BackendUnavailable(String),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum NodeMutationRateDecision {
+    Enforced,
+    AdminEmergencyBypass,
 }
 
 pub struct AuthRateLimiter {
@@ -25,6 +34,15 @@ pub struct AuthRateLimiter {
     ip_limiter_hour: Option<IpLimiter>,
     email_limiter_min: Option<EmailLimiter>,
     email_limiter_hour: Option<EmailLimiter>,
+    node_replace_limiter_min: Option<AccountLimiter>,
+    node_replace_limiter_hour: Option<AccountLimiter>,
+    node_delete_limiter_min: Option<AccountLimiter>,
+    node_delete_limiter_hour: Option<AccountLimiter>,
+    node_replace_per_min: u32,
+    node_replace_per_hour: u32,
+    node_delete_per_min: u32,
+    node_delete_per_hour: u32,
+    node_admin_emergency_bypass: bool,
     db: Option<PgPool>,
     ip_per_min: Option<u32>,
     ip_per_hour: Option<u32>,
@@ -46,11 +64,29 @@ impl AuthRateLimiter {
         let email_limiter_hour = config.auth_rl_email_per_hour.and_then(|limit| {
             NonZeroU32::new(limit).map(|limit| RateLimiter::keyed(Quota::per_hour(limit)))
         });
+        let mutation = &config.node_mutation_rate_limits;
+        let node_replace_limiter_min = NonZeroU32::new(mutation.replace_per_minute)
+            .map(|limit| RateLimiter::keyed(Quota::per_minute(limit)));
+        let node_replace_limiter_hour = NonZeroU32::new(mutation.replace_per_hour)
+            .map(|limit| RateLimiter::keyed(Quota::per_hour(limit)));
+        let node_delete_limiter_min = NonZeroU32::new(mutation.delete_per_minute)
+            .map(|limit| RateLimiter::keyed(Quota::per_minute(limit)));
+        let node_delete_limiter_hour = NonZeroU32::new(mutation.delete_per_hour)
+            .map(|limit| RateLimiter::keyed(Quota::per_hour(limit)));
         Self {
             ip_limiter_min,
             ip_limiter_hour,
             email_limiter_min,
             email_limiter_hour,
+            node_replace_limiter_min,
+            node_replace_limiter_hour,
+            node_delete_limiter_min,
+            node_delete_limiter_hour,
+            node_replace_per_min: mutation.replace_per_minute,
+            node_replace_per_hour: mutation.replace_per_hour,
+            node_delete_per_min: mutation.delete_per_minute,
+            node_delete_per_hour: mutation.delete_per_hour,
+            node_admin_emergency_bypass: mutation.admin_emergency_bypass,
             db: None,
             ip_per_min: config.auth_rl_ip_per_min,
             ip_per_hour: config.auth_rl_ip_per_hour,
@@ -177,5 +213,63 @@ impl AuthRateLimiter {
             }
         }
         Ok(())
+    }
+
+    pub async fn check_node_mutation(
+        &self,
+        account_id: &str,
+        role: Role,
+        operation: NodeMutationOperation,
+    ) -> Result<NodeMutationRateDecision, RateLimitError> {
+        if matches!(role, Role::Admin) && self.node_admin_emergency_bypass {
+            return Ok(NodeMutationRateDecision::AdminEmergencyBypass);
+        }
+
+        let subject = Self::subject_hash(account_id);
+        let (local_minute, local_hour, per_minute, per_hour, minute_scope, hour_scope) =
+            match operation {
+                NodeMutationOperation::Patch | NodeMutationOperation::Replace => (
+                    &self.node_replace_limiter_min,
+                    &self.node_replace_limiter_hour,
+                    self.node_replace_per_min,
+                    self.node_replace_per_hour,
+                    "node-mutation-replace-minute",
+                    "node-mutation-replace-hour",
+                ),
+                NodeMutationOperation::Delete => (
+                    &self.node_delete_limiter_min,
+                    &self.node_delete_limiter_hour,
+                    self.node_delete_per_min,
+                    self.node_delete_per_hour,
+                    "node-mutation-delete-minute",
+                    "node-mutation-delete-hour",
+                ),
+            };
+
+        if let Some(pool) = &self.db {
+            for (scope, seconds, limit) in [
+                (minute_scope, 60_i64, per_minute),
+                (hour_scope, 3600_i64, per_hour),
+            ] {
+                let allowed = Self::increment_window(pool, scope, account_id, seconds, limit)
+                    .await
+                    .map_err(|error| RateLimitError::BackendUnavailable(error.to_string()))?;
+                if !allowed {
+                    return Err(RateLimitError::AccountLimited);
+                }
+            }
+        } else {
+            if let Some(limiter) = local_minute {
+                if limiter.check_key(&subject).is_err() {
+                    return Err(RateLimitError::AccountLimited);
+                }
+            }
+            if let Some(limiter) = local_hour {
+                if limiter.check_key(&subject).is_err() {
+                    return Err(RateLimitError::AccountLimited);
+                }
+            }
+        }
+        Ok(NodeMutationRateDecision::Enforced)
     }
 }

@@ -17,12 +17,16 @@ use crate::config::{
     DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
 };
 use crate::domain_db::{
-    delete_node_with_edges_in_postgres, insert_domain_node_and_faden_with_creator_limit,
-    lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres,
+    delete_node_with_edges_in_postgres_audited, insert_domain_node_and_faden_with_creator_limit,
+    lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres_audited,
     CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodeFadenCreateError,
     NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
+use crate::node_mutation::{
+    abort_jsonl_audit, commit_jsonl_audit, persist_postgres_audit, prepare_jsonl_audit,
+    NodeMutationAudit, NodeMutationOperation,
+};
 use crate::state::{ApiState, OrderedCache};
 use crate::utils::{edges_path, nodes_path};
 use axum::{
@@ -516,7 +520,7 @@ fn point_in_bbox(lng: f64, lat: f64, bb: &BBox) -> bool {
     lng >= bb.min_lng && lng <= bb.max_lng && lat >= bb.min_lat && lat <= bb.max_lat
 }
 
-fn map_json_to_node(v: &Value) -> Option<Node> {
+pub(crate) fn map_json_to_node(v: &Value) -> Option<Node> {
     let id = v
         .get("id")
         .and_then(|v| v.as_str())
@@ -2716,9 +2720,10 @@ async fn delete_node_and_edges_jsonl_with_injection(
 }
 
 pub async fn replace_node(
-    State(state): State<ApiState>,
-    Path(id): Path<String>,
-    Json(payload): Json<Value>,
+    state: ApiState,
+    id: String,
+    payload: Value,
+    actor_account_id: String,
 ) -> Result<Json<Node>, NodeMutationError> {
     reject_node_patch_unless_writable(&state)
         .map_err(|(status, body)| NodeMutationError::Message(status, body))?;
@@ -2773,17 +2778,75 @@ pub async fn replace_node(
         },
     };
     if node == existing {
+        let audit = NodeMutationAudit::new(
+            NodeMutationOperation::Replace,
+            &id,
+            &actor_account_id,
+            &existing,
+            Some(&existing),
+        )
+        .map_err(|error| {
+            tracing::error!(%error, node_id = %id, "failed to prepare no-op node replacement audit");
+            NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+        })?;
+        match state.config.domain_node_write_source {
+            DomainNodeWriteSource::Jsonl => {
+                prepare_jsonl_audit(&audit).await.map_err(|error| {
+                    tracing::error!(%error, node_id = %id, "failed to durably prepare no-op node replacement audit");
+                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                })?;
+                if let Err(error) = commit_jsonl_audit(&audit).await {
+                    tracing::warn!(%error, node_id = %id, operation_id = %audit.operation_id, "no-op node replacement accepted; audit finalization deferred to startup recovery");
+                }
+            }
+            DomainNodeWriteSource::Postgres => {
+                let pool = state
+                    .db_pool
+                    .as_ref()
+                    .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+                persist_postgres_audit(pool, &audit).await.map_err(|error| {
+                    tracing::error!(%error, node_id = %id, "failed to persist no-op node replacement audit");
+                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                })?;
+            }
+        }
+        tracing::info!(event = "node.replaced.collective.noop", node_id = %id, "Node replacement matched current state and was audited");
         return Ok(Json(existing));
     }
     node.updated_at = chrono::Utc::now().to_rfc3339();
+    let audit = NodeMutationAudit::new(
+        NodeMutationOperation::Replace,
+        &id,
+        &actor_account_id,
+        &existing,
+        Some(&node),
+    )
+    .map_err(|error| {
+        tracing::error!(%error, node_id = %id, "failed to prepare node replacement audit");
+        NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
 
     match state.config.domain_node_write_source {
         DomainNodeWriteSource::Jsonl => {
-            if !replace_node_jsonl(&node).await.map_err(|error| {
-                tracing::error!(%error, node_id = %id, "failed to replace node JSONL record");
+            prepare_jsonl_audit(&audit).await.map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to durably prepare node replacement audit");
                 NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
-            })? {
-                return Err(NodeMutationError::Status(StatusCode::NOT_FOUND));
+            })?;
+            match replace_node_jsonl(&node).await {
+                Ok(true) => {
+                    if let Err(error) = commit_jsonl_audit(&audit).await {
+                        tracing::warn!(%error, node_id = %id, operation_id = %audit.operation_id, "node replacement committed; audit finalization deferred to startup recovery");
+                    }
+                }
+                Ok(false) => {
+                    let _ = abort_jsonl_audit(&audit).await;
+                    return Err(NodeMutationError::Status(StatusCode::NOT_FOUND));
+                }
+                Err(error) => {
+                    let _ = abort_jsonl_audit(&audit).await;
+                    tracing::error!(%error, node_id = %id, "failed to replace node JSONL record");
+                    return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+                }
             }
         }
         DomainNodeWriteSource::Postgres => {
@@ -2791,7 +2854,7 @@ pub async fn replace_node(
                 .db_pool
                 .as_ref()
                 .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-            let persisted_updated_at = replace_node_in_postgres(pool, &node)
+            let persisted_updated_at = replace_node_in_postgres_audited(pool, &node, &audit)
                 .await
                 .map_err(|error| match error {
                     NodeWriteError::NotFound => NodeMutationError::Status(StatusCode::NOT_FOUND),
@@ -2832,8 +2895,9 @@ fn map_postgres_node_delete_error(error: NodeWriteError, id: &str) -> NodeMutati
 }
 
 pub async fn delete_node(
-    State(state): State<ApiState>,
-    Path(id): Path<String>,
+    state: ApiState,
+    id: String,
+    actor_account_id: String,
 ) -> Result<(StatusCode, Json<NodeDeleteResponse>), NodeMutationError> {
     reject_node_patch_unless_writable(&state)
         .map_err(|(status, body)| NodeMutationError::Message(status, body))?;
@@ -2855,9 +2919,24 @@ pub async fn delete_node(
         ));
     }
     let _persist_guard = state.nodes_persist.lock().await;
-    if state.nodes.read().await.get(&id).is_none() {
-        return Err(NodeMutationError::Status(StatusCode::NOT_FOUND));
-    }
+    let existing = state
+        .nodes
+        .read()
+        .await
+        .get(&id)
+        .cloned()
+        .ok_or(NodeMutationError::Status(StatusCode::NOT_FOUND))?;
+    let audit = NodeMutationAudit::new(
+        NodeMutationOperation::Delete,
+        &id,
+        &actor_account_id,
+        &existing,
+        None,
+    )
+    .map_err(|error| {
+        tracing::error!(%error, node_id = %id, "failed to prepare node delete audit");
+        NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+    })?;
 
     let account_collision_exists = {
         let accounts = state.accounts.read().await;
@@ -2890,11 +2969,15 @@ pub async fn delete_node(
 
     let (persisted_edge_ids, conversation) = match state.config.domain_node_write_source {
         DomainNodeWriteSource::Jsonl => {
+            prepare_jsonl_audit(&audit).await.map_err(|error| {
+                tracing::error!(%error, node_id = %id, "failed to durably prepare node delete audit");
+                NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            })?;
             // Keep the edge lock until the node file has also been replaced. Otherwise a
             // concurrent edge create could attach a new edge between cascade cleanup and
             // node deletion, leaving an orphan behind.
             let _edge_persist_guard = edge_create_persist_lock().lock().await;
-            let outcome = delete_node_and_edges_jsonl(
+            let outcome = match delete_node_and_edges_jsonl(
                 &id,
                 EdgeEndpointCollisionEvidence {
                     account_exists: account_collision_exists,
@@ -2902,19 +2985,27 @@ pub async fn delete_node(
                 },
             )
             .await
-            .map_err(|error| {
-                tracing::error!(%error, node_id = %id, "failed to delete node and edges from JSONL");
-                if error.kind() == std::io::ErrorKind::InvalidData {
-                    NodeMutationError::Message(
-                        StatusCode::CONFLICT,
-                        "node deletion blocked by ambiguous edge endpoint".to_string(),
-                    )
-                } else {
-                    NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+            {
+                Ok(outcome) => outcome,
+                Err(error) => {
+                    let _ = abort_jsonl_audit(&audit).await;
+                    tracing::error!(%error, node_id = %id, "failed to delete node and edges from JSONL");
+                    return Err(if error.kind() == std::io::ErrorKind::InvalidData {
+                        NodeMutationError::Message(
+                            StatusCode::CONFLICT,
+                            "node deletion blocked by ambiguous edge endpoint".to_string(),
+                        )
+                    } else {
+                        NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR)
+                    });
                 }
-            })?;
+            };
             if !outcome.node_deleted {
+                let _ = abort_jsonl_audit(&audit).await;
                 return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+            }
+            if let Err(error) = commit_jsonl_audit(&audit).await {
+                tracing::warn!(%error, node_id = %id, operation_id = %audit.operation_id, "node delete committed; audit finalization deferred to startup recovery");
             }
             (
                 outcome.removed_edge_ids,
@@ -2926,7 +3017,7 @@ pub async fn delete_node(
                 .db_pool
                 .as_ref()
                 .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
-            let outcome = delete_node_with_edges_in_postgres(pool, &id)
+            let outcome = delete_node_with_edges_in_postgres_audited(pool, &id, &audit)
                 .await
                 .map_err(|error| map_postgres_node_delete_error(error, &id))?;
             (outcome.removed_edge_ids, outcome.conversation.into())

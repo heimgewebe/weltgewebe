@@ -15,13 +15,17 @@ mod helpers;
 use helpers::set_gewebe_in_dir;
 use weltgewebe_api::{
     auth::{
-        accounts::AccountStore, rate_limit::AuthRateLimiter, role::Role, session::SessionBackend,
+        accounts::AccountStore,
+        rate_limit::{AuthRateLimiter, NodeMutationRateDecision, RateLimitError},
+        role::Role,
+        session::SessionBackend,
     },
     config::{
         AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
-        DomainReadSource,
+        DomainReadSource, NodeMutationRateLimitConfig,
     },
     middleware::{auth::auth_middleware, csrf::require_csrf},
+    node_mutation::NodeMutationOperation,
     routes::{
         accounts::{AccountInternal, AccountPublic},
         api_router,
@@ -32,6 +36,13 @@ use weltgewebe_api::{
 };
 
 async fn state_for_role(role: Role) -> Result<ApiState> {
+    state_for_role_with_mutation_limits(role, NodeMutationRateLimitConfig::default()).await
+}
+
+async fn state_for_role_with_mutation_limits(
+    role: Role,
+    node_mutation_rate_limits: NodeMutationRateLimitConfig,
+) -> Result<ApiState> {
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
         commit: "test",
@@ -58,6 +69,7 @@ async fn state_for_role(role: Role) -> Result<ApiState> {
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
         auth_rl_email_per_hour: None,
+        node_mutation_rate_limits,
         smtp_host: None,
         smtp_port: None,
         smtp_user: None,
@@ -205,6 +217,12 @@ async fn node_replace_requires_current_if_match_version() -> Result<()> {
     let body = body::to_bytes(response.into_body(), usize::MAX).await?;
     let current: serde_json::Value = serde_json::from_slice(&body)?;
     assert_eq!(current["title"], "Alt");
+    let conflict_metrics = String::from_utf8(state.metrics.render()?)?;
+    assert!(conflict_metrics.contains(r#"node_mutation_conflicts_total{operation="replace"} 2"#));
+    assert!(conflict_metrics
+        .contains(r#"node_mutations_total{operation="replace",outcome="conflict"} 2"#));
+    assert!(!conflict_metrics.contains(ACTOR_ID));
+    assert!(!conflict_metrics.contains("n1"));
     assert_eq!(
         state
             .nodes
@@ -249,7 +267,65 @@ async fn node_replace_requires_current_if_match_version() -> Result<()> {
         Some("Neu"),
     );
     assert!(fs::read_to_string(nodes_path)?.contains(r#""title":"Neu""#));
+    let audit = fs::read_to_string(in_dir.join(".node-mutation-audit/events.jsonl"))?;
+    assert!(audit.contains(r#""operation":"replace""#));
+    assert!(audit.contains(r#""state":"committed""#));
+    assert!(
+        !audit.contains(ACTOR_ID),
+        "raw account ids must not enter mutation audit"
+    );
+    let metrics = String::from_utf8(state.metrics.render()?)?;
+    assert!(metrics.contains(r#"node_mutations_total{operation="replace",outcome="success"} 1"#));
+    assert!(!metrics.contains(ACTOR_ID));
+    assert!(!metrics.contains("n1"));
 
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn no_op_replace_is_still_actor_audited_without_advancing_version() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    let nodes_path = in_dir.join("demo.nodes.jsonl");
+    let original = concat!(
+        r#"{"id":"n1","kind":"Werkstatt","title":"Alt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+        "
+",
+    );
+    write_fixture(&nodes_path, original);
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Weber).await?;
+    let (app, cookie) = authenticated_app(state.clone()).await;
+    let request = mutation_request_with_etag(
+        "PUT",
+        "/nodes/n1",
+        &cookie,
+        r#"{"title":"Alt","kind":"Werkstatt","address":"Alt 1","location":{"lat":53.5,"lon":10.0},"tags":[]}"#,
+        Some(INITIAL_NODE_ETAG),
+    );
+
+    let response = app.oneshot(request).await?;
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = body::to_bytes(response.into_body(), usize::MAX).await?;
+    let node: serde_json::Value = serde_json::from_slice(&body)?;
+    assert_eq!(node["updated_at"], "2026-01-01T00:00:00Z");
+    assert_eq!(fs::read_to_string(&nodes_path)?, original);
+
+    let audit = fs::read_to_string(in_dir.join(".node-mutation-audit/events.jsonl"))?;
+    let events = audit
+        .lines()
+        .map(serde_json::from_str::<serde_json::Value>)
+        .collect::<Result<Vec<_>, _>>()?;
+    assert_eq!(events.len(), 2);
+    assert_eq!(events[0]["state"], "prepared");
+    assert_eq!(events[1]["state"], "committed");
+    assert_eq!(events[0]["operation_id"], events[1]["operation_id"]);
+    assert_eq!(events[1]["before_hash"], events[1]["after_hash"]);
+    assert!(!audit.contains(ACTOR_ID));
+
+    let metrics = String::from_utf8(state.metrics.render()?)?;
+    assert!(metrics.contains(r#"node_mutations_total{operation="replace",outcome="success"} 1"#));
     Ok(())
 }
 
@@ -349,6 +425,11 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
     assert!(state.edges.read().await.get("e1").is_none());
     assert!(!fs::read_to_string(&nodes_path)?.contains(r#""id":"n1""#));
     assert!(!fs::read_to_string(&edges_path)?.contains(r#""id":"e1""#));
+    let audit = fs::read_to_string(in_dir.join(".node-mutation-audit/events.jsonl"))?;
+    assert!(audit.contains(r#""operation":"replace""#));
+    assert!(audit.contains(r#""operation":"delete""#));
+    assert_eq!(audit.matches(r#""state":"committed""#).count(), 2);
+    assert!(!audit.contains(ACTOR_ID));
 
     let response = app
         .clone()
@@ -360,6 +441,87 @@ async fn weber_can_replace_shared_node_and_delete_node_cascade() -> Result<()> {
         .await?;
     assert_eq!(response.status(), StatusCode::NOT_FOUND);
 
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn mutation_limits_are_separate_and_admin_bypass_is_explicit() -> Result<()> {
+    let limited = NodeMutationRateLimitConfig {
+        replace_per_minute: 1,
+        replace_per_hour: 10,
+        delete_per_minute: 1,
+        delete_per_hour: 10,
+        admin_emergency_bypass: false,
+    };
+    let state = state_for_role_with_mutation_limits(Role::Admin, limited).await?;
+    assert_eq!(
+        state
+            .rate_limiter
+            .check_node_mutation(ACTOR_ID, Role::Admin, NodeMutationOperation::Replace)
+            .await?,
+        NodeMutationRateDecision::Enforced
+    );
+    assert!(matches!(
+        state
+            .rate_limiter
+            .check_node_mutation(ACTOR_ID, Role::Admin, NodeMutationOperation::Patch)
+            .await,
+        Err(RateLimitError::AccountLimited)
+    ));
+    assert_eq!(
+        state
+            .rate_limiter
+            .check_node_mutation(ACTOR_ID, Role::Admin, NodeMutationOperation::Delete)
+            .await?,
+        NodeMutationRateDecision::Enforced,
+        "delete must use a bucket distinct from replace/patch"
+    );
+
+    let bypass = NodeMutationRateLimitConfig {
+        replace_per_minute: 1,
+        replace_per_hour: 1,
+        delete_per_minute: 1,
+        delete_per_hour: 1,
+        admin_emergency_bypass: true,
+    };
+    let state = state_for_role_with_mutation_limits(Role::Admin, bypass).await?;
+    for operation in [
+        NodeMutationOperation::Replace,
+        NodeMutationOperation::Patch,
+        NodeMutationOperation::Delete,
+    ] {
+        for _ in 0..3 {
+            assert_eq!(
+                state
+                    .rate_limiter
+                    .check_node_mutation(ACTOR_ID, Role::Admin, operation)
+                    .await?,
+                NodeMutationRateDecision::AdminEmergencyBypass
+            );
+        }
+    }
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn permanent_node_delete_does_not_expose_public_purge() -> Result<()> {
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    write_fixture(
+        &in_dir.join("demo.nodes.jsonl"),
+        concat!(
+            r#"{"id":"n1","kind":"Werkstatt","title":"Alt","location":{"lat":53.5,"lon":10.0},"created_at":"2026-01-01T00:00:00Z","updated_at":"2026-01-01T00:00:00Z"}"#,
+            "\n",
+        ),
+    );
+    let _env = set_gewebe_in_dir(&in_dir);
+    let state = state_for_role(Role::Admin).await?;
+    let (app, cookie) = authenticated_app(state).await;
+    let request = mutation_request("POST", "/nodes/n1/purge", &cookie, "{}");
+    let response = app.oneshot(request).await?;
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
     Ok(())
 }
 

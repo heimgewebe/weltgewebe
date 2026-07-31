@@ -104,6 +104,7 @@ fn provisioning_state_postgres(pool: PgPool, allow_emails: Vec<String>) -> ApiSt
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
         auth_rl_email_per_hour: None,
+        node_mutation_rate_limits: Default::default(),
         smtp_host: None,
         smtp_port: None,
         smtp_user: None,

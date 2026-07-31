@@ -13,6 +13,7 @@ use uuid::Uuid;
 
 use crate::auth::accounts::AccountStore;
 use crate::auth::role::Role;
+use crate::node_mutation::{insert_postgres_audit, node_hash, NodeMutationAudit};
 use crate::routes::accounts::{
     ensure_radius_projection_value, map_json_to_public_account, radius_projection_matches_location,
     radius_projection_public_pos, AccountInternal, Location as AccountLocation, MAX_RADIUS_M,
@@ -836,10 +837,37 @@ pub async fn replace_node_in_postgres(
     pool: &PgPool,
     node: &Node,
 ) -> Result<DateTime<Utc>, NodeWriteError> {
+    replace_node_in_postgres_inner(pool, node, None).await
+}
+
+pub async fn replace_node_in_postgres_audited(
+    pool: &PgPool,
+    node: &Node,
+    audit: &NodeMutationAudit,
+) -> Result<DateTime<Utc>, NodeWriteError> {
+    replace_node_in_postgres_inner(pool, node, Some(audit)).await
+}
+
+async fn replace_node_in_postgres_inner(
+    pool: &PgPool,
+    node: &Node,
+    audit: Option<&NodeMutationAudit>,
+) -> Result<DateTime<Utc>, NodeWriteError> {
     let payload = serialize_node_payload(node).map_err(NodeWriteError::Serialization)?;
     let updated_at = DateTime::parse_from_rfc3339(&node.updated_at)
         .map(|value| postgres_timestamp_precision(value.with_timezone(&Utc)))
         .map_err(|error| NodeWriteError::Mapping(anyhow::Error::new(error)))?;
+    let persisted_audit = if let Some(audit) = audit {
+        let mut persisted_node = node.clone();
+        persisted_node.updated_at = updated_at.to_rfc3339();
+        let mut persisted_audit = audit.clone();
+        persisted_audit.after_hash =
+            Some(node_hash(&persisted_node).map_err(NodeWriteError::Serialization)?);
+        Some(persisted_audit)
+    } else {
+        None
+    };
+    let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;
     let result = sqlx::query(
         "UPDATE domain_nodes \
          SET kind = $2, title = $3, lat = $4, lon = $5, updated_at = $6, payload = $7::jsonb, search_visibility = $8 \
@@ -853,12 +881,19 @@ pub async fn replace_node_in_postgres(
     .bind(updated_at)
     .bind(payload)
     .bind(node.search_visibility.as_str())
-    .execute(pool)
+    .execute(&mut *tx)
     .await
     .map_err(NodeWriteError::Database)?;
     if result.rows_affected() == 0 {
+        tx.rollback().await.ok();
         return Err(NodeWriteError::NotFound);
     }
+    if let Some(audit) = persisted_audit.as_ref() {
+        insert_postgres_audit(&mut tx, audit)
+            .await
+            .map_err(NodeWriteError::Database)?;
+    }
+    tx.commit().await.map_err(NodeWriteError::Database)?;
     Ok(updated_at)
 }
 
@@ -877,6 +912,22 @@ pub struct NodeDeleteOutcome {
 pub async fn delete_node_with_edges_in_postgres(
     pool: &PgPool,
     id: &str,
+) -> Result<NodeDeleteOutcome, NodeWriteError> {
+    delete_node_with_edges_in_postgres_inner(pool, id, None).await
+}
+
+pub async fn delete_node_with_edges_in_postgres_audited(
+    pool: &PgPool,
+    id: &str,
+    audit: &NodeMutationAudit,
+) -> Result<NodeDeleteOutcome, NodeWriteError> {
+    delete_node_with_edges_in_postgres_inner(pool, id, Some(audit)).await
+}
+
+async fn delete_node_with_edges_in_postgres_inner(
+    pool: &PgPool,
+    id: &str,
+    audit: Option<&NodeMutationAudit>,
 ) -> Result<NodeDeleteOutcome, NodeWriteError> {
     let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;
     // Edge creation uses the same table lock. Holding it through the node and
@@ -1038,6 +1089,11 @@ pub async fn delete_node_with_edges_in_postgres(
         NodeConversationDeleteEffect::DeletedEmpty
     };
 
+    if let Some(audit) = audit {
+        insert_postgres_audit(&mut tx, audit)
+            .await
+            .map_err(NodeWriteError::Database)?;
+    }
     tx.commit().await.map_err(NodeWriteError::Database)?;
     Ok(NodeDeleteOutcome {
         removed_edge_ids: edge_ids,

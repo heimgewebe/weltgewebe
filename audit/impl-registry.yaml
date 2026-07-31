@@ -407,3 +407,20 @@ implementations:
       - apps/web/tests/federation-pilot.spec.ts
       - scripts/ci/tests/test_federation_contract.py
       - .github/workflows/ci.yml
+
+  - id: impl.api.collective-node-mutation-accountability
+    path: apps/api/src/node_mutation.rs
+    impl_type: service
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/adr/ADR-0014__accountable-collective-node-mutations.md
+      - docs/specs/objektlebenszyklen-und-loeschwirkungen.md
+      - architecture/security.md
+    verified_by:
+      - apps/api/tests/api_collective_mutations.rs
+      - apps/api/tests/db_domain_node_write_path.rs
+      - apps/api/tests/db_domain_schema_migrations.rs
+      - apps/web/tests/node-mutations.spec.ts
+      - .github/workflows/ci.yml
