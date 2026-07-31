@@ -104,7 +104,7 @@ jobs:
       AUTH_SESSION_PROOF_DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/weltgewebe_ci_proof
 
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v4
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v4
 
       - name: Read Rust version
         id: rust-version

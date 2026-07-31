@@ -41,7 +41,7 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'security')) ||
       (github.event_name == 'schedule')
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
       - name: Read Rust version
         id: rust-version
         shell: bash
@@ -86,7 +86,7 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'security')) ||
       (github.event_name == 'schedule' && github.event.schedule.cron == '10 3 * * 0')
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
       - name: Read Rust version
         id: rust-version
         shell: bash
@@ -131,7 +131,7 @@ jobs:
        contains(github.event.pull_request.labels.*.name, 'security')) ||
       (github.event_name == 'schedule' && github.event.schedule.cron == '25 3 * * 0')
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
       - name: Generate SBOM with Syft
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # tag: v0
         with:

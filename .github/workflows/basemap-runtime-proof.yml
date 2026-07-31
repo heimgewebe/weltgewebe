@@ -97,7 +97,7 @@ jobs:
       # Skip cleanly when no artefact is present; real script regressions still fail the job.
       BASEMAP_PROOF_MODE: skip
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
 
       - name: Check guard script is executable
         run: test -x scripts/guard/basemap-runtime-proof.sh
@@ -166,7 +166,7 @@ jobs:
       BASEMAP_CADDY_URL: http://localhost:8081
       ARTEFACT_NAME: proof-range-delivery.pmtiles
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
 
       - name: Verify Docker availability
         run: |
@@ -335,7 +335,7 @@ jobs:
       BASEMAP_CADDY_URL: http://localhost:8081
       SOURCE_DATE_EPOCH: "1704067200"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
 
       - name: Install pnpm for PMTiles validator
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
@@ -545,7 +545,7 @@ jobs:
       ARTEFACT_NAME: basemap-schleswig-holstein-v0.1.0.pmtiles
       META_NAME: basemap-schleswig-holstein-v0.1.0.meta.json
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
 
       - name: Install pnpm for PMTiles validator
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
@@ -656,7 +656,7 @@ jobs:
       NPM_CONFIG_AUDIT: "false"
       NPM_CONFIG_FUND: "false"
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
 
       - name: Install pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6

@@ -49,7 +49,7 @@ jobs:
       NPM_CONFIG_FUND: "false"
     defaults: {run: {working-directory: apps/web, shell: bash}}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
       # pnpm muss vor setup-node verfügbar sein, sonst schlägt cache: 'pnpm'
       # fehl (setup-node ruft `pnpm store path` auf). Gleiches Muster wie web.yml.
       - name: Setup pnpm

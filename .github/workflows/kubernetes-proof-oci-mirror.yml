@@ -37,7 +37,7 @@ jobs:
       EXPECTED_HEAD: ${{ inputs.expected_head }}
       EXPECTED_SEED_SHA256: ${{ inputs.expected_seed_sha256 }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -92,7 +92,7 @@ jobs:
       EXPECTED_HEAD: ${{ inputs.expected_head }}
       EXPECTED_SEED_SHA256: ${{ inputs.expected_seed_sha256 }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
@@ -221,7 +221,7 @@ jobs:
     env:
       EXPECTED_HEAD: ${{ inputs.expected_head }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - uses: actions/checkout@f548e57e544e1ff5a4c46bf1e1b8685f8e4a348a # tag: v7.0.1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 1
