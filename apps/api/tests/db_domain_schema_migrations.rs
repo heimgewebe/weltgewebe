@@ -220,6 +220,95 @@ async fn domain_schema_tables_exist_after_migration() {
         "removed domain_accounts.mode column must not exist"
     );
 
+    // --- private collective node mutation audit ---
+    assert!(
+        table_exists(&pool, "domain_node_mutation_audit").await,
+        "domain_node_mutation_audit table must exist"
+    );
+    for column in [
+        "operation_id",
+        "node_id",
+        "actor_subject_hash",
+        "operation",
+        "before_hash",
+        "after_hash",
+        "occurred_at",
+    ] {
+        assert!(
+            column_exists(&pool, "domain_node_mutation_audit", column).await,
+            "domain_node_mutation_audit.{column} must exist"
+        );
+    }
+    assert!(
+        index_exists(&pool, "domain_node_mutation_audit_node_time").await,
+        "node mutation audit node/time index must exist"
+    );
+
+    pool.close().await;
+}
+
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+async fn node_mutation_audit_schema_accepts_only_privacy_reviewed_shapes() {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+
+    sqlx::query("DELETE FROM domain_node_mutation_audit WHERE node_id LIKE 'schema-audit-%'")
+        .execute(&pool)
+        .await
+        .expect("pre-test audit cleanup failed");
+
+    let hash = "a".repeat(64);
+    sqlx::query(
+        "INSERT INTO domain_node_mutation_audit (             operation_id, node_id, actor_subject_hash, operation, before_hash, after_hash, occurred_at         ) VALUES ($1::uuid, 'schema-audit-replace', $2, 'replace', $2, $2, NOW()),                   ($3::uuid, 'schema-audit-delete', $2, 'delete', $2, NULL, NOW())",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(&hash)
+    .bind(uuid::Uuid::new_v4().to_string())
+    .execute(&pool)
+    .await
+    .expect("valid replace/delete audit rows must be accepted");
+
+    let invalid_operation = sqlx::query(
+        "INSERT INTO domain_node_mutation_audit (             operation_id, node_id, actor_subject_hash, operation, before_hash, after_hash, occurred_at         ) VALUES ($1::uuid, 'schema-audit-invalid-operation', $2, 'patch', $2, $2, NOW())",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(&hash)
+    .execute(&pool)
+    .await;
+    assert!(
+        invalid_operation.is_err(),
+        "patch is not a persisted audit operation"
+    );
+
+    let invalid_delete_after = sqlx::query(
+        "INSERT INTO domain_node_mutation_audit (             operation_id, node_id, actor_subject_hash, operation, before_hash, after_hash, occurred_at         ) VALUES ($1::uuid, 'schema-audit-invalid-delete', $2, 'delete', $2, $2, NOW())",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(&hash)
+    .execute(&pool)
+    .await;
+    assert!(
+        invalid_delete_after.is_err(),
+        "delete audit must not retain an after hash"
+    );
+
+    let invalid_actor_hash = sqlx::query(
+        "INSERT INTO domain_node_mutation_audit (             operation_id, node_id, actor_subject_hash, operation, before_hash, after_hash, occurred_at         ) VALUES ($1::uuid, 'schema-audit-invalid-actor', 'raw-account-id', 'delete', $2, NULL, NOW())",
+    )
+    .bind(uuid::Uuid::new_v4().to_string())
+    .bind(&hash)
+    .execute(&pool)
+    .await;
+    assert!(
+        invalid_actor_hash.is_err(),
+        "raw account identifiers must not fit the actor hash column"
+    );
+
+    sqlx::query("DELETE FROM domain_node_mutation_audit WHERE node_id LIKE 'schema-audit-%'")
+        .execute(&pool)
+        .await
+        .expect("post-test audit cleanup failed");
     pool.close().await;
 }
 

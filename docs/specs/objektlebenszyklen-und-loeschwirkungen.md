@@ -228,6 +228,21 @@ Migration darf keine neuen objektspezifischen Snapshotspalten nach demselben
 Muster anhäufen. Sie soll einen typisierten historischen Subjektkontext verwenden,
 der die hier definierten Zustände beibehält.
 
+## Entscheidung für gewöhnliche Knotenmutationen
+
+Der kollektive Node-Vertrag ist in
+[`ADR-0014`](../adr/ADR-0014__accountable-collective-node-mutations.md)
+konkretisiert:
+
+- Ein gewöhnliches Node-DELETE entfernt den Knoten permanent aus der aktiven
+  Welt; es ist weder Soft-Delete noch öffentliches Undo.
+- Der Versuch bleibt durch PostgreSQL-Transaktion beziehungsweise JSONL-
+  Write-ahead-Journal bis zum erfolgreichen Abschluss rückrollbar.
+- Nach erfolgreichem Abschluss bleiben die nach dieser Spezifikation zulässigen
+  Conversations, Beiträge, Outbox- und privaten Auditbelege erhalten.
+- Ein öffentlicher Purge- oder Restore-Endpunkt existiert nicht. Purge bleibt bis
+  zum vollständigen Hochrisikovertrag fail-closed.
+
 ## Purgeanforderungen
 
 Ein späterer Purgepfad muss vor seiner Aktivierung belegen:

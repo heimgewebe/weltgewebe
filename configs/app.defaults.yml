@@ -1,3 +1,13 @@
 ---
 anonymize_opt_in: true
 max_guest_owned_nodes: 1000
+
+# Account-scoped collective node mutation limits. All four limits must remain
+# greater than zero. The emergency bypass applies only to administrators and is
+# disabled by default.
+node_mutation_rate_limits:
+  replace_per_minute: 30
+  replace_per_hour: 300
+  delete_per_minute: 10
+  delete_per_hour: 50
+  admin_emergency_bypass: false

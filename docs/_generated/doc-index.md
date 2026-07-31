@@ -13,6 +13,7 @@ Generated automatically. Do not edit.
 | id | title | type | status | path |
 | --- | --- | --- | --- | --- |
 | DEPLOY-DNS-001B | Historical INWX Zone Entry Checklist — Predelegation Assumption Superseded | task | done | docs/tasks/DEPLOY-DNS-001B.md |
+| adr.0014-accountable-collective-node-mutations | ADR-0014 — Nachvollziehbare kollektive Knotenmutationen | reference | active | docs/adr/ADR-0014__accountable-collective-node-mutations.md |
 | adr.0042-consume-semantah-contracts | ADR-0042 — SemanticAH-Contracts konsumieren | reference | active | docs/adr/0042-consume-semantah-contracts.md |
 | adr.0043-edge-vs-conversation | ADR-0043 — Edge vs. Conversation | reference | active | docs/adr/0043-edge-vs-conversation.md |
 | adr.ADR-0001__clean-slate-docs-monorepo | ADR-0001 — Clean Slate und Docs-Monorepo | reference | active | docs/adr/ADR-0001__clean-slate-docs-monorepo.md |

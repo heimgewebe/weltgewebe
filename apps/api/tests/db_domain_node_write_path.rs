@@ -42,16 +42,17 @@ use weltgewebe_api::{
         DomainReadSource,
     },
     domain_db::{
-        delete_node_with_edges_in_postgres, insert_domain_node, load_nodes_from_postgres,
-        lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres,
-        CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodePatchInput,
-        NodeWriteError,
+        delete_node_with_edges_in_postgres, delete_node_with_edges_in_postgres_audited,
+        insert_domain_node, load_nodes_from_postgres, lock_node_faden_cache_publication,
+        patch_node_in_postgres, replace_node_in_postgres_audited, CreateOperationKey,
+        NodeConversationDeleteEffect, NodeCreateError, NodePatchInput, NodeWriteError,
     },
     governance::delete_guest_account,
     middleware::{
         auth::auth_middleware, csrf::require_csrf,
         domain_projection::ensure_current_domain_projection,
     },
+    node_mutation::{actor_subject_hash, node_hash, NodeMutationAudit, NodeMutationOperation},
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
@@ -144,6 +145,9 @@ async fn clean(pool: &PgPool) {
     pool.execute("DELETE FROM domain_edges WHERE id LIKE 'writepath-edge-%'")
         .await
         .expect("clean domain_edges fixtures");
+    pool.execute("DELETE FROM domain_node_mutation_audit WHERE node_id LIKE 'writepath-node-%'")
+        .await
+        .expect("clean node mutation audit fixtures");
     pool.execute("DELETE FROM domain_nodes WHERE id LIKE 'writepath-node-%'")
         .await
         .expect("clean domain_nodes fixtures");
@@ -286,6 +290,7 @@ async fn postgres_write_app_with_account_source(
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
         auth_rl_email_per_hour: None,
+        node_mutation_rate_limits: Default::default(),
         smtp_host: None,
         smtp_port: None,
         smtp_user: None,
@@ -607,6 +612,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
         auth_rl_email_per_hour: None,
+        node_mutation_rate_limits: Default::default(),
         smtp_host: None,
         smtp_port: None,
         smtp_user: None,
@@ -786,6 +792,7 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
         auth_rl_email_per_hour: None,
+        node_mutation_rate_limits: Default::default(),
         smtp_host: None,
         smtp_port: None,
         smtp_user: None,
@@ -2787,6 +2794,12 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
     .await
     .context("seed node and account-typed edge fixtures")?;
 
+    let before = load_nodes_from_postgres(&pool)
+        .await
+        .context("load node before audited replacement")?
+        .get(NODE_A)
+        .cloned()
+        .context("seeded node must exist")?;
     let replacement = Node {
         id: NODE_A.to_string(),
         kind: "Werkstatt".to_string(),
@@ -2804,9 +2817,16 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
             lon: 10.05,
         },
     };
-    replace_node_in_postgres(&pool, &replacement)
+    let replace_audit = NodeMutationAudit::new(
+        NodeMutationOperation::Replace,
+        NODE_A,
+        "postgres-actor",
+        &before,
+        Some(&replacement),
+    )?;
+    replace_node_in_postgres_audited(&pool, &replacement, &replace_audit)
         .await
-        .context("replace node")?;
+        .context("replace node with audit")?;
 
     let row: (String, String, f64, f64, serde_json::Value) = sqlx::query_as(
         "SELECT kind, title, lat, lon, payload \
@@ -2825,9 +2845,22 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
     assert_eq!(row.4["address"], "Neue Straße 1");
     assert_eq!(row.4["tags"], serde_json::json!(["commons"]));
 
-    let mut outcome = delete_node_with_edges_in_postgres(&pool, NODE_A)
+    let persisted_replacement = load_nodes_from_postgres(&pool)
         .await
-        .context("delete node with projections")?;
+        .context("load node before audited delete")?
+        .get(NODE_A)
+        .cloned()
+        .context("replaced node must exist")?;
+    let delete_audit = NodeMutationAudit::new(
+        NodeMutationOperation::Delete,
+        NODE_A,
+        "postgres-actor",
+        &persisted_replacement,
+        None,
+    )?;
+    let mut outcome = delete_node_with_edges_in_postgres_audited(&pool, NODE_A, &delete_audit)
+        .await
+        .context("delete node with projections and audit")?;
     outcome.removed_edge_ids.sort();
     assert_eq!(
         outcome.removed_edge_ids,
@@ -2844,6 +2877,29 @@ async fn replace_and_delete_node_cascade_is_transactional_in_postgres() -> Resul
             .fetch_one(&pool)
             .await?;
     assert!(!node_exists);
+
+    let audits: Vec<(String, String, String, String, Option<String>)> = sqlx::query_as(
+        "SELECT operation, actor_subject_hash, node_id, before_hash, after_hash          FROM domain_node_mutation_audit WHERE node_id = $1 ORDER BY occurred_at",
+    )
+    .bind(NODE_A)
+    .fetch_all(&pool)
+    .await
+    .context("read node mutation audit rows")?;
+    assert_eq!(audits.len(), 2);
+    assert_eq!(audits[0].0, "replace");
+    assert_eq!(audits[1].0, "delete");
+    assert_eq!(audits[0].1, actor_subject_hash("postgres-actor"));
+    assert_eq!(audits[1].1, actor_subject_hash("postgres-actor"));
+    assert_eq!(audits[0].2, NODE_A);
+    assert_eq!(audits[1].2, NODE_A);
+    assert!(audits[0].4.is_some());
+    assert!(audits[1].4.is_none());
+    assert_ne!(audits[0].3, audits[0].4.as_deref().unwrap());
+    assert_eq!(
+        audits[0].4.as_deref(),
+        Some(node_hash(&persisted_replacement)?.as_str()),
+        "after hash must bind the microsecond-precision PostgreSQL truth"
+    );
 
     let node_edge_exists: bool = sqlx::query_scalar(
         "SELECT EXISTS (SELECT 1 FROM domain_edges WHERE id = 'writepath-edge-node')",

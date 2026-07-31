@@ -6,6 +6,7 @@ pub mod federation;
 pub mod governance;
 pub mod mailer;
 pub mod middleware;
+pub mod node_mutation;
 pub mod outbox;
 pub mod routes;
 pub mod search;
@@ -226,6 +227,17 @@ pub async fn run() -> anyhow::Result<()> {
                 .context(
                     "failed to recover JSONL node-delete journal before loading domain data",
                 )?;
+            let audit_recovery = crate::node_mutation::recover_jsonl_audit().await.context(
+                "failed to recover private JSONL node-mutation audit before loading domain data",
+            )?;
+            metrics.node_mutation_jsonl_recovery(
+                crate::telemetry::NodeMutationJsonlRecoveryOutcome::Committed,
+                audit_recovery.committed,
+            );
+            metrics.node_mutation_jsonl_recovery(
+                crate::telemetry::NodeMutationJsonlRecoveryOutcome::Aborted,
+                audit_recovery.aborted,
+            );
             (
                 routes::accounts::load_all_accounts()
                     .await

@@ -292,6 +292,45 @@ impl AutoProvisionRole {
 }
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
+pub struct NodeMutationRateLimitConfig {
+    #[serde(default = "default_node_mutation_replace_per_minute")]
+    pub replace_per_minute: u32,
+    #[serde(default = "default_node_mutation_replace_per_hour")]
+    pub replace_per_hour: u32,
+    #[serde(default = "default_node_mutation_delete_per_minute")]
+    pub delete_per_minute: u32,
+    #[serde(default = "default_node_mutation_delete_per_hour")]
+    pub delete_per_hour: u32,
+    #[serde(default)]
+    pub admin_emergency_bypass: bool,
+}
+
+impl Default for NodeMutationRateLimitConfig {
+    fn default() -> Self {
+        Self {
+            replace_per_minute: default_node_mutation_replace_per_minute(),
+            replace_per_hour: default_node_mutation_replace_per_hour(),
+            delete_per_minute: default_node_mutation_delete_per_minute(),
+            delete_per_hour: default_node_mutation_delete_per_hour(),
+            admin_emergency_bypass: false,
+        }
+    }
+}
+
+const fn default_node_mutation_replace_per_minute() -> u32 {
+    30
+}
+const fn default_node_mutation_replace_per_hour() -> u32 {
+    300
+}
+const fn default_node_mutation_delete_per_minute() -> u32 {
+    10
+}
+const fn default_node_mutation_delete_per_hour() -> u32 {
+    50
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
     pub anonymize_opt_in: bool,
 
@@ -358,6 +397,10 @@ pub struct AppConfig {
     pub auth_rl_email_per_min: Option<u32>,
     #[serde(default)]
     pub auth_rl_email_per_hour: Option<u32>,
+    /// Separate, account-scoped limits for collective node mutations. These
+    /// buckets never reuse login email or IP counters.
+    #[serde(default)]
+    pub node_mutation_rate_limits: NodeMutationRateLimitConfig,
 
     // SMTP Configuration
     #[serde(default)]
@@ -564,6 +607,41 @@ impl AppConfig {
         apply_env_override_option!(self, auth_rl_ip_per_hour, u32, "AUTH_RL_IP_PER_HOUR");
         apply_env_override_option!(self, auth_rl_email_per_min, u32, "AUTH_RL_EMAIL_PER_MIN");
         apply_env_override_option!(self, auth_rl_email_per_hour, u32, "AUTH_RL_EMAIL_PER_HOUR");
+        for (name, target) in [
+            (
+                "NODE_MUTATION_REPLACE_PER_MINUTE",
+                &mut self.node_mutation_rate_limits.replace_per_minute,
+            ),
+            (
+                "NODE_MUTATION_REPLACE_PER_HOUR",
+                &mut self.node_mutation_rate_limits.replace_per_hour,
+            ),
+            (
+                "NODE_MUTATION_DELETE_PER_MINUTE",
+                &mut self.node_mutation_rate_limits.delete_per_minute,
+            ),
+            (
+                "NODE_MUTATION_DELETE_PER_HOUR",
+                &mut self.node_mutation_rate_limits.delete_per_hour,
+            ),
+        ] {
+            if let Ok(raw) = env::var(name) {
+                *target = raw
+                    .trim()
+                    .parse::<u32>()
+                    .with_context(|| format!("invalid {name}: expected a non-negative integer"))?;
+            }
+        }
+        if let Ok(raw) = env::var("NODE_MUTATION_ADMIN_EMERGENCY_BYPASS") {
+            self.node_mutation_rate_limits.admin_emergency_bypass =
+                match raw.trim().to_ascii_lowercase().as_str() {
+                    "1" | "true" => true,
+                    "0" | "false" => false,
+                    other => anyhow::bail!(
+                        "invalid NODE_MUTATION_ADMIN_EMERGENCY_BYPASS value '{other}'; expected true/false or 1/0"
+                    ),
+                };
+        }
 
         // SMTP Overrides
         if let Ok(val) = env::var("SMTP_HOST") {
@@ -683,6 +761,30 @@ impl AppConfig {
     fn validate(self) -> Result<Self> {
         if self.max_guest_owned_nodes == 0 {
             anyhow::bail!("MAX_GUEST_OWNED_NODES must be greater than zero");
+        }
+        for (name, value) in [
+            (
+                "NODE_MUTATION_REPLACE_PER_MINUTE",
+                self.node_mutation_rate_limits.replace_per_minute,
+            ),
+            (
+                "NODE_MUTATION_REPLACE_PER_HOUR",
+                self.node_mutation_rate_limits.replace_per_hour,
+            ),
+            (
+                "NODE_MUTATION_DELETE_PER_MINUTE",
+                self.node_mutation_rate_limits.delete_per_minute,
+            ),
+            (
+                "NODE_MUTATION_DELETE_PER_HOUR",
+                self.node_mutation_rate_limits.delete_per_hour,
+            ),
+        ] {
+            if value == 0 {
+                anyhow::bail!(
+                    "{name} must be greater than zero; use the explicit administrator emergency bypass instead of disabling collective mutation limits"
+                );
+            }
         }
 
         // OPT-ARC-001 Phase E-A: PostgreSQL account-create writes require the
@@ -966,11 +1068,21 @@ anonymize_opt_in: true
         let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _guest_nodes = EnvGuard::unset("MAX_GUEST_OWNED_NODES");
         let _cookie_secure = EnvGuard::unset("AUTH_COOKIE_SECURE");
+        let _mutation_replace_min = EnvGuard::unset("NODE_MUTATION_REPLACE_PER_MINUTE");
+        let _mutation_replace_hour = EnvGuard::unset("NODE_MUTATION_REPLACE_PER_HOUR");
+        let _mutation_delete_min = EnvGuard::unset("NODE_MUTATION_DELETE_PER_MINUTE");
+        let _mutation_delete_hour = EnvGuard::unset("NODE_MUTATION_DELETE_PER_HOUR");
+        let _mutation_bypass = EnvGuard::unset("NODE_MUTATION_ADMIN_EMERGENCY_BYPASS");
 
         let cfg = AppConfig::load_from_path(file.path())?;
         assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.max_guest_owned_nodes, 1_000);
         assert!(cfg.auth_cookie_secure);
+        assert_eq!(cfg.node_mutation_rate_limits.replace_per_minute, 30);
+        assert_eq!(cfg.node_mutation_rate_limits.replace_per_hour, 300);
+        assert_eq!(cfg.node_mutation_rate_limits.delete_per_minute, 10);
+        assert_eq!(cfg.node_mutation_rate_limits.delete_per_hour, 50);
+        assert!(!cfg.node_mutation_rate_limits.admin_emergency_bypass);
 
         Ok(())
     }
@@ -1064,6 +1176,58 @@ anonymize_opt_in: true
         assert_eq!(cfg.max_guest_owned_nodes, 321);
         assert!(!cfg.auth_cookie_secure);
 
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn node_mutation_rate_limit_env_overrides_are_separate() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _replace_min = EnvGuard::set("NODE_MUTATION_REPLACE_PER_MINUTE", "7");
+        let _replace_hour = EnvGuard::set("NODE_MUTATION_REPLACE_PER_HOUR", "70");
+        let _delete_min = EnvGuard::set("NODE_MUTATION_DELETE_PER_MINUTE", "3");
+        let _delete_hour = EnvGuard::set("NODE_MUTATION_DELETE_PER_HOUR", "12");
+        let _bypass = EnvGuard::set("NODE_MUTATION_ADMIN_EMERGENCY_BYPASS", "true");
+
+        let cfg = AppConfig::load_from_path(file.path())?;
+        assert_eq!(cfg.node_mutation_rate_limits.replace_per_minute, 7);
+        assert_eq!(cfg.node_mutation_rate_limits.replace_per_hour, 70);
+        assert_eq!(cfg.node_mutation_rate_limits.delete_per_minute, 3);
+        assert_eq!(cfg.node_mutation_rate_limits.delete_per_hour, 12);
+        assert!(cfg.node_mutation_rate_limits.admin_emergency_bypass);
+        assert_eq!(cfg.auth_rl_email_per_min, None);
+        assert_eq!(cfg.auth_rl_email_per_hour, None);
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn zero_node_mutation_limit_is_rejected() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _replace_min = EnvGuard::set("NODE_MUTATION_REPLACE_PER_MINUTE", "0");
+
+        let error = AppConfig::load_from_path(file.path())
+            .expect_err("zero collective mutation limit must fail closed");
+        assert!(error
+            .to_string()
+            .contains("NODE_MUTATION_REPLACE_PER_MINUTE must be greater than zero"));
+        Ok(())
+    }
+
+    #[test]
+    #[serial]
+    fn invalid_node_mutation_admin_bypass_fails_closed() -> Result<()> {
+        let file = NamedTempFile::new()?;
+        std::fs::write(file.path(), YAML)?;
+        let _bypass = EnvGuard::set("NODE_MUTATION_ADMIN_EMERGENCY_BYPASS", "enable-ish");
+
+        let error = AppConfig::load_from_path(file.path())
+            .expect_err("ambiguous admin bypass value must be rejected");
+        assert!(error
+            .to_string()
+            .contains("invalid NODE_MUTATION_ADMIN_EMERGENCY_BYPASS"));
         Ok(())
     }
 

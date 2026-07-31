@@ -14,8 +14,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use prometheus::{
-    Encoder, Histogram, HistogramOpts, IntCounter, IntCounterVec, IntGauge, IntGaugeVec, Opts,
-    Registry, TextEncoder,
+    Encoder, Histogram, HistogramOpts, HistogramVec, IntCounter, IntCounterVec, IntGauge,
+    IntGaugeVec, Opts, Registry, TextEncoder,
 };
 use tower::{Layer, Service};
 
@@ -35,6 +35,63 @@ pub enum SearchRequestOutcome {
     Unavailable,
     InvalidRequest,
     Internal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeMutationOutcome {
+    Success,
+    Conflict,
+    RateLimited,
+    Forbidden,
+    Invalid,
+    NotFound,
+    Unavailable,
+    Internal,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeMutationJsonlRecoveryOutcome {
+    Committed,
+    Aborted,
+}
+
+impl NodeMutationJsonlRecoveryOutcome {
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::Committed => "committed",
+            Self::Aborted => "aborted",
+        }
+    }
+}
+
+impl NodeMutationOutcome {
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::Success => "success",
+            Self::Conflict => "conflict",
+            Self::RateLimited => "rate_limited",
+            Self::Forbidden => "forbidden",
+            Self::Invalid => "invalid",
+            Self::NotFound => "not_found",
+            Self::Unavailable => "unavailable",
+            Self::Internal => "internal",
+        }
+    }
+
+    pub fn from_status(status: StatusCode) -> Self {
+        match status {
+            StatusCode::OK | StatusCode::NO_CONTENT => Self::Success,
+            StatusCode::CONFLICT
+            | StatusCode::PRECONDITION_FAILED
+            | StatusCode::PRECONDITION_REQUIRED => Self::Conflict,
+            StatusCode::TOO_MANY_REQUESTS => Self::RateLimited,
+            StatusCode::UNAUTHORIZED | StatusCode::FORBIDDEN => Self::Forbidden,
+            StatusCode::BAD_REQUEST | StatusCode::UNPROCESSABLE_ENTITY => Self::Invalid,
+            StatusCode::NOT_FOUND => Self::NotFound,
+            StatusCode::SERVICE_UNAVAILABLE => Self::Unavailable,
+            _ => Self::Internal,
+        }
+    }
 }
 
 impl SearchRequestOutcome {
@@ -115,6 +172,11 @@ struct MetricsInner {
     pub search_provider_duration_seconds: Histogram,
     pub search_authorized_candidates: Histogram,
     pub search_lexical_candidates: Histogram,
+    pub node_mutations_total: IntCounterVec,
+    pub node_mutation_conflicts_total: IntCounterVec,
+    pub node_mutation_admin_bypass_total: IntCounterVec,
+    pub node_mutation_jsonl_recovery_total: IntCounterVec,
+    pub node_mutation_duration_seconds: HistogramVec,
 }
 
 impl Metrics {
@@ -200,6 +262,44 @@ impl Metrics {
             )
             .buckets(lexical_candidate_buckets),
         )?;
+        let node_mutations_total = IntCounterVec::new(
+            Opts::new(
+                "node_mutations_total",
+                "Collective node mutation outcomes with fixed operation and outcome labels",
+            ),
+            &["operation", "outcome"],
+        )?;
+        let node_mutation_conflicts_total = IntCounterVec::new(
+            Opts::new(
+                "node_mutation_conflicts_total",
+                "Collective node write conflicts without node or account labels",
+            ),
+            &["operation"],
+        )?;
+        let node_mutation_admin_bypass_total = IntCounterVec::new(
+            Opts::new(
+                "node_mutation_admin_bypass_total",
+                "Explicit administrator emergency rate-limit bypasses",
+            ),
+            &["operation"],
+        )?;
+        let node_mutation_jsonl_recovery_total = IntCounterVec::new(
+            Opts::new(
+                "node_mutation_jsonl_recovery_total",
+                "JSONL mutation audit recovery outcomes without identifiers",
+            ),
+            &["outcome"],
+        )?;
+        let node_mutation_duration_seconds = HistogramVec::new(
+            HistogramOpts::new(
+                "node_mutation_duration_seconds",
+                "Collective node mutation latency without node or account labels",
+            )
+            .buckets(vec![
+                0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0,
+            ]),
+            &["operation"],
+        )?;
 
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
@@ -214,6 +314,11 @@ impl Metrics {
         registry.register(Box::new(search_provider_duration_seconds.clone()))?;
         registry.register(Box::new(search_authorized_candidates.clone()))?;
         registry.register(Box::new(search_lexical_candidates.clone()))?;
+        registry.register(Box::new(node_mutations_total.clone()))?;
+        registry.register(Box::new(node_mutation_conflicts_total.clone()))?;
+        registry.register(Box::new(node_mutation_admin_bypass_total.clone()))?;
+        registry.register(Box::new(node_mutation_jsonl_recovery_total.clone()))?;
+        registry.register(Box::new(node_mutation_duration_seconds.clone()))?;
 
         build_info_metric
             .with_label_values(&[
@@ -237,6 +342,11 @@ impl Metrics {
                 search_provider_duration_seconds,
                 search_authorized_candidates,
                 search_lexical_candidates,
+                node_mutations_total,
+                node_mutation_conflicts_total,
+                node_mutation_admin_bypass_total,
+                node_mutation_jsonl_recovery_total,
+                node_mutation_duration_seconds,
             }),
         })
     }
@@ -298,6 +408,47 @@ impl Metrics {
             .search_authorized_candidates
             .observe(authorized as f64);
         self.inner.search_lexical_candidates.observe(lexical as f64);
+    }
+
+    pub fn observe_node_mutation(
+        &self,
+        operation: crate::node_mutation::NodeMutationOperation,
+        outcome: NodeMutationOutcome,
+        duration: Duration,
+        admin_bypass: bool,
+    ) {
+        let operation = operation.as_str();
+        self.inner
+            .node_mutations_total
+            .with_label_values(&[operation, outcome.as_label()])
+            .inc();
+        self.inner
+            .node_mutation_duration_seconds
+            .with_label_values(&[operation])
+            .observe(duration.as_secs_f64());
+        if outcome == NodeMutationOutcome::Conflict {
+            self.inner
+                .node_mutation_conflicts_total
+                .with_label_values(&[operation])
+                .inc();
+        }
+        if admin_bypass {
+            self.inner
+                .node_mutation_admin_bypass_total
+                .with_label_values(&[operation])
+                .inc();
+        }
+    }
+
+    pub fn node_mutation_jsonl_recovery(
+        &self,
+        outcome: NodeMutationJsonlRecoveryOutcome,
+        count: u64,
+    ) {
+        self.inner
+            .node_mutation_jsonl_recovery_total
+            .with_label_values(&[outcome.as_label()])
+            .inc_by(count);
     }
 
     pub fn render(&self) -> Result<Vec<u8>, prometheus::Error> {
@@ -394,7 +545,11 @@ where
 mod tests {
     use std::time::Duration;
 
-    use super::{BuildInfo, Metrics, MetricsLayer, SearchRequestOutcome, UNMATCHED_ROUTE_LABEL};
+    use super::{
+        BuildInfo, Metrics, MetricsLayer, NodeMutationJsonlRecoveryOutcome, NodeMutationOutcome,
+        SearchRequestOutcome, UNMATCHED_ROUTE_LABEL,
+    };
+    use crate::node_mutation::NodeMutationOperation;
     use axum::{body::Body, http::Request, routing::get, Router};
     use tower::ServiceExt;
 
@@ -454,6 +609,40 @@ mod tests {
         assert!(rendered.contains("search_lexical_candidates_sum 10"));
         assert!(!rendered.contains("query="));
         assert!(!rendered.contains("node_id="));
+    }
+
+    #[test]
+    fn node_mutation_metrics_use_only_fixed_privacy_safe_labels() {
+        let metrics = test_metrics();
+        metrics.observe_node_mutation(
+            NodeMutationOperation::Replace,
+            NodeMutationOutcome::Conflict,
+            Duration::from_millis(12),
+            true,
+        );
+        metrics.observe_node_mutation(
+            NodeMutationOperation::Delete,
+            NodeMutationOutcome::RateLimited,
+            Duration::from_millis(3),
+            false,
+        );
+        metrics.node_mutation_jsonl_recovery(NodeMutationJsonlRecoveryOutcome::Committed, 2);
+        metrics.node_mutation_jsonl_recovery(NodeMutationJsonlRecoveryOutcome::Aborted, 1);
+
+        let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        assert!(
+            rendered.contains(r#"node_mutations_total{operation="replace",outcome="conflict"} 1"#)
+        );
+        assert!(rendered
+            .contains(r#"node_mutations_total{operation="delete",outcome="rate_limited"} 1"#));
+        assert!(rendered.contains(r#"node_mutation_conflicts_total{operation="replace"} 1"#));
+        assert!(rendered.contains(r#"node_mutation_admin_bypass_total{operation="replace"} 1"#));
+        assert!(rendered.contains(r#"node_mutation_duration_seconds_count{operation="replace"} 1"#));
+        assert!(rendered.contains(r#"node_mutation_jsonl_recovery_total{outcome="committed"} 2"#));
+        assert!(rendered.contains(r#"node_mutation_jsonl_recovery_total{outcome="aborted"} 1"#));
+        for forbidden in ["node_id=", "account_id=", "title=", "content="] {
+            assert!(!rendered.contains(forbidden));
+        }
     }
 
     #[test]

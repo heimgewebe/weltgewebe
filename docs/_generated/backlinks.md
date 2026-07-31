@@ -138,6 +138,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/datenmodell.md
 - [relates_to] docs/techstack.md
 
+## architecture/security.md
+
+- [relates_to] docs/adr/ADR-0014__accountable-collective-node-mutations.md
+
 ## architecture/weltgewebe-os.md
 
 - [relates_to] docs/adr/ADR-0010__kubernetes-kanonische-plattform.md
@@ -1043,6 +1047,7 @@ Generated automatically. Do not edit.
 
 ## docs/specs/objektlebenszyklen-und-loeschwirkungen.md
 
+- [relates_to] docs/adr/ADR-0014__accountable-collective-node-mutations.md
 - [relates_to] docs/datenmodell.md
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/specs/contract.md
@@ -1062,6 +1067,7 @@ Generated automatically. Do not edit.
 ## docs/specs/ui-interaction.md
 
 - [relates_to] docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
+- [relates_to] docs/adr/ADR-0014__accountable-collective-node-mutations.md
 - [depends_on] docs/roadmap.md
 - [relates_to] docs/vision.md
 

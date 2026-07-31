@@ -180,6 +180,7 @@ fn write_path_config(
         auth_rl_ip_per_hour: None,
         auth_rl_email_per_min: None,
         auth_rl_email_per_hour: None,
+        node_mutation_rate_limits: Default::default(),
         smtp_host: None,
         smtp_port: None,
         smtp_user: None,

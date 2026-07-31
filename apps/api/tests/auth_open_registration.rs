@@ -58,6 +58,7 @@ fn test_state_open_reg() -> Result<ApiState> {
         auth_rl_ip_per_hour: Some(1000),
         auth_rl_email_per_min: Some(100),
         auth_rl_email_per_hour: Some(1000),
+        node_mutation_rate_limits: Default::default(),
 
         smtp_host: None,
         smtp_port: None,

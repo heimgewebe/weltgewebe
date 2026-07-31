@@ -116,3 +116,22 @@ Dieses Dokument beschreibt den Vertrag im Repository. Es behauptet nicht, dass
 eine konkrete Runtime aktuell gesund, ein Secret rotiert oder ein Provider
 korrekt konfiguriert ist. Dafür sind frische Runtime-, CI- und Betriebsbelege
 nötig.
+
+## Kollektive Knotenmutationen
+
+Replace und Delete erzeugen private, akteursgebundene Mutationsbelege. Die rohe
+Account-ID wird nicht gespeichert; verwendet wird ein domänenseparater SHA-256.
+Dieser Wert ist pseudonym und darf weder öffentlich projiziert noch als
+Prometheus-Label verwendet werden. PostgreSQL bindet Beleg und Fachmutation in
+eine Transaktion. JSONL verwendet einen privaten fsync-gesicherten
+Prepare/Commit/Abort-Log mit 0700/0600-Rechten, Symlink-Abwehr und fail-closed
+Startup-Recovery.
+
+Accountgebundene Replace-/Delete-Buckets sind von Auth-E-Mail- und IP-Buckets
+getrennt. Die vier Grenzwerte müssen größer als null bleiben; `0` wird beim
+Start abgelehnt. Der administrative Notfall-Bypass ist standardmäßig aus, muss
+explizit konfiguriert werden und wird ohne Akteurs- oder Knotenlabel gezählt. Ein normaler
+Node-Endpunkt darf weder Auditdaten lesen noch einen Purge auslösen. Die Belege
+haben derzeit keinen automatischen TTL und bleiben bis zu einem gesonderten,
+auditierten Retentions- oder Purgevertrag erhalten; dies ist fail-closed, nicht
+eine allgemeine rechtliche Behauptung unbegrenzter Speicherung.

@@ -1,4 +1,4 @@
-use std::{future::Future, sync::OnceLock};
+use std::{future::Future, sync::OnceLock, time::Instant};
 
 use axum::{
     extract::{Path, State},
@@ -12,11 +12,16 @@ use tokio::sync::{Mutex, MutexGuard, Semaphore, SemaphorePermit};
 
 use crate::{
     advisory_lock::node_mutation_lock_key,
-    auth::role::Role,
+    auth::{
+        rate_limit::{NodeMutationRateDecision, RateLimitError},
+        role::Role,
+    },
     config::{DomainNodeWriteSource, DomainReadSource},
     domain_db,
     middleware::auth::AuthContext,
+    node_mutation::NodeMutationOperation,
     state::ApiState,
+    telemetry::NodeMutationOutcome,
 };
 
 use super::{domain_write_guard::reject_node_patch_unless_writable, nodes};
@@ -331,6 +336,60 @@ fn check_node_precondition(
     }
 }
 
+async fn mutation_rate_context(
+    state: &ApiState,
+    auth: &AuthContext,
+    operation: NodeMutationOperation,
+) -> Result<(String, bool), Response> {
+    let account_id = auth.account_id.clone().ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            "authenticated account context missing",
+        )
+            .into_response()
+    })?;
+    match state
+        .rate_limiter
+        .check_node_mutation(&account_id, auth.role.clone(), operation)
+        .await
+    {
+        Ok(NodeMutationRateDecision::Enforced) => Ok((account_id, false)),
+        Ok(NodeMutationRateDecision::AdminEmergencyBypass) => Ok((account_id, true)),
+        Err(RateLimitError::AccountLimited) => Err((
+            StatusCode::TOO_MANY_REQUESTS,
+            "collective node mutation rate limit exceeded",
+        )
+            .into_response()),
+        Err(RateLimitError::BackendUnavailable(error)) => {
+            tracing::error!(%error, operation = operation.as_str(), "node mutation rate-limit backend unavailable");
+            Err((
+                StatusCode::SERVICE_UNAVAILABLE,
+                "collective node mutation rate limit unavailable",
+            )
+                .into_response())
+        }
+        Err(error) => {
+            tracing::error!(%error, operation = operation.as_str(), "unexpected node mutation rate-limit error");
+            Err(StatusCode::INTERNAL_SERVER_ERROR.into_response())
+        }
+    }
+}
+
+fn observe_mutation_response(
+    state: &ApiState,
+    operation: NodeMutationOperation,
+    started: Instant,
+    admin_bypass: bool,
+    response: &Response,
+) {
+    state.metrics.observe_node_mutation(
+        operation,
+        NodeMutationOutcome::from_status(response.status()),
+        started.elapsed(),
+        admin_bypass,
+    );
+}
+
 pub async fn patch_node_serialized(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -338,6 +397,16 @@ pub async fn patch_node_serialized(
     headers: HeaderMap,
     Json(payload): Json<nodes::UpdateNode>,
 ) -> Response {
+    let operation = NodeMutationOperation::Patch;
+    let started = Instant::now();
+    let (_actor_account_id, admin_bypass) =
+        match mutation_rate_context(&state, &auth, operation).await {
+            Ok(context) => context,
+            Err(response) => {
+                observe_mutation_response(&state, operation, started, false, &response);
+                return response;
+            }
+        };
     let projection_auth = auth.clone();
     let mutation_auth = auth;
     let mutation_state = state.clone();
@@ -387,10 +456,12 @@ pub async fn patch_node_serialized(
     })
     .await;
 
-    match outcome {
+    let response = match outcome {
         Ok(node) => Json(node).into_response(),
         Err(response) => response,
-    }
+    };
+    observe_mutation_response(&state, operation, started, admin_bypass, &response);
+    response
 }
 
 pub async fn replace_node_serialized(
@@ -400,6 +471,16 @@ pub async fn replace_node_serialized(
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Response {
+    let operation = NodeMutationOperation::Replace;
+    let started = Instant::now();
+    let (actor_account_id, admin_bypass) =
+        match mutation_rate_context(&state, &auth, operation).await {
+            Ok(context) => context,
+            Err(response) => {
+                observe_mutation_response(&state, operation, started, false, &response);
+                return response;
+            }
+        };
     let projection_auth = auth.clone();
     let mutation_auth = auth;
     let mutation_state = state.clone();
@@ -420,9 +501,10 @@ pub async fn replace_node_serialized(
             return Err(*response);
         }
         let Json(node) = nodes::replace_node(
-            State(mutation_state.clone()),
-            Path(mutation_id),
-            Json(payload),
+            mutation_state.clone(),
+            mutation_id,
+            payload,
+            actor_account_id,
         )
         .await
         .map_err(|error| error.into_response())?;
@@ -449,10 +531,12 @@ pub async fn replace_node_serialized(
     })
     .await;
 
-    match outcome {
+    let response = match outcome {
         Ok(node) => Json(node).into_response(),
         Err(response) => response,
-    }
+    };
+    observe_mutation_response(&state, operation, started, admin_bypass, &response);
+    response
 }
 
 pub async fn delete_node_serialized(
@@ -461,9 +545,19 @@ pub async fn delete_node_serialized(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Response {
+    let operation = NodeMutationOperation::Delete;
+    let started = Instant::now();
+    let (actor_account_id, admin_bypass) =
+        match mutation_rate_context(&state, &auth, operation).await {
+            Ok(context) => context,
+            Err(response) => {
+                observe_mutation_response(&state, operation, started, false, &response);
+                return response;
+            }
+        };
     let mutation_state = state.clone();
     let mutation_id = id.clone();
-    match run_node_mutation(&state, &id, async move {
+    let outcome = run_node_mutation(&state, &id, async move {
         let node = match current_node_for_precondition(&mutation_state, &mutation_id).await {
             Ok(node) => node,
             Err(response) => return Err(response),
@@ -477,15 +571,17 @@ pub async fn delete_node_serialized(
         if let Err(response) = check_node_precondition(node, &mutation_id, &headers) {
             return Err(*response);
         }
-        let response = nodes::delete_node(State(mutation_state), Path(mutation_id))
+        let response = nodes::delete_node(mutation_state, mutation_id, actor_account_id)
             .await
             .into_response();
         Ok(response)
     })
-    .await
-    {
+    .await;
+    let response = match outcome {
         Ok(response) | Err(response) => response,
-    }
+    };
+    observe_mutation_response(&state, operation, started, admin_bypass, &response);
+    response
 }
 
 #[cfg(test)]

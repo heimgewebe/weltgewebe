@@ -14,9 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 662 |
+| Relationen gesamt | 665 |
 | — depends_on | 25 |
-| — relates_to | 619 |
+| — relates_to | 622 |
 | — supersedes | 12 |
 | — verifies | 6 |
 | relates_to Anteil | 94% |
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (263 Dokumente):
+**Cluster 1** (265 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -57,6 +57,7 @@ _Keine Lücken erkannt._
 - `apps/api/tests/db_multi_instance_foundation.rs`
 - `apps/web/src/lib/components/governance/ProposalDetail.svelte`
 - `architecture/overview.md`
+- `architecture/security.md`
 - `architecture/weltgewebe-os.md`
 - `audit/impl-registry.yaml`
 - `contracts/agent/handoff.schema.json`
@@ -81,6 +82,7 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0011__foederierte-gewebezellen.md`
 - `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
 - `docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md`
+- `docs/adr/ADR-0014__accountable-collective-node-mutations.md`
 - `docs/architecture/weltgewebe-os-convergence-adapter.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
