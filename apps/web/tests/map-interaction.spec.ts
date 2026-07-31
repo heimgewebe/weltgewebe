@@ -274,6 +274,27 @@ test.describe("Map Interaction & Context Panel", () => {
     });
     await expect(uebersichtTab).toBeVisible();
 
+    const tabList = panel.getByRole("tablist", { name: "Knoten-Tabs" });
+    const allTabs = tabList.getByRole("tab");
+    await expect(allTabs).toHaveCount(4);
+    const controlledPanelIds = await allTabs.evaluateAll((elements) =>
+      elements.map((element) => element.getAttribute("aria-controls")),
+    );
+    expect(controlledPanelIds).toEqual([
+      "panel-uebersicht",
+      "panel-gespraech",
+      "panel-verlauf",
+      "panel-bearbeiten",
+    ]);
+    for (const panelId of controlledPanelIds) {
+      expect(panelId).not.toBeNull();
+      await expect(panel.locator(`#${panelId}`)).toHaveCount(1);
+    }
+    await expect(panel.locator("#panel-uebersicht")).toBeVisible();
+    await expect(panel.locator("#panel-gespraech")).toBeHidden();
+    await expect(panel.locator("#panel-verlauf")).toBeHidden();
+    await expect(panel.locator("#panel-bearbeiten")).toBeHidden();
+
     // Focus the active tab (usually Übersicht by default)
     await uebersichtTab.focus();
     await expect(uebersichtTab).toBeFocused();
@@ -333,7 +354,6 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(verlaufTab).toHaveAttribute("tabindex", "-1");
     await expect(panel.locator("#panel-bearbeiten")).toBeVisible();
 
-    const tabList = panel.getByRole("tablist", { name: "Knoten-Tabs" });
     const tabListBox = await tabList.boundingBox();
     const bearbeitenBox = await bearbeitenTab.boundingBox();
     expect(tabListBox).not.toBeNull();
