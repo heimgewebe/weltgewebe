@@ -857,21 +857,12 @@ async fn replace_node_in_postgres_inner(
     let updated_at = DateTime::parse_from_rfc3339(&node.updated_at)
         .map(|value| postgres_timestamp_precision(value.with_timezone(&Utc)))
         .map_err(|error| NodeWriteError::Mapping(anyhow::Error::new(error)))?;
-    let persisted_audit = if let Some(audit) = audit {
-        let mut persisted_node = node.clone();
-        persisted_node.updated_at = updated_at.to_rfc3339();
-        let mut persisted_audit = audit.clone();
-        persisted_audit.after_hash =
-            Some(node_hash(&persisted_node).map_err(NodeWriteError::Serialization)?);
-        Some(persisted_audit)
-    } else {
-        None
-    };
     let mut tx = pool.begin().await.map_err(NodeWriteError::Database)?;
-    let result = sqlx::query(
+    let persisted_row: Option<NodeRow> = sqlx::query_as(
         "UPDATE domain_nodes \
          SET kind = $2, title = $3, lat = $4, lon = $5, updated_at = $6, payload = $7::jsonb, search_visibility = $8 \
-         WHERE id = $1",
+         WHERE id = $1 \
+         RETURNING id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility",
     )
     .bind(&node.id)
     .bind(&node.kind)
@@ -881,15 +872,19 @@ async fn replace_node_in_postgres_inner(
     .bind(updated_at)
     .bind(payload)
     .bind(node.search_visibility.as_str())
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(NodeWriteError::Database)?;
-    if result.rows_affected() == 0 {
+    let Some(persisted_row) = persisted_row else {
         tx.rollback().await.ok();
         return Err(NodeWriteError::NotFound);
-    }
-    if let Some(audit) = persisted_audit.as_ref() {
-        insert_postgres_audit(&mut tx, audit)
+    };
+    let persisted_node = node_from_row(persisted_row).map_err(NodeWriteError::Mapping)?;
+    if let Some(audit) = audit {
+        let mut persisted_audit = audit.clone();
+        persisted_audit.after_hash =
+            Some(node_hash(&persisted_node).map_err(NodeWriteError::Serialization)?);
+        insert_postgres_audit(&mut tx, &persisted_audit)
             .await
             .map_err(NodeWriteError::Database)?;
     }
