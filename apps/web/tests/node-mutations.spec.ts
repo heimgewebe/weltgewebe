@@ -33,16 +33,23 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await page.goto("/map");
 
     const panel = await openFirstNode(page);
+    const originalTitle = await panel.locator("h3").innerText();
     await expect(
       panel.getByRole("button", { name: "Bearbeiten", exact: true }),
     ).toHaveCount(0);
-    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    const editTab = panel.getByRole("tab", { name: "Bearbeiten" });
+    await editTab.click();
     await panel
       .getByRole("button", { name: "Bearbeiten", exact: true })
       .click();
     await expect(panel.getByLabel("Titel")).toBeFocused();
+    await panel.getByLabel("Titel").fill("Verworfener Entwurf");
     await panel.getByRole("button", { name: "Abbrechen" }).click();
-    await expect(panel.getByRole("tab", { name: "Bearbeiten" })).toBeFocused();
+    await expect(panel.locator("form")).toHaveCount(0);
+    await expect(panel.locator("h3")).toHaveText(originalTitle);
+    await expect(editTab).toBeFocused();
+    await expect(editTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.getByRole("alert")).toHaveCount(0);
     await panel
       .getByRole("button", { name: "Bearbeiten", exact: true })
       .click();
@@ -259,17 +266,146 @@ test.describe("Knoten bearbeiten und löschen", () => {
       panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }),
     ).toHaveCount(0);
 
-    const uebersichtTab = panel.getByRole("tab", { name: "Übersicht" });
-    const verlaufTab = panel.getByRole("tab", { name: "Verlauf" });
+    const tabList = panel.getByRole("tablist", { name: "Knoten-Tabs" });
+    const uebersichtTab = tabList.getByRole("tab", { name: "Übersicht" });
+    const gespraechTab = tabList.getByRole("tab", { name: "Gespräch" });
+    const verlaufTab = tabList.getByRole("tab", { name: "Verlauf" });
+    await expect(tabList.getByRole("tab")).toHaveCount(3);
+
+    const tabContract = [
+      [uebersichtTab, "panel-uebersicht"],
+      [gespraechTab, "panel-gespraech"],
+      [verlaufTab, "panel-verlauf"],
+    ] as const;
+    for (const [tab, panelId] of tabContract) {
+      await expect(tab).toHaveAttribute("aria-controls", panelId);
+      await expect(panel.locator(`#${panelId}`)).toHaveCount(1);
+    }
+    await expect(panel.locator("#panel-uebersicht")).toBeVisible();
+    await expect(panel.locator("#panel-gespraech")).toBeHidden();
+    await expect(panel.locator("#panel-verlauf")).toBeHidden();
+
     await uebersichtTab.focus();
-    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("ArrowRight");
+    await expect(gespraechTab).toBeFocused();
+    await expect(gespraechTab).toHaveAttribute("aria-selected", "true");
+    await expect(gespraechTab).toHaveAttribute("tabindex", "0");
+    await expect(panel.locator("#panel-gespraech")).toBeVisible();
+    await expect(panel.locator("#panel-uebersicht")).toBeHidden();
+
+    await page.keyboard.press("End");
     await expect(verlaufTab).toBeFocused();
     await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
     await expect(verlaufTab).toHaveAttribute("tabindex", "0");
-    await expect(uebersichtTab).toHaveAttribute("tabindex", "-1");
-    await page.keyboard.press("ArrowRight");
+    await expect(panel.locator("#panel-verlauf")).toBeVisible();
+
+    await page.keyboard.press("Home");
     await expect(uebersichtTab).toBeFocused();
     await expect(uebersichtTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-uebersicht")).toBeVisible();
+
+    await page.keyboard.press("ArrowLeft");
+    await expect(verlaufTab).toBeFocused();
+    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+    await expect(uebersichtTab).toHaveAttribute("tabindex", "-1");
+  });
+
+  test("fällt bei Berechtigungsverlust aus dem offenen Formular sicher auf Übersicht zurück", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
+    await page.goto("/map");
+
+    const panel = await openFirstNode(page);
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    await panel
+      .getByRole("button", { name: "Bearbeiten", exact: true })
+      .click();
+    await panel.getByLabel("Titel").fill("Nicht gespeicherter Entwurf");
+    await expect(panel.locator("form")).toBeVisible();
+
+    const logoutStatus = await page.evaluate(async () => {
+      const response = await fetch("/api/auth/logout", { method: "POST" });
+      return response.status;
+    });
+    expect(logoutStatus).toBe(200);
+    await page.reload();
+
+    const guestPanel = await openFirstNode(page);
+    const overviewTab = guestPanel.getByRole("tab", { name: "Übersicht" });
+    await expect(guestPanel.locator("form")).toHaveCount(0);
+    await expect(
+      guestPanel.getByRole("tab", { name: "Bearbeiten" }),
+    ).toHaveCount(0);
+    await expect(overviewTab).toHaveAttribute("aria-selected", "true");
+    await expect(guestPanel.locator("#panel-uebersicht")).toBeVisible();
+    await expect(
+      guestPanel.getByText("Nicht gespeicherter Entwurf"),
+    ).toHaveCount(0);
+  });
+
+  test("zeigt einen Löschkonflikt, erhält den Knoten und bewahrt die Rückmeldung beim Reiterwechsel", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
+
+    let observedIfMatch = "";
+    await page.route("**/api/nodes/*", async (route, request) => {
+      if (request.method() !== "DELETE") {
+        await route.fallback();
+        return;
+      }
+      observedIfMatch = request.headers()["if-match"] ?? "";
+      const requestedNodeId = decodeURIComponent(
+        new URL(request.url()).pathname.split("/").pop() ?? "",
+      );
+      await route.fulfill({
+        status: 412,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: requestedNodeId,
+          title: "Zwischenzeitlich aktualisierter Knoten",
+          kind: "Ort",
+          summary: "Dieser aktuelle Stand darf nicht gelöscht werden.",
+          address: "Aktuelle Adresse",
+          location: { lat: 53.5, lon: 10 },
+          tags: ["aktuell"],
+          updated_at: "2026-07-31T18:00:00Z",
+        }),
+      });
+    });
+
+    await page.goto("/map");
+    const panel = await openFirstNode(page);
+    const markerCountBeforeDelete = await page.locator(".map-marker").count();
+    const editTab = panel.getByRole("tab", { name: "Bearbeiten" });
+    await editTab.click();
+    page.once("dialog", async (dialog) => {
+      await dialog.accept();
+    });
+    await panel
+      .getByRole("button", { name: "Aus dem Gewebe entfernen" })
+      .click();
+
+    const errorMessage =
+      "Der Knoten wurde in der Zwischenzeit geändert und konnte nicht gelöscht werden. Die Ansicht zeigt nun den aktuellen Stand.";
+    await expect(panel.getByText(errorMessage)).toBeVisible();
+    expect(observedIfMatch).toMatch(/^".+"$/);
+    await expect(page.locator(".map-marker")).toHaveCount(
+      markerCountBeforeDelete,
+    );
+    await expect(panel.locator("h3")).toHaveText(
+      "Zwischenzeitlich aktualisierter Knoten",
+    );
+
+    await panel.getByRole("tab", { name: "Übersicht" }).click();
+    await expect(panel.getByText(errorMessage)).toHaveCount(0);
+    await editTab.click();
+    await expect(panel.getByText(errorMessage)).toBeVisible();
   });
 
   test("bewahrt den Entwurf bei 412 und speichert nach bewusstem Vergleich erneut", async ({

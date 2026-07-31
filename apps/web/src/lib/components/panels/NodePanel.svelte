@@ -130,6 +130,8 @@
     const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
     if (activeTab === "bearbeiten") activeTab = "uebersicht";
     if (editing) editing = false;
+    mutationError = "";
+    conflictNode = null;
     if (shouldRestoreFocus) void focusAfterRender(() => overviewTab);
   }
 
@@ -149,6 +151,9 @@
   }
 
   function setTab(tab: NodeTab) {
+    // Mutation feedback survives ordinary tab changes so a conflict cannot be
+    // dismissed accidentally. A new mutation, cancellation, selection change
+    // or permission loss clears it explicitly.
     activeTab = tab;
   }
 
@@ -192,6 +197,8 @@
 
   function cancelEdit() {
     editing = false;
+    mutationError = "";
+    conflictNode = null;
     void focusAfterRender(() => editTab);
   }
 
@@ -470,14 +477,15 @@
       </div>
 
       <div class="tab-content node-full-content">
-        {#if activeTab === "uebersicht"}
-          <div
-            class="overview"
-            id="panel-uebersicht"
-            role="tabpanel"
-            aria-labelledby="tab-uebersicht"
-            tabindex="0"
-          >
+        <div
+          class="overview"
+          id="panel-uebersicht"
+          role="tabpanel"
+          aria-labelledby="tab-uebersicht"
+          tabindex={activeTab === "uebersicht" ? 0 : -1}
+          hidden={activeTab !== "uebersicht"}
+        >
+          {#if activeTab === "uebersicht"}
             {#if isLoadingDetails}<p class="ghost">Lade Details…</p>
             {:else}
               {#if nodeDetails?.created_at || $selection?.data?.created_at}<p>
@@ -531,26 +539,33 @@
                 />
               {/if}
             {/if}
-          </div>
-        {:else if activeTab === "gespraech"}
-          <div
-            id="panel-gespraech"
-            role="tabpanel"
-            aria-labelledby="tab-gespraech"
-          >
+          {/if}
+        </div>
+
+        <div
+          id="panel-gespraech"
+          role="tabpanel"
+          aria-labelledby="tab-gespraech"
+          tabindex={activeTab === "gespraech" ? 0 : -1}
+          hidden={activeTab !== "gespraech"}
+        >
+          {#if activeTab === "gespraech"}
             {#key nodeDetails?.id || $selection?.id || ""}
               <NodeConversation
                 nodeId={nodeDetails?.id || $selection?.id || ""}
               />
             {/key}
-          </div>
-        {:else if activeTab === "verlauf"}
-          <div
-            id="panel-verlauf"
-            role="tabpanel"
-            aria-labelledby="tab-verlauf"
-            tabindex="0"
-          >
+          {/if}
+        </div>
+
+        <div
+          id="panel-verlauf"
+          role="tabpanel"
+          aria-labelledby="tab-verlauf"
+          tabindex={activeTab === "verlauf" ? 0 : -1}
+          hidden={activeTab !== "verlauf"}
+        >
+          {#if activeTab === "verlauf"}
             {#if isLoadingDetails}<p class="ghost">Lade Verlauf…</p>
             {:else if timelineEvents.length}<ul class="timeline">
                 {#each timelineEvents as event}<li>
@@ -575,31 +590,37 @@
                   </li>{/each}
               </ul>
             {:else}<p class="ghost">Noch kein Verlauf.</p>{/if}
-          </div>
-        {:else if activeTab === "bearbeiten" && canMutate}
+          {/if}
+        </div>
+
+        {#if canMutate}
           <div
             class="mutation-actions"
             id="panel-bearbeiten"
             role="tabpanel"
             aria-labelledby="tab-bearbeiten"
+            tabindex={activeTab === "bearbeiten" ? 0 : -1}
+            hidden={activeTab !== "bearbeiten"}
           >
-            {#if mutationError}<p class="error" role="alert">
-                {mutationError}
-              </p>{/if}
-            <button type="button" class="secondary" on:click={beginEdit}
-              >Bearbeiten</button
-            >
-            <button
-              type="button"
-              class="danger"
-              on:click={removeNode}
-              disabled={deleting}
-              >{deleting ? "Entfernt…" : "Aus dem Gewebe entfernen"}</button
-            >
-            <p class="collective-note">
-              Eigene Knoten kannst du selbst pflegen. Weber können zusätzlich
-              gemeinschaftliche Knoten weiterentwickeln.
-            </p>
+            {#if activeTab === "bearbeiten"}
+              {#if mutationError}<p class="error" role="alert">
+                  {mutationError}
+                </p>{/if}
+              <button type="button" class="secondary" on:click={beginEdit}
+                >Bearbeiten</button
+              >
+              <button
+                type="button"
+                class="danger"
+                on:click={removeNode}
+                disabled={deleting}
+                >{deleting ? "Entfernt…" : "Aus dem Gewebe entfernen"}</button
+              >
+              <p class="collective-note">
+                Eigene Knoten kannst du selbst pflegen. Weber können zusätzlich
+                gemeinschaftliche Knoten weiterentwickeln.
+              </p>
+            {/if}
           </div>
         {/if}
       </div>
@@ -626,6 +647,9 @@
     flex: 1 1 0;
     min-width: 0;
     padding-inline: 0.25rem;
+  }
+  .tab-content > [hidden] {
+    display: none;
   }
   .summary {
     color: var(--muted);
