@@ -100,10 +100,7 @@ jobs:
           retention-days: 14
 
   pr1658-bound-hardening:
-    if: >-
-      github.event.pull_request.number == 1658 &&
-      github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.pull_request.head.ref == 'feat/gewebezelle-two-operator-pilot-v1'
+    if: github.event.pull_request.number == 1658
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -118,7 +115,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "dd8349fc5bf93ab1db132c783651fa3edd2804a0"
+          test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
+          test "$(git rev-parse HEAD^)" = "fa6f73e81c8cda9f4a8c4af3ae19368e6a10bacd"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -155,8 +153,6 @@ jobs:
             scripts/platform/validate_two_operator_pilot.py \
             scripts/ci/tests/test_two_operator_cell_pilot.py
       - name: Ruff
-        id: ruff
-        continue-on-error: true
         run: >-
           python -m ruff check
           scripts/platform/validate_two_operator_pilot.py
@@ -164,8 +160,6 @@ jobs:
           scripts/ci/tests/test_two_operator_cell_pilot.py
           scripts/ci/tests/test_kubernetes_platform_contract.py
       - name: Python compile
-        id: pycompile
-        continue-on-error: true
         run: >-
           python -m py_compile
           scripts/platform/validate_two_operator_pilot.py
@@ -173,56 +167,22 @@ jobs:
           scripts/ci/tests/test_two_operator_cell_pilot.py
           scripts/ci/tests/test_kubernetes_platform_contract.py
       - name: Pilot unit tests
-        id: pilot_tests
-        continue-on-error: true
         run: python -m unittest scripts.ci.tests.test_two_operator_cell_pilot
       - name: Kubernetes platform contract tests
-        id: platform_tests
-        continue-on-error: true
         run: python -m unittest scripts.ci.tests.test_kubernetes_platform_contract
       - name: Platform check
-        id: platform_check
-        continue-on-error: true
         run: make platform-check
       - name: Docs guard
-        id: docs_guard
-        continue-on-error: true
         run: make docs-guard
       - name: Cargo formatting
-        id: cargo_fmt
-        continue-on-error: true
         run: cargo fmt --all -- --check
       - name: Federation module tests
-        id: federation_tests
-        continue-on-error: true
         run: cargo test -p weltgewebe-api federation::tests::
       - name: Exact weak-key regression
-        id: weak_key_test
-        continue-on-error: true
         run: >-
           cargo test -p weltgewebe-api
           federation::tests::weak_public_keys_cannot_validate_universal_signatures
           -- --exact
-      - name: Require all validation gates
-        shell: bash
-        env:
-          RUFF: ${{ steps.ruff.outcome }}
-          PYCOMPILE: ${{ steps.pycompile.outcome }}
-          PILOT_TESTS: ${{ steps.pilot_tests.outcome }}
-          PLATFORM_TESTS: ${{ steps.platform_tests.outcome }}
-          PLATFORM_CHECK: ${{ steps.platform_check.outcome }}
-          DOCS_GUARD: ${{ steps.docs_guard.outcome }}
-          CARGO_FMT: ${{ steps.cargo_fmt.outcome }}
-          FEDERATION_TESTS: ${{ steps.federation_tests.outcome }}
-          WEAK_KEY_TEST: ${{ steps.weak_key_test.outcome }}
-        run: |
-          set -euo pipefail
-          for result in \
-            "$RUFF" "$PYCOMPILE" "$PILOT_TESTS" "$PLATFORM_TESTS" \
-            "$PLATFORM_CHECK" "$DOCS_GUARD" "$CARGO_FMT" \
-            "$FEDERATION_TESTS" "$WEAK_KEY_TEST"; do
-            test "$result" = success
-          done
       - name: Commit hardening and remove temporary operators
         shell: bash
         run: |
