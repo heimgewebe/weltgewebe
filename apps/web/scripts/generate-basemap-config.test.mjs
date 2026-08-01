@@ -15,6 +15,13 @@ const generatedPath = path.resolve(
   "generated",
   "basemapConfig.ts",
 );
+const buildIdentityPath = path.resolve(
+  scriptDir,
+  "..",
+  "static",
+  "_app",
+  "basemap-build.json",
+);
 
 function runGenerator(extraEnv = {}) {
   const env = { ...process.env };
@@ -32,6 +39,10 @@ function generatedConfig() {
   return fs.readFileSync(generatedPath, "utf8");
 }
 
+function buildIdentity() {
+  return JSON.parse(fs.readFileSync(buildIdentityPath, "utf8"));
+}
+
 after(() => {
   const result = runGenerator();
   assert.equal(result.status, 0, result.stderr);
@@ -42,6 +53,12 @@ test("defaults local sovereign builds to the regional rollback variant", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(generatedConfig(), /mode: "local-sovereign"/);
   assert.match(generatedConfig(), /variant: "regional"/);
+  assert.deepEqual(buildIdentity(), {
+    schema_version: 1,
+    mode: "local-sovereign",
+    variant: "regional",
+    style_path: "/local-basemap/style.json",
+  });
 });
 
 test("emits the Germany variant only when explicitly selected", () => {
@@ -52,6 +69,22 @@ test("emits the Germany variant only when explicitly selected", () => {
   assert.equal(result.status, 0, result.stderr);
   assert.match(generatedConfig(), /variant: "germany"/);
   assert.doesNotMatch(generatedConfig(), /basemaps\.cartocdn\.com/);
+  assert.deepEqual(buildIdentity(), {
+    schema_version: 1,
+    mode: "local-sovereign",
+    variant: "germany",
+    style_path: "/local-basemap/style-germany.json",
+  });
+});
+
+test("emits a remote identity without a sovereign variant", () => {
+  const result = runGenerator({ PUBLIC_BASEMAP_MODE: "remote-style" });
+  assert.equal(result.status, 0, result.stderr);
+  const identity = buildIdentity();
+  assert.equal(identity.schema_version, 1);
+  assert.equal(identity.mode, "remote-style");
+  assert.equal(identity.style_url.includes("cartocdn.com"), true);
+  assert.equal(Object.hasOwn(identity, "variant"), false);
 });
 
 test("fails closed on an unknown sovereign variant", () => {
