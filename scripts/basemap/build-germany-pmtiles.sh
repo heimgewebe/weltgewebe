@@ -9,8 +9,8 @@ set -euo pipefail
 # mandatory. Versioned outputs are immutable: an existing version is never
 # replaced. This script never changes a stable alias or production config.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
 BASEMAP_DIR="${BASEMAP_DIR:-$REPO_ROOT/build/basemap}"
 
 DEFAULT_OSM_FILE="germany-260101.osm.pbf"
@@ -80,27 +80,27 @@ case "$MIN_FREE_BYTES" in
 esac
 ((MIN_FREE_BYTES > 0)) || fail "BASEMAP_MIN_FREE_BYTES must be greater than zero"
 
-command -v docker >/dev/null 2>&1 || fail "docker is required"
-command -v python3 >/dev/null 2>&1 || fail "python3 is required"
+command -v docker > /dev/null 2>&1 || fail "docker is required"
+command -v python3 > /dev/null 2>&1 || fail "python3 is required"
 
-if command -v sha256sum >/dev/null 2>&1; then
+if command -v sha256sum > /dev/null 2>&1; then
   SHA256_CMD=(sha256sum)
-elif command -v shasum >/dev/null 2>&1; then
+elif command -v shasum > /dev/null 2>&1; then
   SHA256_CMD=(shasum -a 256)
 else
   fail "sha256sum or shasum is required"
 fi
 
-if command -v wget >/dev/null 2>&1; then
+if command -v wget > /dev/null 2>&1; then
   DOWNLOADER="wget"
-elif command -v curl >/dev/null 2>&1; then
+elif command -v curl > /dev/null 2>&1; then
   DOWNLOADER="curl"
 else
   fail "wget or curl is required"
 fi
 
 mkdir -p "$BASEMAP_DIR"
-BASEMAP_DIR="$(cd "$BASEMAP_DIR" >/dev/null 2>&1 && pwd)"
+BASEMAP_DIR="$(cd "$BASEMAP_DIR" > /dev/null 2>&1 && pwd)"
 AVAILABLE_BYTES="$(df -Pk "$BASEMAP_DIR" | awk 'NR==2 {printf "%.0f\n", $4 * 1024}')"
 case "$AVAILABLE_BYTES" in
   '' | *[!0-9]*) fail "could not determine free disk space for $BASEMAP_DIR" ;;
@@ -197,16 +197,16 @@ elif [[ -n "${SOURCE_DATE_EPOCH:-}" ]]; then
 fi
 
 META_VERSION="$BASEMAP_VERSION" \
-META_TOOLCHAIN="$PLANETILER_IMAGE" \
-META_INPUT_URL="$OSM_URL" \
-META_INPUT_FILE="$OSM_FILE" \
-META_SNAPSHOT_DATE="$OSM_SNAPSHOT_DATE" \
-META_INPUT_SHA256="$OSM_SHA256" \
-META_ARTIFACT_NAME="$OUTPUT_PMTILES" \
-META_ARTIFACT_SHA256="$PMTILES_SHA256" \
-META_ARTIFACT_SIZE="$PMTILES_SIZE" \
-META_BUILD_TIMESTAMP="$BUILD_TIMESTAMP_VALUE" \
-  python3 - "$OUTPUT_META" <<'PY'
+  META_TOOLCHAIN="$PLANETILER_IMAGE" \
+  META_INPUT_URL="$OSM_URL" \
+  META_INPUT_FILE="$OSM_FILE" \
+  META_SNAPSHOT_DATE="$OSM_SNAPSHOT_DATE" \
+  META_INPUT_SHA256="$OSM_SHA256" \
+  META_ARTIFACT_NAME="$OUTPUT_PMTILES" \
+  META_ARTIFACT_SHA256="$PMTILES_SHA256" \
+  META_ARTIFACT_SIZE="$PMTILES_SIZE" \
+  META_BUILD_TIMESTAMP="$BUILD_TIMESTAMP_VALUE" \
+  python3 - "$OUTPUT_META" << 'PY'
 import json
 import os
 import pathlib
