@@ -1006,17 +1006,42 @@ impl AppConfig {
 #[cfg(test)]
 mod tests {
     use super::{
-        AppConfig, AutoProvisionRole, DomainAccountWriteSource, DomainEdgeWriteSource,
-        DomainNodeWriteSource, DomainReadSource, PasskeyCredentialSource,
+        AppConfig as RuntimeAppConfig, AutoProvisionRole, DomainAccountWriteSource,
+        DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource, PasskeyCredentialSource,
     };
     use crate::test_helpers::{DirGuard, EnvGuard};
     use anyhow::Result;
     use serial_test::serial;
+    use std::path::Path;
     use tempfile::{tempdir, NamedTempFile};
 
     const YAML: &str = r#"
 max_guest_owned_nodes: 1000
 "#;
+
+    // Config tests must not inherit a removed operator switch from the developer
+    // or CI host. The explicit rejection test below bypasses this facade so it
+    // still exercises the production fail-closed path.
+    struct AppConfig;
+
+    impl AppConfig {
+        const DEFAULT_CONFIG: &'static str = RuntimeAppConfig::DEFAULT_CONFIG;
+
+        fn load() -> Result<RuntimeAppConfig> {
+            let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
+            RuntimeAppConfig::load()
+        }
+
+        fn load_from_path(path: impl AsRef<Path>) -> Result<RuntimeAppConfig> {
+            let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
+            RuntimeAppConfig::load_from_path(path)
+        }
+
+        fn load_from_str(yaml: &str) -> Result<RuntimeAppConfig> {
+            let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
+            RuntimeAppConfig::load_from_str(yaml)
+        }
+    }
 
     #[test]
     #[serial]
@@ -1038,7 +1063,7 @@ max_guest_owned_nodes: 1000
     fn anonymize_opt_in_env_override_is_rejected_as_removed_setting() {
         let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
 
-        let error = AppConfig::load_from_str(YAML)
+        let error = RuntimeAppConfig::load_from_str(YAML)
             .expect_err("the removed HA_ANONYMIZE_OPT_IN override must fail closed");
         let error = format!("{error:#}");
 
