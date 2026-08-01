@@ -1,7 +1,7 @@
 ---
 id: specs.ui-interaction
 title: UI-Interaktionsvertrag
-summary: Kanonischer Vertrag für Karte, Fokuspanel, Werkzeugfächer, Kartenlinsen, Komposition und Zugänglichkeit.
+summary: Kanonischer Vertrag für Karte, Fokuspanel, Werkzeugfächer, Kartenlinsen, Farbschema, Komposition und Zugänglichkeit.
 doc_type: specification
 status: canonical
 canonicality: normative
@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-ui
 owner: product-ui
-last_reviewed: 2026-07-27
+last_reviewed: 2026-08-01
 review_after: 2026-10-11
 depends_on:
   - specs.ui-state-machine
@@ -23,6 +23,11 @@ verifies_with:
   - apps/web/src/lib/components/ContextPanel.svelte
   - apps/web/src/lib/components/ToolFan.svelte
   - apps/web/src/lib/components/GovernanceFan.svelte
+  - apps/web/src/app.html
+  - apps/web/static/theme-init.js
+  - apps/web/src/lib/styles/tokens.css
+  - apps/web/src/lib/components/TopBarAuth.svelte
+  - apps/web/src/routes/settings/+page.svelte
   - apps/web/src/lib/stores/mapChrome.ts
   - apps/web/src/lib/components/SearchOverlay.svelte
   - apps/web/src/lib/components/FilterOverlay.svelte
@@ -31,6 +36,7 @@ verifies_with:
   - apps/web/tests/ui-search.spec.ts
   - apps/web/tests/tool-fan-layout.spec.ts
   - apps/web/tests/context-panel-sheet.spec.ts
+  - apps/web/tests/theme.spec.ts
 ---
 
 # UI-Interaktionsvertrag
@@ -175,6 +181,20 @@ compose > focus > lens
 ```
 
 `tab` wird erst wirksam, wenn das gewählte Panel ein adressierbares Tabmodell besitzt. Mittelpunkt, Zoom, Drehung und Neigung bleiben MapLibre-Zustand und werden nicht automatisch in die URL gespiegelt.
+
+## Farbschema und visuelle Gewebesprache
+
+Die Oberfläche bietet genau drei Darstellungspräferenzen:
+
+- **System** als Standard; folgt der aktuellen Hell-/Dunkelpräferenz des Geräts und reagiert während der Sitzung auf Änderungen;
+- **Hell** als bewusste helle Darstellung;
+- **Dunkel** als bewusste dunkle Darstellung.
+
+Die Auswahl ist in der Kartenleiste unmittelbar erreichbar und in den Einstellungen ausführlich erklärt. Sie wird ausschließlich lokal im Browser gespeichert; sie gehört weder zum Konto noch zur öffentlichen Garnrolle und wird nicht föderiert.
+
+Farben und Flächen stammen aus gemeinsamen semantischen Darstellungstokens. Komponenten dürfen daher keine dunkle oder helle Grunddarstellung voraussetzen. Status, Auswahl, Warnung und Fehler müssen zusätzlich zu Farbe durch Text, Form, Umrandung oder Symbol verständlich bleiben.
+
+Die Gewebesprache darf Zusammengehörigkeit durch zurückhaltende Fadenlinien, Schichtungen und weiche Übergänge andeuten. Sie darf die Lesbarkeit, den Karteninhalt, den Fokus oder die Bedienziele nicht überlagern. Dekorative Bewegung ist nicht erforderlich und entfällt bei reduzierter Bewegung.
 
 ## Mobile-First und Zugänglichkeit
 

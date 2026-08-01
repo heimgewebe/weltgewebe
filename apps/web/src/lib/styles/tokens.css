@@ -1,20 +1,23 @@
 :root {
-  --bg: #0f1115;
-  --panel: rgba(20, 22, 28, 0.96);
-  --panel-solid: #14161c;
-  --panel-border: rgba(255, 255, 255, 0.1);
-  --panel-border-strong: rgba(255, 255, 255, 0.2);
-  --text: #e9eef5;
-  --muted: #9aa4b2;
-  --accent: #6aa6ff;
-  --accent-soft: rgba(106, 166, 255, 0.18);
-  --accent-contrast: #0f1115;
-  --primary: var(--accent);
-  --fg: var(--text);
-  --ghost: var(--muted);
-  --danger: #ff8585;
+  color-scheme: light;
+  --bg: #f3efe5;
+  --panel: rgba(255, 252, 245, 0.94);
+  --panel-solid: #fbf8f1;
+  --panel-border: rgba(42, 68, 63, 0.16);
+  --panel-border-strong: rgba(42, 68, 63, 0.3);
+  --text: #1d2927;
+  --muted: #5d6c68;
+  --accent: #2f776d;
+  --accent-soft: rgba(47, 119, 109, 0.14);
+  --danger: #b64850;
+  --weave: repeating-linear-gradient(
+    135deg,
+    transparent 0 24px,
+    #2f776d0d 24px 25px
+  );
   --radius: 12px;
-  --shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+  --shadow: 0 12px 32px rgba(47, 62, 58, 0.14);
+
   /* Layout-Defaults: Die Karte reserviert keinen dauerhaften unteren Balken. */
   --toolbar-offset: 52px;
   --context-panel-width: clamp(320px, 30vw, 400px);
