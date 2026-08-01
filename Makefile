@@ -1,9 +1,18 @@
 .PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests platform-check platform-render platform-kind-proof generate diagnose prepare-commit generate-system-map check-system-map-drift
 
+# Fixture repositories are short-lived. Detached Git maintenance can outlive a
+# command and race with TemporaryDirectory cleanup or a following local clone.
+CI_TEST_GIT_ENV = \
+	GIT_CONFIG_COUNT=2 \
+	GIT_CONFIG_KEY_0=maintenance.auto \
+	GIT_CONFIG_VALUE_0=false \
+	GIT_CONFIG_KEY_1=gc.auto \
+	GIT_CONFIG_VALUE_1=0
+
 validate-tests:
 	python3 -m unittest discover scripts/docmeta/tests/
 	python3 -m unittest discover scripts/agent/tests/
-	python3 -m unittest discover scripts/ci/tests/
+	$(CI_TEST_GIT_ENV) python3 -m unittest discover scripts/ci/tests/
 	python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py
 	python3 scripts/docmeta/validate_claim_registry.py
 	python3 scripts/docmeta/validate_doc_freshness_registry.py
