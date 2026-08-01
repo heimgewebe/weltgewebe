@@ -194,6 +194,25 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertLess(compare_at, publication_complete)
         self.assertLess(aliases_verified_at, publication_complete)
 
+    def test_activation_serializes_the_complete_cross_checkout_transaction(
+        self,
+    ) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("GERMANY_BASEMAP_ACTIVATION_LOCK_FILE", activate)
+        self.assertIn("${WELTGEWEBE_DEPLOY_LOCK_FILE}.germany-basemap", activate)
+        self.assertIn('exec {ACTIVATION_LOCK_FD}> "$ACTIVATION_LOCK_FILE"', activate)
+        self.assertIn('flock -n "$ACTIVATION_LOCK_FD"', activate)
+        self.assertIn(
+            "another Germany basemap activation is already active", activate
+        )
+        lock_at = activate.index('flock -n "$ACTIVATION_LOCK_FD"')
+        alias_state_at = activate.index('capture_alias_state "$ALIAS_ARTIFACT"')
+        transaction_at = activate.index("ACTIVATION_TRANSACTION_OPEN=1")
+        committed_at = activate.index("ACTIVATION_COMMITTED=1")
+        self.assertLess(lock_at, alias_state_at)
+        self.assertLess(alias_state_at, transaction_at)
+        self.assertLess(transaction_at, committed_at)
+
     def test_activation_revalidates_checkout_and_freshness_before_aliases(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
         marker = (

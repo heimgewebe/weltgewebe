@@ -35,7 +35,9 @@ Ohne `PUBLIC_BASEMAP_VARIANT` bleibt `regional` aktiv.
 - gepinnter OSM-Snapshot mit bekannter SHA256-Prüfsumme;
 - vollständige, nicht leere Provenienz aus Dateiname, HTTPS-URL, SHA256 und
   einem realen, nicht zukünftigen Kalenderdatum;
-- keine gleichzeitige Veröffentlichung in dasselbe Zielverzeichnis.
+- keine gleichzeitige Veröffentlichung in dasselbe Zielverzeichnis;
+- keine parallele Aktivierung desselben Compose-Projekts. Der Aktivierungspfad
+  erzwingt dies zusätzlich durch einen checkout-übergreifenden Prozess-Lock.
 
 Versionierte Artefakte sind unveränderlich. Existiert eine Version bereits im
 Build- oder Zielverzeichnis, muss eine neue `BASEMAP_VERSION` verwendet werden.
@@ -109,7 +111,12 @@ zulässige Belegalter kann über
 `scripts/basemap/activate-germany-basemap.sh` ist der einzige vorgesehene
 Aktivierungspfad. Er verlangt
 `GERMANY_BASEMAP_ACTIVATION_CONFIRM=deploy-germany-pmtiles` und arbeitet
-fail-closed:
+fail-closed. Ein separater Aktivierungs-Lock umfasst die vollständige
+Transaktion vom ersten Alias-Readback bis zum bestätigten Receipt. Sein
+Standardpfad folgt dem Compose-Projekt und – sofern gesetzt – dem bestehenden
+`WELTGEWEBE_DEPLOY_LOCK_FILE`; ein abweichender Pfad kann explizit über
+`GERMANY_BASEMAP_ACTIVATION_LOCK_FILE` gesetzt werden. Ein paralleler Lauf
+bricht ab, bevor Aliase oder Receipt verändert werden:
 
 1. ausgewählte Versionsdateien, Sentinel und beide Validierungsberichte werden
    gegen Name, Hash, Größe, Region und Version geprüft;

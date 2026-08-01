@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 # Fail-closed activation wrapper for the nationwide Germany PMTiles variant.
 # Preparation publishes immutable versioned files only. Activation binds the
@@ -21,6 +22,8 @@ DEPLOY_COMMAND="${WELTGEWEBE_DEPLOY_COMMAND:-$REPO_ROOT/scripts/weltgewebe-up}"
 PUBLIC_APP_URL="${WELTGEWEBE_PUBLIC_APP_URL:-https://weltgewebe.net}"
 PUBLIC_APP_URL="${PUBLIC_APP_URL%/}"
 STATE_DIR="${WELTGEWEBE_STATE_DIR:-$REPO_ROOT/.ops}"
+COMPOSE_PROJECT="${COMPOSE_PROJECT:-weltgewebe}"
+ACTIVATION_LOCK_FILE="${GERMANY_BASEMAP_ACTIVATION_LOCK_FILE:-}"
 RELEASE_PROOF_PATH="${GERMANY_BASEMAP_RELEASE_PROOF_PATH:-}"
 DEPLOY_ARGS=("$@")
 
@@ -383,6 +386,19 @@ PY
 
 [[ "$BASEMAP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail "BASEMAP_VERSION must use numeric semantic versioning"
+[[ "$COMPOSE_PROJECT" =~ ^[a-z0-9_-]+$ ]] ||
+  fail "COMPOSE_PROJECT must match [a-z0-9_-]+"
+if [[ -z "$ACTIVATION_LOCK_FILE" ]]; then
+  if [[ -n "${WELTGEWEBE_DEPLOY_LOCK_FILE:-}" ]]; then
+    ACTIVATION_LOCK_FILE="${WELTGEWEBE_DEPLOY_LOCK_FILE}.germany-basemap"
+  elif [[ "$(id -u)" == "0" && -d /run/lock && -w /run/lock ]]; then
+    ACTIVATION_LOCK_FILE="/run/lock/weltgewebe-${COMPOSE_PROJECT}.germany-basemap.lock"
+  elif [[ -n "${XDG_RUNTIME_DIR:-}" && -d "$XDG_RUNTIME_DIR" && -w "$XDG_RUNTIME_DIR" ]]; then
+    ACTIVATION_LOCK_FILE="$XDG_RUNTIME_DIR/weltgewebe-${COMPOSE_PROJECT}.germany-basemap.lock"
+  else
+    ACTIVATION_LOCK_FILE="${HOME:?HOME is required}/.local/state/weltgewebe/locks/${COMPOSE_PROJECT}.germany-basemap.lock"
+  fi
+fi
 require_positive_integer "GERMANY_BASEMAP_MAX_SOURCE_AGE_DAYS" "$MAX_SOURCE_AGE_DAYS"
 require_positive_integer "GERMANY_BASEMAP_RELEASE_PROOF_MAX_AGE_HOURS" "$MAX_RELEASE_PROOF_AGE_HOURS"
 require_positive_integer "GERMANY_BASEMAP_HTTP_CONNECT_TIMEOUT_SECONDS" "$HTTP_CONNECT_TIMEOUT_SECONDS"
@@ -400,6 +416,24 @@ command -v sha256sum > /dev/null 2>&1 || fail "sha256sum is required"
 command -v readlink > /dev/null 2>&1 || fail "readlink is required"
 command -v pnpm > /dev/null 2>&1 || fail "pnpm is required"
 command -v git > /dev/null 2>&1 || fail "git is required"
+command -v flock > /dev/null 2>&1 || fail "flock is required"
+
+ACTIVATION_LOCK_DIR="$(dirname -- "$ACTIVATION_LOCK_FILE")"
+if [[ ! -d "$ACTIVATION_LOCK_DIR" ]]; then
+  install -d -m 0700 "$ACTIVATION_LOCK_DIR" ||
+    fail "could not create the Germany activation lock directory"
+fi
+[[ ! -L "$ACTIVATION_LOCK_FILE" ]] ||
+  fail "Germany activation lock file must not be a symlink: $ACTIVATION_LOCK_FILE"
+exec {ACTIVATION_LOCK_FD}> "$ACTIVATION_LOCK_FILE" ||
+  fail "could not open Germany activation lock: $ACTIVATION_LOCK_FILE"
+[[ -f "$ACTIVATION_LOCK_FILE" ]] ||
+  fail "Germany activation lock is not a regular file: $ACTIVATION_LOCK_FILE"
+chmod 0600 "$ACTIVATION_LOCK_FILE" ||
+  fail "could not secure Germany activation lock: $ACTIVATION_LOCK_FILE"
+if ! flock -n "$ACTIVATION_LOCK_FD"; then
+  fail "another Germany basemap activation is already active for project $COMPOSE_PROJECT"
+fi
 
 for argument in "${DEPLOY_ARGS[@]}"; do
   case "$argument" in
