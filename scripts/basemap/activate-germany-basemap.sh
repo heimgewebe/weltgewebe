@@ -9,8 +9,8 @@ set -euo pipefail
 # identity/style/range contract and rolls the frontend back to the regional
 # variant when a post-deploy check fails.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
 BASEMAP_DIR="${BASEMAP_DIR:-$REPO_ROOT/build/basemap}"
 BASEMAP_VERSION="${BASEMAP_VERSION:-0.1.0}"
 MAX_SOURCE_AGE_DAYS="${GERMANY_BASEMAP_MAX_SOURCE_AGE_DAYS:-45}"
@@ -60,11 +60,11 @@ esac
 [[ "$PUBLIC_APP_URL" =~ ^https://[^/]+([/:].*)?$ ]] ||
   fail "WELTGEWEBE_PUBLIC_APP_URL must use HTTPS"
 [[ -x "$DEPLOY_COMMAND" ]] || fail "deployment command is not executable: $DEPLOY_COMMAND"
-command -v python3 >/dev/null 2>&1 || fail "python3 is required"
-command -v curl >/dev/null 2>&1 || fail "curl is required"
-command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required"
-command -v readlink >/dev/null 2>&1 || fail "readlink is required"
-command -v pnpm >/dev/null 2>&1 || fail "pnpm is required"
+command -v python3 > /dev/null 2>&1 || fail "python3 is required"
+command -v curl > /dev/null 2>&1 || fail "curl is required"
+command -v sha256sum > /dev/null 2>&1 || fail "sha256sum is required"
+command -v readlink > /dev/null 2>&1 || fail "readlink is required"
+command -v pnpm > /dev/null 2>&1 || fail "pnpm is required"
 
 for argument in "$@"; do
   case "$argument" in
@@ -106,16 +106,16 @@ ARTIFACT_SHA256="$(sha256sum "$ALIAS_ARTIFACT" | awk '{print $1}')"
 ARTIFACT_SIZE="$(wc -c < "$ALIAS_ARTIFACT" | tr -d '[:space:]')"
 
 META_PATH="$ALIAS_META" \
-VERSIONED_META_PATH="$VERSIONED_META" \
-ALIAS_META_PATH="$ALIAS_META" \
-VALIDATION_PATH="$FRESH_VALIDATION_REPORT" \
-VERSIONED_ARTIFACT_PATH="$VERSIONED_ARTIFACT" \
-ALIAS_ARTIFACT_PATH="$ALIAS_ARTIFACT" \
-EXPECTED_VERSION="$BASEMAP_VERSION" \
-EXPECTED_SHA256="$ARTIFACT_SHA256" \
-EXPECTED_SIZE="$ARTIFACT_SIZE" \
-MAX_SOURCE_AGE_DAYS="$MAX_SOURCE_AGE_DAYS" \
-  python3 <<'PY'
+  VERSIONED_META_PATH="$VERSIONED_META" \
+  ALIAS_META_PATH="$ALIAS_META" \
+  VALIDATION_PATH="$FRESH_VALIDATION_REPORT" \
+  VERSIONED_ARTIFACT_PATH="$VERSIONED_ARTIFACT" \
+  ALIAS_ARTIFACT_PATH="$ALIAS_ARTIFACT" \
+  EXPECTED_VERSION="$BASEMAP_VERSION" \
+  EXPECTED_SHA256="$ARTIFACT_SHA256" \
+  EXPECTED_SIZE="$ARTIFACT_SIZE" \
+  MAX_SOURCE_AGE_DAYS="$MAX_SOURCE_AGE_DAYS" \
+  python3 << 'PY'
 import datetime as dt
 import json
 import os
@@ -203,7 +203,7 @@ rollback_frontend() {
 
 verify_identity_file() {
   local identity_path="$1"
-  IDENTITY_PATH="$identity_path" python3 <<'PY'
+  IDENTITY_PATH="$identity_path" python3 << 'PY'
 import json
 import os
 from pathlib import Path
@@ -221,7 +221,7 @@ PY
 }
 
 PUBLIC_BASEMAP_MODE=local-sovereign \
-PUBLIC_BASEMAP_VARIANT=germany \
+  PUBLIC_BASEMAP_VARIANT=germany \
   "$DEPLOY_COMMAND" --build-web "$@"
 
 if [[ ! -s "$LOCAL_BUILD_IDENTITY" ]] || ! verify_identity_file "$LOCAL_BUILD_IDENTITY"; then
@@ -249,7 +249,7 @@ verify_identity_file "$PUBLIC_IDENTITY" ||
 
 curl -fsS "$PUBLIC_APP_URL/local-basemap/style-germany.json" -o "$PUBLIC_STYLE" ||
   post_deploy_failure "public Germany style is unavailable" "$@"
-STYLE_PATH="$PUBLIC_STYLE" python3 <<'PY' ||
+STYLE_PATH="$PUBLIC_STYLE" python3 << 'PY' ||
   post_deploy_failure "public Germany style contract mismatch" "$@"
 import json
 import os
@@ -262,13 +262,12 @@ if source != {"type": "vector", "url": "pmtiles://basemap-germany.pmtiles"}:
 if style.get("metadata", {}).get("weltgewebe:variant") != "germany":
     raise SystemExit("Germany style variant metadata mismatch")
 PY
-
-curl -fsS "$PUBLIC_APP_URL/local-basemap/basemap-germany.meta.json" -o "$PUBLIC_META" ||
+  curl -fsS "$PUBLIC_APP_URL/local-basemap/basemap-germany.meta.json" -o "$PUBLIC_META" ||
   post_deploy_failure "public Germany metadata is unavailable" "$@"
 PUBLIC_META_PATH="$PUBLIC_META" \
-EXPECTED_SHA256="$ARTIFACT_SHA256" \
-EXPECTED_SIZE="$ARTIFACT_SIZE" \
-  python3 <<'PY' ||
+  EXPECTED_SHA256="$ARTIFACT_SHA256" \
+  EXPECTED_SIZE="$ARTIFACT_SIZE" \
+  python3 << 'PY' ||
   post_deploy_failure "public Germany metadata does not match the prepared artifact" "$@"
 import json
 import os
@@ -282,13 +281,12 @@ if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
 if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
     raise SystemExit("public Germany sentinel size mismatch")
 PY
-
-HTTP_STATUS="$(curl -sS \
-  -H 'Range: bytes=0-126' \
-  -D "$RANGE_HEADERS" \
-  -o "$RANGE_PAYLOAD" \
-  -w '%{http_code}' \
-  "$PUBLIC_APP_URL/local-basemap/basemap-germany.pmtiles")" ||
+  HTTP_STATUS="$(curl -sS \
+    -H 'Range: bytes=0-126' \
+    -D "$RANGE_HEADERS" \
+    -o "$RANGE_PAYLOAD" \
+    -w '%{http_code}' \
+    "$PUBLIC_APP_URL/local-basemap/basemap-germany.pmtiles")" ||
   post_deploy_failure "public Germany PMTiles range request failed" "$@"
 [[ "$HTTP_STATUS" == "206" ]] ||
   post_deploy_failure "public Germany PMTiles range request returned HTTP $HTTP_STATUS" "$@"
@@ -306,11 +304,11 @@ grep -qi '^accept-ranges:[[:space:]]*bytes' "$RANGE_HEADERS" ||
 install -d -m 0700 "$STATE_DIR"
 RECEIPT_TMP="${ACTIVATION_RECEIPT}.tmp.$$"
 RECEIPT_PATH="$RECEIPT_TMP" \
-PUBLIC_APP_URL="$PUBLIC_APP_URL" \
-ARTIFACT_SHA256="$ARTIFACT_SHA256" \
-ARTIFACT_SIZE="$ARTIFACT_SIZE" \
-BASEMAP_VERSION="$BASEMAP_VERSION" \
-  python3 <<'PY'
+  PUBLIC_APP_URL="$PUBLIC_APP_URL" \
+  ARTIFACT_SHA256="$ARTIFACT_SHA256" \
+  ARTIFACT_SIZE="$ARTIFACT_SIZE" \
+  BASEMAP_VERSION="$BASEMAP_VERSION" \
+  python3 << 'PY'
 import datetime as dt
 import json
 import os
