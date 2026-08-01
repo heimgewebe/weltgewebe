@@ -1,5 +1,11 @@
+import ast
+import inspect
+import textwrap
 import unittest
+from collections import deque
+from unittest.mock import patch
 
+from scripts.docmeta import generate_relates_to_audit
 from scripts.docmeta.generate_relates_to_audit import (
     compute_per_doc_type_counts,
     find_supersedes_gaps,
@@ -7,6 +13,30 @@ from scripts.docmeta.generate_relates_to_audit import (
     _check_supersession_pattern,
     collect_negative_examples,
 )
+
+
+class QueueProbe(deque):
+    """Record FIFO behavior and fail if the traversal uses deque.pop()."""
+
+    instances: list["QueueProbe"] = []
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.max_size = len(self)
+        self.popped = []
+        self.__class__.instances.append(self)
+
+    def append(self, item):
+        super().append(item)
+        self.max_size = max(self.max_size, len(self))
+
+    def popleft(self):
+        item = super().popleft()
+        self.popped.append(item)
+        return item
+
+    def pop(self, *args, **kwargs):
+        raise AssertionError("breadth-first queue must not delete from the front with pop")
 
 
 class TestPerDocTypeCounts(unittest.TestCase):
@@ -97,8 +127,78 @@ class TestRelatesToClusters(unittest.TestCase):
             ("b.md", "relates_to", "c.md"),
         ]
         clusters = find_relates_to_clusters(edges)
+        self.assertEqual(clusters, [["a.md", "b.md", "c.md"]])
+
+    def test_cycle_and_duplicate_edges_keep_fifo_characteristics(self):
+        edges = [
+            ("a.md", "relates_to", "b.md"),
+            ("a.md", "relates_to", "b.md"),
+            ("a.md", "relates_to", "c.md"),
+            ("c.md", "relates_to", "a.md"),
+        ]
+        QueueProbe.instances = []
+
+        with patch.object(generate_relates_to_audit, "deque", QueueProbe):
+            clusters = find_relates_to_clusters(edges)
+
+        self.assertEqual(clusters, [["a.md", "b.md", "c.md"]])
+        self.assertEqual(QueueProbe.instances[0].popped, ["a.md", "b.md", "c.md"])
+
+    def test_chain_has_no_depth_cutoff(self):
+        depth = 64
+        edges = [
+            (f"node-{index:03d}.md", "relates_to", f"node-{index + 1:03d}.md")
+            for index in range(depth)
+        ]
+
+        clusters = find_relates_to_clusters(edges)
+
         self.assertEqual(len(clusters), 1)
-        self.assertEqual(len(clusters[0]), 3)
+        self.assertEqual(len(clusters[0]), depth + 1)
+        self.assertEqual(clusters[0][0], "node-000.md")
+        self.assertEqual(clusters[0][-1], f"node-{depth:03d}.md")
+
+    def test_broad_level_queue_avoids_front_deletions(self):
+        breadth = 1024
+        edges = [
+            ("00-root.md", "relates_to", f"node-{index:04d}.md")
+            for index in reversed(range(breadth))
+        ]
+        QueueProbe.instances = []
+
+        with patch.object(generate_relates_to_audit, "deque", QueueProbe):
+            clusters = find_relates_to_clusters(edges)
+
+        self.assertEqual(
+            clusters,
+            [["00-root.md", *(f"node-{index:04d}.md" for index in range(breadth))]],
+        )
+        self.assertEqual(QueueProbe.instances[0].max_size, breadth)
+        self.assertEqual(
+            QueueProbe.instances[0].popped[:4],
+            ["00-root.md", "node-0000.md", "node-0001.md", "node-0002.md"],
+        )
+
+        tree = ast.parse(textwrap.dedent(inspect.getsource(find_relates_to_clusters)))
+        front_deletions = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "pop"
+            and node.args
+            and isinstance(node.args[0], ast.Constant)
+            and node.args[0].value == 0
+        ]
+        popleft_calls = [
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr == "popleft"
+        ]
+        self.assertEqual(front_deletions, [])
+        self.assertEqual(len(popleft_calls), 1)
 
     def test_two_clusters(self):
         edges = [
@@ -109,6 +209,16 @@ class TestRelatesToClusters(unittest.TestCase):
         self.assertEqual(len(clusters), 2)
         self.assertEqual(len(clusters[0]), 2)
         self.assertEqual(len(clusters[1]), 2)
+
+    def test_equal_sized_clusters_have_deterministic_order(self):
+        edges = [
+            ("z.md", "relates_to", "m.md"),
+            ("b.md", "relates_to", "a.md"),
+        ]
+
+        clusters = find_relates_to_clusters(edges)
+
+        self.assertEqual(clusters, [["a.md", "b.md"], ["m.md", "z.md"]])
 
     def test_depends_on_ignored(self):
         edges = [
