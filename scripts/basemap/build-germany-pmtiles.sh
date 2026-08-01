@@ -88,9 +88,11 @@ import datetime as dt
 import sys
 
 try:
-    dt.date.fromisoformat(sys.argv[1])
+    snapshot = dt.date.fromisoformat(sys.argv[1])
 except ValueError as exc:
     raise SystemExit(f"invalid OSM_SNAPSHOT_DATE: {sys.argv[1]}") from exc
+if snapshot > dt.datetime.now(dt.timezone.utc).date():
+    raise SystemExit(f"OSM_SNAPSHOT_DATE lies in the future: {snapshot}")
 PY
 
 if command -v sha256sum > /dev/null 2>&1; then
