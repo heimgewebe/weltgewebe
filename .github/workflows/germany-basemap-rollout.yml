@@ -1,0 +1,92 @@
+---
+name: Germany Basemap Rollout
+
+"on":
+  pull_request:
+    branches: [main]
+    paths:
+      - "apps/web/scripts/generate-basemap-config.js"
+      - "apps/web/scripts/generate-basemap-config.test.mjs"
+      - "apps/web/src/lib/map/basemap.ts"
+      - "apps/web/src/lib/map/config/basemap.current.ts"
+      - "apps/web/src/lib/map/config/basemap.current.test.ts"
+      - "map-style/style-germany.json"
+      - "scripts/basemap/build-germany-pmtiles.sh"
+      - "scripts/basemap/prepare-germany-rollout.sh"
+      - "scripts/ci/tests/test_germany_basemap_rollout.py"
+      - ".github/workflows/germany-basemap-rollout.yml"
+  push:
+    branches: [main]
+    paths:
+      - "apps/web/scripts/generate-basemap-config.js"
+      - "apps/web/scripts/generate-basemap-config.test.mjs"
+      - "apps/web/src/lib/map/basemap.ts"
+      - "apps/web/src/lib/map/config/basemap.current.ts"
+      - "apps/web/src/lib/map/config/basemap.current.test.ts"
+      - "map-style/style-germany.json"
+      - "scripts/basemap/build-germany-pmtiles.sh"
+      - "scripts/basemap/prepare-germany-rollout.sh"
+      - "scripts/ci/tests/test_germany_basemap_rollout.py"
+      - ".github/workflows/germany-basemap-rollout.yml"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  germany-basemap-contract:
+    name: germany-basemap-contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+
+      - name: Verify shell syntax
+        run: |
+          set -euo pipefail
+          bash -n scripts/basemap/build-germany-pmtiles.sh
+          bash -n scripts/basemap/prepare-germany-rollout.sh
+
+      - name: Verify static Germany rollout contracts
+        run: python3 scripts/ci/tests/test_germany_basemap_rollout.py
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
+        with:
+          version: 9.11.0
+
+      - name: Setup Node
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        with:
+          node-version-file: ".node-version"
+          cache: "pnpm"
+          cache-dependency-path: apps/web/pnpm-lock.yaml
+
+      - name: Install web dependencies
+        run: pnpm install --frozen-lockfile
+        working-directory: apps/web
+
+      - name: Verify build-time variant generator
+        run: pnpm test:basemap-config
+        working-directory: apps/web
+
+      - name: Verify runtime style selection
+        run: pnpm exec vitest run src/lib/map/config/basemap.current.test.ts
+        working-directory: apps/web
+
+      - name: Verify Germany style parses and binds the stable alias
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          style = json.loads(Path("map-style/style-germany.json").read_text())
+          source = style["sources"]["basemap-germany"]
+          assert source["type"] == "vector"
+          assert source["url"] == "pmtiles://basemap-germany.pmtiles"
+          assert style["metadata"]["weltgewebe:variant"] == "germany"
+          PY
