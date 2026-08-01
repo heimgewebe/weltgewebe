@@ -108,9 +108,14 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
     def test_builder_validates_calendar_date_before_docker(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
         date_validation_at = builder.index("dt.date.fromisoformat")
+        future_validation_at = builder.index(
+            "dt.datetime.now(dt.timezone.utc).date()"
+        )
         docker_run_at = builder.index("if ! docker")
-        self.assertLess(date_validation_at, docker_run_at)
+        self.assertLess(date_validation_at, future_validation_at)
+        self.assertLess(future_validation_at, docker_run_at)
         self.assertIn("invalid OSM_SNAPSHOT_DATE", builder)
+        self.assertIn("OSM_SNAPSHOT_DATE lies in the future", builder)
 
     def test_builder_never_replaces_a_versioned_output(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
