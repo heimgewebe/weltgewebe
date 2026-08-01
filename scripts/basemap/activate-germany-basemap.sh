@@ -4,10 +4,10 @@ set -euo pipefail
 # Fail-closed activation wrapper for the nationwide Germany PMTiles variant.
 #
 # This is intentionally separate from the normal deployment entrypoint. It
-# proves the prepared artifact, re-runs deep validation against the current
-# bytes, forces a fresh Germany frontend build, verifies the public build
-# identity/style/range contract and rolls the frontend back to the regional
-# variant when a post-deploy check fails.
+# requires a pre-deployment browser/device release proof bound to the exact
+# artifact, re-runs deep validation against the current bytes, forces a fresh
+# Germany frontend build, verifies the full public archive hash and rolls the
+# frontend back to the regional variant when deployment or readback fails.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
@@ -20,6 +20,7 @@ DEPLOY_COMMAND="${WELTGEWEBE_DEPLOY_COMMAND:-$REPO_ROOT/scripts/weltgewebe-up}"
 PUBLIC_APP_URL="${WELTGEWEBE_PUBLIC_APP_URL:-https://weltgewebe.net}"
 PUBLIC_APP_URL="${PUBLIC_APP_URL%/}"
 STATE_DIR="${WELTGEWEBE_STATE_DIR:-$REPO_ROOT/.ops}"
+RELEASE_PROOF_PATH="${GERMANY_BASEMAP_RELEASE_PROOF_PATH:-}"
 
 VERSIONED_ARTIFACT="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.pmtiles"
 VERSIONED_META="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.meta.json"
@@ -65,6 +66,8 @@ esac
   fail "GERMANY_BASEMAP_MAX_SOURCE_AGE_DAYS must be greater than zero"
 [[ "$ACTIVATION_CONFIRM" == "$EXPECTED_CONFIRMATION" ]] ||
   fail "set GERMANY_BASEMAP_ACTIVATION_CONFIRM=$EXPECTED_CONFIRMATION for an intentional activation"
+[[ -n "$RELEASE_PROOF_PATH" ]] ||
+  fail "GERMANY_BASEMAP_RELEASE_PROOF_PATH is required before activation"
 [[ "$PUBLIC_APP_URL" =~ ^https://[^/]+([/:].*)?$ ]] ||
   fail "WELTGEWEBE_PUBLIC_APP_URL must use HTTPS"
 [[ -x "$DEPLOY_COMMAND" ]] || fail "deployment command is not executable: $DEPLOY_COMMAND"
@@ -88,6 +91,7 @@ for required_path in \
   "$ALIAS_ARTIFACT" \
   "$ALIAS_META" \
   "$PREPARED_VALIDATION_REPORT" \
+  "$RELEASE_PROOF_PATH" \
   "$REPO_ROOT/map-style/style-germany.json"; do
   require_nonempty_path "$required_path"
 done
@@ -112,11 +116,13 @@ require_nonempty_path "$FRESH_VALIDATION_REPORT"
 
 ARTIFACT_SHA256="$(sha256sum "$ALIAS_ARTIFACT" | awk '{print $1}')"
 ARTIFACT_SIZE="$(wc -c < "$ALIAS_ARTIFACT" | tr -d '[:space:]')"
+RELEASE_PROOF_SHA256="$(sha256sum "$RELEASE_PROOF_PATH" | awk '{print $1}')"
 
 META_PATH="$ALIAS_META" \
   VERSIONED_META_PATH="$VERSIONED_META" \
   ALIAS_META_PATH="$ALIAS_META" \
   VALIDATION_PATH="$FRESH_VALIDATION_REPORT" \
+  RELEASE_PROOF_PATH="$RELEASE_PROOF_PATH" \
   VERSIONED_ARTIFACT_PATH="$VERSIONED_ARTIFACT" \
   ALIAS_ARTIFACT_PATH="$ALIAS_ARTIFACT" \
   EXPECTED_VERSION="$BASEMAP_VERSION" \
@@ -136,12 +142,17 @@ def reject(message: str) -> None:
 
 meta_path = Path(os.environ["META_PATH"])
 validation_path = Path(os.environ["VALIDATION_PATH"])
+release_proof_path = Path(os.environ["RELEASE_PROOF_PATH"])
 versioned_meta = Path(os.environ["VERSIONED_META_PATH"]).resolve()
 alias_meta = Path(os.environ["ALIAS_META_PATH"]).resolve()
 versioned_artifact = Path(os.environ["VERSIONED_ARTIFACT_PATH"]).resolve()
 alias_artifact = Path(os.environ["ALIAS_ARTIFACT_PATH"]).resolve()
 meta = json.loads(meta_path.read_text(encoding="utf-8"))
 validation = json.loads(validation_path.read_text(encoding="utf-8"))
+release_proof = json.loads(release_proof_path.read_text(encoding="utf-8"))
+expected_size = int(os.environ["EXPECTED_SIZE"])
+expected_sha256 = os.environ["EXPECTED_SHA256"]
+expected_version = os.environ["EXPECTED_VERSION"]
 
 if alias_artifact != versioned_artifact:
     reject("stable Germany artifact alias does not resolve to the selected version")
@@ -153,13 +164,13 @@ if meta.get("status") != "ready" or meta.get("region") != "germany":
     reject("Germany metadata sentinel is not ready for the Germany region")
 if meta.get("activation") != "opt-in":
     reject("Germany metadata must remain opt-in before the reviewed activation")
-if meta.get("version") != os.environ["EXPECTED_VERSION"]:
+if meta.get("version") != expected_version:
     reject("Germany metadata version mismatch")
 if meta.get("artifact_name") != versioned_artifact.name:
     reject("Germany metadata artifact_name mismatch")
-if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
+if meta.get("sha256") != expected_sha256:
     reject("Germany metadata SHA256 mismatch")
-if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
+if meta.get("size_bytes") != expected_size:
     reject("Germany metadata size mismatch")
 
 snapshot_date = meta.get("input", {}).get("snapshot_date")
@@ -188,15 +199,36 @@ if archive.get("region") != "germany":
     reject("Germany deep-validation region mismatch")
 if Path(archive.get("archive_path", "")).resolve() != versioned_artifact:
     reject("Germany deep-validation archive path mismatch")
-if archive.get("file_size") != int(os.environ["EXPECTED_SIZE"]):
+if archive.get("file_size") != expected_size:
     reject("Germany deep-validation file size mismatch")
 if archive.get("directory", {}).get("tile_entry_count", 0) <= 0:
     reject("Germany deep-validation contains no tile entries")
 if not archive.get("samples"):
     reject("Germany deep-validation contains no decoded tile samples")
+
+required_release_proofs = {
+    "desktop-maplibre",
+    "ipad-maplibre",
+    "five-region-visual",
+    "no-external-map-requests",
+    "staging-caddy-range",
+}
+if release_proof.get("schema_version") != 1:
+    reject("Germany release proof schema mismatch")
+if release_proof.get("verdict") != "PROVEN":
+    reject("Germany release proof verdict is not PROVEN")
+if release_proof.get("basemap_version") != expected_version:
+    reject("Germany release proof version mismatch")
+if release_proof.get("artifact_sha256") != expected_sha256:
+    reject("Germany release proof artifact hash mismatch")
+if release_proof.get("artifact_size_bytes") != expected_size:
+    reject("Germany release proof artifact size mismatch")
+proofs = release_proof.get("proofs")
+if not isinstance(proofs, list) or not required_release_proofs.issubset(proofs):
+    reject("Germany release proof is missing required browser/device evidence")
 PY
 
-echo "[✓] Current Germany artifact, aliases, sentinel and deep validation verified."
+echo "[✓] Current Germany artifact, aliases, sentinel, deep validation and release proof verified."
 
 rollback_frontend() {
   echo "WARNING: Germany deployment or post-deploy proof failed; rebuilding the regional rollback variant." >&2
@@ -241,6 +273,7 @@ PUBLIC_STYLE="$TMP_DIR/style-germany.json"
 PUBLIC_META="$TMP_DIR/basemap-germany.meta.json"
 RANGE_HEADERS="$TMP_DIR/range.headers"
 RANGE_PAYLOAD="$TMP_DIR/range.payload"
+PUBLIC_ARTIFACT_URL="$PUBLIC_APP_URL/local-basemap/basemap-germany.pmtiles"
 
 post_deploy_failure() {
   local message="$1"
@@ -293,20 +326,26 @@ PY
     -D "$RANGE_HEADERS" \
     -o "$RANGE_PAYLOAD" \
     -w '%{http_code}' \
-    "$PUBLIC_APP_URL/local-basemap/basemap-germany.pmtiles")" ||
+    "$PUBLIC_ARTIFACT_URL")" ||
   post_deploy_failure "public Germany PMTiles range request failed" "$@"
 [[ "$HTTP_STATUS" == "206" ]] ||
   post_deploy_failure "public Germany PMTiles range request returned HTTP $HTTP_STATUS" "$@"
 grep -qi '^content-type:[[:space:]]*application/octet-stream' "$RANGE_HEADERS" ||
   post_deploy_failure "public Germany PMTiles response has the wrong Content-Type" "$@"
-grep -qi '^content-range:[[:space:]]*bytes 0-126/' "$RANGE_HEADERS" ||
-  post_deploy_failure "public Germany PMTiles response lacks the expected Content-Range" "$@"
+grep -qi "^content-range:[[:space:]]*bytes 0-126/${ARTIFACT_SIZE}" "$RANGE_HEADERS" ||
+  post_deploy_failure "public Germany PMTiles response lacks the exact Content-Range size" "$@"
 grep -qi '^accept-ranges:[[:space:]]*bytes' "$RANGE_HEADERS" ||
   post_deploy_failure "public Germany PMTiles response lacks Accept-Ranges: bytes" "$@"
 [[ "$(wc -c < "$RANGE_PAYLOAD" | tr -d '[:space:]')" == "127" ]] ||
   post_deploy_failure "public Germany PMTiles range payload has the wrong length" "$@"
 [[ "$(head -c 7 "$RANGE_PAYLOAD")" == "PMTiles" ]] ||
   post_deploy_failure "public Germany PMTiles signature mismatch" "$@"
+
+if ! PUBLIC_ARTIFACT_SHA256="$(curl -fsS "$PUBLIC_ARTIFACT_URL" | sha256sum | awk '{print $1}')"; then
+  post_deploy_failure "could not hash the complete public Germany PMTiles artifact" "$@"
+fi
+[[ "$PUBLIC_ARTIFACT_SHA256" == "$ARTIFACT_SHA256" ]] ||
+  post_deploy_failure "complete public Germany PMTiles hash mismatch" "$@"
 
 install -d -m 0700 "$STATE_DIR"
 RECEIPT_TMP="${ACTIVATION_RECEIPT}.tmp.$$"
@@ -315,6 +354,7 @@ RECEIPT_PATH="$RECEIPT_TMP" \
   ARTIFACT_SHA256="$ARTIFACT_SHA256" \
   ARTIFACT_SIZE="$ARTIFACT_SIZE" \
   BASEMAP_VERSION="$BASEMAP_VERSION" \
+  RELEASE_PROOF_SHA256="$RELEASE_PROOF_SHA256" \
   python3 << 'PY'
 import datetime as dt
 import json
@@ -323,21 +363,24 @@ from pathlib import Path
 
 receipt = {
     "schema_version": 1,
-    "status": "verified",
-    "activated_at": dt.datetime.now(dt.timezone.utc).isoformat(),
+    "status": "activation_verified",
+    "scope": "predeployment-device-proof-plus-complete-public-artifact",
+    "verified_at": dt.datetime.now(dt.timezone.utc).isoformat(),
     "mode": "local-sovereign",
     "variant": "germany",
     "basemap_version": os.environ["BASEMAP_VERSION"],
     "artifact_sha256": os.environ["ARTIFACT_SHA256"],
     "artifact_size_bytes": int(os.environ["ARTIFACT_SIZE"]),
+    "release_proof_sha256": os.environ["RELEASE_PROOF_SHA256"],
     "public_app_url": os.environ["PUBLIC_APP_URL"],
     "proofs": [
         "fresh-deep-validation",
+        "predeployment-device-release-proof",
         "public-build-identity",
         "public-style-source",
         "public-metadata-sentinel",
         "http-206-range",
-        "pmtiles-signature",
+        "complete-public-artifact-sha256",
     ],
 }
 Path(os.environ["RECEIPT_PATH"]).write_text(
@@ -348,5 +391,5 @@ PY
 chmod 0600 "$RECEIPT_TMP"
 mv -f "$RECEIPT_TMP" "$ACTIVATION_RECEIPT"
 
-echo "[✓] Germany PMTiles activation verified end to end."
+echo "[✓] Germany PMTiles activation verified against the device release gate and complete public artifact hash."
 echo "Receipt: $ACTIVATION_RECEIPT"
