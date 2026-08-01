@@ -149,10 +149,7 @@ const buildIdentity =
         mode,
         style_url: REMOTE_STYLE_URL,
       };
-const buildIdentityPath = path.join(
-  staticIdentityDir,
-  "basemap-build.json",
-);
+const buildIdentityPath = path.join(staticIdentityDir, "basemap-build.json");
 fs.writeFileSync(
   buildIdentityPath,
   `${JSON.stringify(buildIdentity, null, 2)}\n`,
