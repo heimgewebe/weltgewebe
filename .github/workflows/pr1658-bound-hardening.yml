@@ -1,0 +1,99 @@
+name: PR 1658 bound hardening operator
+
+"on":
+  push:
+    branches:
+      - feat/gewebezelle-two-operator-pilot-v1
+    paths:
+      - .github/workflows/pr1658-bound-hardening.yml
+
+permissions:
+  contents: write
+
+jobs:
+  harden:
+    if: github.repository == 'heimgewebe/weltgewebe'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify immutable bootstrap binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_REF_NAME}" = "feat/gewebezelle-two-operator-pilot-v1"
+          test "$(git rev-parse HEAD^)" = "19abd7a9fe773c74991afd3820c2d5000a9c6efc"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/pr1658-bound-hardening.yml"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: '3.12'
+      - name: Install Python validation dependencies
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.2' pytest ruff
+      - name: Materialize and apply head-bound hardening
+        shell: bash
+        env:
+          PATCH_BLOB_SHAS: >-
+            3bc6dbc5db86f4831eef387a2d979669bc36d802
+            93b0e0fc3b60c99124547fc8deb8b53a745bef7a
+            6f3ffa9ba085a1142254885125d20ccc5fa0f8d1
+            8aeeac2905bf97cb51377ad074b7dbaf59b8d5ae
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          : > /tmp/pr1658-patch.b64
+          for sha in $PATCH_BLOB_SHAS; do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${sha}" \
+              | jq -r '.content' | tr -d '\n' | base64 --decode \
+              >> /tmp/pr1658-patch.b64
+          done
+          base64 --decode /tmp/pr1658-patch.b64 | gzip --decompress \
+            > /tmp/pr1658_hardening.py
+          python /tmp/pr1658_hardening.py
+      - name: Format changed sources
+        run: |
+          cargo fmt --all
+          python -m ruff format \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py
+      - name: Validate Python and platform contracts
+        run: |
+          python -m ruff check \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/platform/validate_platform.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py \
+            scripts/ci/tests/test_kubernetes_platform_contract.py
+          python -m py_compile \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/platform/validate_platform.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py \
+            scripts/ci/tests/test_kubernetes_platform_contract.py
+          python -m unittest \
+            scripts.ci.tests.test_two_operator_cell_pilot \
+            scripts.ci.tests.test_kubernetes_platform_contract
+          make platform-check
+          make docs-guard
+      - name: Validate federation runtime
+        run: |
+          cargo fmt --all -- --check
+          cargo test -p weltgewebe-api federation::tests::
+          cargo test -p weltgewebe-api \
+            federation::tests::weak_public_keys_cannot_validate_universal_signatures \
+            -- --exact
+      - name: Commit hardening and remove bootstrap operator
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/pr1658-bound-hardening.yml
+          git diff --check
+          test -z "$(git status --short | grep -E '^\?\?' || true)"
+          git config user.name 'heimgewebe-operator'
+          git config user.email 'noreply@heimgewebe.invalid'
+          git add -A
+          git commit -m 'fix(platform): harden two-operator pilot trust boundary'
+          git push origin HEAD:feat/gewebezelle-two-operator-pilot-v1
