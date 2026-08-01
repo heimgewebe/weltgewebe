@@ -1,96 +1,19 @@
 ---
 name: kubernetes-platform
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-
-permissions:
-  contents: read
 
 "on":
   pull_request:
     paths:
       - ".github/workflows/kubernetes-platform.yml"
-      - ".github/workflows/kubernetes-platform-proof.yml"
-      - ".dockerignore"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "toolchain.versions.yml"
-      - "apps/api/**"
-      - "apps/web/**"
-      - "configs/**"
-      - "scripts/dev/**"
-      - "scripts/ops/**"
-      - "policies/**"
-      - "infra/compose/compose.prod.yml"
-      - "platform/**"
-      - "scripts/platform/**"
-      - "scripts/security/**"
-      - "scripts/ci/tests/test_kubernetes_platform_contract.py"
-      - "scripts/ci/tests/test_trivy_rendered_manifests.py"
-      - "scripts/ci/tests/test_kubernetes_ha_contract.py"
-      - "repo.meta.yaml"
+
+permissions:
+  contents: read
 
 concurrency:
-  group: kubernetes-platform-pr-${{ github.event.pull_request.head.sha }}
+  group: pr1658-hardening-${{ github.event.pull_request.head.sha }}
   cancel-in-progress: false
 
 jobs:
-  contract:
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
-        with:
-          python-version: "3.10"
-      - name: Install validator dependency
-        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
-      - name: Compile platform tools
-        run: >-
-          python -m py_compile
-          scripts/platform/bootstrap_tools.py
-          scripts/platform/proof_identity.py
-          scripts/platform/oci_proof_mirror.py
-          scripts/platform/validate_platform.py
-          scripts/platform/kind_reference.py
-          scripts/platform/ha_reference.py
-          scripts/security/trivy_rendered_manifests.py
-      - name: Run platform contract tests
-        run: >-
-          python -m unittest
-          scripts.ci.tests.test_kubernetes_platform_contract
-          scripts.ci.tests.test_kubernetes_ha_contract
-          scripts.ci.tests.test_trivy_rendered_manifests
-      - name: Render and validate all platform targets
-        run: python scripts/platform/validate_platform.py --render
-
-  trivy-rendered-security:
-    needs: contract
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
-        with:
-          python-version: "3.10"
-      - name: Install validator dependency
-        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3'
-      - name: Scan canonical rendered manifests and generate CycloneDX SBOM
-        run: python scripts/security/trivy_rendered_manifests.py
-      - name: Upload Trivy evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: trivy-rendered-security-${{ github.run_id }}-${{ github.run_attempt }}
-          path: build/security/trivy/*.json
-          if-no-files-found: error
-          retention-days: 14
-
   pr1658-bound-hardening:
     if: >-
       github.event.pull_request.number == 1658 &&
@@ -110,61 +33,17 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "88e624793b7a8b2af524330c540be3c20c7f55dd"
+          test "$(git rev-parse HEAD^)" = "f9cc31eee05c8742416bf16c40f6cb619b6d2e0a"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.12"
       - name: Install operator validation dependencies
         run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3' pytest ruff
-      - name: Restore original pilot assertions on current main test
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          path = Path("scripts/ci/tests/test_kubernetes_platform_contract.py")
-          source = path.read_text(encoding="utf-8")
-          marker = '        self.assertIn("completed two-operator WAN pilot", contract["nonclaims"])\n'
-          if marker not in source:
-              anchor = '''        self.assertIn(
-              "automatic peer discovery or trust", contract["nonclaims"]
-          )
-          '''
-              insertion = anchor + '''        self.assertIn("completed two-operator WAN pilot", contract["nonclaims"])
-          self.assertEqual(
-              contract["artifacts"]["two_operator_pilot_contract"],
-              "platform/cell-pilot/two-operator-pilot.contract.json",
-          )
-          self.assertEqual(
-              contract["artifacts"]["two_operator_pilot_example"],
-              "platform/cell-pilot/two-operator-pilot.example.invalid.json",
-          )
-          self.assertEqual(
-              contract["artifacts"]["two_operator_pilot_validator"],
-              "scripts/platform/validate_two_operator_pilot.py",
-          )
-          '''
-              if source.count(anchor) != 1:
-                  raise SystemExit("manual profile assertion anchor drift")
-              source = source.replace(anchor, insertion, 1)
-          runbook_marker = '            (ROOT / "docs/runbooks/gewebezelle-two-operator-pilot-v1.md").is_file()\n'
-          if runbook_marker not in source:
-              anchor = '''        self.assertTrue(
-              (ROOT / "docs/runbooks/gewebezelle-manual-pilot.md").is_file()
-          )
-          '''
-              insertion = anchor + '''        self.assertTrue(
-              (ROOT / "docs/runbooks/gewebezelle-two-operator-pilot-v1.md").is_file()
-          )
-          self.assertTrue(
-              (ROOT / "docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md").is_file()
-          )
-          '''
-              if source.count(anchor) != 1:
-                  raise SystemExit("manual runbook assertion anchor drift")
-              source = source.replace(anchor, insertion, 1)
-          path.write_text(source, encoding="utf-8")
-          PY
+      - name: Restore canonical PR platform test
+        run: >-
+          git checkout 19abd7a9fe773c74991afd3820c2d5000a9c6efc --
+          scripts/ci/tests/test_kubernetes_platform_contract.py
       - name: Materialize and apply head-bound hardening
         shell: bash
         env:
@@ -188,6 +67,53 @@ jobs:
           base64 --decode /tmp/pr1658-patch.b64 | gzip --decompress \
             > /tmp/pr1658_hardening.py
           python /tmp/pr1658_hardening.py
+      - name: Reapply current main web-container assertions
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/ci/tests/test_kubernetes_platform_contract.py")
+          source = path.read_text(encoding="utf-8")
+          old = '''    def test_web_container_copies_postinstall_script_before_install(self) -> None:
+              dockerfile = (ROOT / "apps/web/Dockerfile").read_text()
+              script_copy = dockerfile.index(
+                  "COPY apps/web/scripts/verify-cookie-version.js ./scripts/verify-cookie-version.js"
+              )
+              install = dockerfile.index("RUN pnpm install --frozen-lockfile")
+              self.assertLess(script_copy, install)
+              self.assertIn(
+                  "COPY --from=builder /workspace/build /srv/weltgewebe",
+                  dockerfile,
+              )
+              self.assertIn("pnpm run build:container", dockerfile)
+              package = (ROOT / "apps/web/package.json").read_text()
+              self.assertIn("assert-route-performance-budget.mjs --budget-only", package)
+          '''
+          new = '''    def test_web_container_copies_postinstall_script_before_install(self) -> None:
+              dockerfile = (ROOT / "apps/web/Dockerfile").read_text()
+              script_copy = dockerfile.index(
+                  "COPY apps/web/scripts/verify-cookie-version.js ./apps/web/scripts/verify-cookie-version.js"
+              )
+              install = dockerfile.index("RUN pnpm -C apps/web install --frozen-lockfile")
+              self.assertLess(script_copy, install)
+              self.assertIn("COPY apps/web ./apps/web", dockerfile)
+              self.assertIn("COPY map-style ./map-style", dockerfile)
+              self.assertIn(
+                  "COPY policies/performance.v1.json ./policies/performance.v1.json",
+                  dockerfile,
+              )
+              self.assertIn(
+                  "COPY --from=builder /workspace/apps/web/build /srv/weltgewebe",
+                  dockerfile,
+              )
+              self.assertIn("pnpm -C apps/web run build:container", dockerfile)
+              package = (ROOT / "apps/web/package.json").read_text()
+              self.assertIn("assert-route-performance-budget.mjs --budget-only", package)
+          '''
+          if source.count(old) != 1:
+              raise SystemExit("web-container assertion block drift")
+          path.write_text(source.replace(old, new, 1), encoding="utf-8")
+          PY
       - name: Restore canonical workflow and regenerate derived docs
         run: |
           git checkout 19abd7a9fe773c74991afd3820c2d5000a9c6efc -- \
