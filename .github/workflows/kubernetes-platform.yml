@@ -116,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "79520be05be69929715a5ff119d9e90d8413e597"
+          test "$(git rev-parse HEAD^)" = "cf022370792a3372ac9b3396ecd5eb2e0796b60f"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -148,7 +148,7 @@ jobs:
           python /tmp/pr1658_hardening.py
       - name: Apply safe source fixes and formatting
         run: |
-          python -m ruff check --fix \
+          python -m ruff check --fix --exit-zero \
             scripts/platform/validate_two_operator_pilot.py \
             scripts/platform/validate_platform.py \
             scripts/ci/tests/test_two_operator_cell_pilot.py \
@@ -158,12 +158,23 @@ jobs:
             scripts/platform/validate_two_operator_pilot.py \
             scripts/ci/tests/test_two_operator_cell_pilot.py
       - name: Ruff
-        run: >-
-          python -m ruff check
-          scripts/platform/validate_two_operator_pilot.py
-          scripts/platform/validate_platform.py
-          scripts/ci/tests/test_two_operator_cell_pilot.py
-          scripts/ci/tests/test_kubernetes_platform_contract.py
+        id: ruff
+        continue-on-error: true
+        run: |
+          python -m ruff check --output-format json \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/platform/validate_platform.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py \
+            scripts/ci/tests/test_kubernetes_platform_contract.py \
+            > /tmp/pr1658-ruff.json
+      - name: Upload Ruff diagnostics
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: pr1658-ruff-${{ github.run_id }}-${{ github.run_attempt }}
+          path: /tmp/pr1658-ruff.json
+          if-no-files-found: error
+          retention-days: 2
       - name: Python compile
         run: >-
           python -m py_compile
@@ -189,6 +200,10 @@ jobs:
           cargo test -p weltgewebe-api
           federation::tests::weak_public_keys_cannot_validate_universal_signatures
           -- --exact
+      - name: Require Ruff success
+        env:
+          RUFF_OUTCOME: ${{ steps.ruff.outcome }}
+        run: test "$RUFF_OUTCOME" = success
       - name: Commit hardening and restore canonical workflow
         shell: bash
         run: |
