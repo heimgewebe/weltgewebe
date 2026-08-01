@@ -65,22 +65,37 @@ async function expectReadableSurface(locator: Locator, label: string) {
   ).toBeGreaterThanOrEqual(4.5);
 }
 
+async function expectNoStripePattern(locator: Locator, label: string) {
+  const backgroundImage = await locator.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  );
+  expect(
+    backgroundImage,
+    `${label} darf kein wiederholtes Streifenmuster verwenden`,
+  ).not.toContain("repeating-linear-gradient");
+}
+
 test.describe("Farbschema", () => {
-  test("wechselt das Farbschema und teilt die Auswahl zwischen Karte und Einstellungen", async ({
+  test("steuert das Farbschema im Einstellungsmenü und behält es auf der Karte", async ({
     page,
   }) => {
-    await page.goto("/map");
+    await page.goto("/settings");
 
-    const mapButton = page.getByTestId("theme-compact-button");
-    await expect(mapButton).toBeVisible();
-    await expect(mapButton).toHaveAttribute("data-theme", "system");
-    await expect(page.getByRole("option")).toHaveCount(0);
+    const menu = page.getByTestId("settings-menu");
+    const settingsSelect = page.getByTestId("theme-select");
+    await expect(menu).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: /Meine Garnrolle/ }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: /Konto & Sicherheit/ }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: /Private Nachrichten/ }),
+    ).toHaveCount(0);
+    await expect(settingsSelect).toHaveValue("system");
 
-    await mapButton.click();
-    await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
-    await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "light");
-
-    await mapButton.click();
+    await settingsSelect.selectOption("dark");
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
     await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "dark");
     await expect
@@ -91,22 +106,252 @@ test.describe("Farbschema", () => {
 
     await page.reload();
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
-    await expect(page.getByTestId("theme-compact-button")).toHaveAttribute(
-      "data-theme",
-      "dark",
-    );
-
-    await page.goto("/settings");
-    const settingsSelect = page.getByTestId("theme-select");
-    await expect(settingsSelect).toHaveValue("dark");
-    await settingsSelect.selectOption("light");
-    await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
+    await expect(page.getByTestId("theme-select")).toHaveValue("dark");
 
     await page.goto("/map");
-    await expect(page.getByTestId("theme-compact-button")).toHaveAttribute(
-      "data-theme",
-      "light",
+    await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
+    await expect(
+      page.getByRole("link", { name: "Einstellungen öffnen" }),
+    ).toBeVisible();
+    await expect(page.getByTestId("theme-compact-button")).toHaveCount(0);
+
+    await page.goto("/settings");
+    await page.getByTestId("theme-select").selectOption("light");
+    await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
+  });
+
+  test("hält Einstellungen und Anmeldung bei 320 Pixeln frei berührbar", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.route("**/_app/version.json", (route) =>
+      route.fulfill({ status: 404, body: "" }),
     );
+    await page.route("**/api/auth/me", (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: false,
+          account_id: null,
+          role: "gast",
+        }),
+      }),
+    );
+    await page.goto("/map");
+
+    const settings = page.getByRole("link", { name: "Einstellungen öffnen" });
+    const login = page.getByRole("link", { name: "Anmelden" });
+    const governance = page.getByTestId("governance-fan-trigger");
+    await expect(settings).toBeVisible();
+    await expect(login).toBeVisible();
+    await expect(governance).toBeVisible();
+
+    const settingsBox = await settings.boundingBox();
+    const loginBox = await login.boundingBox();
+    const governanceBox = await governance.boundingBox();
+    expect(settingsBox).not.toBeNull();
+    expect(loginBox).not.toBeNull();
+    expect(governanceBox).not.toBeNull();
+    expect(settingsBox!.x + 0.5).toBeGreaterThanOrEqual(
+      governanceBox!.x + governanceBox!.width,
+    );
+    expect(loginBox!.x).toBeGreaterThanOrEqual(
+      settingsBox!.x + settingsBox!.width,
+    );
+    expect(loginBox!.x + loginBox!.width).toBeLessThanOrEqual(320);
+
+    for (const [label, target] of [
+      ["Einstellungen", settings],
+      ["Anmelden", login],
+    ] as const) {
+      const hitTest = await target.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return {
+          receivesPointer:
+            hit === element || (hit !== null && element.contains(hit)),
+          hitElement: hit
+            ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
+            : "none",
+        };
+      });
+      expect(
+        hitTest.receivesPointer,
+        `${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
+      ).toBe(true);
+    }
+  });
+
+  test("hält Gastzugriffe bis zur sicheren Textbreite kollisionsfrei", async ({
+    page,
+  }) => {
+    await page.route("**/_app/version.json", (route) =>
+      route.fulfill({ status: 404, body: "" }),
+    );
+    await page.route("**/api/auth/me", (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: false,
+          account_id: null,
+          role: "gast",
+        }),
+      }),
+    );
+
+    for (const width of [361, 375, 390, 414, 430, 480, 510, 511]) {
+      await page.setViewportSize({ width, height: 720 });
+      await page.goto("/map");
+
+      const settings = page.getByRole("link", {
+        name: "Einstellungen öffnen",
+      });
+      const login = page.getByRole("link", { name: "Anmelden" });
+      const governance = page.getByTestId("governance-fan-trigger");
+      await expect(settings).toBeVisible();
+      await expect(login).toBeVisible();
+      await expect(governance).toBeVisible();
+
+      const settingsBox = await settings.boundingBox();
+      const loginBox = await login.boundingBox();
+      const governanceBox = await governance.boundingBox();
+      expect(settingsBox, `${width}px: Einstellungen fehlen`).not.toBeNull();
+      expect(loginBox, `${width}px: Anmeldung fehlt`).not.toBeNull();
+      expect(governanceBox, `${width}px: Mitentscheiden fehlt`).not.toBeNull();
+      expect(
+        settingsBox!.x + 0.5,
+        `${width}px: Einstellungen überlappen Mitentscheiden`,
+      ).toBeGreaterThanOrEqual(governanceBox!.x + governanceBox!.width);
+      expect(
+        loginBox!.x,
+        `${width}px: Anmeldung überlappt Einstellungen`,
+      ).toBeGreaterThanOrEqual(settingsBox!.x + settingsBox!.width);
+      expect(
+        loginBox!.x + loginBox!.width,
+        `${width}px: Anmeldung verlässt den Bildschirm`,
+      ).toBeLessThanOrEqual(width);
+
+      for (const [label, target] of [
+        ["Einstellungen", settings],
+        ["Anmelden", login],
+      ] as const) {
+        const hitTest = await target.evaluate((element) => {
+          const rect = element.getBoundingClientRect();
+          const hit = document.elementFromPoint(
+            rect.left + rect.width / 2,
+            rect.top + rect.height / 2,
+          );
+          return {
+            receivesPointer:
+              hit === element || (hit !== null && element.contains(hit)),
+            hitElement: hit
+              ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
+              : "none",
+          };
+        });
+        expect(
+          hitTest.receivesPointer,
+          `${width}px: ${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
+        ).toBe(true);
+      }
+
+      const loginLabel = login.locator(".auth-label");
+      if (width <= 510) {
+        await expect(loginLabel).toBeHidden();
+      } else {
+        await expect(loginLabel).toBeVisible();
+      }
+    }
+  });
+
+  test("zeigt private Nachrichten angemeldeten Webern direkt in der Kartenleiste", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.route("**/_app/version.json", (route) =>
+      route.fulfill({ status: 404, body: "" }),
+    );
+    await page.route("**/api/auth/me", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          account_id: "weber-test",
+          role: "weber",
+        }),
+      }),
+    );
+    await page.goto("/map");
+
+    const messages = page.getByRole("link", { name: "Private Nachrichten" });
+    const settings = page.getByRole("link", { name: "Einstellungen öffnen" });
+    const governance = page.getByTestId("governance-fan-trigger");
+    await expect(messages).toBeVisible();
+    await expect(messages).toHaveAttribute("href", "/nachrichten");
+    await expect(settings).toBeVisible();
+    await expect(governance).toBeVisible();
+
+    const messagesBox = await messages.boundingBox();
+    const settingsBox = await settings.boundingBox();
+    const governanceBox = await governance.boundingBox();
+    expect(messagesBox).not.toBeNull();
+    expect(settingsBox).not.toBeNull();
+    expect(governanceBox).not.toBeNull();
+    expect(messagesBox!.x + 0.5).toBeGreaterThanOrEqual(
+      governanceBox!.x + governanceBox!.width,
+    );
+    expect(settingsBox!.x).toBeGreaterThanOrEqual(
+      messagesBox!.x + messagesBox!.width,
+    );
+    expect(settingsBox!.x + settingsBox!.width).toBeLessThanOrEqual(320);
+
+    for (const [label, target] of [
+      ["Private Nachrichten", messages],
+      ["Einstellungen", settings],
+    ] as const) {
+      const hitTest = await target.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return {
+          receivesPointer:
+            hit === element || (hit !== null && element.contains(hit)),
+          hitElement: hit
+            ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
+            : "none",
+        };
+      });
+      expect(
+        hitTest.receivesPointer,
+        `${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
+      ).toBe(true);
+    }
+  });
+
+  test("hält den Rückweg zur Karte in Hell und Dunkel lesbar", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+
+    const backLink = page.getByRole("link", { name: /Zur Karte/ });
+    const themeSelect = page.getByTestId("theme-select");
+    await expect(backLink).toBeVisible();
+    const backLinkBox = await backLink.boundingBox();
+    expect(backLinkBox).not.toBeNull();
+    expect(backLinkBox!.height).toBeGreaterThanOrEqual(44);
+
+    for (const theme of ["dark", "light"] as const) {
+      await themeSelect.selectOption(theme);
+      await expectReadableSurface(backLink, `Rückweg im Modus ${theme}`);
+    }
   });
 
   test("folgt im Systemmodus einer geänderten Gerätepräferenz", async ({
@@ -123,6 +368,47 @@ test.describe("Farbschema", () => {
 
     await page.emulateMedia({ colorScheme: "light" });
     await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "light");
+  });
+
+  test("verwendet glatte Flächen ohne wiederholte Streifen", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+
+    await expectNoStripePattern(page.locator("body"), "Seitenhintergrund");
+    await expectNoStripePattern(
+      page.getByTestId("settings-menu"),
+      "Einstellungsmenü",
+    );
+    await expectNoStripePattern(
+      page.locator(".settings-content .panel").first(),
+      "Inhaltskarte",
+    );
+  });
+
+  test("ordnet das Menü auf kleinen Bildschirmen ohne Überlauf unter die Überschrift", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await page.goto("/settings");
+
+    const menu = page.getByTestId("settings-menu");
+    const content = page.locator("main.settings-content");
+    const desktopMenu = await menu.boundingBox();
+    const desktopContent = await content.boundingBox();
+    expect(desktopMenu).not.toBeNull();
+    expect(desktopContent).not.toBeNull();
+    expect(desktopContent!.x).toBeGreaterThan(desktopMenu!.x);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileMenu = await menu.boundingBox();
+    const mobileContent = await content.boundingBox();
+    expect(mobileMenu).not.toBeNull();
+    expect(mobileContent).not.toBeNull();
+    expect(mobileContent!.y).toBeGreaterThan(mobileMenu!.y);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(390);
   });
 
   test("hält die zentralen Kartenflächen im hellen Farbschema lesbar", async ({

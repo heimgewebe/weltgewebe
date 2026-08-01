@@ -10,11 +10,6 @@
   --accent: #2f776d;
   --accent-soft: rgba(47, 119, 109, 0.14);
   --danger: #b64850;
-  --weave: repeating-linear-gradient(
-    135deg,
-    transparent 0 24px,
-    #2f776d0d 24px 25px
-  );
   --radius: 12px;
   --shadow: 0 12px 32px rgba(47, 62, 58, 0.14);
 
