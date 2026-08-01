@@ -13,7 +13,9 @@
 <div class="settings-page">
   <div class="container">
     <header class="page-header">
-      <a class="btn" href="/map">← Zur Karte</a>
+      <div class="row">
+        <a class="btn touch-target" href="/map">← Zur Karte</a>
+      </div>
       <h1>Einstellungen</h1>
       <p class="intro">
         Verwalte deine Garnrolle, dein Konto und die Darstellung an einem
@@ -50,7 +52,7 @@
           </p>
           <select
             id="theme-select"
-            class="btn theme-select"
+            class="btn touch-target"
             data-wg-theme-control
             data-testid="theme-select"
           >
@@ -139,7 +141,7 @@
     border-top: 1px solid var(--panel-border);
   }
 
-  .theme-select {
+  .touch-target {
     min-height: 44px;
   }
 

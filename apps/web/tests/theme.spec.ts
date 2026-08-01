@@ -344,6 +344,9 @@ test.describe("Farbschema", () => {
     const backLink = page.getByRole("link", { name: /Zur Karte/ });
     const themeSelect = page.getByTestId("theme-select");
     await expect(backLink).toBeVisible();
+    const backLinkBox = await backLink.boundingBox();
+    expect(backLinkBox).not.toBeNull();
+    expect(backLinkBox!.height).toBeGreaterThanOrEqual(44);
 
     for (const theme of ["dark", "light"] as const) {
       await themeSelect.selectOption(theme);
