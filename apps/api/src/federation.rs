@@ -1589,7 +1589,7 @@ fn signing_bytes(event: &FederationEvent) -> anyhow::Result<Vec<u8>> {
 }
 
 // Envelope identity: hash the complete signed envelope, including `signature`.
-fn envelope_sha256(event: &FederationEvent) -> anyhow::Result<String> {
+pub(crate) fn envelope_sha256(event: &FederationEvent) -> anyhow::Result<String> {
     let bytes = serde_jcs::to_vec(event)?;
     Ok(hex::encode(Sha256::digest(bytes)))
 }

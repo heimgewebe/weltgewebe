@@ -84,7 +84,7 @@ Es gibt keine automatische Peer-Discovery oder Vertrauensbildung. Beide Betreibe
 
 Die Kubernetes-Basis bleibt egress-default-deny und enthält bewusst keine allgemeine Internetfreigabe. Das manuelle Zelloverlay muss deshalb für jeden ausgehenden Peer eine explizite Cilium-FQDN-Regel enthalten. Ausgangspunkt ist `platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml`. Vor der Aufnahme in das Overlay werden `peer.example.invalid`, Policy-Name und gegebenenfalls Port durch den exakt verifizierten DNS-Host und TCP-Port aus `delivery_base_url` ersetzt.
 
-Zulässig sind ausschließlich exakte `matchName`-Einträge. `matchPattern`, `toEntities: world`, pauschale CIDR-Freigaben und ein unveränderter Beispielhost sind Aktivierungsblocker. IP-Literale benötigen einen gesondert geprüften CIDR-Vertrag; das Standardprofil behauptet dafür keine Freigabe. Der gerenderte Zellstand muss daher denselben Zielhost- und Portsatz wie `FEDERATION_PEERS_JSON` enthalten.
+Für ausgehende Peerziele sind ausschließlich exakte `toFQDNs.matchName`-Einträge zulässig. Das L7-DNS-Proxy-Element `rules.dns.matchPattern: "*"` ist ausschließlich für Abfragen an den ausgewählten Cluster-DNS-Dienst erforderlich. `toFQDNs.matchPattern`, `toEntities: world`, pauschale CIDR-Freigaben und ein unveränderter Beispielhost sind Aktivierungsblocker. IP-Literale benötigen einen gesondert geprüften CIDR-Vertrag; das Standardprofil behauptet dafür keine Freigabe. Der gerenderte Zellstand muss daher denselben Zielhost- und Portsatz wie `FEDERATION_PEERS_JSON` enthalten.
 
 ## Automatische Auslieferung
 
@@ -103,11 +103,11 @@ Beim Start gelten folgende Stopbedingungen:
 - Ohne vollständige Zellidentität startet kein Worker.
 - Ohne PostgreSQL gibt es keinen flüchtigen Ersatzbetrieb.
 - Ohne mindestens einen Peer mit gültiger HTTPS-`delivery_base_url` wird die Aktivierung abgewiesen.
-- Redirects, Zugangsdaten in URLs, HTTP, Queryparameter und Fragmente sind verboten.
+- Redirects, Zugangsdaten in URLs, HTTP, IP-Literale, Queryparameter und Fragmente sind verboten.
 
-Beim lokalen Fachcommit werden Outbox-Ereignis und Zielreservierungen in derselben PostgreSQL-Transaktion erzeugt. Dadurch gibt es keinen periodischen Vollscan der historischen Outbox. Wenn ein HTTPS-Endpoint oder sein gebundener Vertrauens-, Reichweiten- oder Ereignisvertrag erstmals aktiviert oder geändert wird, reserviert eine einmalige transaktionale Rückfüllung die erlaubte globale beziehungsweise ausdrücklich an diese Zelle gerichtete Objektgeschichte. So kann die Zielzelle jedes Objekt ab Version 1 verifizieren, ohne dass die gesamte Outbox bei jedem Worker-Lauf erneut gekreuzt wird. Mehrere API-Replikate beanspruchen fällige Einträge mit `SKIP LOCKED` und kurzlebiger Eigentumslease. Transiente Netzwerkfehler, `429` und `5xx` führen zu begrenztem Backoff. `Applied` und `Duplicate` schließen die Zustellung nur ab, wenn bestätigte Event-ID und Objektversion exakt zur gesendeten Hülle passen. Ablehnung, Quarantäne, fremde Bestätigungen, ungültige Erfolgsantworten und ausgeschöpfte Versuche werden als `dead` erhalten und nicht still verworfen. Wird ein bereits reserviertes Ziel nachträglich blockiert oder eingeschränkt, verarbeitet der Worker den Eintrag ohne Netzwerkzugriff zu einem sichtbaren Policy-`dead` statt ihn unclaimbar stehen zu lassen. Eine spätere, fingerprintgebundene Freigabe reaktiviert ausschließlich solche Policy-`dead`-Einträge; Remote-Ablehnungen oder ausgeschöpfte Versuche bleiben terminal.
+Beim lokalen Fachcommit werden Outbox-Ereignis und Zielreservierungen in derselben PostgreSQL-Transaktion erzeugt. Dadurch gibt es keinen periodischen Vollscan der historischen Outbox. Wenn ein HTTPS-Endpoint oder sein gebundener Vertrauens-, Reichweiten- oder Ereignisvertrag erstmals aktiviert oder geändert wird, reserviert eine einmalige transaktionale Rückfüllung die für Vertrauens- und Reichweitenvertrag relevante Objektgeschichte. Ereignisklassen werden beim Claim geprüft: Eine nicht freigegebene Zwischenversion wird sichtbar als Policy-`dead` markiert und hält spätere Versionen geordnet zurück, bis eine revisionsgebundene Policy-Erweiterung sie reaktiviert. Mehrere API-Replikate beanspruchen fällige Einträge mit `SKIP LOCKED` und einer Lease, die das Request-Timeout um einen Sicherheitsabstand übersteigt. Transiente Netzwerkfehler, `429`, `5xx`, Ablehnung und Quarantäne führen zu begrenztem Backoff. `Applied` und `Duplicate` schließen die Zustellung nur ab, wenn bestätigte Event-ID und Objektversion exakt zur gesendeten Hülle passen. Fremde Bestätigungen, ungültige Erfolgsantworten, beschädigte Outbox-Hüllen und andere Protokollfehler werden als `dead` erhalten und nicht still verworfen. Wird ein bereits reserviertes Ziel nachträglich blockiert oder eingeschränkt, verarbeitet der Worker den Eintrag ohne Netzwerkzugriff zu einem sichtbaren Policy-`dead` statt ihn unclaimbar stehen zu lassen. Eine explizite Änderung des Endpoint-/Policy-Fingerprints reaktiviert nur freigegebene Policy-Fehler sowie ausgeschöpfte Ablehnungs-, Quarantäne- und Retryzustände; beliebige terminale Fehler bleiben unangetastet.
 
-Während einer einzelnen, zeitlich begrenzten HTTP-Zustellung bleibt die aktuelle Peerbeziehung in PostgreSQL geteilt gesperrt. Blockierung oder Endpointänderung wird dadurch vollständig vor oder nach der Zustellung geordnet statt mitten in ihr wirksam zu werden.
+Vor einer einzelnen, zeitlich begrenzten HTTP-Zustellung prüft der Worker die signierte Outbox-Hülle, ihren gespeicherten Digest und einen Snapshot der aktuellen Peerpolicy. Während des Netzwerkzugriffs bleibt kein Datenbanklock offen. Eine nach dem Versand eintretende Blockierung kann die bereits ausgesandte idempotente Anfrage nicht zurückholen, verhindert aber weitere Claims und blockiert keine Konfigurationsänderung.
 
 ## Aktivierungsbeweis
 
@@ -134,7 +134,7 @@ Der Betreiber überwacht mindestens:
 - Schlüsselablauf, Peerblockierung und Konfigurationsdrift;
 - Backup- und Restorefrische.
 
-Ein `dead`-Eintrag wird nicht automatisch erneut aktiviert. Vor einer manuellen Wiederaufnahme muss die konkrete Ursache revisionsgebunden behoben und geprüft sein.
+Ein `dead`-Eintrag wird nicht durch Polling oder Zeitablauf erneut aktiviert. Nur eine explizite, revisionsgebundene Änderung des Endpoint-/Policy-Fingerprints darf die fest definierten Policy-, Ablehnungs-, Quarantäne- oder Ausschöpfungsklassen zurück auf `pending` setzen. Andere terminale Fehler benötigen weiterhin einen gesonderten, geprüften Reparaturpfad.
 
 ## Rücknahme
 
