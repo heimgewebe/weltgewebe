@@ -1,9 +1,11 @@
 name: PR 1658 bound hardening operator
 
 "on":
-  push:
+  pull_request:
     branches:
-      - feat/gewebezelle-two-operator-pilot-v1
+      - main
+    types:
+      - synchronize
     paths:
       - .github/workflows/pr1658-bound-hardening.yml
 
@@ -12,20 +14,21 @@ permissions:
 
 jobs:
   harden:
-    if: github.repository == 'heimgewebe/weltgewebe'
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
           persist-credentials: true
       - name: Verify immutable bootstrap binding
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_REF_NAME}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "19abd7a9fe773c74991afd3820c2d5000a9c6efc"
+          test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
+          test "$(git rev-parse HEAD^)" = "d3bcf6647a9fed45458304b6dc3a1b571c9ad9f5"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/pr1658-bound-hardening.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
