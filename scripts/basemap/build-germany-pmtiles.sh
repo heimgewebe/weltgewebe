@@ -23,6 +23,7 @@ OSM_SNAPSHOT_DATE="${OSM_SNAPSHOT_DATE:-2026-01-01}"
 BASEMAP_VERSION="${BASEMAP_VERSION:-0.1.0}"
 BASEMAP_TAG="v${BASEMAP_VERSION}"
 OUTPUT_PMTILES="basemap-germany-${BASEMAP_TAG}.pmtiles"
+PARTIAL_PMTILES="basemap-germany-${BASEMAP_TAG}.partial.pmtiles"
 OUTPUT_META="basemap-germany-${BASEMAP_TAG}.meta.json"
 MIN_FREE_BYTES="${BASEMAP_MIN_FREE_BYTES:-68719476736}"
 
@@ -33,10 +34,8 @@ fail() {
   exit 1
 }
 
-case "$OSM_SHA256" in
-  [0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]) ;;
-  *) fail "OSM_SHA256 must be exactly 64 lowercase hexadecimal characters" ;;
-esac
+[[ "$OSM_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "OSM_SHA256 must be exactly 64 lowercase hexadecimal characters"
 case "$MIN_FREE_BYTES" in
   '' | *[!0-9]*) fail "BASEMAP_MIN_FREE_BYTES must be a positive integer" ;;
 esac
@@ -88,21 +87,21 @@ echo "========================================="
 cd "$BASEMAP_DIR"
 
 if [[ ! -f "$OSM_FILE" ]]; then
-  PARTIAL_FILE="${OSM_FILE}.partial"
-  rm -f "$PARTIAL_FILE"
+  PARTIAL_INPUT="${OSM_FILE}.partial"
+  rm -f "$PARTIAL_INPUT"
   echo ">> Downloading pinned Germany OSM snapshot..."
   if [[ "$DOWNLOADER" == "wget" ]]; then
-    wget -qO "$PARTIAL_FILE" "$OSM_URL" || {
-      rm -f "$PARTIAL_FILE"
+    wget -qO "$PARTIAL_INPUT" "$OSM_URL" || {
+      rm -f "$PARTIAL_INPUT"
       fail "download failed: $OSM_URL"
     }
   else
-    curl -fL --retry 3 --retry-delay 5 -o "$PARTIAL_FILE" "$OSM_URL" || {
-      rm -f "$PARTIAL_FILE"
+    curl -fL --retry 3 --retry-delay 5 -o "$PARTIAL_INPUT" "$OSM_URL" || {
+      rm -f "$PARTIAL_INPUT"
       fail "download failed: $OSM_URL"
     }
   fi
-  mv -f "$PARTIAL_FILE" "$OSM_FILE"
+  mv -f "$PARTIAL_INPUT" "$OSM_FILE"
 else
   echo ">> Reusing existing input: $OSM_FILE"
 fi
@@ -115,7 +114,7 @@ ACTUAL_INPUT_SHA256="$("${SHA256_CMD[@]}" "$OSM_FILE" | awk '{print $1}')"
 }
 echo "   [✓] Input integrity verified"
 
-rm -f "${OUTPUT_PMTILES}.partial"
+rm -f "$PARTIAL_PMTILES"
 DOCKER_ARGS=(
   run --rm
   --platform linux/amd64
@@ -128,13 +127,13 @@ fi
 
 if ! docker "${DOCKER_ARGS[@]}" "$PLANETILER_IMAGE" \
   --osm-path="/data/$OSM_FILE" \
-  --output="/data/${OUTPUT_PMTILES}.partial"; then
-  rm -f "${OUTPUT_PMTILES}.partial"
+  --output="/data/$PARTIAL_PMTILES"; then
+  rm -f "$PARTIAL_PMTILES"
   fail "Planetiler execution failed"
 fi
 
-[[ -s "${OUTPUT_PMTILES}.partial" ]] || fail "Planetiler produced no non-empty artifact"
-mv -f "${OUTPUT_PMTILES}.partial" "$OUTPUT_PMTILES"
+[[ -s "$PARTIAL_PMTILES" ]] || fail "Planetiler produced no non-empty artifact"
+mv -f "$PARTIAL_PMTILES" "$OUTPUT_PMTILES"
 
 PMTILES_SIZE="$(wc -c < "$OUTPUT_PMTILES" | tr -d '[:space:]')"
 PMTILES_SHA256="$("${SHA256_CMD[@]}" "$OUTPUT_PMTILES" | awk '{print $1}')"
@@ -147,34 +146,46 @@ elif [[ -n "${SOURCE_DATE_EPOCH:-}" ]]; then
   BUILD_TIMESTAMP_VALUE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +"%Y-%m-%dT%H:%M:%SZ")" || BUILD_TIMESTAMP_VALUE=""
 fi
 
-python3 - "$OUTPUT_META" <<PY
+META_VERSION="$BASEMAP_VERSION" \
+META_TOOLCHAIN="$PLANETILER_IMAGE" \
+META_INPUT_URL="$OSM_URL" \
+META_INPUT_FILE="$OSM_FILE" \
+META_SNAPSHOT_DATE="$OSM_SNAPSHOT_DATE" \
+META_INPUT_SHA256="$OSM_SHA256" \
+META_ARTIFACT_NAME="$OUTPUT_PMTILES" \
+META_ARTIFACT_SHA256="$PMTILES_SHA256" \
+META_ARTIFACT_SIZE="$PMTILES_SIZE" \
+META_BUILD_TIMESTAMP="$BUILD_TIMESTAMP_VALUE" \
+  python3 - "$OUTPUT_META" <<'PY'
 import json
+import os
 import pathlib
 import sys
 
 payload = {
     "schema_version": 1,
-    "version": "${BASEMAP_VERSION}",
+    "version": os.environ["META_VERSION"],
     "region": "germany",
     "country_code": "DE",
     "activation": "opt-in",
     "toolchain": {
         "generator": "planetiler",
-        "image": "${PLANETILER_IMAGE}",
+        "image": os.environ["META_TOOLCHAIN"],
     },
     "input": {
-        "url": "${OSM_URL}",
-        "file": "${OSM_FILE}",
-        "snapshot_date": "${OSM_SNAPSHOT_DATE}",
-        "sha256": "${OSM_SHA256}",
+        "url": os.environ["META_INPUT_URL"],
+        "file": os.environ["META_INPUT_FILE"],
+        "snapshot_date": os.environ["META_SNAPSHOT_DATE"],
+        "sha256": os.environ["META_INPUT_SHA256"],
     },
-    "artifact_name": "${OUTPUT_PMTILES}",
-    "sha256": "${PMTILES_SHA256}",
-    "size_bytes": int("${PMTILES_SIZE}"),
+    "artifact_name": os.environ["META_ARTIFACT_NAME"],
+    "sha256": os.environ["META_ARTIFACT_SHA256"],
+    "size_bytes": int(os.environ["META_ARTIFACT_SIZE"]),
     "status": "ready",
 }
-if "${BUILD_TIMESTAMP_VALUE}":
-    payload["build_timestamp"] = "${BUILD_TIMESTAMP_VALUE}"
+build_timestamp = os.environ.get("META_BUILD_TIMESTAMP", "")
+if build_timestamp:
+    payload["build_timestamp"] = build_timestamp
 pathlib.Path(sys.argv[1]).write_text(
     json.dumps(payload, indent=2, sort_keys=True) + "\n",
     encoding="utf-8",
