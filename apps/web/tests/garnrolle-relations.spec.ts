@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 
 test.describe("Garnrolle relations", () => {
-  test("shows connected Knoten and activity from persisted Fäden", async ({
+  test("shows connected Knoten and independently projected activity", async ({
     page,
   }) => {
     await mockApiResponses(page);
@@ -92,8 +92,9 @@ test.describe("Garnrolle relations", () => {
           ],
           activity: [
             {
-              date: "2026-07-11T11:11:50.322307+00:00",
-              event: 'Hat den Knoten "fairschenkbox" geknüpft.',
+              date: "2026-07-12T08:30:00.000000Z",
+              event:
+                'Hat 2 Beiträge zum Gespräch über den Knoten "fairschenkbox" geschrieben.',
             },
           ],
         }),
@@ -108,7 +109,7 @@ test.describe("Garnrolle relations", () => {
 
     await panel.getByRole("tab", { name: "Aktivität" }).click();
     await expect(panel.locator("#panel-aktivitaet")).toContainText(
-      'Hat den Knoten "fairschenkbox" geknüpft.',
+      'Hat 2 Beiträge zum Gespräch über den Knoten "fairschenkbox" geschrieben.',
     );
 
     await panel.getByRole("tab", { name: "Knoten" }).click();

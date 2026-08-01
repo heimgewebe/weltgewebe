@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   resolveAccountNodes,
+  resolveAccountActivity,
   resolveNodeParticipants,
   resolveEdgeParticipants,
   resolveNode,
@@ -86,6 +87,17 @@ describe("Demo Resolvers", () => {
       expect(normalizeEdgeLifecycle(edge).lifecycle).toEqual({
         kind: "legacy",
       });
+    });
+
+    it("does not turn a static demo relation into Knoten activity", () => {
+      const accountId = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
+      expect(resolveAccountNodes(accountId).length).toBeGreaterThan(0);
+      expect(resolveAccountActivity(accountId)).toEqual([
+        {
+          date: "2025-01-01T12:00:00Z",
+          event: "Account erstellt.",
+        },
+      ]);
     });
 
     it("resolveEdgeParticipants remains consistent for existing and missing IDs", () => {
