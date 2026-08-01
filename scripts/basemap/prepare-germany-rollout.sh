@@ -6,8 +6,8 @@ set -euo pipefail
 # alias from ever exposing newly built bytes before deep validation succeeds.
 # Production activation remains a separate reviewed act.
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
 BASEMAP_VERSION="${BASEMAP_VERSION:-0.1.0}"
 BUILD_DIR="${GERMANY_BASEMAP_BUILD_DIR:-$REPO_ROOT/build/basemap-staging/germany}"
 TARGET_DIR="${1:-${GERMANY_BASEMAP_TARGET_DIR:-$REPO_ROOT/build/basemap}}"
@@ -21,15 +21,15 @@ fail() {
 
 [[ "$BASEMAP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail "BASEMAP_VERSION must use numeric semantic versioning"
-command -v node >/dev/null 2>&1 || fail "node is required"
-command -v pnpm >/dev/null 2>&1 || fail "pnpm is required"
-command -v python3 >/dev/null 2>&1 || fail "python3 is required"
-command -v readlink >/dev/null 2>&1 || fail "readlink is required"
+command -v node > /dev/null 2>&1 || fail "node is required"
+command -v pnpm > /dev/null 2>&1 || fail "pnpm is required"
+command -v python3 > /dev/null 2>&1 || fail "python3 is required"
+command -v readlink > /dev/null 2>&1 || fail "readlink is required"
 
 mkdir -p "$BUILD_DIR"
 [[ -d "$TARGET_DIR" ]] || fail "target directory does not exist: $TARGET_DIR"
-BUILD_DIR="$(cd "$BUILD_DIR" >/dev/null 2>&1 && pwd)"
-TARGET_DIR="$(cd "$TARGET_DIR" >/dev/null 2>&1 && pwd)"
+BUILD_DIR="$(cd "$BUILD_DIR" > /dev/null 2>&1 && pwd)"
+TARGET_DIR="$(cd "$TARGET_DIR" > /dev/null 2>&1 && pwd)"
 [[ "$BUILD_DIR" != "$TARGET_DIR" ]] ||
   fail "Germany build and published target directories must differ"
 
@@ -74,7 +74,7 @@ ALIAS_META="$TARGET_DIR/basemap-germany.meta.json"
 [[ "$(readlink -f -- "$ALIAS_META")" == "$TARGET_META" ]] ||
   fail "stable Germany metadata alias does not resolve to the published version"
 
-python3 - "$ALIAS_META" <<'PY'
+python3 - "$ALIAS_META" << 'PY'
 import json
 import pathlib
 import sys
