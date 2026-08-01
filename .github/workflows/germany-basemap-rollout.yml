@@ -101,8 +101,13 @@ jobs:
         run: |
           set -euo pipefail
           pnpm build
-          python3 - <<'PY'
+          expected_source_commit="$(git -C ../.. rev-parse HEAD)"
+          expected_style_sha256="$(sha256sum ../../map-style/style-germany.json | awk '{print $1}')"
+          EXPECTED_SOURCE_COMMIT="${expected_source_commit}" \
+            EXPECTED_STYLE_SHA256="${expected_style_sha256}" \
+            python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
 
           identity = json.loads(
@@ -113,6 +118,8 @@ jobs:
               "mode": "local-sovereign",
               "variant": "germany",
               "style_path": "/local-basemap/style-germany.json",
+              "source_commit": os.environ["EXPECTED_SOURCE_COMMIT"],
+              "style_sha256": os.environ["EXPECTED_STYLE_SHA256"],
           }
           PY
         working-directory: apps/web
