@@ -57,9 +57,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn(
             f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
         )
-        self.assertIn(
-            "LOCAL_BASEMAP_GERMANY_STYLE_URL", basemap_module
-        )
+        self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_URL", basemap_module)
         self.assertIn("style-germany.json", basemap_module)
 
     def test_build_generator_defaults_to_regional_and_requires_opt_in(self) -> None:
@@ -75,17 +73,34 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("germany-260101.osm.pbf", builder)
         self.assertIn("DEFAULT_OSM_SHA256", builder)
+        self.assertIn("DEFAULT_OSM_SNAPSHOT_DATE", builder)
         self.assertIn("ghcr.io/onthegomap/planetiler@sha256:", builder)
         self.assertIn('"activation": "opt-in"', builder)
         self.assertNotIn("ln -s", builder)
         self.assertNotIn("PUBLIC_BASEMAP_VARIANT=germany", builder)
+
+    def test_builder_requires_complete_snapshot_provenance_overrides(self) -> None:
+        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
+        for marker in (
+            "OSM_FILE_WAS_SET",
+            "OSM_URL_WAS_SET",
+            "OSM_SHA256_WAS_SET",
+            "OSM_SNAPSHOT_DATE_WAS_SET",
+        ):
+            self.assertIn(marker, builder)
+        self.assertIn("SNAPSHOT_OVERRIDE_COUNT != 4", builder)
+        self.assertIn(
+            "override OSM_FILE, OSM_URL, OSM_SHA256 and "
+            "OSM_SNAPSHOT_DATE together",
+            builder,
+        )
 
     def test_prepare_step_deep_validates_before_publication(self) -> None:
         prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
         validate_at = prepare.index("validate:pmtiles")
         publish_at = prepare.index("publish-basemap.sh")
         self.assertLess(validate_at, publish_at)
-        self.assertIn("--archive \"germany=$ARTIFACT\"", prepare)
+        self.assertIn('--archive "germany=$ARTIFACT"', prepare)
         self.assertIn("style-germany.json", prepare)
         self.assertIn("Activation was NOT changed", prepare)
 
