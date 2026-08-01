@@ -105,6 +105,13 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         ):
             self.assertIn(f"{name} override must not be empty", builder)
 
+    def test_builder_validates_calendar_date_before_docker(self) -> None:
+        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
+        date_validation_at = builder.index("dt.date.fromisoformat")
+        docker_run_at = builder.index("if ! docker")
+        self.assertLess(date_validation_at, docker_run_at)
+        self.assertIn("invalid OSM_SNAPSHOT_DATE", builder)
+
     def test_builder_never_replaces_a_versioned_output(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
         immutable_check = builder.index(
@@ -118,12 +125,16 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
     def test_prepare_step_validates_isolated_staging_before_publication(self) -> None:
         prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
         validate_at = prepare.index("validate:pmtiles")
-        publish_at = prepare.index("publish-basemap.sh")
-        self.assertLess(validate_at, publish_at)
+        proof_publish_at = prepare.index('ln "$PROOF_TMP" "$TARGET_PROOF"')
+        artifact_publish_at = prepare.index("publish-basemap.sh")
+        self.assertLess(validate_at, proof_publish_at)
+        self.assertLess(proof_publish_at, artifact_publish_at)
         self.assertIn("build/basemap-staging/germany", prepare)
         self.assertIn('[[ "$BUILD_DIR" != "$TARGET_DIR" ]]', prepare)
         self.assertIn('BASEMAP_DIR="$BUILD_DIR" bash', prepare)
         self.assertIn('--archive "germany=$ARTIFACT"', prepare)
+        self.assertIn("TARGET_PROOF", prepare)
+        self.assertIn("published Germany validation report missing", prepare)
         self.assertIn("published Germany version already exists", prepare)
         self.assertIn("style-germany.json", prepare)
         self.assertIn("Activation was NOT changed", prepare)
@@ -131,7 +142,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
     def test_activation_requires_fresh_exact_evidence_and_forced_build(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
         fresh_validation_at = activate.index("validate:pmtiles")
-        deploy_at = activate.index("PUBLIC_BASEMAP_VARIANT=germany")
+        deploy_at = activate.index('deploy_frontend_variant "germany"')
         self.assertLess(fresh_validation_at, deploy_at)
         self.assertIn('"$DEPLOY_COMMAND" --build-web "$@"', activate)
         self.assertIn("deploy-germany-pmtiles", activate)
@@ -143,15 +154,20 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("Content-Range", activate)
         self.assertIn("Accept-Ranges", activate)
 
-    def test_activation_rollback_preserves_deploy_arguments(self) -> None:
+    def test_activation_rolls_back_deploy_and_readback_failures(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('if ! deploy_frontend_variant "germany" "$@"; then', activate)
+        self.assertIn(
+            "Germany deployment command failed; regional rollback was attempted",
+            activate,
+        )
+        self.assertIn('deploy_frontend_variant "regional" "$@"', activate)
         failure_function = activate.split("post_deploy_failure() {", 1)[1].split(
             "}", 1
         )[0]
         self.assertIn('local message="$1"', failure_function)
         self.assertIn("shift", failure_function)
         self.assertIn('rollback_frontend "$@"', failure_function)
-        self.assertIn("PUBLIC_BASEMAP_VARIANT=regional", activate)
         self.assertNotIn('rollback_frontend "$message"', activate)
 
 
