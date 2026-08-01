@@ -35,9 +35,14 @@ permissions:
       - "docs/tasks/board.md"
       - "Makefile"
       - "repo.meta.yaml"
+  push:
+    branches:
+      - feat/gewebezelle-two-operator-pilot-v1
+    paths:
+      - ".github/workflows/kubernetes-platform.yml"
 
 concurrency:
-  group: kubernetes-platform-pr-${{ github.event.pull_request.head.sha }}
+  group: kubernetes-platform-${{ github.event_name }}-${{ github.sha }}
   cancel-in-progress: false
 
 jobs:
@@ -100,7 +105,9 @@ jobs:
           retention-days: 14
 
   pr1658-bound-hardening:
-    if: github.event.pull_request.number == 1658
+    if: >-
+      github.event_name == 'push' &&
+      github.ref_name == 'feat/gewebezelle-two-operator-pilot-v1'
     permissions:
       contents: write
     runs-on: ubuntu-latest
@@ -108,21 +115,39 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
         with:
-          ref: ${{ github.event.pull_request.head.sha }}
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: true
       - name: Verify immutable operator binding
         shell: bash
         run: |
           set -euo pipefail
-          test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "20adbc8e6809c97275c8bae2233bc897a1d5db84"
+          test "${GITHUB_REF_NAME}" = "feat/gewebezelle-two-operator-pilot-v1"
+          test "$(git rev-parse HEAD^)" = "fd63f3de00982ebb7eba04b14d9a6ad0f788fc52"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
+      - name: Merge current main and permit only workflow conflict
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'heimgewebe-operator'
+          git config user.email 'noreply@heimgewebe.invalid'
+          git fetch origin main
+          set +e
+          git merge --no-commit --no-ff origin/main
+          merge_status=$?
+          set -e
+          if [ "$merge_status" -ne 0 ]; then
+            conflicts="$(git diff --name-only --diff-filter=U)"
+            test "$conflicts" = ".github/workflows/kubernetes-platform.yml"
+          fi
+          git checkout origin/main -- .github/workflows/kubernetes-platform.yml
+          git add .github/workflows/kubernetes-platform.yml
+          test -z "$(git diff --name-only --diff-filter=U)"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.12"
       - name: Install operator validation dependencies
-        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.2' pytest ruff
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3' pytest ruff
       - name: Materialize and apply head-bound hardening
         shell: bash
         env:
@@ -157,114 +182,36 @@ jobs:
           python -m ruff format \
             scripts/platform/validate_two_operator_pilot.py \
             scripts/ci/tests/test_two_operator_cell_pilot.py
-      - name: Restore canonical workflow before contract validation
-        run: >-
-          git checkout dd8349fc5bf93ab1db132c783651fa3edd2804a0 --
-          .github/workflows/kubernetes-platform.yml
-      - name: Ruff
-        id: ruff
-        continue-on-error: true
+      - name: Validate Python and platform contracts
         run: |
-          set -o pipefail
           python -m ruff check \
             scripts/platform/validate_two_operator_pilot.py \
             scripts/platform/validate_platform.py \
             scripts/ci/tests/test_two_operator_cell_pilot.py \
-            scripts/ci/tests/test_kubernetes_platform_contract.py \
-            2>&1 | tee /tmp/pr1658-ruff.log
-      - name: Python compile
-        id: pycompile
-        continue-on-error: true
-        run: |
-          set -o pipefail
+            scripts/ci/tests/test_kubernetes_platform_contract.py
           python -m py_compile \
             scripts/platform/validate_two_operator_pilot.py \
             scripts/platform/validate_platform.py \
             scripts/ci/tests/test_two_operator_cell_pilot.py \
-            scripts/ci/tests/test_kubernetes_platform_contract.py \
-            2>&1 | tee /tmp/pr1658-pycompile.log
-      - name: Pilot unit tests
-        id: pilot_tests
-        continue-on-error: true
+            scripts/ci/tests/test_kubernetes_platform_contract.py
+          python -m unittest \
+            scripts.ci.tests.test_two_operator_cell_pilot \
+            scripts.ci.tests.test_kubernetes_platform_contract
+          make platform-check
+          make docs-guard
+      - name: Validate federation runtime
         run: |
-          set -o pipefail
-          python -m unittest scripts.ci.tests.test_two_operator_cell_pilot \
-            2>&1 | tee /tmp/pr1658-pilot-tests.log
-      - name: Kubernetes platform contract tests
-        id: platform_tests
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          python -m unittest scripts.ci.tests.test_kubernetes_platform_contract \
-            2>&1 | tee /tmp/pr1658-platform-tests.log
-      - name: Platform check
-        id: platform_check
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          make platform-check 2>&1 | tee /tmp/pr1658-platform-check.log
-      - name: Docs guard
-        id: docs_guard
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          make docs-guard 2>&1 | tee /tmp/pr1658-docs-guard.log
-      - name: Cargo formatting
-        id: cargo_fmt
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          cargo fmt --all -- --check 2>&1 | tee /tmp/pr1658-cargo-fmt.log
-      - name: Federation module tests
-        id: federation_tests
-        continue-on-error: true
-        run: |
-          set -o pipefail
-          cargo test -p weltgewebe-api federation::tests:: \
-            2>&1 | tee /tmp/pr1658-federation-tests.log
-      - name: Exact weak-key regression
-        id: weak_key_test
-        continue-on-error: true
-        run: |
-          set -o pipefail
+          cargo fmt --all -- --check
+          cargo test -p weltgewebe-api federation::tests::
           cargo test -p weltgewebe-api \
             federation::tests::weak_public_keys_cannot_validate_universal_signatures \
-            -- --exact 2>&1 | tee /tmp/pr1658-weak-key-test.log
-      - name: Upload gate diagnostics
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: pr1658-gates-${{ github.run_id }}-${{ github.run_attempt }}
-          path: /tmp/pr1658-*.log
-          if-no-files-found: error
-          retention-days: 2
-      - name: Require all validation gates
-        env:
-          RUFF: ${{ steps.ruff.outcome }}
-          PYCOMPILE: ${{ steps.pycompile.outcome }}
-          PILOT_TESTS: ${{ steps.pilot_tests.outcome }}
-          PLATFORM_TESTS: ${{ steps.platform_tests.outcome }}
-          PLATFORM_CHECK: ${{ steps.platform_check.outcome }}
-          DOCS_GUARD: ${{ steps.docs_guard.outcome }}
-          CARGO_FMT: ${{ steps.cargo_fmt.outcome }}
-          FEDERATION_TESTS: ${{ steps.federation_tests.outcome }}
-          WEAK_KEY_TEST: ${{ steps.weak_key_test.outcome }}
-        run: |
-          set -euo pipefail
-          for result in \
-            "$RUFF" "$PYCOMPILE" "$PILOT_TESTS" "$PLATFORM_TESTS" \
-            "$PLATFORM_CHECK" "$DOCS_GUARD" "$CARGO_FMT" \
-            "$FEDERATION_TESTS" "$WEAK_KEY_TEST"; do
-            test "$result" = success
-          done
-      - name: Commit hardening
+            -- --exact
+      - name: Commit merged hardening
         shell: bash
         run: |
           set -euo pipefail
           git diff --check
           test -z "$(git status --short | grep -E '^\?\?' || true)"
-          git config user.name 'heimgewebe-operator'
-          git config user.email 'noreply@heimgewebe.invalid'
           git add -A
           git commit -m 'fix(platform): harden two-operator pilot trust boundary'
           git push origin HEAD:feat/gewebezelle-two-operator-pilot-v1
