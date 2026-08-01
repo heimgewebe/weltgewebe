@@ -34,8 +34,16 @@ fail() {
   exit 1
 }
 
+[[ "$OSM_FILE" == "$(basename -- "$OSM_FILE")" ]] ||
+  fail "OSM_FILE must be a plain filename inside BASEMAP_DIR"
+[[ "$OSM_FILE" == *.osm.pbf ]] || fail "OSM_FILE must end in .osm.pbf"
+[[ "$OSM_URL" =~ ^https:// ]] || fail "OSM_URL must use HTTPS"
 [[ "$OSM_SHA256" =~ ^[0-9a-f]{64}$ ]] ||
   fail "OSM_SHA256 must be exactly 64 lowercase hexadecimal characters"
+[[ "$OSM_SNAPSHOT_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
+  fail "OSM_SNAPSHOT_DATE must use YYYY-MM-DD"
+[[ "$BASEMAP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
+  fail "BASEMAP_VERSION must use numeric semantic versioning"
 case "$MIN_FREE_BYTES" in
   '' | *[!0-9]*) fail "BASEMAP_MIN_FREE_BYTES must be a positive integer" ;;
 esac
@@ -61,7 +69,8 @@ else
 fi
 
 mkdir -p "$BASEMAP_DIR"
-AVAILABLE_BYTES="$(df -Pk "$BASEMAP_DIR" | awk 'NR==2 {print $4 * 1024}')"
+BASEMAP_DIR="$(cd "$BASEMAP_DIR" >/dev/null 2>&1 && pwd)"
+AVAILABLE_BYTES="$(df -Pk "$BASEMAP_DIR" | awk 'NR==2 {printf "%.0f\n", $4 * 1024}')"
 case "$AVAILABLE_BYTES" in
   '' | *[!0-9]*) fail "could not determine free disk space for $BASEMAP_DIR" ;;
 esac
@@ -70,7 +79,7 @@ if ((AVAILABLE_BYTES < MIN_FREE_BYTES)); then
 fi
 
 if [[ -r /proc/meminfo ]]; then
-  AVAILABLE_MEMORY_BYTES="$(awk '/^MemAvailable:/ {print $2 * 1024}' /proc/meminfo)"
+  AVAILABLE_MEMORY_BYTES="$(awk '/^MemAvailable:/ {printf "%.0f\n", $2 * 1024}' /proc/meminfo)"
   echo "Available memory: ${AVAILABLE_MEMORY_BYTES:-unknown} bytes"
 fi
 
@@ -119,7 +128,7 @@ DOCKER_ARGS=(
   run --rm
   --platform linux/amd64
   --user "$(id -u):$(id -g)"
-  -v "$BASEMAP_DIR:/data"
+  --mount "type=bind,src=$BASEMAP_DIR,dst=/data"
 )
 if [[ -n "${BASEMAP_DOCKER_MEMORY:-}" ]]; then
   DOCKER_ARGS+=(--memory "$BASEMAP_DOCKER_MEMORY")
