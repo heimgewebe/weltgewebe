@@ -12,6 +12,9 @@ GENERATOR = REPO / "apps" / "web" / "scripts" / "generate-basemap-config.js"
 BUILD_SCRIPT = REPO / "scripts" / "basemap" / "build-germany-pmtiles.sh"
 PREPARE_SCRIPT = REPO / "scripts" / "basemap" / "prepare-germany-rollout.sh"
 ACTIVATE_SCRIPT = REPO / "scripts" / "basemap" / "activate-germany-basemap.sh"
+SCHLESWIG_BUILD_SCRIPT = (
+    REPO / "scripts" / "basemap" / "build-schleswig-holstein-pmtiles.sh"
+)
 
 
 class GermanyBasemapRolloutTest(unittest.TestCase):
@@ -110,15 +113,33 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("Stable aliases were NOT changed", prepare)
         self.assertNotIn("publish-basemap.sh", prepare)
 
-    def test_activation_revalidates_freshness_immediately_before_aliases(self) -> None:
-        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
-        second_freshness_at = activate.index(
-            "# Re-evaluate freshness immediately before the first externally visible change."
+    def test_prepare_creates_only_the_documented_default_target(self) -> None:
+        prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("TARGET_DIR_EXPLICIT=0", prepare)
+        self.assertIn('TARGET_DIR="$REPO_ROOT/build/basemap"', prepare)
+        self.assertIn('if [[ "$TARGET_DIR_EXPLICIT" == "0" ]]; then', prepare)
+        self.assertIn('mkdir -p "$TARGET_DIR"', prepare)
+        self.assertIn(
+            "explicit target directory does not exist", prepare
         )
+        self.assertIn(
+            "GERMANY_BASEMAP_TARGET_DIR must not be empty when set", prepare
+        )
+
+    def test_activation_revalidates_checkout_and_freshness_before_aliases(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        marker = (
+            "# Re-evaluate checkout and freshness immediately before the first "
+            "externally visible change."
+        )
+        second_check_at = activate.index(marker)
         switch_at = activate.index("if ! switch_alias_pair; then")
-        self.assertLess(second_freshness_at, switch_at)
-        between = activate[second_freshness_at:switch_at]
+        self.assertLess(second_check_at, switch_at)
+        between = activate[second_check_at:switch_at]
+        self.assertIn("verify_tracked_checkout_clean", between)
         self.assertIn("verify_snapshot_freshness", between)
+        self.assertIn("invalidate_activation_receipt", between)
+        self.assertIn("ACTIVATION_TRANSACTION_OPEN=1", between)
 
     def test_activation_binds_prepared_report_by_artifact_content(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
@@ -129,7 +150,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn('"size_bytes": expected_size', activate)
         self.assertNotIn("prepared validation archive path mismatch", activate)
 
-    def test_activation_binds_device_proof_to_frontend_style_and_time(self) -> None:
+    def test_activation_binds_device_proof_to_clean_frontend_style_and_time(
+        self,
+    ) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
         for contract in (
             "frontend_commit",
@@ -146,6 +169,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("Germany release proof frontend commit mismatch", activate)
         self.assertIn("Germany release proof style hash mismatch", activate)
         self.assertIn("Germany release proof is too old", activate)
+        self.assertIn('git -C "$REPO_ROOT" diff --quiet', activate)
+        self.assertIn('git -C "$REPO_ROOT" diff --cached --quiet', activate)
+        self.assertNotIn("git status --porcelain", activate)
 
     def test_activation_bounds_all_public_readbacks(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
@@ -160,10 +186,31 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
         self.assertIn("ALIASES_TOUCHED=1", activate)
         self.assertIn("restore_alias_pair", activate)
+        self.assertIn("ACTIVATION_TRANSACTION_OPEN=1", activate)
+        self.assertIn("ACTIVATION_COMMITTED=1", activate)
+        self.assertIn("ROLLBACK_IN_PROGRESS=1", activate)
+        self.assertIn("ROLLBACK_COMPLETE=1", activate)
+        self.assertIn("trap on_exit EXIT", activate)
+        self.assertIn("trap on_interrupt INT", activate)
+        self.assertIn("trap on_terminate TERM", activate)
         self.assertIn("if ! switch_alias_pair; then", activate)
         self.assertIn("if ! write_activation_receipt; then", activate)
+        self.assertIn("if ! verify_activation_receipt; then", activate)
         self.assertIn("could not persist the Germany activation receipt", activate)
         self.assertIn('deploy_frontend_variant "regional"', activate)
+
+    def test_activation_fallback_invalidates_stale_success_receipt(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        rollback_start = activate.index("rollback_activation() {")
+        rollback_end = activate.index("cleanup_tmp() {", rollback_start)
+        rollback = activate[rollback_start:rollback_end]
+        self.assertIn("invalidate_activation_receipt", rollback)
+        self.assertIn('rm -f -- "$ACTIVATION_RECEIPT"', activate)
+        receipt_at = activate.index("invalidate_activation_receipt", rollback_start)
+        regional_at = activate.index(
+            'deploy_frontend_variant "regional"', rollback_start
+        )
+        self.assertLess(receipt_at, regional_at)
 
     def test_activation_hashes_complete_public_artifact_before_receipt(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
@@ -184,6 +231,21 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("python3 << 'PY'; then", receipt_function)
         self.assertIn("\nPY\n    rm -f", receipt_function)
         self.assertNotIn("python3 << 'PY' || {", receipt_function)
+
+    def test_schleswig_retries_never_write_or_delete_final_version(self) -> None:
+        builder = SCHLESWIG_BUILD_SCRIPT.read_text(encoding="utf-8")
+        run_start = builder.index("run_planetiler() {")
+        loop_start = builder.index("while true; do")
+        publish_at = builder.index('ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"')
+        retry_region = builder[run_start:publish_at]
+        self.assertIn('--output="/data/$PARTIAL_PMTILES"', retry_region)
+        self.assertIn('rm -f -- "$PARTIAL_PMTILES_PATH"', retry_region)
+        self.assertNotIn('rm -f -- "$FINAL_PMTILES_PATH"', retry_region)
+        self.assertNotIn('--output="/data/$OUTPUT_PMTILES"', retry_region)
+        self.assertLess(loop_start, publish_at)
+        self.assertIn("Published version already exists", builder)
+        self.assertIn("PUBLISH_COMPLETE=1", builder)
+        self.assertNotIn("ln -s", builder)
 
 
 if __name__ == "__main__":
