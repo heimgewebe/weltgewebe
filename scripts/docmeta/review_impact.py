@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+from collections import deque
 
 from scripts.docmeta.docmeta import (
     REPO_ROOT,
@@ -146,11 +147,11 @@ def main():
     impact_data = {}
     for doc_id, filepath in id_to_file.items():
         visited = set()
-        queue = [doc_id]
+        queue = deque([doc_id])
         impacted_ids = set()
 
         while queue:
-            current_id = queue.pop(0)
+            current_id = queue.popleft()
             if current_id in visited:
                 continue
             visited.add(current_id)
