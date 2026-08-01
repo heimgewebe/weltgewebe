@@ -45,6 +45,14 @@ require_nonempty_path() {
     fail "required Germany rollout evidence is empty: $required_path"
 }
 
+deploy_frontend_variant() {
+  local variant="$1"
+  shift
+  PUBLIC_BASEMAP_MODE=local-sovereign \
+    PUBLIC_BASEMAP_VARIANT="$variant" \
+    "$DEPLOY_COMMAND" --build-web "$@"
+}
+
 case "$BASEMAP_VERSION" in
   *[!0-9.]* | .* | *. | *..*) fail "BASEMAP_VERSION must be numeric semantic versioning" ;;
 esac
@@ -191,10 +199,8 @@ PY
 echo "[✓] Current Germany artifact, aliases, sentinel and deep validation verified."
 
 rollback_frontend() {
-  echo "WARNING: Germany post-deploy proof failed; rebuilding the regional rollback variant." >&2
-  if PUBLIC_BASEMAP_MODE=local-sovereign \
-    PUBLIC_BASEMAP_VARIANT=regional \
-    "$DEPLOY_COMMAND" --build-web "$@"; then
+  echo "WARNING: Germany deployment or post-deploy proof failed; rebuilding the regional rollback variant." >&2
+  if deploy_frontend_variant "regional" "$@"; then
     echo "[✓] Regional frontend rollback completed." >&2
   else
     echo "CRITICAL: Automatic regional frontend rollback failed." >&2
@@ -220,9 +226,10 @@ if identity != expected:
 PY
 }
 
-PUBLIC_BASEMAP_MODE=local-sovereign \
-  PUBLIC_BASEMAP_VARIANT=germany \
-  "$DEPLOY_COMMAND" --build-web "$@"
+if ! deploy_frontend_variant "germany" "$@"; then
+  rollback_frontend "$@"
+  fail "Germany deployment command failed; regional rollback was attempted"
+fi
 
 if [[ ! -s "$LOCAL_BUILD_IDENTITY" ]] || ! verify_identity_file "$LOCAL_BUILD_IDENTITY"; then
   rollback_frontend "$@"
