@@ -245,7 +245,7 @@ write_activation_receipt() {
     RELEASE_PROOF_SHA256="$RELEASE_PROOF_SHA256" \
     SOURCE_COMMIT="$SOURCE_COMMIT" \
     STYLE_SHA256="$STYLE_SHA256" \
-    python3 << 'PY'
+    python3 << 'PY'; then
 import datetime as dt
 import json
 import os
@@ -281,7 +281,6 @@ Path(os.environ["RECEIPT_PATH"]).write_text(
     encoding="utf-8",
 )
 PY
-  then
     rm -f "$receipt_tmp"
     return 1
   fi
@@ -533,13 +532,12 @@ if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
 if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
     raise SystemExit("public Germany sentinel size mismatch")
 PY
-
-HTTP_STATUS="$(curl "${CURL_COMMON[@]}" \
-  -H 'Range: bytes=0-126' \
-  -D "$RANGE_HEADERS" \
-  -o "$RANGE_PAYLOAD" \
-  -w '%{http_code}' \
-  "$PUBLIC_ARTIFACT_URL")" ||
+  HTTP_STATUS="$(curl "${CURL_COMMON[@]}" \
+    -H 'Range: bytes=0-126' \
+    -D "$RANGE_HEADERS" \
+    -o "$RANGE_PAYLOAD" \
+    -w '%{http_code}' \
+    "$PUBLIC_ARTIFACT_URL")" ||
   post_activation_failure "public Germany PMTiles range request failed"
 [[ "$HTTP_STATUS" == "206" ]] ||
   post_activation_failure "public Germany PMTiles range request returned HTTP $HTTP_STATUS"
