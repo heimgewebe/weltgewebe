@@ -116,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "f58d0dd68e2821978efd00bad047f35a99241ea4"
+          test "$(git rev-parse HEAD^)" = "20adbc8e6809c97275c8bae2233bc897a1d5db84"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -157,6 +157,10 @@ jobs:
           python -m ruff format \
             scripts/platform/validate_two_operator_pilot.py \
             scripts/ci/tests/test_two_operator_cell_pilot.py
+      - name: Restore canonical workflow before contract validation
+        run: >-
+          git checkout dd8349fc5bf93ab1db132c783651fa3edd2804a0 --
+          .github/workflows/kubernetes-platform.yml
       - name: Ruff
         id: ruff
         continue-on-error: true
@@ -253,12 +257,10 @@ jobs:
             "$FEDERATION_TESTS" "$WEAK_KEY_TEST"; do
             test "$result" = success
           done
-      - name: Commit hardening and restore canonical workflow
+      - name: Commit hardening
         shell: bash
         run: |
           set -euo pipefail
-          git checkout dd8349fc5bf93ab1db132c783651fa3edd2804a0 -- \
-            .github/workflows/kubernetes-platform.yml
           git diff --check
           test -z "$(git status --short | grep -E '^\?\?' || true)"
           git config user.name 'heimgewebe-operator'
