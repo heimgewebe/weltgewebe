@@ -125,6 +125,21 @@ export function resolveAccountNodes(accountId: string) {
 }
 
 /**
+ * Returns only activity backed by the static account fixture itself.
+ *
+ * Demo edges intentionally carry no authoritative lifecycle timestamp, so
+ * neither their presence nor an account timestamp can prove when a Knoten was
+ * created. Keep the relation visible in the Knoten projection without turning
+ * it into invented Garnrolle activity.
+ */
+export function resolveAccountActivity(accountId: string) {
+  const account = accountMap.get(accountId);
+  return account
+    ? [{ date: account.created_at, event: "Account erstellt." }]
+    : [];
+}
+
+/**
  * Resolves accounts associated with a node.
  */
 export function resolveNodeParticipants(nodeId: string) {

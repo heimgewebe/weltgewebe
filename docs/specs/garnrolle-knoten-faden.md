@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-07-20
+last_reviewed: 2026-08-01
 review_after: 2026-10-12
 depends_on: []
 relations:
@@ -31,7 +31,11 @@ verifies_with:
   - contracts/domain/edge.schema.json
   - apps/api/tests/api_governance_guards.rs
   - apps/api/tests/api_accounts.rs
+  - apps/api/tests/db_domain_edge_write_path.rs
+  - apps/api/tests/db_node_conversations.rs
+  - apps/web/src/lib/demo/resolvers.test.ts
   - apps/web/tests/garnrolle-self-service.spec.ts
+  - apps/web/tests/garnrolle-relations.spec.ts
   - apps/web/tests/komposition.spec.ts
 ---
 # Garnrolle, Knoten und Faden
