@@ -135,7 +135,7 @@
     font-size: 0.75rem;
   }
 
-  @media (max-width: 360px) {
+  @media (max-width: 510px) {
     .auth-slot {
       gap: 0.125rem;
     }
