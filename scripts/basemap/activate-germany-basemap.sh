@@ -4,9 +4,10 @@ set -euo pipefail
 # Fail-closed activation wrapper for the nationwide Germany PMTiles variant.
 #
 # This is intentionally separate from the normal deployment entrypoint. It
-# proves the prepared artifact, forces a fresh Germany frontend build, verifies
-# the public build identity/style/range contract and rolls the frontend back to
-# the regional variant when a post-deploy check fails.
+# proves the prepared artifact, re-runs deep validation against the current
+# bytes, forces a fresh Germany frontend build, verifies the public build
+# identity/style/range contract and rolls the frontend back to the regional
+# variant when a post-deploy check fails.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
@@ -17,19 +18,31 @@ ACTIVATION_CONFIRM="${GERMANY_BASEMAP_ACTIVATION_CONFIRM:-}"
 EXPECTED_CONFIRMATION="deploy-germany-pmtiles"
 DEPLOY_COMMAND="${WELTGEWEBE_DEPLOY_COMMAND:-$REPO_ROOT/scripts/weltgewebe-up}"
 PUBLIC_APP_URL="${WELTGEWEBE_PUBLIC_APP_URL:-https://weltgewebe.net}"
+PUBLIC_APP_URL="${PUBLIC_APP_URL%/}"
 STATE_DIR="${WELTGEWEBE_STATE_DIR:-$REPO_ROOT/.ops}"
 
 VERSIONED_ARTIFACT="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.pmtiles"
 VERSIONED_META="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.meta.json"
 ALIAS_ARTIFACT="$BASEMAP_DIR/basemap-germany.pmtiles"
 ALIAS_META="$BASEMAP_DIR/basemap-germany.meta.json"
-VALIDATION_REPORT="${GERMANY_BASEMAP_PROOF_OUTPUT:-$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.validation.json}"
-LOCAL_BUILD_IDENTITY="$REPO_ROOT/apps/web/build/_app/basemap-build.json"
+PREPARED_VALIDATION_REPORT="${GERMANY_BASEMAP_PROOF_OUTPUT:-$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.validation.json}"
+LOCAL_BUILD_IDENTITY="${WELTGEWEBE_BUILD_IDENTITY_PATH:-$REPO_ROOT/apps/web/build/_app/basemap-build.json}"
 ACTIVATION_RECEIPT="$STATE_DIR/germany-basemap-activation.json"
 
 fail() {
   echo "ERROR: $*" >&2
   exit 1
+}
+
+require_nonempty_path() {
+  local required_path="$1"
+  local resolved_path=""
+  [[ -e "$required_path" ]] ||
+    fail "required Germany rollout evidence is missing: $required_path"
+  resolved_path="$(readlink -f -- "$required_path")" ||
+    fail "cannot resolve Germany rollout evidence: $required_path"
+  [[ -n "$resolved_path" && -s "$resolved_path" ]] ||
+    fail "required Germany rollout evidence is empty: $required_path"
 }
 
 case "$BASEMAP_VERSION" in
@@ -44,10 +57,14 @@ esac
   fail "GERMANY_BASEMAP_MAX_SOURCE_AGE_DAYS must be greater than zero"
 [[ "$ACTIVATION_CONFIRM" == "$EXPECTED_CONFIRMATION" ]] ||
   fail "set GERMANY_BASEMAP_ACTIVATION_CONFIRM=$EXPECTED_CONFIRMATION for an intentional activation"
+[[ "$PUBLIC_APP_URL" =~ ^https://[^/]+([/:].*)?$ ]] ||
+  fail "WELTGEWEBE_PUBLIC_APP_URL must use HTTPS"
 [[ -x "$DEPLOY_COMMAND" ]] || fail "deployment command is not executable: $DEPLOY_COMMAND"
 command -v python3 >/dev/null 2>&1 || fail "python3 is required"
 command -v curl >/dev/null 2>&1 || fail "curl is required"
 command -v sha256sum >/dev/null 2>&1 || fail "sha256sum is required"
+command -v readlink >/dev/null 2>&1 || fail "readlink is required"
+command -v pnpm >/dev/null 2>&1 || fail "pnpm is required"
 
 for argument in "$@"; do
   case "$argument" in
@@ -62,17 +79,36 @@ for required_path in \
   "$VERSIONED_META" \
   "$ALIAS_ARTIFACT" \
   "$ALIAS_META" \
-  "$VALIDATION_REPORT" \
+  "$PREPARED_VALIDATION_REPORT" \
   "$REPO_ROOT/map-style/style-germany.json"; do
-  [[ -s "$required_path" || -e "$required_path" ]] ||
-    fail "required Germany rollout evidence is missing: $required_path"
+  require_nonempty_path "$required_path"
 done
+
+TMP_DIR="$(mktemp -d)"
+cleanup() {
+  rm -rf "$TMP_DIR"
+}
+trap cleanup EXIT
+
+FRESH_VALIDATION_REPORT="$TMP_DIR/basemap-germany.validation.json"
+
+if [[ ! -d "$REPO_ROOT/apps/web/node_modules" ]]; then
+  fail "apps/web/node_modules is missing; install pinned dependencies before activation"
+fi
+
+pnpm -C "$REPO_ROOT/apps/web" validate:pmtiles -- \
+  --archive "germany=$VERSIONED_ARTIFACT" \
+  --style "$REPO_ROOT/map-style/style-germany.json" \
+  --output "$FRESH_VALIDATION_REPORT"
+require_nonempty_path "$FRESH_VALIDATION_REPORT"
 
 ARTIFACT_SHA256="$(sha256sum "$ALIAS_ARTIFACT" | awk '{print $1}')"
 ARTIFACT_SIZE="$(wc -c < "$ALIAS_ARTIFACT" | tr -d '[:space:]')"
 
 META_PATH="$ALIAS_META" \
-VALIDATION_PATH="$VALIDATION_REPORT" \
+VERSIONED_META_PATH="$VERSIONED_META" \
+ALIAS_META_PATH="$ALIAS_META" \
+VALIDATION_PATH="$FRESH_VALIDATION_REPORT" \
 VERSIONED_ARTIFACT_PATH="$VERSIONED_ARTIFACT" \
 ALIAS_ARTIFACT_PATH="$ALIAS_ARTIFACT" \
 EXPECTED_VERSION="$BASEMAP_VERSION" \
@@ -92,13 +128,17 @@ def reject(message: str) -> None:
 
 meta_path = Path(os.environ["META_PATH"])
 validation_path = Path(os.environ["VALIDATION_PATH"])
+versioned_meta = Path(os.environ["VERSIONED_META_PATH"]).resolve()
+alias_meta = Path(os.environ["ALIAS_META_PATH"]).resolve()
 versioned_artifact = Path(os.environ["VERSIONED_ARTIFACT_PATH"]).resolve()
 alias_artifact = Path(os.environ["ALIAS_ARTIFACT_PATH"]).resolve()
 meta = json.loads(meta_path.read_text(encoding="utf-8"))
 validation = json.loads(validation_path.read_text(encoding="utf-8"))
 
 if alias_artifact != versioned_artifact:
-    reject("stable Germany alias does not resolve to the selected versioned artifact")
+    reject("stable Germany artifact alias does not resolve to the selected version")
+if alias_meta != versioned_meta:
+    reject("stable Germany metadata alias does not resolve to the selected version")
 if meta.get("schema_version") != 1:
     reject("Germany metadata schema mismatch")
 if meta.get("status") != "ready" or meta.get("region") != "germany":
@@ -148,7 +188,7 @@ if not archive.get("samples"):
     reject("Germany deep-validation contains no decoded tile samples")
 PY
 
-echo "[✓] Prepared Germany artifact, sentinel and deep-validation receipt verified."
+echo "[✓] Current Germany artifact, aliases, sentinel and deep validation verified."
 
 rollback_frontend() {
   echo "WARNING: Germany post-deploy proof failed; rebuilding the regional rollback variant." >&2
@@ -189,12 +229,6 @@ if [[ ! -s "$LOCAL_BUILD_IDENTITY" ]] || ! verify_identity_file "$LOCAL_BUILD_ID
   fail "local frontend artifact does not prove the Germany build variant"
 fi
 
-TMP_DIR="$(mktemp -d)"
-cleanup() {
-  rm -rf "$TMP_DIR"
-}
-trap cleanup EXIT
-
 PUBLIC_IDENTITY="$TMP_DIR/basemap-build.json"
 PUBLIC_STYLE="$TMP_DIR/style-germany.json"
 PUBLIC_META="$TMP_DIR/basemap-germany.meta.json"
@@ -203,6 +237,7 @@ RANGE_PAYLOAD="$TMP_DIR/range.payload"
 
 post_deploy_failure() {
   local message="$1"
+  shift
   rollback_frontend "$@"
   fail "$message"
 }
@@ -230,7 +265,10 @@ PY
 
 curl -fsS "$PUBLIC_APP_URL/local-basemap/basemap-germany.meta.json" -o "$PUBLIC_META" ||
   post_deploy_failure "public Germany metadata is unavailable" "$@"
-PUBLIC_META_PATH="$PUBLIC_META" EXPECTED_SHA256="$ARTIFACT_SHA256" python3 <<'PY' ||
+PUBLIC_META_PATH="$PUBLIC_META" \
+EXPECTED_SHA256="$ARTIFACT_SHA256" \
+EXPECTED_SIZE="$ARTIFACT_SIZE" \
+  python3 <<'PY' ||
   post_deploy_failure "public Germany metadata does not match the prepared artifact" "$@"
 import json
 import os
@@ -241,6 +279,8 @@ if meta.get("status") != "ready" or meta.get("region") != "germany":
     raise SystemExit("public Germany sentinel is not ready")
 if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
     raise SystemExit("public Germany sentinel hash mismatch")
+if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
+    raise SystemExit("public Germany sentinel size mismatch")
 PY
 
 HTTP_STATUS="$(curl -sS \
@@ -252,9 +292,11 @@ HTTP_STATUS="$(curl -sS \
   post_deploy_failure "public Germany PMTiles range request failed" "$@"
 [[ "$HTTP_STATUS" == "206" ]] ||
   post_deploy_failure "public Germany PMTiles range request returned HTTP $HTTP_STATUS" "$@"
-grep -qi '^content-range: bytes 0-126/' "$RANGE_HEADERS" ||
+grep -qi '^content-type:[[:space:]]*application/octet-stream' "$RANGE_HEADERS" ||
+  post_deploy_failure "public Germany PMTiles response has the wrong Content-Type" "$@"
+grep -qi '^content-range:[[:space:]]*bytes 0-126/' "$RANGE_HEADERS" ||
   post_deploy_failure "public Germany PMTiles response lacks the expected Content-Range" "$@"
-grep -qi '^accept-ranges: bytes' "$RANGE_HEADERS" ||
+grep -qi '^accept-ranges:[[:space:]]*bytes' "$RANGE_HEADERS" ||
   post_deploy_failure "public Germany PMTiles response lacks Accept-Ranges: bytes" "$@"
 [[ "$(wc -c < "$RANGE_PAYLOAD" | tr -d '[:space:]')" == "127" ]] ||
   post_deploy_failure "public Germany PMTiles range payload has the wrong length" "$@"
@@ -285,6 +327,7 @@ receipt = {
     "artifact_size_bytes": int(os.environ["ARTIFACT_SIZE"]),
     "public_app_url": os.environ["PUBLIC_APP_URL"],
     "proofs": [
+        "fresh-deep-validation",
         "public-build-identity",
         "public-style-source",
         "public-metadata-sentinel",
