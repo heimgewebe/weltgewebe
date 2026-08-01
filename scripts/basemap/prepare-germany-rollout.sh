@@ -13,6 +13,7 @@ TARGET_DIR="${1:-${GERMANY_BASEMAP_TARGET_DIR:-$REPO_ROOT/build/basemap}}"
 ARTIFACT_NAME="basemap-germany-v${BASEMAP_VERSION}.pmtiles"
 META_NAME="basemap-germany-v${BASEMAP_VERSION}.meta.json"
 PROOF_NAME="basemap-germany-v${BASEMAP_VERSION}.validation.json"
+RAW_PROOF_NAME="basemap-germany-v${BASEMAP_VERSION}.validation.raw.json"
 ALIAS_ARTIFACT_NAME="basemap-germany.pmtiles"
 ALIAS_META_NAME="basemap-germany.meta.json"
 
@@ -26,7 +27,9 @@ path_state() {
   if [[ -L "$path" ]]; then
     printf 'symlink:%s\n' "$(readlink -- "$path")"
   elif [[ -e "$path" ]]; then
-    printf 'file:%s:%s\n' "$(wc -c < "$path" | tr -d '[:space:]')" "$(sha256sum "$path" | awk '{print $1}')"
+    printf 'file:%s:%s\n' \
+      "$(wc -c < "$path" | tr -d '[:space:]')" \
+      "$(sha256sum "$path" | awk '{print $1}')"
   else
     printf 'absent\n'
   fi
@@ -34,7 +37,6 @@ path_state() {
 
 [[ "$BASEMAP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail "BASEMAP_VERSION must use numeric semantic versioning"
-command -v node > /dev/null 2>&1 || fail "node is required"
 command -v pnpm > /dev/null 2>&1 || fail "pnpm is required"
 command -v python3 > /dev/null 2>&1 || fail "python3 is required"
 command -v readlink > /dev/null 2>&1 || fail "readlink is required"
@@ -49,6 +51,7 @@ TARGET_DIR="$(cd "$TARGET_DIR" > /dev/null 2>&1 && pwd)"
 
 ARTIFACT="$BUILD_DIR/$ARTIFACT_NAME"
 META="$BUILD_DIR/$META_NAME"
+RAW_PROOF="$BUILD_DIR/$RAW_PROOF_NAME"
 PROOF_OUTPUT="${GERMANY_BASEMAP_PROOF_OUTPUT:-$BUILD_DIR/$PROOF_NAME}"
 TARGET_ARTIFACT="$TARGET_DIR/$ARTIFACT_NAME"
 TARGET_META="$TARGET_DIR/$META_NAME"
@@ -72,31 +75,33 @@ fi
 [[ -s "$ARTIFACT" ]] || fail "Germany artifact missing: $ARTIFACT"
 [[ -s "$META" ]] || fail "Germany metadata missing: $META"
 
-python3 - "$META" "$ARTIFACT" "$BASEMAP_VERSION" << 'PY'
-import hashlib
-import json
-import pathlib
-import sys
+ARTIFACT_SHA256="$(sha256sum "$ARTIFACT" | awk '{print $1}')"
+ARTIFACT_SIZE="$(wc -c < "$ARTIFACT" | tr -d '[:space:]')"
 
-meta_path = pathlib.Path(sys.argv[1])
-artifact_path = pathlib.Path(sys.argv[2])
-expected_version = sys.argv[3]
-meta = json.loads(meta_path.read_text(encoding="utf-8"))
-size = artifact_path.stat().st_size
-sha256 = hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+META_PATH="$META" \
+  ARTIFACT_NAME="$ARTIFACT_NAME" \
+  EXPECTED_VERSION="$BASEMAP_VERSION" \
+  EXPECTED_SHA256="$ARTIFACT_SHA256" \
+  EXPECTED_SIZE="$ARTIFACT_SIZE" \
+  python3 << 'PY'
+import json
+import os
+from pathlib import Path
+
+meta = json.loads(Path(os.environ["META_PATH"]).read_text(encoding="utf-8"))
 if meta.get("schema_version") != 1:
     raise SystemExit("Germany sentinel schema mismatch")
 if meta.get("status") != "ready" or meta.get("region") != "germany":
     raise SystemExit("Germany sentinel is not ready for Germany")
 if meta.get("activation") != "opt-in":
     raise SystemExit("Germany sentinel must remain opt-in during preparation")
-if meta.get("version") != expected_version:
+if meta.get("version") != os.environ["EXPECTED_VERSION"]:
     raise SystemExit("Germany sentinel version mismatch")
-if meta.get("artifact_name") != artifact_path.name:
+if meta.get("artifact_name") != os.environ["ARTIFACT_NAME"]:
     raise SystemExit("Germany sentinel artifact_name mismatch")
-if meta.get("size_bytes") != size:
+if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
     raise SystemExit("Germany sentinel size mismatch")
-if meta.get("sha256") != sha256:
+if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
     raise SystemExit("Germany sentinel SHA256 mismatch")
 PY
 
@@ -104,12 +109,58 @@ if [[ ! -d "$REPO_ROOT/apps/web/node_modules" ]]; then
   pnpm -C "$REPO_ROOT/apps/web" install --frozen-lockfile
 fi
 
+rm -f "$RAW_PROOF" "$PROOF_OUTPUT"
 pnpm -C "$REPO_ROOT/apps/web" validate:pmtiles -- \
   --archive "germany=$ARTIFACT" \
   --style "$REPO_ROOT/map-style/style-germany.json" \
-  --output "$PROOF_OUTPUT"
+  --output "$RAW_PROOF"
+[[ -s "$RAW_PROOF" ]] || fail "raw deep-validation report was not written"
 
-[[ -s "$PROOF_OUTPUT" ]] || fail "deep-validation report was not written"
+RAW_PROOF_PATH="$RAW_PROOF" \
+  PROOF_OUTPUT_PATH="$PROOF_OUTPUT" \
+  ARTIFACT_NAME="$ARTIFACT_NAME" \
+  ARTIFACT_SHA256="$ARTIFACT_SHA256" \
+  ARTIFACT_SIZE="$ARTIFACT_SIZE" \
+  python3 << 'PY'
+import json
+import os
+from pathlib import Path
+
+raw = json.loads(Path(os.environ["RAW_PROOF_PATH"]).read_text(encoding="utf-8"))
+if raw.get("schema_version") != 1 or raw.get("verdict") != "PROVEN":
+    raise SystemExit("raw Germany deep-validation verdict is not PROVEN")
+if raw.get("validator") != "bounded-pmtiles-deep-validation-v1":
+    raise SystemExit("raw Germany deep-validation validator mismatch")
+archives = raw.get("archives")
+if not isinstance(archives, list) or len(archives) != 1:
+    raise SystemExit("raw Germany deep-validation must contain one archive")
+archive = archives[0]
+if archive.get("region") != "germany":
+    raise SystemExit("raw Germany deep-validation region mismatch")
+if archive.get("file_size") != int(os.environ["ARTIFACT_SIZE"]):
+    raise SystemExit("raw Germany deep-validation size mismatch")
+if archive.get("directory", {}).get("tile_entry_count", 0) <= 0:
+    raise SystemExit("raw Germany deep-validation contains no tiles")
+if not archive.get("samples"):
+    raise SystemExit("raw Germany deep-validation contains no samples")
+
+envelope = {
+    "schema_version": 1,
+    "verdict": "PROVEN",
+    "contract": "germany-pmtiles-prepared-validation-v1",
+    "artifact": {
+        "name": os.environ["ARTIFACT_NAME"],
+        "sha256": os.environ["ARTIFACT_SHA256"],
+        "size_bytes": int(os.environ["ARTIFACT_SIZE"]),
+    },
+    "validation": raw,
+}
+Path(os.environ["PROOF_OUTPUT_PATH"]).write_text(
+    json.dumps(envelope, indent=2, sort_keys=True) + "\n",
+    encoding="utf-8",
+)
+PY
+[[ -s "$PROOF_OUTPUT" ]] || fail "artifact-bound validation envelope was not written"
 
 ARTIFACT_TMP="$TARGET_DIR/.${ARTIFACT_NAME}.tmp.$$"
 PROOF_TMP="$TARGET_DIR/.${PROOF_NAME}.tmp.$$"
@@ -147,12 +198,11 @@ PUBLISH_COMPLETE=1
 cleanup_publish
 trap - EXIT
 
-[[ -s "$TARGET_ARTIFACT" ]] || fail "published Germany artifact missing"
-[[ -s "$TARGET_PROOF" ]] || fail "published Germany validation report missing"
-[[ -s "$TARGET_META" ]] || fail "published Germany sentinel missing"
-
+for published_path in "$TARGET_ARTIFACT" "$TARGET_PROOF" "$TARGET_META"; do
+  [[ -s "$published_path" ]] || fail "published Germany version file missing: $published_path"
+done
 cmp -s "$ARTIFACT" "$TARGET_ARTIFACT" || fail "published Germany artifact differs from staging"
-cmp -s "$PROOF_OUTPUT" "$TARGET_PROOF" || fail "published Germany validation report differs from staging"
+cmp -s "$PROOF_OUTPUT" "$TARGET_PROOF" || fail "published Germany validation differs from staging"
 cmp -s "$META" "$TARGET_META" || fail "published Germany sentinel differs from staging"
 
 ALIAS_ARTIFACT_STATE_AFTER="$(path_state "$ALIAS_ARTIFACT")"
@@ -164,7 +214,7 @@ ALIAS_META_STATE_AFTER="$(path_state "$ALIAS_META")"
 
 echo "Germany PMTiles version preparation is complete."
 echo "Isolated build: $BUILD_DIR"
-echo "Published version:"
+echo "Published immutable version files:"
 echo "  $TARGET_ARTIFACT"
 echo "  $TARGET_META"
 echo "  $TARGET_PROOF"
