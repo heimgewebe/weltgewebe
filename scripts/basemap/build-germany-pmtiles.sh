@@ -26,8 +26,10 @@ OSM_SNAPSHOT_DATE_WAS_SET="${OSM_SNAPSHOT_DATE+x}"
 BASEMAP_VERSION="${BASEMAP_VERSION:-0.1.0}"
 BASEMAP_TAG="v${BASEMAP_VERSION}"
 OUTPUT_PMTILES="basemap-germany-${BASEMAP_TAG}.pmtiles"
-PARTIAL_PMTILES="basemap-germany-${BASEMAP_TAG}.partial.pmtiles"
 OUTPUT_META="basemap-germany-${BASEMAP_TAG}.meta.json"
+OUTPUT_PMTILES_STEM="${OUTPUT_PMTILES%.pmtiles}"
+PARTIAL_PMTILES=".${OUTPUT_PMTILES_STEM}.partial.$$.pmtiles"
+PARTIAL_META=".${OUTPUT_META}.partial.$$"
 MIN_FREE_BYTES="${BASEMAP_MIN_FREE_BYTES:-68719476736}"
 
 PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb"
@@ -138,33 +140,64 @@ echo "========================================="
 
 cd "$BASEMAP_DIR"
 
-for immutable_output in "$OUTPUT_PMTILES" "$OUTPUT_META"; do
+FINAL_PMTILES_PATH="$BASEMAP_DIR/$OUTPUT_PMTILES"
+FINAL_META_PATH="$BASEMAP_DIR/$OUTPUT_META"
+PARTIAL_PMTILES_PATH="$BASEMAP_DIR/$PARTIAL_PMTILES"
+PARTIAL_META_PATH="$BASEMAP_DIR/$PARTIAL_META"
+PARTIAL_INPUT_PATH=""
+PARTIAL_LAYERSTATS_PATH="${PARTIAL_PMTILES_PATH}.layerstats.tsv.gz"
+FINAL_ARTIFACT_CREATED=0
+FINAL_META_CREATED=0
+PUBLISH_COMPLETE=0
+
+cleanup_build() {
+  rm -f -- \
+    "$PARTIAL_PMTILES_PATH" \
+    "$PARTIAL_META_PATH" \
+    "$PARTIAL_LAYERSTATS_PATH"
+  if [[ -n "$PARTIAL_INPUT_PATH" ]]; then
+    rm -f -- "$PARTIAL_INPUT_PATH"
+  fi
+  if [[ "$PUBLISH_COMPLETE" != "1" ]]; then
+    [[ "$FINAL_META_CREATED" == "1" ]] && rm -f -- "$FINAL_META_PATH"
+    [[ "$FINAL_ARTIFACT_CREATED" == "1" ]] && rm -f -- "$FINAL_PMTILES_PATH"
+  fi
+  return 0
+}
+
+on_interrupt() {
+  exit 130
+}
+
+on_terminate() {
+  exit 143
+}
+
+trap cleanup_build EXIT
+trap on_interrupt INT
+trap on_terminate TERM
+
+for immutable_output in "$FINAL_PMTILES_PATH" "$FINAL_META_PATH"; do
   if [[ -e "$immutable_output" || -L "$immutable_output" ]]; then
-    fail "versioned output already exists: $BASEMAP_DIR/$immutable_output; choose a new BASEMAP_VERSION"
+    fail "versioned output already exists: $immutable_output; choose a new BASEMAP_VERSION"
   fi
 done
-if [[ -e "$PARTIAL_PMTILES" || -L "$PARTIAL_PMTILES" ]]; then
-  fail "stale partial output exists: $BASEMAP_DIR/$PARTIAL_PMTILES; inspect and remove it explicitly"
-fi
 
 if [[ ! -f "$OSM_FILE" ]]; then
-  PARTIAL_INPUT="${OSM_FILE}.partial"
-  if [[ -e "$PARTIAL_INPUT" || -L "$PARTIAL_INPUT" ]]; then
-    fail "stale partial input exists: $BASEMAP_DIR/$PARTIAL_INPUT; inspect and remove it explicitly"
-  fi
+  PARTIAL_INPUT_PATH="$BASEMAP_DIR/.${OSM_FILE}.partial.$$"
   echo ">> Downloading pinned Germany OSM snapshot..."
   if [[ "$DOWNLOADER" == "wget" ]]; then
-    wget -qO "$PARTIAL_INPUT" "$OSM_URL" || {
-      rm -f "$PARTIAL_INPUT"
+    wget -qO "$PARTIAL_INPUT_PATH" "$OSM_URL" ||
       fail "download failed: $OSM_URL"
-    }
   else
-    curl -fL --retry 3 --retry-delay 5 -o "$PARTIAL_INPUT" "$OSM_URL" || {
-      rm -f "$PARTIAL_INPUT"
+    curl -fL --retry 3 --retry-delay 5 -o "$PARTIAL_INPUT_PATH" "$OSM_URL" ||
       fail "download failed: $OSM_URL"
-    }
   fi
-  mv "$PARTIAL_INPUT" "$OSM_FILE"
+  if [[ -e "$OSM_FILE" || -L "$OSM_FILE" ]]; then
+    fail "OSM input appeared concurrently: $BASEMAP_DIR/$OSM_FILE"
+  fi
+  mv "$PARTIAL_INPUT_PATH" "$OSM_FILE"
+  PARTIAL_INPUT_PATH=""
 else
   echo ">> Reusing existing input: $OSM_FILE"
 fi
@@ -187,18 +220,17 @@ if [[ -n "${BASEMAP_DOCKER_MEMORY:-}" ]]; then
   DOCKER_ARGS+=(--memory "$BASEMAP_DOCKER_MEMORY")
 fi
 
+rm -f -- "$PARTIAL_PMTILES_PATH" "$PARTIAL_LAYERSTATS_PATH"
 if ! docker "${DOCKER_ARGS[@]}" "$PLANETILER_IMAGE" \
   --osm-path="/data/$OSM_FILE" \
   --output="/data/$PARTIAL_PMTILES"; then
-  rm -f "$PARTIAL_PMTILES"
   fail "Planetiler execution failed"
 fi
 
-[[ -s "$PARTIAL_PMTILES" ]] || fail "Planetiler produced no non-empty artifact"
-mv "$PARTIAL_PMTILES" "$OUTPUT_PMTILES"
+[[ -s "$PARTIAL_PMTILES_PATH" ]] || fail "Planetiler produced no non-empty artifact"
 
-PMTILES_SIZE="$(wc -c < "$OUTPUT_PMTILES" | tr -d '[:space:]')"
-PMTILES_SHA256="$("${SHA256_CMD[@]}" "$OUTPUT_PMTILES" | awk '{print $1}')"
+PMTILES_SIZE="$(wc -c < "$PARTIAL_PMTILES_PATH" | tr -d '[:space:]')"
+PMTILES_SHA256="$("${SHA256_CMD[@]}" "$PARTIAL_PMTILES_PATH" | awk '{print $1}')"
 [[ -n "$PMTILES_SHA256" && "$PMTILES_SIZE" -gt 0 ]] || fail "invalid artifact hash or size"
 
 BUILD_TIMESTAMP_VALUE=""
@@ -218,7 +250,7 @@ META_VERSION="$BASEMAP_VERSION" \
   META_ARTIFACT_SHA256="$PMTILES_SHA256" \
   META_ARTIFACT_SIZE="$PMTILES_SIZE" \
   META_BUILD_TIMESTAMP="$BUILD_TIMESTAMP_VALUE" \
-  python3 - "$OUTPUT_META" << 'PY'
+  python3 - "$PARTIAL_META_PATH" << 'PY'
 import json
 import os
 import pathlib
@@ -254,11 +286,42 @@ pathlib.Path(sys.argv[1]).write_text(
 )
 PY
 
-[[ -s "$OUTPUT_META" ]] || fail "metadata sentinel was not written"
+[[ -s "$PARTIAL_META_PATH" ]] || fail "metadata sentinel was not written"
+
+publish_immutable_pair() {
+  local failed=0
+
+  trap '' INT TERM
+
+  if ! ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"; then
+    echo "ERROR: could not publish immutable Germany artifact: $FINAL_PMTILES_PATH" >&2
+    failed=1
+  else
+    FINAL_ARTIFACT_CREATED=1
+  fi
+
+  if [[ "$failed" == "0" ]]; then
+    if ! ln "$PARTIAL_META_PATH" "$FINAL_META_PATH"; then
+      echo "ERROR: could not publish immutable Germany metadata: $FINAL_META_PATH" >&2
+      failed=1
+    else
+      FINAL_META_CREATED=1
+      PUBLISH_COMPLETE=1
+    fi
+  fi
+
+  trap on_interrupt INT
+  trap on_terminate TERM
+  return "$failed"
+}
+
+publish_immutable_pair || fail "could not publish the immutable Germany version pair"
+cleanup_build
+trap - EXIT INT TERM
 
 echo "   [✓] Germany artifact ready"
-echo "Artifact: $BASEMAP_DIR/$OUTPUT_PMTILES"
-echo "Metadata: $BASEMAP_DIR/$OUTPUT_META"
+echo "Artifact: $FINAL_PMTILES_PATH"
+echo "Metadata: $FINAL_META_PATH"
 echo "SHA256:   $PMTILES_SHA256"
 echo "Size:     $PMTILES_SIZE bytes"
 echo "No stable alias or production setting was changed."
