@@ -38,10 +38,6 @@
               <strong>Konto &amp; Sicherheit</strong>
               <span>Sitzungen, Geräte und Anmeldung</span>
             </a>
-            <a href="/nachrichten">
-              <strong>Private Nachrichten</strong>
-              <span>Gespräche mit anderen Webern</span>
-            </a>
           </nav>
         </div>
 

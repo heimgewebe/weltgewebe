@@ -92,7 +92,7 @@ test.describe("Farbschema", () => {
     ).toBeVisible();
     await expect(
       menu.getByRole("link", { name: /Private Nachrichten/ }),
-    ).toBeVisible();
+    ).toHaveCount(0);
     await expect(settingsSelect).toHaveValue("system");
 
     await settingsSelect.selectOption("dark");
@@ -118,6 +118,139 @@ test.describe("Farbschema", () => {
     await page.goto("/settings");
     await page.getByTestId("theme-select").selectOption("light");
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
+  });
+
+  test("hält Einstellungen und Anmeldung bei 320 Pixeln frei berührbar", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.route("**/_app/version.json", (route) =>
+      route.fulfill({ status: 404, body: "" }),
+    );
+    await page.route("**/api/auth/me", (route) =>
+      route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: false,
+          account_id: null,
+          role: "gast",
+        }),
+      }),
+    );
+    await page.goto("/map");
+
+    const settings = page.getByRole("link", { name: "Einstellungen öffnen" });
+    const login = page.getByRole("link", { name: "Anmelden" });
+    const governance = page.getByTestId("governance-fan-trigger");
+    await expect(settings).toBeVisible();
+    await expect(login).toBeVisible();
+    await expect(governance).toBeVisible();
+
+    const settingsBox = await settings.boundingBox();
+    const loginBox = await login.boundingBox();
+    const governanceBox = await governance.boundingBox();
+    expect(settingsBox).not.toBeNull();
+    expect(loginBox).not.toBeNull();
+    expect(governanceBox).not.toBeNull();
+    expect(settingsBox!.x + 0.5).toBeGreaterThanOrEqual(
+      governanceBox!.x + governanceBox!.width,
+    );
+    expect(loginBox!.x).toBeGreaterThanOrEqual(
+      settingsBox!.x + settingsBox!.width,
+    );
+    expect(loginBox!.x + loginBox!.width).toBeLessThanOrEqual(320);
+
+    for (const [label, target] of [
+      ["Einstellungen", settings],
+      ["Anmelden", login],
+    ] as const) {
+      const hitTest = await target.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return {
+          receivesPointer:
+            hit === element || (hit !== null && element.contains(hit)),
+          hitElement: hit
+            ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
+            : "none",
+        };
+      });
+      expect(
+        hitTest.receivesPointer,
+        `${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
+      ).toBe(true);
+    }
+  });
+
+  test("zeigt private Nachrichten angemeldeten Webern direkt in der Kartenleiste", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    await page.route("**/_app/version.json", (route) =>
+      route.fulfill({ status: 404, body: "" }),
+    );
+    await page.route("**/api/auth/me", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          authenticated: true,
+          account_id: "weber-test",
+          role: "weber",
+        }),
+      }),
+    );
+    await page.goto("/map");
+
+    const messages = page.getByRole("link", { name: "Private Nachrichten" });
+    const settings = page.getByRole("link", { name: "Einstellungen öffnen" });
+    const governance = page.getByTestId("governance-fan-trigger");
+    await expect(messages).toBeVisible();
+    await expect(messages).toHaveAttribute("href", "/nachrichten");
+    await expect(settings).toBeVisible();
+    await expect(governance).toBeVisible();
+
+    const messagesBox = await messages.boundingBox();
+    const settingsBox = await settings.boundingBox();
+    const governanceBox = await governance.boundingBox();
+    expect(messagesBox).not.toBeNull();
+    expect(settingsBox).not.toBeNull();
+    expect(governanceBox).not.toBeNull();
+    expect(messagesBox!.x + 0.5).toBeGreaterThanOrEqual(
+      governanceBox!.x + governanceBox!.width,
+    );
+    expect(settingsBox!.x).toBeGreaterThanOrEqual(
+      messagesBox!.x + messagesBox!.width,
+    );
+    expect(settingsBox!.x + settingsBox!.width).toBeLessThanOrEqual(320);
+
+    for (const [label, target] of [
+      ["Private Nachrichten", messages],
+      ["Einstellungen", settings],
+    ] as const) {
+      const hitTest = await target.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const hit = document.elementFromPoint(
+          rect.left + rect.width / 2,
+          rect.top + rect.height / 2,
+        );
+        return {
+          receivesPointer:
+            hit === element || (hit !== null && element.contains(hit)),
+          hitElement: hit
+            ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
+            : "none",
+        };
+      });
+      expect(
+        hitTest.receivesPointer,
+        `${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
+      ).toBe(true);
+    }
   });
 
   test("folgt im Systemmodus einer geänderten Gerätepräferenz", async ({

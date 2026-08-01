@@ -190,7 +190,7 @@ Die Oberfläche bietet genau drei Darstellungspräferenzen:
 - **Hell** als bewusste helle Darstellung;
 - **Dunkel** als bewusste dunkle Darstellung.
 
-Die Auswahl liegt im zentralen Einstellungsmenü. Die Kartenleiste führt mit einem einzigen Einstieg dorthin, statt dort parallele Schnellschalter zu zeigen. Die Auswahl wird ausschließlich lokal im Browser gespeichert; sie gehört weder zum Konto noch zur öffentlichen Garnrolle und wird nicht föderiert.
+Die Auswahl liegt im zentralen Einstellungsmenü. Die Kartenleiste führt mit einem einzigen Einstieg dorthin, statt dort parallele Darstellungsschalter zu zeigen. Private Nachrichten bleiben davon getrennt als direkter Arbeitsweg in der Kartenleiste erreichbar; sie sind keine Einstellung. Die Farbschema-Auswahl wird ausschließlich lokal im Browser gespeichert; sie gehört weder zum Konto noch zur öffentlichen Garnrolle und wird nicht föderiert.
 
 Farben und Flächen stammen aus gemeinsamen semantischen Darstellungstokens. Komponenten dürfen daher keine dunkle oder helle Grunddarstellung voraussetzen. Status, Auswahl, Warnung und Fehler müssen zusätzlich zu Farbe durch Text, Form, Umrandung oder Symbol verständlich bleiben.
 
