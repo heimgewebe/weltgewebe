@@ -13,9 +13,12 @@ Die Deutschland-Basemap wird als eigenständiges, versioniertes PMTiles-Artefakt
 vorbereitet. Der bestehende Regionalpfad mit Hamburg und Schleswig-Holstein
 bleibt Standard und Rückfallpfad.
 
-Der Build oder die Veröffentlichung des stabilen Alias aktiviert Deutschland
-**nicht**. Die Clientaktivierung erfordert zusätzlich einen bewusst neu gebauten
-Frontend-Build mit:
+Der Vorbereitungslauf veröffentlicht ausschließlich unveränderliche
+Versionsdateien. Er verändert weder `basemap-germany.pmtiles` noch
+`basemap-germany.meta.json`. Die stabilen Aliase werden erst innerhalb der
+getrennten Aktivierungstransaktion umgestellt.
+
+Die Clientaktivierung erfordert einen bewusst neu gebauten Frontend-Build mit:
 
 - `PUBLIC_BASEMAP_MODE=local-sovereign`
 - `PUBLIC_BASEMAP_VARIANT=germany`
@@ -25,37 +28,38 @@ Ohne `PUBLIC_BASEMAP_VARIANT` bleibt `regional` aktiv.
 ## Voraussetzungen
 
 - sauberer, aktueller Checkout;
-- Docker, Node und pnpm;
+- Docker, Git, Node und pnpm;
 - mindestens 64 GiB freier Arbeitsraum, sofern der Grenzwert nicht bewusst
   über `BASEMAP_MIN_FREE_BYTES` angepasst wurde;
 - gepinnter OSM-Snapshot mit bekannter SHA256-Prüfsumme;
 - vollständige, nicht leere Provenienz aus Dateiname, HTTPS-URL, SHA256 und
-  einem realen Kalenderdatum;
+  einem realen, nicht zukünftigen Kalenderdatum;
 - keine gleichzeitige Veröffentlichung in dasselbe Zielverzeichnis.
 
 Versionierte Artefakte sind unveränderlich. Existiert eine Version bereits im
 Build- oder Zielverzeichnis, muss eine neue `BASEMAP_VERSION` verwendet werden.
 Ein Austausch unter demselben Versionsnamen ist nicht zulässig.
 
-## Phase 1: Artefakt herstellen und prüfen
+## Phase 1: Version herstellen und veröffentlichen
 
 `scripts/basemap/prepare-germany-rollout.sh` führt in dieser Reihenfolge aus:
 
 1. reproduzierbaren Build durch `build-germany-pmtiles.sh` im isolierten
    Staging-Verzeichnis `build/basemap-staging/germany`;
-2. vollständige Traversierung aller erreichbaren PMTiles-Verzeichnisse;
-3. deterministische Stichprobe realer MVT-Kacheln gegen
+2. Sentinel-, Hash- und Größenprüfung gegen das gebaute Artefakt;
+3. vollständige Traversierung aller erreichbaren PMTiles-Verzeichnisse;
+4. deterministische Stichprobe realer MVT-Kacheln gegen
    `map-style/style-germany.json`;
-4. Sentinel-, Hash- und Größenprüfung;
-5. unveränderliche Übernahme des versionierten Validierungsberichts in das
-   Zielverzeichnis;
-6. atomare Veröffentlichung von `basemap-germany.pmtiles` und
-   `basemap-germany.meta.json` in ein ausdrücklich angegebenes, vom
-   Buildverzeichnis verschiedenes Ziel.
+5. Erzeugung eines Validierungsumschlags, der den Validatorbericht an
+   Artefaktname, SHA256 und Größe bindet, nicht an den früheren Staging-Pfad;
+6. unveränderliche Veröffentlichung genau dieser drei Versionsdateien:
+   - `basemap-germany-v<version>.pmtiles`
+   - `basemap-germany-v<version>.meta.json`
+   - `basemap-germany-v<version>.validation.json`
+7. Readback, dass beide stabilen Germany-Aliase unverändert geblieben sind.
 
-Dadurch kann ein vorhandener stabiler Alias zu keinem Zeitpunkt auf neue,
-noch nicht validierte Bytes zeigen. Die Metadaten tragen bis zur getrennten
-Produktionsfreigabe `"activation": "opt-in"`.
+Die Metadaten tragen bis zur getrennten Aktivierung
+`"activation": "opt-in"`.
 
 ## Phase 2: Runtime- und Gerätebeweis
 
@@ -69,18 +73,22 @@ Vor der Aktivierung müssen mindestens belegt sein:
 - PMTiles-Signatur, Größe und SHA256 des geprüften Artefakts;
 - dekodierte und sichtbare Kacheln aus Nord, Süd, Ost, West und Mitte;
 - Browserabnahme mit MapLibre auf iPad und Desktop;
-- keine Requests an externe Kartenanbieter.
+- keine Requests an externe Kartenanbieter;
+- exakter Frontend-Commit und SHA256 des Germany-Stils;
+- zeitlich begrenzter Beleg, standardmäßig höchstens 24 Stunden alt.
 
-Diese Belege werden als JSON-Datei an das exakte Artefakt gebunden. Sie muss
-mindestens folgendem Vertrag entsprechen:
+Die Belege werden als JSON-Datei an Artefakt, Frontend und Stil gebunden:
 
 ```json
 {
   "schema_version": 1,
   "verdict": "PROVEN",
+  "proofed_at": "2026-08-01T14:00:00+00:00",
   "basemap_version": "1.0.0",
   "artifact_sha256": "<64 hex>",
   "artifact_size_bytes": 123,
+  "frontend_commit": "<40 hex>",
+  "style_sha256": "<64 hex>",
   "proofs": [
     "desktop-maplibre",
     "ipad-maplibre",
@@ -91,45 +99,53 @@ mindestens folgendem Vertrag entsprechen:
 }
 ```
 
-Der Pfad wird dem Aktivierungsoperator über
-`GERMANY_BASEMAP_RELEASE_PROOF_PATH` übergeben. Ein erfolgreicher Strukturtest
-allein beweist weder kartografische Vollständigkeit noch aktuelle OSM-Daten.
+Der Pfad wird über `GERMANY_BASEMAP_RELEASE_PROOF_PATH` übergeben. Das
+zulässige Belegalter kann über
+`GERMANY_BASEMAP_RELEASE_PROOF_MAX_AGE_HOURS` enger gesetzt werden.
 
-## Phase 3: Aktivierung
+## Phase 3: Aktivierungstransaktion
 
 `scripts/basemap/activate-germany-basemap.sh` ist der einzige vorgesehene
-Aktivierungspfad. Er verlangt die ausdrückliche Bestätigung
-`GERMANY_BASEMAP_ACTIVATION_CONFIRM=deploy-germany-pmtiles`, den gebundenen
-Gerätefreigabebeleg und arbeitet fail-closed:
+Aktivierungspfad. Er verlangt
+`GERMANY_BASEMAP_ACTIVATION_CONFIRM=deploy-germany-pmtiles` und arbeitet
+fail-closed:
 
-1. beide stabilen Aliase müssen exakt auf dasselbe ausgewählte Versionspaar
-   zeigen;
-2. Sentinel, Hash, Größe, Region, Version und Quelldatenalter werden geprüft;
-3. die Tiefenvalidierung wird unmittelbar gegen die aktuellen Artefaktbytes
-   wiederholt;
-4. der Desktop-/iPad-/Fünf-Regionen-Beleg muss Version, SHA256 und Größe des
-   exakten Artefakts tragen;
-5. ein frischer Frontend-Build mit der Variante `germany` wird erzwungen;
-6. der lokale und öffentliche Buildbeleg `/_app/basemap-build.json` muss die
-   Germany-Variante exakt ausweisen;
-7. öffentlicher Stil, Metadaten und HTTP-206-Range-Vertrag werden gelesen;
-8. das vollständige öffentlich ausgelieferte PMTiles-Archiv wird gestreamt und
-   gegen den vorbereiteten SHA256 gehasht;
-9. erst danach wird `.ops/germany-basemap-activation.json` geschrieben.
+1. ausgewählte Versionsdateien, Sentinel und beide Validierungsberichte werden
+   gegen Name, Hash, Größe, Region und Version geprüft;
+2. die PMTiles-Tiefenvalidierung wird gegen die aktuellen Bytes wiederholt;
+3. Gerätebeleg, Frontend-Commit, Stilhash und Belegalter werden geprüft;
+4. unmittelbar vor der ersten sichtbaren Wirkung wird das OSM-Alter erneut
+   gegen die aktuelle UTC-Zeit geprüft;
+5. der bisherige Zustand beider stabilen Aliase wird erfasst;
+6. beide Aliase werden auf das ausgewählte Versionspaar umgestellt und sofort
+   zurückgelesen;
+7. ein frischer Germany-Frontend-Build wird erzwungen;
+8. lokaler und öffentlicher `/_app/basemap-build.json` müssen Variante,
+   Frontend-Commit und Stilhash exakt ausweisen;
+9. öffentlicher Stil, Sentinel und HTTP-206-Vertrag werden mit explizitem
+   Verbindungs- und Gesamtzeitlimit gelesen;
+10. das vollständige öffentliche PMTiles-Archiv wird innerhalb derselben
+    Zeitgrenze gestreamt und gegen den vorbereiteten SHA256 gehasht;
+11. erst danach wird `.ops/germany-basemap-activation.json` atomar geschrieben.
 
-Der Aktivierungsbeleg beschreibt seinen Umfang als
-`predeployment-device-proof-plus-complete-public-artifact`. Er behauptet nicht,
-dass die Geräteprüfung nach dem öffentlichen Umschalten erneut stattgefunden
-hat. Das bestehende regionale Artefaktpaar wird nicht gelöscht.
+Die HTTP-Grenzen werden über
+`GERMANY_BASEMAP_HTTP_CONNECT_TIMEOUT_SECONDS` und
+`GERMANY_BASEMAP_HTTP_MAX_TIME_SECONDS` konfiguriert. Die Defaults sind 10
+beziehungsweise 900 Sekunden.
 
 ## Rückfall
 
-Scheitert der Germany-Deploy selbst oder danach ein Buildidentitäts-, Stil-,
-Sentinel-, Range- oder Vollhash-Beweis, baut der Aktivierungsoperator das
-Frontend automatisch erneut mit `PUBLIC_BASEMAP_VARIANT=regional`. Die
-ursprünglichen Deploy-Argumente werden unverändert übernommen. Die regionalen
-Aliase bleiben mindestens 14 Tage verfügbar. Der Deutschland-Alias kann
-unabhängig davon auf die vorherige, intakte Version zurückgesetzt werden.
+Jeder Fehler ab dem ersten Aliasversuch bis einschließlich Receipt-Schreiben
+führt durch denselben Rückfallpfad:
+
+1. beide Germany-Aliase werden gemeinsam auf ihren vorherigen Zustand
+   zurückgestellt oder entfernt, falls sie vorher nicht existierten;
+2. das Frontend wird mit `PUBLIC_BASEMAP_VARIANT=regional` neu gebaut;
+3. der Aktivierungslauf endet fehlgeschlagen und schreibt keinen Erfolgsbeleg.
+
+Das gilt auch für einen teilweise fehlgeschlagenen Aliaswechsel, einen
+nichtnulligen Deploy-Abschluss, einen hängenden oder zu langsamen öffentlichen
+Archivreadback und ein nicht beschreibbares State-Verzeichnis.
 
 ## Noch nicht automatisch erfüllt
 
@@ -139,7 +155,7 @@ unabhängig davon auf die vorherige, intakte Version zurückgesetzt werden.
 - staginggebundener Caddy-Readback mit dem großen Artefakt;
 - bundesweite visuelle Abnahme auf Desktop und iPad;
 - gemessene Artefaktgröße, Builddauer, Spitzenlast und Bandbreite;
-- Erzeugung des artefaktgebundenen Gerätefreigabebelegs.
+- Erzeugung des artefakt-, commit- und stilgebundenen Gerätefreigabebelegs.
 
 Diese Punkte sind Freigabebedingungen, keine stillschweigend als erfüllt
 geltenden Annahmen.
