@@ -17,7 +17,7 @@ import argparse
 import os
 import sys
 import tempfile
-from collections import defaultdict
+from collections import defaultdict, deque
 
 from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.docmeta.generated_check import write_or_check
@@ -159,9 +159,9 @@ def find_relates_to_clusters(edges):
             continue
         # BFS to find connected component
         component = []
-        queue = [node]
+        queue = deque([node])
         while queue:
-            current = queue.pop(0)
+            current = queue.popleft()
             if current in visited:
                 continue
             visited.add(current)
