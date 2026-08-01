@@ -17,7 +17,9 @@ INPUT_SHA256 = "3e5efb30488daa87a098d61bf1f60155f89cdcf900aeadee5a1cd27910bfd450
 
 
 class SchleswigHolsteinBasemapBuilderTest(unittest.TestCase):
-    def test_transient_planetiler_failures_retry_without_reusing_partial_output(self) -> None:
+    def test_transient_planetiler_failures_retry_without_reusing_partial_output(
+        self,
+    ) -> None:
         with tempfile.TemporaryDirectory() as temporary_directory:
             root = Path(temporary_directory)
             script = root / "scripts" / "basemap" / BUILDER.name
@@ -119,7 +121,9 @@ printf 'PMTiles\\003fixture' > "$output_path"
 
     def test_publication_masks_interrupts_until_the_pair_is_owned(self) -> None:
         source = BUILDER.read_text(encoding="utf-8")
-        ignore_signals = source.index("trap '' INT TERM", source.index("publish_immutable_pair()"))
+        ignore_signals = source.index(
+            "trap '' INT TERM", source.index("publish_immutable_pair()")
+        )
         artifact_link = source.index('ln "$PARTIAL_PMTILES_PATH"', ignore_signals)
         artifact_owned = source.index("FINAL_ARTIFACT_CREATED=1", artifact_link)
         metadata_link = source.index('ln "$PARTIAL_META_PATH"', artifact_owned)
