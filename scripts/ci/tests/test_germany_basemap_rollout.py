@@ -181,8 +181,8 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         function_end = activate.index('[[ "$BASEMAP_VERSION"', function_start)
         receipt_function = activate[function_start:function_end]
         self.assertIn('if ! RECEIPT_PATH="$receipt_tmp"', receipt_function)
-        self.assertIn("python3 << 'PY'", receipt_function)
-        self.assertIn("\nPY\n  then\n", receipt_function)
+        self.assertIn("python3 << 'PY'; then", receipt_function)
+        self.assertIn("\nPY\n    rm -f", receipt_function)
         self.assertNotIn("python3 << 'PY' || {", receipt_function)
 
 
