@@ -781,9 +781,89 @@ pub struct PostgresFederationRepository {
     pool: PgPool,
 }
 
+fn delivery_policy_sha256(policy: &PeerPolicy, endpoint: &str) -> anyhow::Result<String> {
+    let mut event_types: Vec<_> = policy.allowed_event_types.iter().cloned().collect();
+    event_types.sort();
+    let payload = serde_json::json!({
+        "schema_version": 1,
+        "remote_cell_id": policy.remote_cell_id,
+        "state": policy.state,
+        "allow_neighbourhood": policy.allow_neighbourhood,
+        "allowed_event_types": event_types,
+        "delivery_base_url": endpoint,
+    });
+    Ok(hex::encode(Sha256::digest(serde_jcs::to_vec(&payload)?)))
+}
+
 impl PostgresFederationRepository {
     pub fn new(pool: PgPool) -> Self {
         Self { pool }
+    }
+
+    pub(crate) async fn reconcile_delivery_endpoints(
+        &self,
+        bindings: &[(PeerPolicy, Option<String>)],
+    ) -> anyhow::Result<()> {
+        let mut normalized = Vec::with_capacity(bindings.len());
+        let mut cell_ids = Vec::with_capacity(bindings.len());
+        for (policy, endpoint) in bindings {
+            let endpoint = endpoint
+                .as_deref()
+                .map(crate::federation_delivery::validate_delivery_base_url)
+                .transpose()?;
+            let fingerprint = endpoint
+                .as_deref()
+                .map(|endpoint| delivery_policy_sha256(policy, endpoint))
+                .transpose()?;
+            normalized.push((policy.clone(), endpoint, fingerprint));
+            cell_ids.push(policy.remote_cell_id.clone());
+        }
+
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "UPDATE federation_peer_relationships \
+             SET delivery_base_url = NULL, delivery_policy_sha256 = NULL, updated_at = NOW() \
+             WHERE delivery_base_url IS NOT NULL \
+               AND NOT (remote_cell_id = ANY($1::text[]))",
+        )
+        .bind(&cell_ids)
+        .execute(&mut *tx)
+        .await?;
+
+        for (policy, endpoint, fingerprint) in normalized {
+            let cell_id = &policy.remote_cell_id;
+            let row = sqlx::query(
+                "SELECT delivery_base_url, delivery_policy_sha256 \
+                 FROM federation_peer_relationships \
+                 WHERE remote_cell_id = $1 FOR UPDATE",
+            )
+            .bind(cell_id)
+            .fetch_optional(&mut *tx)
+            .await?;
+            let Some(row) = row else {
+                bail!("delivery endpoint references unknown peer {cell_id}");
+            };
+            let previous_endpoint: Option<String> = row.try_get("delivery_base_url")?;
+            let previous_fingerprint: Option<String> = row.try_get("delivery_policy_sha256")?;
+            if previous_endpoint == endpoint && previous_fingerprint == fingerprint {
+                continue;
+            }
+            sqlx::query(
+                "UPDATE federation_peer_relationships \
+                 SET delivery_base_url = $2, delivery_policy_sha256 = $3, updated_at = NOW() \
+                 WHERE remote_cell_id = $1",
+            )
+            .bind(cell_id)
+            .bind(&endpoint)
+            .bind(&fingerprint)
+            .execute(&mut *tx)
+            .await?;
+            if endpoint.is_some() && policy.state == "trusted" {
+                crate::federation_delivery::backfill_delivery_target(&mut tx, cell_id).await?;
+            }
+        }
+        tx.commit().await?;
+        Ok(())
     }
 }
 
@@ -1104,6 +1184,7 @@ impl FederationRepository for PostgresFederationRepository {
         .bind(serde_json::to_value(event)?)
         .execute(&mut *tx)
         .await?;
+        crate::federation_delivery::enqueue_delivery_targets(&mut tx, event).await?;
         tx.commit().await?;
         Ok(())
     }
@@ -1926,6 +2007,13 @@ struct PeerBootstrap {
     allow_neighbourhood: bool,
     allowed_event_types: Vec<String>,
     keys: Vec<PeerKeyBootstrap>,
+    #[serde(default)]
+    delivery_base_url: Option<String>,
+}
+
+struct PeerRuntimeConfig {
+    policy: PeerPolicy,
+    delivery_base_url: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -1941,7 +2029,7 @@ fn default_true() -> bool {
     true
 }
 
-fn peer_policies_from_json(raw: &str) -> anyhow::Result<Vec<PeerPolicy>> {
+fn peer_configs_from_json(raw: &str) -> anyhow::Result<Vec<PeerRuntimeConfig>> {
     let peers: Vec<PeerBootstrap> =
         serde_json::from_str(raw).context("FEDERATION_PEERS_JSON is invalid")?;
     let mut cell_ids = HashSet::new();
@@ -1974,19 +2062,42 @@ fn peer_policies_from_json(raw: &str) -> anyhow::Result<Vec<PeerPolicy>> {
                     })
                 })
                 .collect::<anyhow::Result<Vec<_>>>()?;
-            Ok(PeerPolicy {
-                remote_cell_id: peer.cell_id,
-                state: peer.state,
-                allow_neighbourhood: peer.allow_neighbourhood,
-                allowed_event_types: peer.allowed_event_types.into_iter().collect(),
-                keys,
+            let delivery_base_url = peer
+                .delivery_base_url
+                .as_deref()
+                .map(crate::federation_delivery::validate_delivery_base_url)
+                .transpose()?;
+            Ok(PeerRuntimeConfig {
+                policy: PeerPolicy {
+                    remote_cell_id: peer.cell_id,
+                    state: peer.state,
+                    allow_neighbourhood: peer.allow_neighbourhood,
+                    allowed_event_types: peer.allowed_event_types.into_iter().collect(),
+                    keys,
+                },
+                delivery_base_url,
             })
         })
         .collect()
 }
 
+#[cfg(test)]
+fn peer_policies_from_json(raw: &str) -> anyhow::Result<Vec<PeerPolicy>> {
+    Ok(peer_configs_from_json(raw)?
+        .into_iter()
+        .map(|config| config.policy)
+        .collect())
+}
+
 pub async fn runtime_router(pool: Option<PgPool>) -> anyhow::Result<Router> {
+    let delivery_config = crate::federation_delivery::DeliveryWorkerConfig::from_env()?;
     let Some(identity) = identity_from_env()? else {
+        if delivery_config.is_some() {
+            bail!(
+                "federation delivery requires a complete federation cell identity; \
+                 refusing a worker without FEDERATION_CELL_ID and signing configuration"
+            );
+        }
         return Ok(Router::new());
     };
     let pool = pool.ok_or_else(|| {
@@ -1994,15 +2105,46 @@ pub async fn runtime_router(pool: Option<PgPool>) -> anyhow::Result<Router> {
             "federation is configured but DATABASE_URL is unavailable; refusing ephemeral fallback"
         )
     })?;
-    let repository = Arc::new(PostgresFederationRepository::new(pool));
-    let service = FederationService::new(identity, repository);
-    if let Ok(raw) = env::var("FEDERATION_PEERS_JSON") {
-        if !raw.trim().is_empty() {
-            for policy in peer_policies_from_json(&raw)? {
-                service.install_peer(policy).await?;
-            }
-        }
+    let repository = Arc::new(PostgresFederationRepository::new(pool.clone()));
+    let service = FederationService::new(identity, repository.clone());
+
+    let peer_configs = match env::var("FEDERATION_PEERS_JSON") {
+        Ok(raw) if !raw.trim().is_empty() => peer_configs_from_json(&raw)?,
+        Ok(_) | Err(env::VarError::NotPresent) => Vec::new(),
+        Err(error) => return Err(error.into()),
+    };
+    for config in &peer_configs {
+        service.install_peer(config.policy.clone()).await?;
     }
+    let delivery_bindings: Vec<_> = peer_configs
+        .iter()
+        .map(|config| (config.policy.clone(), config.delivery_base_url.clone()))
+        .collect();
+    repository
+        .reconcile_delivery_endpoints(&delivery_bindings)
+        .await?;
+
+    if let Some(config) = delivery_config {
+        let target_count = delivery_bindings
+            .iter()
+            .filter(|(_, endpoint)| endpoint.is_some())
+            .count();
+        if target_count == 0 {
+            bail!(
+                "FEDERATION_DELIVERY_ENABLED=true requires at least one peer with delivery_base_url"
+            );
+        }
+        drop(crate::federation_delivery::start(pool, config)?);
+        tracing::info!(target_count, "durable federation delivery worker enabled");
+    } else if delivery_bindings
+        .iter()
+        .any(|(_, endpoint)| endpoint.is_some())
+    {
+        tracing::warn!(
+            "federation delivery endpoints are configured but FEDERATION_DELIVERY_ENABLED is false"
+        );
+    }
+
     tracing::info!(
         cell_id = %service.descriptor().cell_id,
         "public federation HTTP boundary enabled"
@@ -2784,5 +2926,25 @@ mod tests {
         );
         let error = peer_policies_from_json(&duplicate).unwrap_err();
         assert!(error.to_string().contains("duplicate cell_id cell-a"));
+    }
+
+    #[test]
+    fn peer_bootstrap_validates_optional_delivery_endpoint() {
+        let key = URL_SAFE_NO_PAD.encode([9; 32]);
+        let valid = format!(
+            r#"[{{"cell_id":"cell-a","state":"trusted","allowed_event_types":["object.upserted"],"keys":[{{"key_id":"key-1","public_key":"{key}"}}],"delivery_base_url":"https://cell-a.example.test/edge/"}}]"#
+        );
+        let configs = peer_configs_from_json(&valid).unwrap();
+        assert_eq!(configs.len(), 1);
+        assert_eq!(
+            configs[0].delivery_base_url.as_deref(),
+            Some("https://cell-a.example.test/edge")
+        );
+
+        let insecure = valid.replace(
+            "https://cell-a.example.test/edge/",
+            "http://cell-a.example.test",
+        );
+        assert!(peer_configs_from_json(&insecure).is_err());
     }
 }

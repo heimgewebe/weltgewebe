@@ -60,6 +60,12 @@ spec:
                 secretKeyRef:
                   name: weltgewebe-runtime
                   key: database-url
+            - name: FEDERATION_SIGNING_KEY_B64
+              valueFrom:
+                secretKeyRef:
+                  name: weltgewebe-runtime
+                  key: federation-signing-key-b64
+                  optional: true
           startupProbe:
             httpGet:
               path: /health/live
