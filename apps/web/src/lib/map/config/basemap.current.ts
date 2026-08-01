@@ -1,19 +1,19 @@
-// The active basemap mode is decided at build time by
-// scripts/generate-basemap-config.js, which reads PUBLIC_BASEMAP_MODE and
-// writes $lib/generated/basemapConfig.ts. In a local-sovereign build that
-// generated module carries no remote (CARTO) URL, so this module — and the
-// whole client bundle — contains no CARTO string literal at all. The remote
-// URL only ever exists in the generated module of an explicit remote-style
-// build. The deploy leak-guard (scripts/weltgewebe-up) enforces this.
+// The active basemap mode and sovereign variant are decided at build time by
+// scripts/generate-basemap-config.js. A local-sovereign generated module carries
+// no remote (CARTO) URL. The Germany variant remains opt-in until its real
+// artifact and production proof are complete.
 
-import { BUILD_BASEMAP_CONFIG } from "../../generated/basemapConfig";
+import {
+  BUILD_BASEMAP_CONFIG,
+  type LocalBasemapVariant,
+} from "../../generated/basemapConfig";
 import {
   BASEMAP_MODE_POLICY,
   type BasemapMode,
 } from "../../generated/basemapModePolicy";
 import { MAP_MIN_ZOOM } from "../markerScale";
 
-export type { BasemapMode };
+export type { BasemapMode, LocalBasemapVariant };
 
 type BaseBasemapConfig = {
   center: [number, number];
@@ -31,6 +31,7 @@ export type RemoteStyleBasemapConfig = BaseBasemapConfig & {
 
 export type LocalSovereignBasemapConfig = BaseBasemapConfig & {
   mode: "local-sovereign";
+  variant: LocalBasemapVariant;
   styleUrl?: never;
 };
 
@@ -43,20 +44,6 @@ export const HAMMER_PARK_CENTER = {
   lon: 10.058,
 };
 
-// Context-aware basemap mode resolver. Maps a raw env mode string to a
-// concrete basemap mode, with context-specific fallback behavior.
-//
-// Allowed modes are defined in basemap-mode.policy.json. When envMode is
-// explicitly set to an allowed value, it is always honored regardless of context.
-// When envMode is absent or invalid, the fallback depends on context:
-//
-// isLocalContext: true  → fall back to "local-sovereign" (local dev default)
-// isLocalContext: false → fall back to "remote-style" (production default)
-//
-// Note: The build-time generator (scripts/generate-basemap-config.js) is stricter
-// — it always uses basemap-mode.policy.json's defaultMode ("local-sovereign") for
-// unset PUBLIC_BASEMAP_MODE. This resolver is a runtime fallback for test/runtime
-// scenarios where context matters.
 export function resolveBasemapMode(
   envMode: string | undefined,
   isLocalContext: boolean,
@@ -68,16 +55,12 @@ export function resolveBasemapMode(
 }
 
 const baseConfig: BaseBasemapConfig = {
-  center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat], // Hammer Park, Hamm
+  center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
   zoom: 15,
   minZoom: MAP_MIN_ZOOM,
   maxZoom: 18,
 };
 
-// Assembled from the generated build-time config. The remote branch reads the
-// URL from BUILD_BASEMAP_CONFIG (a property access, not a string literal), so
-// no CARTO URL is hardcoded here. In a local-sovereign build the generated
-// config has mode "local-sovereign" and no styleUrl.
 export const currentBasemap: BasemapConfig =
   BUILD_BASEMAP_CONFIG.mode === "remote-style"
     ? {
@@ -88,4 +71,5 @@ export const currentBasemap: BasemapConfig =
     : {
         ...baseConfig,
         mode: "local-sovereign",
+        variant: BUILD_BASEMAP_CONFIG.variant,
       };
