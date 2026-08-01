@@ -18,19 +18,19 @@ class GitFixtureMaintenanceIsolationTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
+        python_command = "python3 -m unittest discover scripts/ci/tests/"
         command = next(
             (
                 line.strip()
                 for line in result.stdout.splitlines()
-                if line.strip().endswith(
-                    "python3 -m unittest discover scripts/ci/tests/"
-                )
+                if line.strip().endswith(python_command)
             ),
             None,
         )
         self.assertIsNotNone(command, result.stdout)
         assert command is not None
 
+        python_index = command.index(python_command)
         expected_assignments = (
             "GIT_CONFIG_COUNT=2",
             "GIT_CONFIG_KEY_0=maintenance.auto",
@@ -40,11 +40,7 @@ class GitFixtureMaintenanceIsolationTests(unittest.TestCase):
         )
         for assignment in expected_assignments:
             self.assertIn(assignment, command)
-
-        self.assertLess(
-            command.index("GIT_CONFIG_COUNT=2"),
-            command.index("python3 -m unittest discover scripts/ci/tests/"),
-        )
+            self.assertLess(command.index(assignment), python_index)
 
 
 if __name__ == "__main__":
