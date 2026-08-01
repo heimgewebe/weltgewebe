@@ -126,5 +126,8 @@ test("rejects a meaningless variant on remote-style builds", () => {
 test("rejects a non-canonical source commit", () => {
   const result = runGenerator({ PUBLIC_SOURCE_COMMIT: "short" });
   assert.notEqual(result.status, 0);
-  assert.match(result.stderr, /PUBLIC_SOURCE_COMMIT must be a full lowercase Git SHA/);
+  assert.match(
+    result.stderr,
+    /PUBLIC_SOURCE_COMMIT must be a full lowercase Git SHA/,
+  );
 });
