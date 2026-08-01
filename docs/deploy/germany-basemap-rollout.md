@@ -5,6 +5,9 @@ summary: Runbook für Vorbereitung, Aktivierung und sicheren Rückbau der deutsc
 doc_type: runbook
 status: active
 owner: product-map
+relations:
+  - type: implements
+    target: docs/specs/map-experience.md
 ---
 # Deutschlandweite PMTiles-Basemap ausrollen
 

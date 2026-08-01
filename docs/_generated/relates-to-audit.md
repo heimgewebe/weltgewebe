@@ -14,8 +14,9 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 676 |
+| Relationen gesamt | 677 |
 | — depends_on | 27 |
+| — implements | 1 |
 | — relates_to | 628 |
 | — supersedes | 12 |
 | — verifies | 9 |
