@@ -154,6 +154,36 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("Content-Range", activate)
         self.assertIn("Accept-Ranges", activate)
 
+    def test_activation_requires_artifact_bound_device_release_proof(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("GERMANY_BASEMAP_RELEASE_PROOF_PATH", activate)
+        self.assertIn("required_release_proofs", activate)
+        for proof in (
+            "desktop-maplibre",
+            "ipad-maplibre",
+            "five-region-visual",
+            "no-external-map-requests",
+            "staging-caddy-range",
+        ):
+            self.assertIn(proof, activate)
+        self.assertIn("Germany release proof artifact hash mismatch", activate)
+        self.assertIn("Germany release proof artifact size mismatch", activate)
+
+    def test_activation_hashes_complete_public_artifact(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        range_check_at = activate.index("Range: bytes=0-126")
+        full_hash_at = activate.index("PUBLIC_ARTIFACT_SHA256")
+        receipt_at = activate.index('"status": "activation_verified"')
+        self.assertLess(range_check_at, full_hash_at)
+        self.assertLess(full_hash_at, receipt_at)
+        self.assertIn("complete public Germany PMTiles hash mismatch", activate)
+        self.assertIn("complete-public-artifact-sha256", activate)
+        self.assertIn(
+            "predeployment-device-proof-plus-complete-public-artifact",
+            activate,
+        )
+        self.assertNotIn("verified end to end", activate)
+
     def test_activation_rolls_back_deploy_and_readback_failures(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
         self.assertIn('if ! deploy_frontend_variant "germany" "$@"; then', activate)
