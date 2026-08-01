@@ -177,10 +177,10 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
 
     def test_activation_receipt_heredoc_is_inside_if_statement(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
-        receipt_function = activate.split("write_activation_receipt() {", 1)[1].split(
-            "\n}\n", 1
-        )[0]
-        self.assertIn('if ! RECEIPT_PATH="$receipt_tmp" \\', receipt_function)
+        function_start = activate.index("write_activation_receipt() {")
+        function_end = activate.index('[[ "$BASEMAP_VERSION"', function_start)
+        receipt_function = activate[function_start:function_end]
+        self.assertIn('if ! RECEIPT_PATH="$receipt_tmp"', receipt_function)
         self.assertIn("python3 << 'PY'", receipt_function)
         self.assertIn("\nPY\n  then\n", receipt_function)
         self.assertNotIn("python3 << 'PY' || {", receipt_function)
