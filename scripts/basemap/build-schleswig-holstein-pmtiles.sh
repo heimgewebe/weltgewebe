@@ -18,6 +18,9 @@ OUTPUT_PMTILES="basemap-schleswig-holstein-${BASEMAP_TAG}.pmtiles"
 OUTPUT_META="basemap-schleswig-holstein-${BASEMAP_TAG}.meta.json"
 
 PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb"
+PLANETILER_HTTP_TIMEOUT="${BASEMAP_PLANETILER_HTTP_TIMEOUT:-120s}"
+PLANETILER_HTTP_RETRIES="${BASEMAP_PLANETILER_HTTP_RETRIES:-3}"
+PLANETILER_HTTP_RETRY_WAIT="${BASEMAP_PLANETILER_HTTP_RETRY_WAIT:-10s}"
 
 echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Schleswig-Holstein"
@@ -90,6 +93,10 @@ if ! [[ "$PLANETILER_RETRY_DELAY_SECONDS" =~ ^[0-9]+$ ]]; then
   echo "Error: PLANETILER_RETRY_DELAY_SECONDS must be a non-negative integer." >&2
   exit 1
 fi
+if ! [[ "$PLANETILER_HTTP_RETRIES" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Error: BASEMAP_PLANETILER_HTTP_RETRIES must be a positive integer." >&2
+  exit 1
+fi
 
 run_planetiler() {
   docker run --rm \
@@ -99,7 +106,10 @@ run_planetiler() {
     "$PLANETILER_IMAGE" \
     --osm-path="/data/$OSM_FILE" \
     --output="/data/$OUTPUT_PMTILES" \
-    --download=true
+    --download=true \
+    --http-timeout="$PLANETILER_HTTP_TIMEOUT" \
+    --http-retries="$PLANETILER_HTTP_RETRIES" \
+    --http-retry-wait="$PLANETILER_HTTP_RETRY_WAIT"
 }
 
 echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
