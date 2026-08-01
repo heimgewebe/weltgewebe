@@ -37,6 +37,11 @@ PREVIOUS_ARTIFACT_ALIAS_PRESENT=0
 PREVIOUS_META_ALIAS_PRESENT=0
 PREVIOUS_ARTIFACT_ALIAS_TARGET=""
 PREVIOUS_META_ALIAS_TARGET=""
+ACTIVATION_TRANSACTION_OPEN=0
+ACTIVATION_COMMITTED=0
+ROLLBACK_IN_PROGRESS=0
+ROLLBACK_COMPLETE=0
+TMP_DIR=""
 
 fail() {
   echo "ERROR: $*" >&2
@@ -156,10 +161,25 @@ switch_alias_pair() {
   [[ "$(readlink -f -- "$ALIAS_META")" == "$(readlink -f -- "$VERSIONED_META")" ]] || return 1
 }
 
+invalidate_activation_receipt() {
+  if [[ -e "$ACTIVATION_RECEIPT" || -L "$ACTIVATION_RECEIPT" ]]; then
+    rm -f -- "$ACTIVATION_RECEIPT" || return 1
+  fi
+}
+
 rollback_activation() {
   local failed=0
 
-  echo "WARNING: Germany activation failed; restoring aliases and the regional frontend." >&2
+  if [[ "$ROLLBACK_COMPLETE" == "1" || "$ROLLBACK_IN_PROGRESS" == "1" ]]; then
+    return 0
+  fi
+  ROLLBACK_IN_PROGRESS=1
+
+  echo "WARNING: Germany activation failed; invalidating its receipt, restoring aliases and the regional frontend." >&2
+  if ! invalidate_activation_receipt; then
+    echo "CRITICAL: Could not invalidate the Germany activation receipt." >&2
+    failed=1
+  fi
   if [[ "$ALIASES_TOUCHED" == "1" ]] && ! restore_alias_pair; then
     failed=1
   fi
@@ -169,14 +189,54 @@ rollback_activation() {
   else
     echo "[✓] Regional frontend rollback completed." >&2
   fi
+
+  ROLLBACK_IN_PROGRESS=0
+  ROLLBACK_COMPLETE=1
   return "$failed"
 }
 
-post_activation_failure() {
-  local message="$1"
+cleanup_tmp() {
+  if [[ -n "$TMP_DIR" ]]; then
+    rm -rf -- "$TMP_DIR" || echo "WARNING: Could not remove activation temporary directory: $TMP_DIR" >&2
+  fi
+}
 
-  rollback_activation || true
-  fail "$message"
+on_exit() {
+  local status=$?
+  local rollback_status=0
+
+  trap - EXIT
+  trap '' INT TERM
+  if [[ "$ACTIVATION_TRANSACTION_OPEN" == "1" && "$ACTIVATION_COMMITTED" != "1" ]]; then
+    rollback_activation || rollback_status=$?
+    if [[ "$status" == "0" ]]; then
+      status=1
+    fi
+  fi
+  cleanup_tmp
+  if [[ "$rollback_status" != "0" ]]; then
+    echo "CRITICAL: Germany activation rollback was incomplete." >&2
+  fi
+  exit "$status"
+}
+
+on_interrupt() {
+  exit 130
+}
+
+on_terminate() {
+  exit 143
+}
+
+post_activation_failure() {
+  fail "$1"
+}
+
+verify_tracked_checkout_clean() {
+  git -C "$REPO_ROOT" diff --quiet --ignore-submodules -- ||
+    fail "tracked worktree changes would make the Germany device proof stale"
+  git -C "$REPO_ROOT" diff --cached --quiet --ignore-submodules -- ||
+    fail "staged changes would make the Germany device proof stale"
 }
 
 verify_snapshot_freshness() {
@@ -294,6 +354,25 @@ PY
   }
 }
 
+verify_activation_receipt() {
+  RECEIPT_PATH="$ACTIVATION_RECEIPT" \
+    EXPECTED_SHA256="$ARTIFACT_SHA256" \
+    EXPECTED_SOURCE_COMMIT="$SOURCE_COMMIT" \
+    python3 << 'PY'
+import json
+import os
+from pathlib import Path
+
+receipt = json.loads(Path(os.environ["RECEIPT_PATH"]).read_text(encoding="utf-8"))
+if receipt.get("status") != "activation_verified":
+    raise SystemExit("Germany activation receipt status mismatch")
+if receipt.get("artifact_sha256") != os.environ["EXPECTED_SHA256"]:
+    raise SystemExit("Germany activation receipt artifact mismatch")
+if receipt.get("source_commit") != os.environ["EXPECTED_SOURCE_COMMIT"]:
+    raise SystemExit("Germany activation receipt source commit mismatch")
+PY
+}
+
 [[ "$BASEMAP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail "BASEMAP_VERSION must use numeric semantic versioning"
 require_positive_integer "GERMANY_BASEMAP_MAX_SOURCE_AGE_DAYS" "$MAX_SOURCE_AGE_DAYS"
@@ -329,6 +408,7 @@ for required_path in \
   require_nonempty_path "$required_path"
 done
 
+verify_tracked_checkout_clean
 SOURCE_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "could not resolve a full source commit"
 STYLE_SHA256="$(sha256sum "$STYLE_PATH" | awk '{print $1}')"
@@ -340,10 +420,9 @@ capture_alias_state "$ALIAS_ARTIFACT" "artifact"
 capture_alias_state "$ALIAS_META" "metadata"
 
 TMP_DIR="$(mktemp -d)"
-cleanup() {
-  rm -rf "$TMP_DIR"
-}
-trap cleanup EXIT
+trap on_exit EXIT
+trap on_interrupt INT
+trap on_terminate TERM
 FRESH_VALIDATION_REPORT="$TMP_DIR/basemap-germany.validation.json"
 
 if [[ ! -d "$REPO_ROOT/apps/web/node_modules" ]]; then
@@ -475,8 +554,13 @@ PY
 
 echo "[✓] Germany version, validation and device release proof verified."
 
-# Re-evaluate freshness immediately before the first externally visible change.
+# Re-evaluate checkout and freshness immediately before the first externally visible change.
+verify_tracked_checkout_clean
 verify_snapshot_freshness
+if ! invalidate_activation_receipt; then
+  fail "could not invalidate a previous Germany activation receipt"
+fi
+ACTIVATION_TRANSACTION_OPEN=1
 if ! switch_alias_pair; then
   post_activation_failure "could not switch the Germany alias pair atomically"
 fi
@@ -532,12 +616,12 @@ if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
 if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
     raise SystemExit("public Germany sentinel size mismatch")
 PY
-  HTTP_STATUS="$(curl "${CURL_COMMON[@]}" \
-    -H 'Range: bytes=0-126' \
-    -D "$RANGE_HEADERS" \
-    -o "$RANGE_PAYLOAD" \
-    -w '%{http_code}' \
-    "$PUBLIC_ARTIFACT_URL")" ||
+HTTP_STATUS="$(curl "${CURL_COMMON[@]}" \
+  -H 'Range: bytes=0-126' \
+  -D "$RANGE_HEADERS" \
+  -o "$RANGE_PAYLOAD" \
+  -w '%{http_code}' \
+  "$PUBLIC_ARTIFACT_URL")" ||
   post_activation_failure "public Germany PMTiles range request failed"
 [[ "$HTTP_STATUS" == "206" ]] ||
   post_activation_failure "public Germany PMTiles range request returned HTTP $HTTP_STATUS"
@@ -561,6 +645,11 @@ fi
 if ! write_activation_receipt; then
   post_activation_failure "could not persist the Germany activation receipt"
 fi
+if ! verify_activation_receipt; then
+  post_activation_failure "persisted Germany activation receipt failed readback"
+fi
+ACTIVATION_COMMITTED=1
+ACTIVATION_TRANSACTION_OPEN=0
 
 echo "[✓] Germany PMTiles activation committed with device, identity, public hash and receipt proof."
 echo "Receipt: $ACTIVATION_RECEIPT"
