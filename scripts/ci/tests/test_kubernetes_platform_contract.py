@@ -318,13 +318,40 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(egress_policy["kind"], "CiliumNetworkPolicy")
         selector = egress_policy["spec"]["endpointSelector"]["matchLabels"]
         self.assertEqual(selector["app.kubernetes.io/name"], "weltgewebe-api")
-        rule = egress_policy["spec"]["egress"][0]
-        self.assertEqual(rule["toFQDNs"], [{"matchName": "peer.example.invalid"}])
-        self.assertNotIn("toEntities", rule)
-        self.assertNotIn("toCIDR", rule)
-        self.assertNotIn("toCIDRSet", rule)
+        dns_rule, delivery_rule = egress_policy["spec"]["egress"]
         self.assertEqual(
-            rule["toPorts"],
+            dns_rule["toEndpoints"],
+            [
+                {
+                    "matchLabels": {
+                        "k8s:io.kubernetes.pod.namespace": "kube-system",
+                        "k8s:k8s-app": "kube-dns",
+                    }
+                }
+            ],
+        )
+        self.assertEqual(
+            dns_rule["toPorts"],
+            [
+                {
+                    "ports": [
+                        {"port": "53", "protocol": "UDP"},
+                        {"port": "53", "protocol": "TCP"},
+                    ],
+                    "rules": {"dns": [{"matchPattern": "*"}]},
+                }
+            ],
+        )
+        self.assertEqual(
+            delivery_rule["toFQDNs"], [{"matchName": "peer.example.invalid"}]
+        )
+        self.assertNotIn("matchPattern", delivery_rule["toFQDNs"][0])
+        for rule in egress_policy["spec"]["egress"]:
+            self.assertNotIn("toEntities", rule)
+            self.assertNotIn("toCIDR", rule)
+            self.assertNotIn("toCIDRSet", rule)
+        self.assertEqual(
+            delivery_rule["toPorts"],
             [{"ports": [{"port": "443", "protocol": "TCP"}]}],
         )
         self.assertNotIn(

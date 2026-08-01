@@ -23,7 +23,7 @@ const DEFAULT_POLL_SECONDS: u64 = 5;
 const DEFAULT_REQUEST_TIMEOUT_SECONDS: u64 = 10;
 const DEFAULT_BATCH_SIZE: usize = 20;
 const DEFAULT_MAX_ATTEMPTS: u32 = 8;
-const DELIVERY_LEASE_SECONDS: i64 = 30;
+const DELIVERY_LEASE_GRACE_SECONDS: u64 = 30;
 const MAX_RESPONSE_BYTES: usize = 64 * 1024;
 const MAX_BACKOFF_SECONDS: u64 = 300;
 
@@ -106,6 +106,9 @@ pub fn validate_delivery_base_url(raw: &str) -> anyhow::Result<String> {
     }
     if url.host_str().is_none() || !url.username().is_empty() || url.password().is_some() {
         bail!("federation delivery base URL must contain a host and no credentials");
+    }
+    if !matches!(url.host(), Some(url::Host::Domain(_))) {
+        bail!("federation delivery base URL must use a DNS host, not an IP literal");
     }
     if url.query().is_some() || url.fragment().is_some() {
         bail!("federation delivery base URL must not contain query or fragment");
@@ -270,13 +273,15 @@ fn classify_response(
                 http_status: Some(response.status),
                 error_class: "response-version-mismatch",
             },
-            ReceiveStatus::Rejected => DeliveryDecision::Dead {
+            ReceiveStatus::Rejected => DeliveryDecision::Retry {
                 http_status: Some(response.status),
                 error_class: "remote-rejected",
+                retry_after_seconds: response.retry_after_seconds,
             },
-            ReceiveStatus::Quarantined => DeliveryDecision::Dead {
+            ReceiveStatus::Quarantined => DeliveryDecision::Retry {
                 http_status: Some(response.status),
                 error_class: "remote-quarantined",
+                retry_after_seconds: response.retry_after_seconds,
             },
         };
     }
@@ -291,6 +296,18 @@ fn retry_delay_seconds(event_id: Uuid, attempt_count: u32) -> u64 {
     let base = 5_u64.saturating_mul(1_u64 << exponent);
     let jitter = u64::from(event_id.as_bytes()[15] % 5);
     base.saturating_add(jitter).min(MAX_BACKOFF_SECONDS)
+}
+
+fn effective_retry_delay_seconds(
+    event_id: Uuid,
+    attempt_count: u32,
+    retry_after_seconds: Option<u64>,
+) -> u64 {
+    let computed = retry_delay_seconds(event_id, attempt_count);
+    retry_after_seconds
+        .map(|remote| remote.max(computed))
+        .unwrap_or(computed)
+        .min(MAX_BACKOFF_SECONDS)
 }
 
 #[derive(Debug)]
@@ -334,15 +351,43 @@ pub async fn run_delivery_batch(
     transport: &dyn DeliveryTransport,
     worker_id: Uuid,
 ) -> anyhow::Result<usize> {
+    expire_exhausted_deliveries(pool, config.max_attempts).await?;
+    let lease_seconds = delivery_lease_seconds(config)?;
     let mut processed = 0;
     for _ in 0..config.batch_size {
-        let Some(claim) = claim_due_delivery(pool, worker_id).await? else {
+        let Some(claim) = claim_due_delivery(pool, worker_id, lease_seconds).await? else {
             break;
         };
         execute_claim(pool, config, transport, claim).await?;
         processed += 1;
     }
     Ok(processed)
+}
+
+fn delivery_lease_seconds(config: &DeliveryWorkerConfig) -> anyhow::Result<i64> {
+    let seconds = config
+        .request_timeout
+        .as_secs()
+        .saturating_add(DELIVERY_LEASE_GRACE_SECONDS);
+    Ok(i64::try_from(seconds)?)
+}
+
+async fn expire_exhausted_deliveries(pool: &PgPool, max_attempts: u32) -> anyhow::Result<()> {
+    sqlx::query(
+        "UPDATE federation_delivery_attempts \
+         SET state = 'dead', next_attempt_at = NOW(), \
+             lease_owner = NULL, lease_expires_at = NULL, \
+             last_error_class = 'delivery-attempts-exhausted', updated_at = NOW() \
+         WHERE attempt_count >= $1 \
+           AND ( \
+             state IN ('pending', 'retry') \
+             OR (state = 'in_flight' AND lease_expires_at <= NOW()) \
+           )",
+    )
+    .bind(i32::try_from(max_attempts)?)
+    .execute(pool)
+    .await?;
+    Ok(())
 }
 
 pub(crate) async fn enqueue_delivery_targets(
@@ -355,19 +400,17 @@ pub(crate) async fn enqueue_delivery_targets(
          FROM federation_peer_relationships AS relationship \
          WHERE relationship.state = 'trusted' \
            AND relationship.delivery_base_url IS NOT NULL \
-           AND relationship.allowed_event_types ? $2 \
            AND ( \
-             $3 = 'global' \
+             $2 = 'global' \
              OR ( \
-               $3 = 'neighbourhood' \
+               $2 = 'neighbourhood' \
                AND relationship.allow_neighbourhood \
-               AND relationship.remote_cell_id = ANY($4::text[]) \
+               AND relationship.remote_cell_id = ANY($3::text[]) \
              ) \
            ) \
          ON CONFLICT (event_id, target_cell_id) DO NOTHING",
     )
     .bind(event.event_id)
-    .bind(&event.event_type)
     .bind(&event.scope)
     .bind(&event.neighbourhood_targets)
     .execute(&mut **tx)
@@ -387,7 +430,6 @@ pub(crate) async fn backfill_delivery_target(
            ON relationship.remote_cell_id = $1 \
           AND relationship.state = 'trusted' \
           AND relationship.delivery_base_url IS NOT NULL \
-          AND relationship.allowed_event_types ? (outbox.envelope ->> 'event_type') \
           AND ( \
             outbox.envelope ->> 'scope' = 'global' \
             OR ( \
@@ -396,24 +438,27 @@ pub(crate) async fn backfill_delivery_target(
               AND (outbox.envelope -> 'neighbourhood_targets') ? relationship.remote_cell_id \
             ) \
           ) \
-         ON CONFLICT (event_id, target_cell_id) DO UPDATE SET
-           state = 'pending',
-           attempt_count = 0,
-           next_attempt_at = NOW(),
-           lease_owner = NULL,
-           lease_expires_at = NULL,
-           last_http_status = NULL,
-           last_error_class = NULL,
-           delivered_at = NULL,
-           updated_at = NOW()
-         WHERE federation_delivery_attempts.state = 'dead'
-           AND federation_delivery_attempts.last_error_class IN (
-             'peer-not-trusted',
-             'event-type-not-allowed',
-             'neighbourhood-target-not-allowed',
-             'scope-not-deliverable',
-             'delivery-endpoint-missing',
-             'delivery-endpoint-invalid'
+         ON CONFLICT (event_id, target_cell_id) DO UPDATE SET \
+           state = 'pending', \
+           attempt_count = 0, \
+           next_attempt_at = NOW(), \
+           lease_owner = NULL, \
+           lease_expires_at = NULL, \
+           last_http_status = NULL, \
+           last_error_class = NULL, \
+           delivered_at = NULL, \
+           updated_at = NOW() \
+         WHERE federation_delivery_attempts.state = 'dead' \
+           AND federation_delivery_attempts.last_error_class IN ( \
+             'peer-not-trusted', \
+             'event-type-not-allowed', \
+             'neighbourhood-target-not-allowed', \
+             'scope-not-deliverable', \
+             'delivery-endpoint-missing', \
+             'delivery-endpoint-invalid', \
+             'remote-rejected', \
+             'remote-quarantined', \
+             'delivery-attempts-exhausted' \
            )",
     )
     .bind(target_cell_id)
@@ -425,6 +470,7 @@ pub(crate) async fn backfill_delivery_target(
 async fn claim_due_delivery(
     pool: &PgPool,
     worker_id: Uuid,
+    lease_seconds: i64,
 ) -> anyhow::Result<Option<DeliveryClaim>> {
     let row = sqlx::query(
         "WITH candidate AS ( \
@@ -461,7 +507,7 @@ async fn claim_due_delivery(
          RETURNING delivery.event_id, delivery.target_cell_id, delivery.attempt_count",
     )
     .bind(worker_id)
-    .bind(DELIVERY_LEASE_SECONDS)
+    .bind(lease_seconds)
     .fetch_optional(pool)
     .await?;
     let Some(row) = row else {
@@ -476,63 +522,111 @@ async fn claim_due_delivery(
     }))
 }
 
-async fn execute_claim(
+struct DeliveryContext {
+    event: FederationEvent,
+    peer_state: String,
+    allow_neighbourhood: bool,
+    allowed_event_types: Vec<String>,
+    delivery_base_url: Option<String>,
+}
+
+async fn load_delivery_context(
     pool: &PgPool,
-    config: &DeliveryWorkerConfig,
-    transport: &dyn DeliveryTransport,
-    claim: DeliveryClaim,
-) -> anyhow::Result<()> {
-    let mut tx = pool.begin().await?;
+    claim: &DeliveryClaim,
+) -> anyhow::Result<Option<DeliveryContext>> {
     let row = sqlx::query(
         "SELECT delivery.state AS delivery_state, delivery.lease_owner, \
-                outbox.envelope, relationship.state AS peer_state, \
+                outbox.envelope, outbox.envelope_sha256, relationship.state AS peer_state, \
                 relationship.allow_neighbourhood, relationship.allowed_event_types, \
                 relationship.delivery_base_url \
          FROM federation_delivery_attempts AS delivery \
          JOIN federation_outbox AS outbox USING (event_id) \
          JOIN federation_peer_relationships AS relationship \
            ON relationship.remote_cell_id = delivery.target_cell_id \
-         WHERE delivery.event_id = $1 AND delivery.target_cell_id = $2 \
-         FOR UPDATE OF delivery FOR SHARE OF relationship",
+         WHERE delivery.event_id = $1 AND delivery.target_cell_id = $2",
     )
     .bind(claim.event_id)
     .bind(&claim.target_cell_id)
-    .fetch_optional(&mut *tx)
+    .fetch_optional(pool)
     .await?;
     let Some(row) = row else {
-        tx.rollback().await?;
-        return Ok(());
+        return Ok(None);
     };
     let delivery_state: String = row.try_get("delivery_state")?;
     let lease_owner: Option<Uuid> = row.try_get("lease_owner")?;
     if delivery_state != "in_flight" || lease_owner != Some(claim.lease_owner) {
-        tx.rollback().await?;
-        return Ok(());
+        return Ok(None);
     }
     let envelope: Value = row.try_get("envelope")?;
-    let event: FederationEvent = serde_json::from_value(envelope)?;
-    let peer_state: String = row.try_get("peer_state")?;
-    let allow_neighbourhood: bool = row.try_get("allow_neighbourhood")?;
+    let event: FederationEvent = match serde_json::from_value(envelope) {
+        Ok(event) => event,
+        Err(error) => {
+            tracing::error!(event_id = %claim.event_id, %error, "invalid federation outbox envelope");
+            mark_dead(pool, claim, None, "invalid-outbox-envelope").await?;
+            return Ok(None);
+        }
+    };
+    let stored_envelope_sha256: String = row.try_get("envelope_sha256")?;
+    let observed_envelope_sha256 = crate::federation::envelope_sha256(&event)?;
+    if stored_envelope_sha256 != observed_envelope_sha256 {
+        tracing::error!(
+            event_id = %claim.event_id,
+            stored_envelope_sha256,
+            observed_envelope_sha256,
+            "federation outbox envelope digest mismatch"
+        );
+        mark_dead(pool, claim, None, "outbox-envelope-digest-mismatch").await?;
+        return Ok(None);
+    }
     let allowed_event_types: Value = row.try_get("allowed_event_types")?;
-    let allowed_event_types: Vec<String> = serde_json::from_value(allowed_event_types)?;
-    let delivery_base_url: Option<String> = row.try_get("delivery_base_url")?;
+    let allowed_event_types: Vec<String> = match serde_json::from_value(allowed_event_types) {
+        Ok(event_types) => event_types,
+        Err(error) => {
+            tracing::error!(target_cell_id = %claim.target_cell_id, %error, "invalid federation peer policy");
+            mark_dead(pool, claim, None, "invalid-peer-policy").await?;
+            return Ok(None);
+        }
+    };
+    Ok(Some(DeliveryContext {
+        event,
+        peer_state: row.try_get("peer_state")?,
+        allow_neighbourhood: row.try_get("allow_neighbourhood")?,
+        allowed_event_types,
+        delivery_base_url: row.try_get("delivery_base_url")?,
+    }))
+}
 
+async fn execute_claim(
+    pool: &PgPool,
+    config: &DeliveryWorkerConfig,
+    transport: &dyn DeliveryTransport,
+    claim: DeliveryClaim,
+) -> anyhow::Result<()> {
+    let Some(context) = load_delivery_context(pool, &claim).await? else {
+        return Ok(());
+    };
     let policy_error = delivery_policy_error(
-        &event,
+        &context.event,
         &claim.target_cell_id,
-        &peer_state,
-        allow_neighbourhood,
-        &allowed_event_types,
-        delivery_base_url.as_deref(),
+        &context.peer_state,
+        context.allow_neighbourhood,
+        &context.allowed_event_types,
+        context.delivery_base_url.as_deref(),
     );
     if let Some(error_class) = policy_error {
-        mark_dead(&mut tx, &claim, None, error_class).await?;
-        tx.commit().await?;
+        mark_dead(pool, &claim, None, error_class).await?;
         return Ok(());
     }
-    let base_url = delivery_base_url.expect("validated delivery base URL");
-    let decision = match transport.post_event(&base_url, &event).await {
-        Ok(response) => classify_response(response, event.event_id, event.object_version),
+    let base_url = context
+        .delivery_base_url
+        .as_deref()
+        .expect("validated delivery base URL");
+    let decision = match transport.post_event(base_url, &context.event).await {
+        Ok(response) => classify_response(
+            response,
+            context.event.event_id,
+            context.event.object_version,
+        ),
         Err(error) => DeliveryDecision::Retry {
             http_status: None,
             error_class: error.class,
@@ -540,16 +634,28 @@ async fn execute_claim(
         },
     };
     let decision = match decision {
-        DeliveryDecision::Retry { http_status, .. }
-            if claim.attempt_count >= config.max_attempts =>
-        {
-            DeliveryDecision::Dead {
-                http_status,
-                error_class: "delivery-attempts-exhausted",
-            }
-        }
+        DeliveryDecision::Retry {
+            http_status,
+            error_class,
+            ..
+        } if claim.attempt_count >= config.max_attempts => DeliveryDecision::Dead {
+            http_status,
+            error_class: match error_class {
+                "remote-rejected" => "remote-rejected",
+                "remote-quarantined" => "remote-quarantined",
+                _ => "delivery-attempts-exhausted",
+            },
+        },
         other => other,
     };
+    finalize_decision(pool, &claim, decision).await
+}
+
+async fn finalize_decision(
+    pool: &PgPool,
+    claim: &DeliveryClaim,
+    decision: DeliveryDecision,
+) -> anyhow::Result<()> {
     match decision {
         DeliveryDecision::Delivered { http_status } => {
             sqlx::query(
@@ -564,7 +670,7 @@ async fn execute_claim(
             .bind(&claim.target_cell_id)
             .bind(claim.lease_owner)
             .bind(i32::from(http_status))
-            .execute(&mut *tx)
+            .execute(pool)
             .await?;
         }
         DeliveryDecision::Retry {
@@ -572,9 +678,11 @@ async fn execute_claim(
             error_class,
             retry_after_seconds,
         } => {
-            let delay = retry_after_seconds
-                .unwrap_or_else(|| retry_delay_seconds(claim.event_id, claim.attempt_count))
-                .min(MAX_BACKOFF_SECONDS);
+            let delay = effective_retry_delay_seconds(
+                claim.event_id,
+                claim.attempt_count,
+                retry_after_seconds,
+            );
             sqlx::query(
                 "UPDATE federation_delivery_attempts \
                  SET state = 'retry', \
@@ -590,17 +698,16 @@ async fn execute_claim(
             .bind(i64::try_from(delay)?)
             .bind(http_status.map(i32::from))
             .bind(error_class)
-            .execute(&mut *tx)
+            .execute(pool)
             .await?;
         }
         DeliveryDecision::Dead {
             http_status,
             error_class,
         } => {
-            mark_dead(&mut tx, &claim, http_status, error_class).await?;
+            mark_dead(pool, claim, http_status, error_class).await?;
         }
     }
-    tx.commit().await?;
     Ok(())
 }
 
@@ -645,7 +752,7 @@ fn delivery_policy_error(
 }
 
 async fn mark_dead(
-    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    pool: &PgPool,
     claim: &DeliveryClaim,
     http_status: Option<u16>,
     error_class: &str,
@@ -663,7 +770,7 @@ async fn mark_dead(
     .bind(claim.lease_owner)
     .bind(http_status.map(i32::from))
     .bind(error_class)
-    .execute(&mut **tx)
+    .execute(pool)
     .await?;
     Ok(())
 }
@@ -683,6 +790,8 @@ mod tests {
         assert!(validate_delivery_base_url("http://cell.example").is_err());
         assert!(validate_delivery_base_url("https://user@cell.example").is_err());
         assert!(validate_delivery_base_url("https://cell.example?token=x").is_err());
+        assert!(validate_delivery_base_url("https://127.0.0.1").is_err());
+        assert!(validate_delivery_base_url("https://[::1]").is_err());
     }
 
     #[test]
@@ -774,6 +883,29 @@ mod tests {
     }
 
     #[test]
+    fn retry_after_cannot_shorten_local_backoff() {
+        let event_id = Uuid::nil();
+        let local = retry_delay_seconds(event_id, 2);
+        assert_eq!(effective_retry_delay_seconds(event_id, 2, Some(0)), local);
+        assert_eq!(effective_retry_delay_seconds(event_id, 2, Some(1)), local);
+        assert_eq!(
+            effective_retry_delay_seconds(event_id, 2, Some(local + 7)),
+            local + 7
+        );
+    }
+
+    #[test]
+    fn delivery_lease_exceeds_request_timeout() {
+        let config = DeliveryWorkerConfig {
+            poll_interval: Duration::from_secs(1),
+            request_timeout: Duration::from_secs(30),
+            batch_size: 1,
+            max_attempts: 3,
+        };
+        assert!(delivery_lease_seconds(&config).unwrap() > 30);
+    }
+
+    #[test]
     #[serial]
     fn delivery_config_is_explicit_and_bounded() {
         let _enabled = EnvGuard::set(DELIVERY_ENABLED_ENV, "true");
@@ -831,6 +963,58 @@ mod tests {
             if !self.delay.is_zero() {
                 tokio::time::sleep(self.delay).await;
             }
+            let outcome =
+                self.receiver
+                    .receive(event.clone())
+                    .await
+                    .map_err(|_| DeliveryTransportError {
+                        class: "test-receiver-failed",
+                    })?;
+            Ok(DeliveryHttpResponse {
+                status: match outcome.status {
+                    ReceiveStatus::Applied => 201,
+                    _ => 200,
+                },
+                retry_after_seconds: None,
+                body: serde_json::to_vec(&outcome).map_err(|_| DeliveryTransportError {
+                    class: "test-response-serialization-failed",
+                })?,
+            })
+        }
+    }
+
+    struct GateTransport {
+        receiver: crate::federation::FederationService,
+        calls: std::sync::atomic::AtomicUsize,
+        entered: tokio::sync::Notify,
+        release: tokio::sync::Notify,
+    }
+
+    impl GateTransport {
+        fn new(receiver: crate::federation::FederationService) -> Self {
+            Self {
+                receiver,
+                calls: std::sync::atomic::AtomicUsize::new(0),
+                entered: tokio::sync::Notify::new(),
+                release: tokio::sync::Notify::new(),
+            }
+        }
+
+        fn calls(&self) -> usize {
+            self.calls.load(std::sync::atomic::Ordering::SeqCst)
+        }
+    }
+
+    #[async_trait]
+    impl DeliveryTransport for GateTransport {
+        async fn post_event(
+            &self,
+            _base_url: &str,
+            event: &FederationEvent,
+        ) -> Result<DeliveryHttpResponse, DeliveryTransportError> {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.entered.notify_one();
+            self.release.notified().await;
             let outcome =
                 self.receiver
                     .receive(event.clone())
@@ -911,15 +1095,14 @@ mod tests {
         sender.install_peer(sender_peer_policy.clone()).await?;
         let receiver_repository = Arc::new(MemoryFederationRepository::new());
         let receiver = FederationService::new(receiver_identity, receiver_repository.clone());
-        receiver
-            .install_peer(PeerPolicy {
-                remote_cell_id: "cell-a".to_string(),
-                state: "trusted".to_string(),
-                allow_neighbourhood: true,
-                allowed_event_types: HashSet::from(["object.upserted".to_string()]),
-                keys: vec![sender_identity.peer_key()],
-            })
-            .await?;
+        let receiver_peer_policy = PeerPolicy {
+            remote_cell_id: "cell-a".to_string(),
+            state: "trusted".to_string(),
+            allow_neighbourhood: true,
+            allowed_event_types: HashSet::from(["object.upserted".to_string()]),
+            keys: vec![sender_identity.peer_key()],
+        };
+        receiver.install_peer(receiver_peer_policy.clone()).await?;
 
         let first = sender
             .publish_local(PublishRequest {
@@ -1001,6 +1184,66 @@ mod tests {
             .object("wg://cell-a/node/automatic-delivery")
             .await?
             .is_some());
+
+        let revocation_event = sender
+            .publish_local(PublishRequest {
+                actor: "system:delivery-revocation-proof".to_string(),
+                event_type: "object.upserted".to_string(),
+                object_address: "wg://cell-a/node/revocation-liveness".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"state": "in-flight"}),
+            })
+            .await?;
+        let gate_transport = Arc::new(GateTransport::new(receiver.clone()));
+        let worker_pool = pool.clone();
+        let worker_config = config.clone();
+        let worker_transport = gate_transport.clone();
+        let in_flight_worker = tokio::spawn(async move {
+            run_delivery_batch(
+                &worker_pool,
+                &worker_config,
+                worker_transport.as_ref(),
+                Uuid::new_v4(),
+            )
+            .await
+        });
+        tokio::time::timeout(Duration::from_secs(2), gate_transport.entered.notified()).await?;
+        let mut revoked_policy = sender_peer_policy.clone();
+        revoked_policy.state = "blocked".to_string();
+        tokio::time::timeout(Duration::from_secs(2), async {
+            sender.install_peer(revoked_policy.clone()).await?;
+            sender_repository
+                .reconcile_delivery_endpoints(&[(
+                    revoked_policy,
+                    Some("https://cell-b.example.test".to_string()),
+                )])
+                .await?;
+            Ok::<(), anyhow::Error>(())
+        })
+        .await??;
+        gate_transport.release.notify_one();
+        assert_eq!(in_flight_worker.await??, 1);
+        assert_eq!(gate_transport.calls(), 1);
+        let revocation_state: String = sqlx::query_scalar(
+            "SELECT state FROM federation_delivery_attempts \
+             WHERE event_id = $1 AND target_cell_id = $2",
+        )
+        .bind(revocation_event.event_id)
+        .bind("cell-b")
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(revocation_state, "delivered");
+        sender.install_peer(sender_peer_policy.clone()).await?;
+        sender_repository
+            .reconcile_delivery_endpoints(&[(
+                sender_peer_policy.clone(),
+                Some("https://cell-b.example.test".to_string()),
+            )])
+            .await?;
 
         let policy_pending = sender
             .publish_local(PublishRequest {
@@ -1131,6 +1374,126 @@ mod tests {
             0
         );
 
+        let rejected_event = sender
+            .publish_local(PublishRequest {
+                actor: "system:delivery-rejection-proof".to_string(),
+                event_type: "object.upserted".to_string(),
+                object_address: "wg://cell-a/node/rejection-recovery".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"state": "awaiting receiver trust"}),
+            })
+            .await?;
+        let mut blocked_receiver_policy = receiver_peer_policy.clone();
+        blocked_receiver_policy.state = "blocked".to_string();
+        receiver.install_peer(blocked_receiver_policy).await?;
+        let rejection_transport = ReceiverTransport::new(receiver.clone(), false);
+        let rejection_config = DeliveryWorkerConfig {
+            max_attempts: 2,
+            ..config.clone()
+        };
+        assert_eq!(
+            run_delivery_batch(
+                &pool,
+                &rejection_config,
+                &rejection_transport,
+                Uuid::new_v4(),
+            )
+            .await?,
+            1
+        );
+        sqlx::query(
+            "UPDATE federation_delivery_attempts SET next_attempt_at = NOW() \
+             WHERE event_id = $1 AND target_cell_id = $2",
+        )
+        .bind(rejected_event.event_id)
+        .bind("cell-b")
+        .execute(&pool)
+        .await?;
+        assert_eq!(
+            run_delivery_batch(
+                &pool,
+                &rejection_config,
+                &rejection_transport,
+                Uuid::new_v4(),
+            )
+            .await?,
+            1
+        );
+        let rejected_state: (String, Option<String>) = sqlx::query_as(
+            "SELECT state, last_error_class FROM federation_delivery_attempts \
+             WHERE event_id = $1 AND target_cell_id = $2",
+        )
+        .bind(rejected_event.event_id)
+        .bind("cell-b")
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(
+            rejected_state,
+            ("dead".to_string(), Some("remote-quarantined".to_string()))
+        );
+        receiver.install_peer(receiver_peer_policy.clone()).await?;
+        sender_repository
+            .reconcile_delivery_endpoints(&[(
+                sender_peer_policy.clone(),
+                Some("https://cell-b.example.test/recovered".to_string()),
+            )])
+            .await?;
+        assert_eq!(
+            run_delivery_batch(&pool, &config, &rejection_transport, Uuid::new_v4()).await?,
+            1
+        );
+        assert!(receiver
+            .object("wg://cell-a/node/rejection-recovery")
+            .await?
+            .is_some());
+
+        let tampered_event = sender
+            .publish_local(PublishRequest {
+                actor: "system:delivery-digest-proof".to_string(),
+                event_type: "object.upserted".to_string(),
+                object_address: "wg://cell-a/node/outbox-digest".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"state": "original"}),
+            })
+            .await?;
+        sqlx::query(
+            "UPDATE federation_outbox \
+             SET envelope = jsonb_set(envelope, '{payload,state}', to_jsonb('tampered'::text)) \
+             WHERE event_id = $1",
+        )
+        .bind(tampered_event.event_id)
+        .execute(&pool)
+        .await?;
+        let calls_before_tamper = rejection_transport.calls();
+        assert_eq!(
+            run_delivery_batch(&pool, &config, &rejection_transport, Uuid::new_v4()).await?,
+            1
+        );
+        assert_eq!(rejection_transport.calls(), calls_before_tamper);
+        let tampered_state: (String, Option<String>) = sqlx::query_as(
+            "SELECT state, last_error_class FROM federation_delivery_attempts \
+             WHERE event_id = $1 AND target_cell_id = $2",
+        )
+        .bind(tampered_event.event_id)
+        .bind("cell-b")
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(
+            tampered_state,
+            (
+                "dead".to_string(),
+                Some("outbox-envelope-digest-mismatch".to_string())
+            )
+        );
+
         let version_one = sender
             .publish_local(PublishRequest {
                 actor: "system:delivery-order-proof".to_string(),
@@ -1198,6 +1561,107 @@ mod tests {
             .await?
             .expect("versioned object delivered");
         assert_eq!(remote.object_version, 2);
+
+        let gap_v1 = sender
+            .publish_local(PublishRequest {
+                actor: "system:delivery-gap-proof".to_string(),
+                event_type: "object.upserted".to_string(),
+                object_address: "wg://cell-a/node/event-type-gap".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"version": 1}),
+            })
+            .await?;
+        let gap_v2 = sender
+            .publish_local(PublishRequest {
+                actor: "system:delivery-gap-proof".to_string(),
+                event_type: "object.deleted".to_string(),
+                object_address: "wg://cell-a/node/event-type-gap".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 2,
+                previous_version: Some(1),
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: Value::Null,
+            })
+            .await?;
+        let gap_v3 = sender
+            .publish_local(PublishRequest {
+                actor: "system:delivery-gap-proof".to_string(),
+                event_type: "object.upserted".to_string(),
+                object_address: "wg://cell-a/node/event-type-gap".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 3,
+                previous_version: Some(2),
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"version": 3}),
+            })
+            .await?;
+        let gap_transport = ReceiverTransport::new(receiver.clone(), false);
+        assert_eq!(
+            run_delivery_batch(&pool, &config, &gap_transport, Uuid::new_v4()).await?,
+            1
+        );
+        assert_eq!(
+            run_delivery_batch(&pool, &config, &gap_transport, Uuid::new_v4()).await?,
+            1
+        );
+        let gap_states: Vec<(Uuid, String, Option<String>)> = sqlx::query_as(
+            "SELECT event_id, state, last_error_class \
+             FROM federation_delivery_attempts \
+             WHERE event_id = ANY($1::uuid[])",
+        )
+        .bind(vec![gap_v1.event_id, gap_v2.event_id, gap_v3.event_id])
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(
+            gap_states
+                .iter()
+                .find(|(event_id, _, _)| *event_id == gap_v2.event_id)
+                .map(|(_, state, error)| (state.as_str(), error.as_deref())),
+            Some(("dead", Some("event-type-not-allowed")))
+        );
+        assert_eq!(
+            gap_states
+                .iter()
+                .find(|(event_id, _, _)| *event_id == gap_v3.event_id)
+                .map(|(_, state, _)| state.as_str()),
+            Some("pending")
+        );
+
+        let mut expanded_sender_policy = sender_peer_policy.clone();
+        expanded_sender_policy
+            .allowed_event_types
+            .insert("object.deleted".to_string());
+        let mut expanded_receiver_policy = receiver_peer_policy.clone();
+        expanded_receiver_policy
+            .allowed_event_types
+            .insert("object.deleted".to_string());
+        receiver.install_peer(expanded_receiver_policy).await?;
+        sender.install_peer(expanded_sender_policy.clone()).await?;
+        sender_repository
+            .reconcile_delivery_endpoints(&[(
+                expanded_sender_policy,
+                Some("https://cell-b.example.test".to_string()),
+            )])
+            .await?;
+        assert_eq!(
+            run_delivery_batch(&pool, &config, &gap_transport, Uuid::new_v4()).await?,
+            1
+        );
+        assert_eq!(
+            run_delivery_batch(&pool, &config, &gap_transport, Uuid::new_v4()).await?,
+            1
+        );
+        let gap_remote = receiver
+            .object("wg://cell-a/node/event-type-gap")
+            .await?
+            .expect("event-type gap recovered");
+        assert_eq!(gap_remote.object_version, 3);
 
         Ok(())
     }
