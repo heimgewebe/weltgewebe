@@ -13,6 +13,7 @@ BUILD_DIR="${GERMANY_BASEMAP_BUILD_DIR:-$REPO_ROOT/build/basemap-staging/germany
 TARGET_DIR="${1:-${GERMANY_BASEMAP_TARGET_DIR:-$REPO_ROOT/build/basemap}}"
 ARTIFACT_NAME="basemap-germany-v${BASEMAP_VERSION}.pmtiles"
 META_NAME="basemap-germany-v${BASEMAP_VERSION}.meta.json"
+PROOF_NAME="basemap-germany-v${BASEMAP_VERSION}.validation.json"
 
 fail() {
   echo "ERROR: $*" >&2
@@ -35,11 +36,12 @@ TARGET_DIR="$(cd "$TARGET_DIR" > /dev/null 2>&1 && pwd)"
 
 ARTIFACT="$BUILD_DIR/$ARTIFACT_NAME"
 META="$BUILD_DIR/$META_NAME"
-PROOF_OUTPUT="${GERMANY_BASEMAP_PROOF_OUTPUT:-$BUILD_DIR/basemap-germany-v${BASEMAP_VERSION}.validation.json}"
+PROOF_OUTPUT="${GERMANY_BASEMAP_PROOF_OUTPUT:-$BUILD_DIR/$PROOF_NAME}"
 TARGET_ARTIFACT="$TARGET_DIR/$ARTIFACT_NAME"
 TARGET_META="$TARGET_DIR/$META_NAME"
+TARGET_PROOF="$TARGET_DIR/$PROOF_NAME"
 
-for published_path in "$TARGET_ARTIFACT" "$TARGET_META"; do
+for published_path in "$TARGET_ARTIFACT" "$TARGET_META" "$TARGET_PROOF"; do
   if [[ -e "$published_path" || -L "$published_path" ]]; then
     fail "published Germany version already exists: $published_path; choose a new BASEMAP_VERSION"
   fi
@@ -63,12 +65,25 @@ pnpm -C "$REPO_ROOT/apps/web" validate:pmtiles -- \
 
 [[ -s "$PROOF_OUTPUT" ]] || fail "deep-validation report was not written"
 
+PROOF_TMP="$TARGET_DIR/.${PROOF_NAME}.tmp.$$"
+cleanup_proof_tmp() {
+  rm -f "$PROOF_TMP"
+}
+trap cleanup_proof_tmp EXIT
+install -m 0644 "$PROOF_OUTPUT" "$PROOF_TMP"
+if ! ln "$PROOF_TMP" "$TARGET_PROOF"; then
+  fail "could not publish immutable Germany validation report: $TARGET_PROOF"
+fi
+rm -f "$PROOF_TMP"
+trap - EXIT
+
 bash "$SCRIPT_DIR/publish-basemap.sh" "$ARTIFACT" "$META" "$TARGET_DIR"
 
 ALIAS_ARTIFACT="$TARGET_DIR/basemap-germany.pmtiles"
 ALIAS_META="$TARGET_DIR/basemap-germany.meta.json"
 [[ -e "$ALIAS_ARTIFACT" ]] || fail "stable Germany PMTiles alias missing"
 [[ -e "$ALIAS_META" ]] || fail "stable Germany metadata alias missing"
+[[ -s "$TARGET_PROOF" ]] || fail "published Germany validation report missing"
 [[ "$(readlink -f -- "$ALIAS_ARTIFACT")" == "$TARGET_ARTIFACT" ]] ||
   fail "stable Germany PMTiles alias does not resolve to the published version"
 [[ "$(readlink -f -- "$ALIAS_META")" == "$TARGET_META" ]] ||
@@ -95,7 +110,7 @@ echo "Published target: $TARGET_DIR"
 echo "Target aliases:"
 echo "  $ALIAS_ARTIFACT"
 echo "  $ALIAS_META"
-echo "Validation: $PROOF_OUTPUT"
+echo "Validation: $TARGET_PROOF"
 echo "Activation was NOT changed. A reviewed frontend build must explicitly set:"
 echo "  PUBLIC_BASEMAP_MODE=local-sovereign"
 echo "  PUBLIC_BASEMAP_VARIANT=germany"
