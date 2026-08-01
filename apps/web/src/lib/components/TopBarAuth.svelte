@@ -11,15 +11,16 @@
 </script>
 
 <div class="auth-slot">
+  <a
+    class="garnrolle-link"
+    href="/settings"
+    aria-label="Einstellungen öffnen"
+    title="Einstellungen"
+  >
+    <img src={garnrolleIcon} alt="" />
+  </a>
+
   {#if authView.showAccountLink}
-    <a
-      class="garnrolle-link"
-      href="/settings"
-      aria-label="Einstellungen öffnen"
-      title="Einstellungen"
-    >
-      <img src={garnrolleIcon} alt="" />
-    </a>
     {#if authView.showRetry}
       <button
         type="button"

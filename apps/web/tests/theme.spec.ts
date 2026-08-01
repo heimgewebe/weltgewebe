@@ -110,6 +110,9 @@ test.describe("Farbschema", () => {
 
     await page.goto("/map");
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
+    await expect(
+      page.getByRole("link", { name: "Einstellungen öffnen" }),
+    ).toBeVisible();
     await expect(page.getByTestId("theme-compact-button")).toHaveCount(0);
 
     await page.goto("/settings");
