@@ -83,6 +83,16 @@ esac
 command -v docker > /dev/null 2>&1 || fail "docker is required"
 command -v python3 > /dev/null 2>&1 || fail "python3 is required"
 
+python3 - "$OSM_SNAPSHOT_DATE" << 'PY'
+import datetime as dt
+import sys
+
+try:
+    dt.date.fromisoformat(sys.argv[1])
+except ValueError as exc:
+    raise SystemExit(f"invalid OSM_SNAPSHOT_DATE: {sys.argv[1]}") from exc
+PY
+
 if command -v sha256sum > /dev/null 2>&1; then
   SHA256_CMD=(sha256sum)
 elif command -v shasum > /dev/null 2>&1; then
