@@ -6,76 +6,143 @@
   export let data: PageData;
 </script>
 
-<div class="container">
-  <h1>Einstellungen</h1>
-  <p class="intro">
-    Passe die Darstellung an. Deine Garnrolle besteht bereits. Hier beschreibst
-    du sie, setzt freiwillig einen privaten Kartenanker und bestimmst ihre
-    öffentliche Sichtbarkeit.
-  </p>
+<svelte:head>
+  <title>Einstellungen – Weltgewebe</title>
+</svelte:head>
 
-  <div class="card">
-    <h2>Darstellung</h2>
-    <p class="ghost">
-      „System“ folgt deinem Gerät. Die Auswahl bleibt nur in diesem Browser.
-    </p>
-    <label class="row">
-      <span>Farbschema</span>
-      <select class="btn" data-wg-theme-control data-testid="theme-select">
-        <option value="system">System</option>
-        <option value="light">Hell</option>
-        <option value="dark">Dunkel</option>
-      </select>
-    </label>
+<div class="settings-page">
+  <div class="container">
+    <header class="page-header">
+      <div class="row">
+        <a class="btn touch-target" href="/map">← Zur Karte</a>
+      </div>
+      <h1>Einstellungen</h1>
+      <p class="intro">
+        Verwalte deine Garnrolle, dein Konto und die Darstellung an einem
+        übersichtlichen Ort.
+      </p>
+    </header>
+
+    <div class="settings-layout">
+      <aside
+        class="panel settings-menu"
+        aria-label="Einstellungsmenü"
+        data-testid="settings-menu"
+      >
+        <div class="col">
+          <p class="menu-heading"><strong>Bereiche</strong></p>
+          <nav class="menu-links" aria-label="Einstellungsbereiche">
+            <a href="#meine-garnrolle">
+              <strong>Meine Garnrolle</strong>
+              <span>Profil, Kartenanker und Sichtbarkeit</span>
+            </a>
+            <a href="#konto-und-sicherheit">
+              <strong>Konto &amp; Sicherheit</strong>
+              <span>Sitzungen, Geräte und Anmeldung</span>
+            </a>
+          </nav>
+        </div>
+
+        <div class="col appearance-section">
+          <label class="menu-heading" for="theme-select"
+            ><strong>Darstellung</strong></label
+          >
+          <p class="menu-hint">
+            „System“ folgt deinem Gerät. Die Auswahl gilt nur in diesem Browser.
+          </p>
+          <select
+            id="theme-select"
+            class="btn touch-target"
+            data-wg-theme-control
+            data-testid="theme-select"
+          >
+            <option value="system">System</option>
+            <option value="light">Hell</option>
+            <option value="dark">Dunkel</option>
+          </select>
+        </div>
+
+        <a
+          class="diagnostics-link"
+          href="/build"
+          data-testid="build-diagnostics-link"
+        >
+          Technische Build-Diagnose
+        </a>
+      </aside>
+
+      <main class="col settings-content">
+        <section class="panel primary-card" aria-label="Meine Garnrolle">
+          <MyGarnrolleSection
+            accounts={data.accounts}
+            accountsLoadError={data.accountsLoadError}
+          />
+        </section>
+
+        <div id="konto-und-sicherheit" class="panel">
+          <AccountSection />
+        </div>
+      </main>
+    </div>
   </div>
-
-  <div class="card primary-card">
-    <MyGarnrolleSection
-      accounts={data.accounts}
-      accountsLoadError={data.accountsLoadError}
-    />
-  </div>
-
-  <div class="card">
-    <AccountSection />
-  </div>
-
-  <p class="diagnostics-link">
-    <a href="/build" data-testid="build-diagnostics-link">
-      Technische Build-Diagnose
-    </a>
-  </p>
 </div>
 
 <style>
+  .settings-page {
+    min-height: 100dvh;
+    padding: clamp(1rem, 3vw, 2.5rem) 1rem 4rem;
+  }
+
   .container {
+    max-width: 75rem;
+    margin: auto;
+  }
+
+  .page-header {
+    margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
+  }
+
+  .intro,
+  .menu-heading,
+  .menu-hint {
+    margin: 0;
+  }
+
+  .settings-layout {
+    display: grid;
+    grid-template-columns: minmax(15rem, 18rem) minmax(0, 1fr);
+    align-items: start;
+    gap: clamp(1rem, 3vw, 2rem);
+  }
+
+  .settings-menu {
+    position: sticky;
+    top: 1rem;
+    gap: 1rem;
+  }
+
+  .menu-links a {
+    display: grid;
+    padding: 0.6rem;
     color: var(--text);
-    margin: 40px auto;
-    max-width: 760px;
-    padding: 0 20px;
+    text-decoration: none;
   }
 
-  h1 {
-    font-size: 2rem;
-    margin-bottom: 1rem;
-  }
-
-  h2 {
-    margin-top: 0;
-  }
-
-  .intro {
-    margin-bottom: 2rem;
+  .menu-links span,
+  .menu-hint,
+  .diagnostics-link {
     color: var(--muted);
+    font-size: 0.82rem;
   }
 
-  .card {
-    background: var(--weave), var(--panel);
-    border: 1px solid var(--panel-border);
-    border-radius: var(--radius);
-    margin-bottom: 24px;
-    padding: 24px;
-    box-shadow: var(--shadow);
+  .appearance-section,
+  .diagnostics-link {
+    padding-top: 0.8rem;
+    border-top: 1px solid var(--panel-border);
+  }
+
+  .touch-target {
+    min-height: 44px;
   }
 
   .primary-card {
@@ -83,10 +150,16 @@
   }
 
   .primary-card :global(.my-garnrolle) {
-    padding: 24px;
+    padding: clamp(1rem, 3vw, 1.5rem);
   }
 
-  .diagnostics-link {
-    margin: 0;
+  @media (max-width: 860px) {
+    .settings-layout {
+      grid-template-columns: 1fr;
+    }
+
+    .settings-menu {
+      position: static;
+    }
   }
 </style>

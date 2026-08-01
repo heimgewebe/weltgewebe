@@ -13,14 +13,7 @@
     "--accent": "#72c8b6",
     "--accent-soft": "rgba(114, 200, 182, 0.16)",
     "--danger": "#ff8d92",
-    "--weave":
-      "repeating-linear-gradient(135deg, transparent 0 24px, rgba(114, 200, 182, 0.04) 24px 25px)",
     "--shadow": "0 14px 36px rgba(0, 0, 0, 0.38)",
-  };
-  const themeMeta = {
-    system: { label: "System", icon: "◐", next: "light" },
-    light: { label: "Hell", icon: "☀", next: "dark" },
-    dark: { label: "Dunkel", icon: "☾", next: "system" },
   };
   const normalize = (value) =>
     value === "light" || value === "dark" ? value : "system";
@@ -36,19 +29,6 @@
     control.value = current;
   };
 
-  const syncCycleButton = (button) => {
-    const meta = themeMeta[current];
-    const next = themeMeta[meta.next];
-    button.dataset.theme = current;
-    button.setAttribute(
-      "aria-label",
-      `Farbschema: ${meta.label}. Nächste Auswahl: ${next.label}.`,
-    );
-    button.title = `Farbschema: ${meta.label}`;
-    const icon = button.querySelector("[data-wg-theme-icon]");
-    if (icon) icon.textContent = meta.icon;
-  };
-
   const syncControlTree = (scope = document) => {
     if (
       scope instanceof HTMLSelectElement &&
@@ -56,14 +36,7 @@
     ) {
       syncSelect(scope);
     }
-    if (
-      scope instanceof HTMLButtonElement &&
-      scope.matches("[data-wg-theme-cycle]")
-    ) {
-      syncCycleButton(scope);
-    }
     scope.querySelectorAll?.("[data-wg-theme-control]").forEach(syncSelect);
-    scope.querySelectorAll?.("[data-wg-theme-cycle]").forEach(syncCycleButton);
   };
 
   const watchControls = () => {
@@ -108,8 +81,6 @@
     target.matches("[data-wg-theme-control]")
       ? target
       : null;
-  const getCycleButton = (target) =>
-    target instanceof Element ? target.closest("[data-wg-theme-cycle]") : null;
 
   apply(current);
   media?.addEventListener("change", () => {
@@ -137,9 +108,5 @@
   document.addEventListener("change", (event) => {
     const control = getSelect(event.target);
     if (control) apply(control.value, true);
-  });
-  document.addEventListener("click", (event) => {
-    const button = getCycleButton(event.target);
-    if (button) apply(themeMeta[current].next, true);
   });
 })();

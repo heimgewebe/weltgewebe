@@ -12,7 +12,7 @@
   padding: clamp(1rem, 4vw, 2rem) 0 clamp(3rem, 8vw, 5rem);
   background:
     radial-gradient(circle at 12% 0, var(--accent-soft), transparent 34rem),
-    var(--weave), var(--bg);
+    var(--bg);
   color: var(--text);
 }
 
