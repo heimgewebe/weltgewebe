@@ -14,12 +14,12 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 665 |
-| — depends_on | 25 |
-| — relates_to | 622 |
+| Relationen gesamt | 675 |
+| — depends_on | 27 |
+| — relates_to | 628 |
 | — supersedes | 12 |
-| — verifies | 6 |
-| relates_to Anteil | 94% |
+| — verifies | 8 |
+| relates_to Anteil | 93% |
 
 ### Mögliche supersedes-Lücken
 
@@ -31,7 +31,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (265 Dokumente):
+**Cluster 1** (268 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -156,6 +156,7 @@ _Keine Lücken erkannt._
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
 - `docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md`
+- `docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md`
 - `docs/quickstart-gate-c.md`
 - `docs/reference/agent-dry-run-runner.md`
 - `docs/reference/agent-handoff-contract.md`
@@ -220,6 +221,7 @@ _Keine Lücken erkannt._
 - `docs/runbooks/codespaces-recovery.md`
 - `docs/runbooks/db-recovery.md`
 - `docs/runbooks/domain-mail-cutover.md`
+- `docs/runbooks/gewebezelle-manual-pilot.md`
 - `docs/runbooks/incident-response.md`
 - `docs/runbooks/kubernetes-ha-recovery-proof.md`
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
@@ -256,6 +258,7 @@ _Keine Lücken erkannt._
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.vps.override.yml`
 - `platform/README.md`
+- `platform/cell-profile.contract.json`
 - `repo.meta.yaml`
 - `runbooks/README.md`
 - `scripts/agent/check_non_ideal_task.py`

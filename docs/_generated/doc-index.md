@@ -118,6 +118,7 @@ Generated automatically. Do not edit.
 | proofs.sqlx-pgbouncer-session-crud-proof | SQLx → PgBouncer → Postgres — Session-CRUD-Proof | report | active | docs/proofs/sqlx-pgbouncer-session-crud-proof.md |
 | proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |
 | proofs.weltgewebe-os-v1-t005-two-cell-proof | WELTGEWEBE-OS-V1-T005 — Zwei-Zellen-Beweis | report | active | docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md |
+| proofs.weltgewebe-os-v1-t032-federation-delivery | WELTGEWEBE-OS-V1-T032 — Automatische Föderationsauslieferung | report | active | docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md |
 | quickstart-gate-c | Quickstart Gate C | reference | active | docs/quickstart-gate-c.md |
 | reference.glossar | Glossar | reference | active | docs/reference/glossar.md |
 | reports.auth-persistence-direct-proof-diagnose-audit | Auth-Persistenz - Diagnose-Audit zum Direct-Postgres-Proof | report | deprecated | docs/reports/auth-persistence-direct-proof-diagnose-audit.md |
@@ -164,6 +165,7 @@ Generated automatically. Do not edit.
 | reports.repo-audit-2026-07-02 | Repo-Komplettaudit 2026-07-02 | report | active | docs/reports/repo-audit-2026-07-02.md |
 | reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
 | reports.weltgewebe-os-v1-t018-conversation-convergence-plan | WELTGEWEBE-OS-V1-T018: Governance- und Knotengespräche kontrolliert konvergieren | report | active | docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md |
+| runbook.gewebezelle-manual-pilot | Manuelles GewebeZelle-Pilotprofil | runbook | active | docs/runbooks/gewebezelle-manual-pilot.md |
 | runbook.kubernetes-ha-recovery-proof | Kubernetes-HA- und Recovery-Beweis | runbook | active | docs/runbooks/kubernetes-ha-recovery-proof.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |

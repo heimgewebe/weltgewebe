@@ -16,6 +16,8 @@ relations:
     target: architecture/weltgewebe-os.md
   - type: relates_to
     target: docs/reports/kubernetes-platform-foundation-status.md
+  - type: relates_to
+    target: docs/runbooks/gewebezelle-manual-pilot.md
   - type: verifies
     target: scripts/platform/validate_platform.py
   - type: verifies
@@ -37,6 +39,7 @@ verifies_with:
 - `infrastructure/gateway/` definiert Gateway API und HTTPRoute.
 - `clusters/local/` definiert die Flux-Abhängigkeitskette `data → migration → app → gateway`.
 - `toolchain.lock.json` bindet Werkzeuge, Clusterimage und Drittartefakte an SHA-256.
+- `cell-profile.contract.json` definiert das erste manuelle, nicht selbstbedienbare GewebeZelle-Pilotprofil.
 
 ## Sicherheitsgrenzen
 
@@ -59,3 +62,8 @@ make platform-kind-proof
 ```
 
 Der unprivilegierte Workflow `kubernetes-platform` prüft Pull Requests gegen den exakt ausgecheckten Merge-Zustand, ohne Zugriff auf private OCI-Pakete. Der getrennte Workflow `kubernetes-platform-proof` läuft nach passenden Pushes auf `main` oder bei einem ausdrücklich an den vollständigen aktuellen Main-Commit gebundenen Handstart. Er prüft den privaten OCI-Mirror sowie die vollständige Flux-/GitOps- und HA-Wiederherstellungskette gegen eindeutig benannte, kurzlebige kind-Cluster. Wiederverwendete Beweise sind an Commit, Eingabemanifest, Werkzeug-Lock, OCI-Lock, Image- und Knotenbindungen sowie Registry-Sperren gebunden.
+## Manuelles GewebeZelle-Pilotprofil
+
+Eine eigenständige Pilotzelle kann die gemeinsame Anwendungsbasis mit einem zelleigenen Overlay, externer Secretbereitstellung, eigener Zellidentität und ausdrücklich konfigurierten Peerbeziehungen verwenden. Die automatische Auslieferung ist standardmäßig deaktiviert und wird nur mit PostgreSQL, vollständiger Identität und mindestens einem gültigen HTTPS-Ziel gestartet.
+
+Der Betreibervertrag steht in `docs/runbooks/gewebezelle-manual-pilot.md`. Er etabliert weder Self-Service noch einen GewebeZelle-Operator und ersetzt nicht die getrennte Kubernetes-Produktionsfreigabe.

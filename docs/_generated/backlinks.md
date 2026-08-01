@@ -73,6 +73,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/garnrolle-identity-cutover-proof.md
 
+## apps/api/migrations/20260731000002_federation_delivery_worker.up.sql
+
+- [verifies] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
+
 ## apps/api/src/auth/accounts.rs
 
 - [relates_to] docs/reports/domain-account-email-uniqueness-audit.md
@@ -84,6 +88,10 @@ Generated automatically. Do not edit.
 ## apps/api/src/domain_db.rs
 
 - [relates_to] docs/reports/domain-edge-cache-limit-design.md
+
+## apps/api/src/federation_delivery.rs
+
+- [verifies] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
 
 ## apps/api/src/governance.rs
 
@@ -667,6 +675,15 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/auth-persistence-direct-proof-diagnose-audit.md
 - [relates_to] docs/reports/auth-persistence-runtime-proof.md
 
+## docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
+
+- [depends_on] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
+- [relates_to] docs/runbooks/gewebezelle-manual-pilot.md
+
+## docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
+
+- [relates_to] docs/reports/weltgewebe-os-foundation-status.md
+
 ## docs/quickstart-gate-c.md
 
 - [relates_to] docs/dev/codespaces.md
@@ -954,6 +971,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
 - [relates_to] docs/runbooks/README.md
 
+## docs/runbooks/gewebezelle-manual-pilot.md
+
+- [relates_to] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
+
 ## docs/runbooks/incident-response.md
 
 - [relates_to] docs/runbooks/README.md
@@ -1011,6 +1032,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/architecture/weltgewebe-os-convergence-adapter.md
 - [verifies] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
+- [relates_to] docs/runbooks/gewebezelle-manual-pilot.md
 - [relates_to] docs/specs/federation-wire-v1.md
 
 ## docs/specs/federation-wire-v1.md
@@ -1186,6 +1208,12 @@ Generated automatically. Do not edit.
 ## platform/README.md
 
 - [relates_to] docs/reports/kubernetes-platform-foundation-status.md
+- [relates_to] docs/runbooks/gewebezelle-manual-pilot.md
+
+## platform/cell-profile.contract.json
+
+- [relates_to] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
+- [depends_on] docs/runbooks/gewebezelle-manual-pilot.md
 
 ## repo.meta.yaml
 

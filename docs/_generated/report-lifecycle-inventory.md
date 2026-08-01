@@ -98,7 +98,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/proof-matrix-generalization-decision.md | report | active | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  | 1 | 4 | 6 |  |  |
 | docs/reports/repo-audit-2026-07-02.md | report | active | active | audit | REPO-AUDIT-001 | 2026-10-31 |  | 1 | 4 | 4 |  |  |
 | docs/reports/report-lifecycle-restbestand-triage.md | report | deprecated | archived | audit | DOCMETA-REPORT-LIFECYCLE-001 |  |  | 0 | 5 | 3 | review_after |  |
-| docs/reports/weltgewebe-os-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-001 | 2026-08-15 |  | 2 | 4 | 5 | lifecycle, lifecycle_state |  |
+| docs/reports/weltgewebe-os-foundation-status.md | status | active |  |  | WELTGEWEBE-OS-001 | 2026-08-15 |  | 2 | 4 | 6 | lifecycle, lifecycle_state |  |
 | docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md | report | active | active | planning | WELTGEWEBE-OS-001 | 2026-10-20 |  | 0 | 4 | 7 |  |  |
 
 ## Absent Core Lifecycle Metadata
@@ -174,7 +174,7 @@ Primary references are exact path matches in canonical documentation surfaces. D
 | docs/reports/proof-matrix-generalization-decision.md | 6 | relates_to | .github/workflows/opt-arc-001-db-proof-matrix.yml, docs/reports/opt-arc-001-db-proof-matrix.json, docs/tasks/board.md, docs/tasks/index.json, scripts/docmeta/tests/test_validate_opt_arc_001_db_proof_matrix.py, scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py |
 | docs/reports/repo-audit-2026-07-02.md | 4 | relates_to | docs/policies/agent-reading-protocol.md, docs/policies/architecture-critique.md, docs/reports/optimierungsstatus.md, docs/tasks/board.md |
 | docs/reports/report-lifecycle-restbestand-triage.md | 3 | relates_to | docs/process/report-lifecycle.md, docs/tasks/index.json, scripts/docmeta/validate_report_lifecycle.py |
-| docs/reports/weltgewebe-os-foundation-status.md | 5 | depends_on, relates_to | architecture/weltgewebe-os.md, docs/blueprints/weltgewebe-os-masterplan.md, docs/reports/domain-postgres-instance-coherence-decision.md, docs/reports/kubernetes-platform-foundation-status.md, docs/tasks/board.md |
+| docs/reports/weltgewebe-os-foundation-status.md | 6 | depends_on, relates_to | architecture/weltgewebe-os.md, docs/blueprints/weltgewebe-os-masterplan.md, docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md, docs/reports/domain-postgres-instance-coherence-decision.md, docs/reports/kubernetes-platform-foundation-status.md, docs/tasks/board.md |
 | docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md | 7 | relates_to | apps/api/src/governance.rs, apps/api/src/routes/conversations.rs, apps/web/src/lib/components/governance/ProposalDetail.svelte, contracts/domain/conversation.schema.json, contracts/domain/message.schema.json, docs/datenmodell.md, docs/specs/governance-antraege.md |
 
 ## Primary Referenced Reports

@@ -268,6 +268,60 @@ class KubernetesPlatformContractTests(unittest.TestCase):
 
             self.assertEqual(marker.read_text(encoding="utf-8"), "keep")
 
+    def test_manual_cell_profile_keeps_delivery_explicit_and_secrets_external(self) -> None:
+        contract = json.loads(
+            (ROOT / "platform/cell-profile.contract.json").read_text(encoding="utf-8")
+        )
+        self.assertEqual(contract["profile_id"], "gewebezelle-manual-v1")
+        self.assertEqual(contract["status"], "manual-pilot")
+        self.assertFalse(contract["self_service"])
+        self.assertFalse(contract["operator_api"])
+        self.assertIn(
+            "automatic peer discovery or trust", contract["nonclaims"]
+        )
+
+        config_map = yaml.safe_load(
+            (
+                ROOT
+                / "platform/apps/weltgewebe/base/config-map.yaml"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertEqual(
+            config_map["data"]["FEDERATION_DELIVERY_ENABLED"], "false"
+        )
+
+        deployment = yaml.safe_load(
+            (
+                ROOT
+                / "platform/apps/weltgewebe/base/api-deployment.yaml"
+            ).read_text(encoding="utf-8")
+        )
+        env = deployment["spec"]["template"]["spec"]["containers"][0]["env"]
+        signing_key = next(
+            item for item in env if item["name"] == "FEDERATION_SIGNING_KEY_B64"
+        )
+        secret_ref = signing_key["valueFrom"]["secretKeyRef"]
+        self.assertEqual(secret_ref["key"], "federation-signing-key-b64")
+        self.assertTrue(secret_ref["optional"])
+
+        secret_contract = json.loads(
+            (
+                ROOT / "platform/apps/weltgewebe/secret-contract.json"
+            ).read_text(encoding="utf-8")
+        )
+        self.assertIn(
+            "federation-signing-key-b64", secret_contract["optional_keys"]
+        )
+        self.assertTrue(
+            (ROOT / "docs/runbooks/gewebezelle-manual-pilot.md").is_file()
+        )
+        self.assertTrue(
+            (
+                ROOT
+                / "apps/api/migrations/20260731000002_federation_delivery_worker.up.sql"
+            ).is_file()
+        )
+
     def test_kind_reference_requests_ha_required_kubectl_cnpg_tool(self) -> None:
         source = (ROOT / "scripts/platform/kind_reference.py").read_text(encoding="utf-8")
         self.assertIn('"kubectl_cnpg"', source)
