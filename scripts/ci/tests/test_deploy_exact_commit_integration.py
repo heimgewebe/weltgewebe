@@ -16,6 +16,14 @@ DEPLOY_SCRIPT = ROOT / "scripts" / "ops" / "deploy-exact-commit-vps.sh"
 RECONCILE_SCRIPT = ROOT / "scripts" / "ops" / "reconcile-production-main-vps.sh"
 VALIDATOR = ROOT / "scripts" / "ops" / "validate_web_deploy_archive.py"
 
+GIT_MAINTENANCE_ENV = {
+    "GIT_CONFIG_COUNT": "2",
+    "GIT_CONFIG_KEY_0": "maintenance.auto",
+    "GIT_CONFIG_VALUE_0": "false",
+    "GIT_CONFIG_KEY_1": "gc.auto",
+    "GIT_CONFIG_VALUE_1": "0",
+}
+
 
 def run(
     argv: list[str],
@@ -27,6 +35,7 @@ def run(
     effective_env = None if env is None else env.copy()
     if argv and Path(argv[0]).name == "git":
         effective_env = os.environ.copy() if effective_env is None else effective_env
+        effective_env.update(GIT_MAINTENANCE_ENV)
         effective_env["GIT_CONFIG_GLOBAL"] = os.devnull
         effective_env["GIT_CONFIG_NOSYSTEM"] = "1"
 
@@ -614,6 +623,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
     def base_environment(self) -> dict[str, str]:
         inherited_path = os.environ.get("PATH", "/usr/bin:/bin")
         return {
+            **GIT_MAINTENANCE_ENV,
             "PATH": f"{self.bin}:{inherited_path}",
             "GIT_CONFIG_GLOBAL": os.devnull,
             "GIT_CONFIG_NOSYSTEM": "1",

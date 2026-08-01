@@ -10,6 +10,14 @@ from scripts.docmeta.generated_check import write_or_check
 
 OUT_FILE = os.path.join(REPO_ROOT, "docs", "_generated", "implicit-dependencies.md")
 
+_RECIPE_ENV_PREFIX = re.compile(
+    r"^(?:(?:env|\$\([A-Za-z0-9_.-]+\)|[A-Za-z_][A-Za-z0-9_]*=\S+)\s+)+"
+)
+
+
+def _strip_recipe_environment_prefix(command: str) -> str:
+    return _RECIPE_ENV_PREFIX.sub("", command)
+
 
 def collect_deps() -> list[dict[str, str]]:
     makefile_path = os.path.join(REPO_ROOT, "Makefile")
@@ -29,8 +37,9 @@ def collect_deps() -> list[dict[str, str]]:
         if match:
             current_target = match.group(1).strip()
         elif current_target and line.startswith("\t"):
-            if line_stripped.startswith("python3 -m "):
-                module = line_stripped.split("python3 -m ")[1].split()[0]
+            command = _strip_recipe_environment_prefix(line_stripped)
+            if command.startswith("python3 -m "):
+                module = command.split("python3 -m ")[1].split()[0]
                 deps.append({
                     "source": "Makefile",
                     "target": current_target,
@@ -38,8 +47,8 @@ def collect_deps() -> list[dict[str, str]]:
                     "evidence": line_stripped,
                     "documented": "*unclear*",
                 })
-            elif line_stripped.startswith("bash "):
-                script = line_stripped.split("bash ")[1].split()[0]
+            elif command.startswith("bash "):
+                script = command.split("bash ")[1].split()[0]
                 deps.append({
                     "source": "Makefile",
                     "target": current_target,
