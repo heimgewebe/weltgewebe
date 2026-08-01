@@ -4,10 +4,10 @@ set -euo pipefail
 # Reproducible nationwide Germany PMTiles build.
 #
 # The default input remains a pinned historical Geofabrik snapshot. A newer
-# snapshot may be supplied only as a complete provenance tuple: filename, URL,
-# SHA256 and snapshot date. The integrity check remains mandatory. This script
-# builds a versioned artifact and sentinel metadata. It never changes a stable
-# alias or production config.
+# snapshot may be supplied only as a complete, non-empty provenance tuple:
+# filename, URL, SHA256 and snapshot date. The integrity check remains
+# mandatory. Versioned outputs are immutable: an existing version is never
+# replaced. This script never changes a stable alias or production config.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
@@ -23,10 +23,6 @@ OSM_URL_WAS_SET="${OSM_URL+x}"
 OSM_SHA256_WAS_SET="${OSM_SHA256+x}"
 OSM_SNAPSHOT_DATE_WAS_SET="${OSM_SNAPSHOT_DATE+x}"
 
-OSM_FILE="${OSM_FILE:-$DEFAULT_OSM_FILE}"
-OSM_URL="${OSM_URL:-$DEFAULT_OSM_URL}"
-OSM_SHA256="${OSM_SHA256:-$DEFAULT_OSM_SHA256}"
-OSM_SNAPSHOT_DATE="${OSM_SNAPSHOT_DATE:-$DEFAULT_OSM_SNAPSHOT_DATE}"
 BASEMAP_VERSION="${BASEMAP_VERSION:-0.1.0}"
 BASEMAP_TAG="v${BASEMAP_VERSION}"
 OUTPUT_PMTILES="basemap-germany-${BASEMAP_TAG}.pmtiles"
@@ -49,9 +45,25 @@ for marker in \
   "$OSM_SNAPSHOT_DATE_WAS_SET"; do
   [[ -n "$marker" ]] && SNAPSHOT_OVERRIDE_COUNT=$((SNAPSHOT_OVERRIDE_COUNT + 1))
 done
-if ((SNAPSHOT_OVERRIDE_COUNT != 0 && SNAPSHOT_OVERRIDE_COUNT != 4)); then
-  fail "override OSM_FILE, OSM_URL, OSM_SHA256 and OSM_SNAPSHOT_DATE together"
-fi
+
+case "$SNAPSHOT_OVERRIDE_COUNT" in
+  0)
+    OSM_FILE="$DEFAULT_OSM_FILE"
+    OSM_URL="$DEFAULT_OSM_URL"
+    OSM_SHA256="$DEFAULT_OSM_SHA256"
+    OSM_SNAPSHOT_DATE="$DEFAULT_OSM_SNAPSHOT_DATE"
+    ;;
+  4)
+    [[ -n "$OSM_FILE" ]] || fail "OSM_FILE override must not be empty"
+    [[ -n "$OSM_URL" ]] || fail "OSM_URL override must not be empty"
+    [[ -n "$OSM_SHA256" ]] || fail "OSM_SHA256 override must not be empty"
+    [[ -n "$OSM_SNAPSHOT_DATE" ]] ||
+      fail "OSM_SNAPSHOT_DATE override must not be empty"
+    ;;
+  *)
+    fail "override OSM_FILE, OSM_URL, OSM_SHA256 and OSM_SNAPSHOT_DATE together"
+    ;;
+esac
 
 [[ "$OSM_FILE" == "$(basename -- "$OSM_FILE")" ]] ||
   fail "OSM_FILE must be a plain filename inside BASEMAP_DIR"
@@ -114,9 +126,20 @@ echo "========================================="
 
 cd "$BASEMAP_DIR"
 
+for immutable_output in "$OUTPUT_PMTILES" "$OUTPUT_META"; do
+  if [[ -e "$immutable_output" || -L "$immutable_output" ]]; then
+    fail "versioned output already exists: $BASEMAP_DIR/$immutable_output; choose a new BASEMAP_VERSION"
+  fi
+done
+if [[ -e "$PARTIAL_PMTILES" || -L "$PARTIAL_PMTILES" ]]; then
+  fail "stale partial output exists: $BASEMAP_DIR/$PARTIAL_PMTILES; inspect and remove it explicitly"
+fi
+
 if [[ ! -f "$OSM_FILE" ]]; then
   PARTIAL_INPUT="${OSM_FILE}.partial"
-  rm -f "$PARTIAL_INPUT"
+  if [[ -e "$PARTIAL_INPUT" || -L "$PARTIAL_INPUT" ]]; then
+    fail "stale partial input exists: $BASEMAP_DIR/$PARTIAL_INPUT; inspect and remove it explicitly"
+  fi
   echo ">> Downloading pinned Germany OSM snapshot..."
   if [[ "$DOWNLOADER" == "wget" ]]; then
     wget -qO "$PARTIAL_INPUT" "$OSM_URL" || {
@@ -129,7 +152,7 @@ if [[ ! -f "$OSM_FILE" ]]; then
       fail "download failed: $OSM_URL"
     }
   fi
-  mv -f "$PARTIAL_INPUT" "$OSM_FILE"
+  mv "$PARTIAL_INPUT" "$OSM_FILE"
 else
   echo ">> Reusing existing input: $OSM_FILE"
 fi
@@ -142,7 +165,6 @@ ACTUAL_INPUT_SHA256="$("${SHA256_CMD[@]}" "$OSM_FILE" | awk '{print $1}')"
 }
 echo "   [✓] Input integrity verified"
 
-rm -f "$PARTIAL_PMTILES"
 DOCKER_ARGS=(
   run --rm
   --platform linux/amd64
@@ -161,7 +183,7 @@ if ! docker "${DOCKER_ARGS[@]}" "$PLANETILER_IMAGE" \
 fi
 
 [[ -s "$PARTIAL_PMTILES" ]] || fail "Planetiler produced no non-empty artifact"
-mv -f "$PARTIAL_PMTILES" "$OUTPUT_PMTILES"
+mv "$PARTIAL_PMTILES" "$OUTPUT_PMTILES"
 
 PMTILES_SIZE="$(wc -c < "$OUTPUT_PMTILES" | tr -d '[:space:]')"
 PMTILES_SHA256="$("${SHA256_CMD[@]}" "$OUTPUT_PMTILES" | awk '{print $1}')"
