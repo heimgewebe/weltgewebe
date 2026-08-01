@@ -82,7 +82,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertNotIn("ln -s", builder)
         self.assertNotIn("PUBLIC_BASEMAP_VARIANT=germany", builder)
 
-    def test_builder_requires_complete_snapshot_provenance_overrides(self) -> None:
+    def test_builder_requires_complete_nonempty_snapshot_provenance(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
         for marker in (
             "OSM_FILE_WAS_SET",
@@ -91,19 +91,40 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
             "OSM_SNAPSHOT_DATE_WAS_SET",
         ):
             self.assertIn(marker, builder)
-        self.assertIn("SNAPSHOT_OVERRIDE_COUNT != 4", builder)
+        self.assertIn('case "$SNAPSHOT_OVERRIDE_COUNT"', builder)
         self.assertIn(
             "override OSM_FILE, OSM_URL, OSM_SHA256 and "
             "OSM_SNAPSHOT_DATE together",
             builder,
         )
+        for name in (
+            "OSM_FILE",
+            "OSM_URL",
+            "OSM_SHA256",
+            "OSM_SNAPSHOT_DATE",
+        ):
+            self.assertIn(f"{name} override must not be empty", builder)
 
-    def test_prepare_step_deep_validates_before_publication(self) -> None:
+    def test_builder_never_replaces_a_versioned_output(self) -> None:
+        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
+        immutable_check = builder.index(
+            'for immutable_output in "$OUTPUT_PMTILES" "$OUTPUT_META"'
+        )
+        docker_run = builder.index("if ! docker")
+        self.assertLess(immutable_check, docker_run)
+        self.assertIn("versioned output already exists", builder)
+        self.assertNotIn('mv -f "$PARTIAL_PMTILES"', builder)
+
+    def test_prepare_step_validates_isolated_staging_before_publication(self) -> None:
         prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
         validate_at = prepare.index("validate:pmtiles")
         publish_at = prepare.index("publish-basemap.sh")
         self.assertLess(validate_at, publish_at)
+        self.assertIn("build/basemap-staging/germany", prepare)
+        self.assertIn('[[ "$BUILD_DIR" != "$TARGET_DIR" ]]', prepare)
+        self.assertIn('BASEMAP_DIR="$BUILD_DIR" bash', prepare)
         self.assertIn('--archive "germany=$ARTIFACT"', prepare)
+        self.assertIn("published Germany version already exists", prepare)
         self.assertIn("style-germany.json", prepare)
         self.assertIn("Activation was NOT changed", prepare)
 
