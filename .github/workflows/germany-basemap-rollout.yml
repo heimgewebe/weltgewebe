@@ -5,6 +5,7 @@ name: Germany Basemap Rollout
   pull_request:
     branches: [main]
     paths:
+      - "apps/web/.gitignore"
       - "apps/web/scripts/generate-basemap-config.js"
       - "apps/web/scripts/generate-basemap-config.test.mjs"
       - "apps/web/src/lib/map/basemap.ts"
@@ -13,11 +14,13 @@ name: Germany Basemap Rollout
       - "map-style/style-germany.json"
       - "scripts/basemap/build-germany-pmtiles.sh"
       - "scripts/basemap/prepare-germany-rollout.sh"
+      - "scripts/basemap/activate-germany-basemap.sh"
       - "scripts/ci/tests/test_germany_basemap_rollout.py"
       - ".github/workflows/germany-basemap-rollout.yml"
   push:
     branches: [main]
     paths:
+      - "apps/web/.gitignore"
       - "apps/web/scripts/generate-basemap-config.js"
       - "apps/web/scripts/generate-basemap-config.test.mjs"
       - "apps/web/src/lib/map/basemap.ts"
@@ -26,6 +29,7 @@ name: Germany Basemap Rollout
       - "map-style/style-germany.json"
       - "scripts/basemap/build-germany-pmtiles.sh"
       - "scripts/basemap/prepare-germany-rollout.sh"
+      - "scripts/basemap/activate-germany-basemap.sh"
       - "scripts/ci/tests/test_germany_basemap_rollout.py"
       - ".github/workflows/germany-basemap-rollout.yml"
   workflow_dispatch: {}
@@ -41,15 +45,19 @@ jobs:
   germany-basemap-contract:
     name: germany-basemap-contract
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
 
-      - name: Verify shell syntax
+      - name: Verify shell syntax and executable contracts
         run: |
           set -euo pipefail
           bash -n scripts/basemap/build-germany-pmtiles.sh
           bash -n scripts/basemap/prepare-germany-rollout.sh
+          bash -n scripts/basemap/activate-germany-basemap.sh
+          test -x scripts/basemap/build-germany-pmtiles.sh
+          test -x scripts/basemap/prepare-germany-rollout.sh
+          test -x scripts/basemap/activate-germany-basemap.sh
 
       - name: Verify static Germany rollout contracts
         run: python3 scripts/ci/tests/test_germany_basemap_rollout.py
@@ -86,13 +94,38 @@ jobs:
         run: pnpm exec vitest run src/lib/map/config/basemap.current.test.ts
         working-directory: apps/web
 
+      - name: Build and inspect the Germany frontend variant
+        env:
+          PUBLIC_BASEMAP_MODE: local-sovereign
+          PUBLIC_BASEMAP_VARIANT: germany
+        run: |
+          set -euo pipefail
+          pnpm build
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          identity = json.loads(
+              Path("build/_app/basemap-build.json").read_text(encoding="utf-8")
+          )
+          assert identity == {
+              "schema_version": 1,
+              "mode": "local-sovereign",
+              "variant": "germany",
+              "style_path": "/local-basemap/style-germany.json",
+          }
+          PY
+        working-directory: apps/web
+
       - name: Verify Germany style parses and binds the stable alias
         run: |
           python3 - <<'PY'
           import json
           from pathlib import Path
 
-          style = json.loads(Path("map-style/style-germany.json").read_text())
+          style = json.loads(
+              Path("map-style/style-germany.json").read_text(encoding="utf-8")
+          )
           source = style["sources"]["basemap-germany"]
           assert source["type"] == "vector"
           assert source["url"] == "pmtiles://basemap-germany.pmtiles"
