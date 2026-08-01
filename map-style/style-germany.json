@@ -2,7 +2,7 @@
   "version": 8,
   "name": "Weltgewebe Sovereign Basemap — Germany",
   "metadata": {
-    "weltgewebe:version": "0.4.0",
+    "weltgewebe:version": "0.3.1",
     "weltgewebe:variant": "germany",
     "weltgewebe:note": "Opt-in nationwide PMTiles source; production activation requires artifact and live runtime proof"
   },
