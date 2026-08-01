@@ -599,11 +599,10 @@ curl "${CURL_COMMON[@]}" "$PUBLIC_APP_URL/local-basemap/style-germany.json" -o "
 
 curl "${CURL_COMMON[@]}" "$PUBLIC_APP_URL/local-basemap/basemap-germany.meta.json" -o "$PUBLIC_META" ||
   post_activation_failure "public Germany metadata is unavailable"
-PUBLIC_META_PATH="$PUBLIC_META" \
+if ! PUBLIC_META_PATH="$PUBLIC_META" \
   EXPECTED_SHA256="$ARTIFACT_SHA256" \
   EXPECTED_SIZE="$ARTIFACT_SIZE" \
-  python3 << 'PY' ||
-  post_activation_failure "public Germany metadata does not match the selected version"
+  python3 << 'PY'; then
 import json
 import os
 from pathlib import Path
@@ -616,13 +615,17 @@ if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
 if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
     raise SystemExit("public Germany sentinel size mismatch")
 PY
-HTTP_STATUS="$(curl "${CURL_COMMON[@]}" \
+  post_activation_failure "public Germany metadata does not match the selected version"
+fi
+
+if ! HTTP_STATUS="$(curl "${CURL_COMMON[@]}" \
   -H 'Range: bytes=0-126' \
   -D "$RANGE_HEADERS" \
   -o "$RANGE_PAYLOAD" \
   -w '%{http_code}' \
-  "$PUBLIC_ARTIFACT_URL")" ||
+  "$PUBLIC_ARTIFACT_URL")"; then
   post_activation_failure "public Germany PMTiles range request failed"
+fi
 [[ "$HTTP_STATUS" == "206" ]] ||
   post_activation_failure "public Germany PMTiles range request returned HTTP $HTTP_STATUS"
 grep -qi '^content-type:[[:space:]]*application/octet-stream' "$RANGE_HEADERS" ||
