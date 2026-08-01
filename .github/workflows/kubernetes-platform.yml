@@ -116,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "98129fc17c1ec03bf2f39f051a08b68c3e2bfb6c"
+          test "$(git rev-parse HEAD^)" = "79520be05be69929715a5ff119d9e90d8413e597"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -146,8 +146,13 @@ jobs:
           base64 --decode /tmp/pr1658-patch.b64 | gzip --decompress \
             > /tmp/pr1658_hardening.py
           python /tmp/pr1658_hardening.py
-      - name: Format changed sources
+      - name: Apply safe source fixes and formatting
         run: |
+          python -m ruff check --fix \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/platform/validate_platform.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py \
+            scripts/ci/tests/test_kubernetes_platform_contract.py
           cargo fmt --all
           python -m ruff format \
             scripts/platform/validate_two_operator_pilot.py \
