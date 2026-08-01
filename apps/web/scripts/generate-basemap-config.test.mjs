@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -6,32 +7,37 @@ import { after, test } from "node:test";
 import { fileURLToPath } from "node:url";
 
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
+const webRoot = path.resolve(scriptDir, "..");
+const repoRoot = path.resolve(webRoot, "..", "..");
 const scriptPath = path.join(scriptDir, "generate-basemap-config.js");
-const generatedPath = path.resolve(
-  scriptDir,
-  "..",
+const generatedPath = path.join(
+  webRoot,
   "src",
   "lib",
   "generated",
   "basemapConfig.ts",
 );
-const buildIdentityPath = path.resolve(
-  scriptDir,
-  "..",
+const buildIdentityPath = path.join(
+  webRoot,
   "static",
   "_app",
   "basemap-build.json",
 );
 const remoteStyleUrl =
   "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+const sourceCommit = "0123456789abcdef0123456789abcdef01234567";
+
+const sha256File = (filePath) =>
+  crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 
 function runGenerator(extraEnv = {}) {
   const env = { ...process.env };
   delete env.PUBLIC_BASEMAP_MODE;
   delete env.PUBLIC_BASEMAP_VARIANT;
-  Object.assign(env, extraEnv);
+  delete env.PUBLIC_SOURCE_COMMIT;
+  Object.assign(env, { PUBLIC_SOURCE_COMMIT: sourceCommit }, extraEnv);
   return spawnSync(process.execPath, [scriptPath], {
-    cwd: path.resolve(scriptDir, ".."),
+    cwd: webRoot,
     env,
     encoding: "utf8",
   });
@@ -60,6 +66,8 @@ test("defaults local sovereign builds to the regional rollback variant", () => {
     mode: "local-sovereign",
     variant: "regional",
     style_path: "/local-basemap/style.json",
+    source_commit: sourceCommit,
+    style_sha256: sha256File(path.join(repoRoot, "map-style", "style.json")),
   });
 });
 
@@ -76,17 +84,22 @@ test("emits the Germany variant only when explicitly selected", () => {
     mode: "local-sovereign",
     variant: "germany",
     style_path: "/local-basemap/style-germany.json",
+    source_commit: sourceCommit,
+    style_sha256: sha256File(
+      path.join(repoRoot, "map-style", "style-germany.json"),
+    ),
   });
 });
 
 test("emits a remote identity without a sovereign variant", () => {
   const result = runGenerator({ PUBLIC_BASEMAP_MODE: "remote-style" });
   assert.equal(result.status, 0, result.stderr);
-  const identity = buildIdentity();
-  assert.equal(identity.schema_version, 1);
-  assert.equal(identity.mode, "remote-style");
-  assert.equal(identity.style_url, remoteStyleUrl);
-  assert.equal(Object.hasOwn(identity, "variant"), false);
+  assert.deepEqual(buildIdentity(), {
+    schema_version: 1,
+    mode: "remote-style",
+    style_url: remoteStyleUrl,
+    source_commit: sourceCommit,
+  });
 });
 
 test("fails closed on an unknown sovereign variant", () => {
@@ -108,4 +121,10 @@ test("rejects a meaningless variant on remote-style builds", () => {
     result.stderr,
     /PUBLIC_BASEMAP_VARIANT is only valid with PUBLIC_BASEMAP_MODE=local-sovereign/,
   );
+});
+
+test("rejects a non-canonical source commit", () => {
+  const result = runGenerator({ PUBLIC_SOURCE_COMMIT: "short" });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /PUBLIC_SOURCE_COMMIT must be a full lowercase Git SHA/);
 });
