@@ -557,10 +557,10 @@ echo "[✓] Germany version, validation and device release proof verified."
 # Re-evaluate checkout and freshness immediately before the first externally visible change.
 verify_tracked_checkout_clean
 verify_snapshot_freshness
+ACTIVATION_TRANSACTION_OPEN=1
 if ! invalidate_activation_receipt; then
   fail "could not invalidate a previous Germany activation receipt"
 fi
-ACTIVATION_TRANSACTION_OPEN=1
 if ! switch_alias_pair; then
   post_activation_failure "could not switch the Germany alias pair atomically"
 fi
