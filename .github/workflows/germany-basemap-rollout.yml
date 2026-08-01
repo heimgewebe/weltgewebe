@@ -74,6 +74,14 @@ jobs:
         run: pnpm test:basemap-config
         working-directory: apps/web
 
+      - name: Prepare generated web artifacts
+        run: |
+          set -euo pipefail
+          pnpm run generate:client-version
+          pnpm run generate:basemap-config
+          pnpm exec svelte-kit sync
+        working-directory: apps/web
+
       - name: Verify runtime style selection
         run: pnpm exec vitest run src/lib/map/config/basemap.current.test.ts
         working-directory: apps/web
