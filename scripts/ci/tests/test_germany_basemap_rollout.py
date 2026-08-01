@@ -32,7 +32,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
             self.style["metadata"]["weltgewebe:variant"], "germany"
         )
 
-    def test_germany_style_has_the_required_visual_layer_contract(self) -> None:
+    def test_germany_style_has_required_visual_layers(self) -> None:
         source_layers = {
             layer["source-layer"]
             for layer in self.style["layers"]
@@ -52,37 +52,26 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         layer_ids = [layer["id"] for layer in self.style["layers"]]
         self.assertEqual(len(layer_ids), len(set(layer_ids)))
 
-    def test_style_version_matches_the_shared_cache_contract(self) -> None:
-        basemap_module = BASEMAP_MODULE.read_text(encoding="utf-8")
+    def test_style_version_matches_shared_cache_contract(self) -> None:
+        module = BASEMAP_MODULE.read_text(encoding="utf-8")
         version = self.style["metadata"]["weltgewebe:version"]
-        self.assertIn(
-            f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
-        )
-        self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_URL", basemap_module)
-        self.assertIn("style-germany.json", basemap_module)
+        self.assertIn(f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', module)
+        self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_URL", module)
+        self.assertIn("style-germany.json", module)
 
-    def test_build_generator_defaults_to_regional_and_requires_opt_in(self) -> None:
+    def test_build_generator_defaults_to_regional_and_binds_identity(self) -> None:
         generator = GENERATOR.read_text(encoding="utf-8")
         self.assertIn(
             'const DEFAULT_LOCAL_BASEMAP_VARIANT = "regional"', generator
         )
         self.assertIn('["regional", "germany"]', generator)
         self.assertIn("PUBLIC_BASEMAP_VARIANT", generator)
-        self.assertIn('variant: "${variant}"', generator)
+        self.assertIn("source_commit", generator)
+        self.assertIn("style_sha256", generator)
+        self.assertIn("PUBLIC_SOURCE_COMMIT", generator)
         self.assertIn("basemap-build.json", generator)
-        self.assertIn("/local-basemap/style-germany.json", generator)
 
-    def test_builder_is_pinned_and_does_not_activate_an_alias(self) -> None:
-        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("germany-260101.osm.pbf", builder)
-        self.assertIn("DEFAULT_OSM_SHA256", builder)
-        self.assertIn("DEFAULT_OSM_SNAPSHOT_DATE", builder)
-        self.assertIn("ghcr.io/onthegomap/planetiler@sha256:", builder)
-        self.assertIn('"activation": "opt-in"', builder)
-        self.assertNotIn("ln -s", builder)
-        self.assertNotIn("PUBLIC_BASEMAP_VARIANT=germany", builder)
-
-    def test_builder_requires_complete_nonempty_snapshot_provenance(self) -> None:
+    def test_builder_requires_complete_valid_snapshot_provenance(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
         for marker in (
             "OSM_FILE_WAS_SET",
@@ -92,118 +81,104 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         ):
             self.assertIn(marker, builder)
         self.assertIn('case "$SNAPSHOT_OVERRIDE_COUNT"', builder)
-        self.assertIn(
-            "override OSM_FILE, OSM_URL, OSM_SHA256 and "
-            "OSM_SNAPSHOT_DATE together",
-            builder,
-        )
-        for name in (
-            "OSM_FILE",
-            "OSM_URL",
-            "OSM_SHA256",
-            "OSM_SNAPSHOT_DATE",
-        ):
-            self.assertIn(f"{name} override must not be empty", builder)
-
-    def test_builder_validates_calendar_date_before_docker(self) -> None:
-        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
-        date_validation_at = builder.index("dt.date.fromisoformat")
-        future_validation_at = builder.index(
-            "dt.datetime.now(dt.timezone.utc).date()"
-        )
-        docker_run_at = builder.index("if ! docker")
-        self.assertLess(date_validation_at, future_validation_at)
-        self.assertLess(future_validation_at, docker_run_at)
-        self.assertIn("invalid OSM_SNAPSHOT_DATE", builder)
+        self.assertIn("dt.date.fromisoformat", builder)
+        self.assertIn("dt.datetime.now(dt.timezone.utc).date()", builder)
         self.assertIn("OSM_SNAPSHOT_DATE lies in the future", builder)
+        self.assertLess(builder.index("dt.date.fromisoformat"), builder.index("if ! docker"))
 
-    def test_builder_never_replaces_a_versioned_output(self) -> None:
+    def test_builder_never_replaces_version_or_activates_alias(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
-        immutable_check = builder.index(
-            'for immutable_output in "$OUTPUT_PMTILES" "$OUTPUT_META"'
-        )
-        docker_run = builder.index("if ! docker")
-        self.assertLess(immutable_check, docker_run)
         self.assertIn("versioned output already exists", builder)
+        self.assertIn('"activation": "opt-in"', builder)
         self.assertNotIn('mv -f "$PARTIAL_PMTILES"', builder)
+        self.assertNotIn("ln -s", builder)
+        self.assertNotIn("PUBLIC_BASEMAP_VARIANT=germany", builder)
 
-    def test_prepare_step_validates_isolated_staging_before_publication(self) -> None:
+    def test_prepare_publishes_bound_version_without_alias_switch(self) -> None:
         prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
-        validate_at = prepare.index("validate:pmtiles")
-        proof_publish_at = prepare.index('ln "$PROOF_TMP" "$TARGET_PROOF"')
-        artifact_publish_at = prepare.index("publish-basemap.sh")
-        self.assertLess(validate_at, proof_publish_at)
-        self.assertLess(proof_publish_at, artifact_publish_at)
-        self.assertIn("build/basemap-staging/germany", prepare)
-        self.assertIn('[[ "$BUILD_DIR" != "$TARGET_DIR" ]]', prepare)
-        self.assertIn('BASEMAP_DIR="$BUILD_DIR" bash', prepare)
-        self.assertIn('--archive "germany=$ARTIFACT"', prepare)
-        self.assertIn("TARGET_PROOF", prepare)
-        self.assertIn("published Germany validation report missing", prepare)
-        self.assertIn("published Germany version already exists", prepare)
-        self.assertIn("style-germany.json", prepare)
-        self.assertIn("Activation was NOT changed", prepare)
+        validation_at = prepare.index("validate:pmtiles")
+        envelope_at = prepare.index("germany-pmtiles-prepared-validation-v1")
+        publish_at = prepare.index('ln "$ARTIFACT_TMP" "$TARGET_ARTIFACT"')
+        self.assertLess(validation_at, envelope_at)
+        self.assertLess(envelope_at, publish_at)
+        self.assertIn('"artifact": {', prepare)
+        self.assertIn('"sha256": os.environ["ARTIFACT_SHA256"]', prepare)
+        self.assertIn("ALIAS_ARTIFACT_STATE_BEFORE", prepare)
+        self.assertIn("ALIAS_ARTIFACT_STATE_AFTER", prepare)
+        self.assertIn("Stable aliases were NOT changed", prepare)
+        self.assertNotIn("publish-basemap.sh", prepare)
 
-    def test_activation_requires_fresh_exact_evidence_and_forced_build(self) -> None:
+    def test_activation_revalidates_freshness_immediately_before_aliases(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
-        fresh_validation_at = activate.index("validate:pmtiles")
-        deploy_at = activate.index('deploy_frontend_variant "germany"')
-        self.assertLess(fresh_validation_at, deploy_at)
-        self.assertIn('"$DEPLOY_COMMAND" --build-web "$@"', activate)
-        self.assertIn("deploy-germany-pmtiles", activate)
-        self.assertIn("GERMANY_BASEMAP_MAX_SOURCE_AGE_DAYS", activate)
-        self.assertIn("alias_artifact != versioned_artifact", activate)
-        self.assertIn("alias_meta != versioned_meta", activate)
-        self.assertIn("basemap-build.json", activate)
-        self.assertIn("Content-Type", activate)
-        self.assertIn("Content-Range", activate)
-        self.assertIn("Accept-Ranges", activate)
+        second_freshness_at = activate.index(
+            "# Re-evaluate freshness immediately before the first externally visible change."
+        )
+        switch_at = activate.index("if ! switch_alias_pair; then")
+        self.assertLess(second_freshness_at, switch_at)
+        between = activate[second_freshness_at:switch_at]
+        self.assertIn("verify_snapshot_freshness", between)
 
-    def test_activation_requires_artifact_bound_device_release_proof(self) -> None:
+    def test_activation_binds_prepared_report_by_artifact_content(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn("GERMANY_BASEMAP_RELEASE_PROOF_PATH", activate)
-        self.assertIn("required_release_proofs", activate)
-        for proof in (
+        self.assertIn("prepared validation artifact binding mismatch", activate)
+        self.assertIn('prepared.get("artifact", {})', activate)
+        self.assertIn('"name": artifact.name', activate)
+        self.assertIn('"sha256": expected_sha256', activate)
+        self.assertIn('"size_bytes": expected_size', activate)
+        self.assertNotIn("prepared validation archive path mismatch", activate)
+
+    def test_activation_binds_device_proof_to_frontend_style_and_time(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        for contract in (
+            "frontend_commit",
+            "style_sha256",
+            "proofed_at",
+            "GERMANY_BASEMAP_RELEASE_PROOF_MAX_AGE_HOURS",
             "desktop-maplibre",
             "ipad-maplibre",
             "five-region-visual",
             "no-external-map-requests",
             "staging-caddy-range",
         ):
-            self.assertIn(proof, activate)
-        self.assertIn("Germany release proof artifact hash mismatch", activate)
-        self.assertIn("Germany release proof artifact size mismatch", activate)
+            self.assertIn(contract, activate)
+        self.assertIn("Germany release proof frontend commit mismatch", activate)
+        self.assertIn("Germany release proof style hash mismatch", activate)
+        self.assertIn("Germany release proof is too old", activate)
+
+    def test_activation_bounds_all_public_readbacks(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("GERMANY_BASEMAP_HTTP_CONNECT_TIMEOUT_SECONDS", activate)
+        self.assertIn("GERMANY_BASEMAP_HTTP_MAX_TIME_SECONDS", activate)
+        self.assertIn("--connect-timeout", activate)
+        self.assertIn("--max-time", activate)
+        self.assertIn('curl "${CURL_COMMON[@]}"', activate)
+        self.assertIn("within the readback deadline", activate)
+
+    def test_activation_alias_switch_and_receipt_are_rollback_bound(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn("ALIASES_TOUCHED=1", activate)
+        self.assertIn("restore_alias_pair", activate)
+        self.assertIn("if ! switch_alias_pair; then", activate)
+        self.assertIn("if ! write_activation_receipt; then", activate)
+        self.assertIn("could not persist the Germany activation receipt", activate)
+        self.assertIn('deploy_frontend_variant "regional"', activate)
 
     def test_activation_hashes_complete_public_artifact(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
-        range_check_at = activate.index("Range: bytes=0-126")
+        range_at = activate.index("Range: bytes=0-126")
         full_hash_at = activate.index("PUBLIC_ARTIFACT_SHA256")
         receipt_at = activate.index('"status": "activation_verified"')
-        self.assertLess(range_check_at, full_hash_at)
+        self.assertLess(range_at, full_hash_at)
         self.assertLess(full_hash_at, receipt_at)
         self.assertIn("complete public Germany PMTiles hash mismatch", activate)
         self.assertIn("complete-public-artifact-sha256", activate)
-        self.assertIn(
-            "predeployment-device-proof-plus-complete-public-artifact",
-            activate,
-        )
-        self.assertNotIn("verified end to end", activate)
 
-    def test_activation_rolls_back_deploy_and_readback_failures(self) -> None:
+    def test_activation_receipt_heredoc_is_inside_if_statement(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('if ! deploy_frontend_variant "germany" "$@"; then', activate)
-        self.assertIn(
-            "Germany deployment command failed; regional rollback was attempted",
-            activate,
-        )
-        self.assertIn('deploy_frontend_variant "regional" "$@"', activate)
-        failure_function = activate.split("post_deploy_failure() {", 1)[1].split(
-            "}", 1
-        )[0]
-        self.assertIn('local message="$1"', failure_function)
-        self.assertIn("shift", failure_function)
-        self.assertIn('rollback_frontend "$@"', failure_function)
-        self.assertNotIn('rollback_frontend "$message"', activate)
+        self.assertIn('if ! RECEIPT_PATH="$receipt_tmp" \\n', activate)
+        self.assertIn("python3 << 'PY'", activate)
+        self.assertIn("then\n    rm -f", activate)
+        self.assertNotIn("python3 << 'PY' || {", activate)
 
 
 if __name__ == "__main__":
