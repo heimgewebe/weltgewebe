@@ -78,23 +78,28 @@ if (mode === "remote-style" && rawVariant) {
   process.exit(1);
 }
 
+const requireCanonicalCommit = (value, source) => {
+  if (!/^[0-9a-f]{40}$/.test(value)) {
+    throw new Error(`${source} must be a full lowercase Git SHA`);
+  }
+  return value;
+};
+
 const resolveSourceCommit = () => {
   const explicitCommit = process.env.PUBLIC_SOURCE_COMMIT?.trim();
   if (explicitCommit) {
-    if (!/^[0-9a-f]{40}$/.test(explicitCommit)) {
-      throw new Error("PUBLIC_SOURCE_COMMIT must be a full lowercase Git SHA");
-    }
-    return explicitCommit;
+    return requireCanonicalCommit(explicitCommit, "PUBLIC_SOURCE_COMMIT");
   }
+
+  const buildCommit = process.env.GIT_COMMIT_SHA?.trim();
+  if (buildCommit) {
+    return requireCanonicalCommit(buildCommit, "GIT_COMMIT_SHA");
+  }
+
   const commit = execFileSync("git", ["-C", repoRoot, "rev-parse", "HEAD"], {
     encoding: "utf8",
   }).trim();
-  if (!/^[0-9a-f]{40}$/.test(commit)) {
-    throw new Error(
-      "Could not resolve a full source commit for basemap identity",
-    );
-  }
-  return commit;
+  return requireCanonicalCommit(commit, "resolved source commit");
 };
 
 const sha256File = (filePath) =>

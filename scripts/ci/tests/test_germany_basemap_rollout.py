@@ -204,7 +204,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         switch_at = activate.index("if ! switch_alias_pair; then")
         self.assertLess(second_check_at, switch_at)
         between = activate[second_check_at:switch_at]
-        self.assertIn("verify_tracked_checkout_clean", between)
+        self.assertIn("verify_checkout_clean", between)
         self.assertIn("verify_snapshot_freshness", between)
         self.assertIn("invalidate_activation_receipt", between)
         self.assertIn("ACTIVATION_TRANSACTION_OPEN=1", between)
@@ -242,6 +242,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("Germany release proof is too old", activate)
         self.assertIn('git -C "$REPO_ROOT" diff --quiet', activate)
         self.assertIn('git -C "$REPO_ROOT" diff --cached --quiet', activate)
+        self.assertIn("ls-files --others --exclude-standard", activate)
+        self.assertIn("apps/web map-style policies/performance.v1.json", activate)
+        self.assertIn("untracked frontend or style inputs", activate)
         self.assertNotIn("git status --porcelain", activate)
 
     def test_activation_bounds_all_public_readbacks(self) -> None:

@@ -30,12 +30,19 @@ const sourceCommit = "0123456789abcdef0123456789abcdef01234567";
 const sha256File = (filePath) =>
   crypto.createHash("sha256").update(fs.readFileSync(filePath)).digest("hex");
 
-function runGenerator(extraEnv = {}) {
+function runGenerator(
+  extraEnv = {},
+  { includePublicSourceCommit = true } = {},
+) {
   const env = { ...process.env };
   delete env.PUBLIC_BASEMAP_MODE;
   delete env.PUBLIC_BASEMAP_VARIANT;
   delete env.PUBLIC_SOURCE_COMMIT;
-  Object.assign(env, { PUBLIC_SOURCE_COMMIT: sourceCommit }, extraEnv);
+  delete env.GIT_COMMIT_SHA;
+  if (includePublicSourceCommit) {
+    env.PUBLIC_SOURCE_COMMIT = sourceCommit;
+  }
+  Object.assign(env, extraEnv);
   return spawnSync(process.execPath, [scriptPath], {
     cwd: webRoot,
     env,
@@ -120,6 +127,36 @@ test("rejects a meaningless variant on remote-style builds", () => {
   assert.match(
     result.stderr,
     /PUBLIC_BASEMAP_VARIANT is only valid with PUBLIC_BASEMAP_MODE=local-sovereign/,
+  );
+});
+
+test("uses the reconciler-supplied commit when the build has no explicit public commit", () => {
+  const archiveCommit = "89abcdef0123456789abcdef0123456789abcdef";
+  const result = runGenerator(
+    { GIT_COMMIT_SHA: archiveCommit },
+    { includePublicSourceCommit: false },
+  );
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(buildIdentity().source_commit, archiveCommit);
+});
+
+test("keeps PUBLIC_SOURCE_COMMIT authoritative over the generic build commit", () => {
+  const result = runGenerator({
+    GIT_COMMIT_SHA: "89abcdef0123456789abcdef0123456789abcdef",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(buildIdentity().source_commit, sourceCommit);
+});
+
+test("rejects a non-canonical reconciler build commit", () => {
+  const result = runGenerator(
+    { GIT_COMMIT_SHA: "short" },
+    { includePublicSourceCommit: false },
+  );
+  assert.notEqual(result.status, 0);
+  assert.match(
+    result.stderr,
+    /GIT_COMMIT_SHA must be a full lowercase Git SHA/,
   );
 });
 

@@ -1,6 +1,7 @@
 ---
 id: deploy.germany-basemap-rollout
 title: Deutschlandweite PMTiles-Basemap ausrollen
+summary: Runbook für Vorbereitung, Aktivierung und sicheren Rückbau der deutschlandweiten PMTiles-Basemap.
 doc_type: runbook
 status: active
 owner: product-map

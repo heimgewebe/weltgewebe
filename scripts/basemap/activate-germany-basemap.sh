@@ -232,11 +232,19 @@ post_activation_failure() {
   fail "$1"
 }
 
-verify_tracked_checkout_clean() {
+verify_checkout_clean() {
+  local untracked_inputs=""
+
   git -C "$REPO_ROOT" diff --quiet --ignore-submodules -- ||
     fail "tracked worktree changes would make the Germany device proof stale"
   git -C "$REPO_ROOT" diff --cached --quiet --ignore-submodules -- ||
     fail "staged changes would make the Germany device proof stale"
+  untracked_inputs="$(
+    git -C "$REPO_ROOT" ls-files --others --exclude-standard -- \
+      apps/web map-style policies/performance.v1.json
+  )" || fail "could not inspect untracked frontend inputs"
+  [[ -z "$untracked_inputs" ]] ||
+    fail "untracked frontend or style inputs would make the Germany device proof stale: $untracked_inputs"
 }
 
 verify_snapshot_freshness() {
@@ -408,7 +416,7 @@ for required_path in \
   require_nonempty_path "$required_path"
 done
 
-verify_tracked_checkout_clean
+verify_checkout_clean
 SOURCE_COMMIT="$(git -C "$REPO_ROOT" rev-parse HEAD)"
 [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "could not resolve a full source commit"
 STYLE_SHA256="$(sha256sum "$STYLE_PATH" | awk '{print $1}')"
@@ -555,7 +563,7 @@ PY
 echo "[✓] Germany version, validation and device release proof verified."
 
 # Re-evaluate checkout and freshness immediately before the first externally visible change.
-verify_tracked_checkout_clean
+verify_checkout_clean
 verify_snapshot_freshness
 ACTIVATION_TRANSACTION_OPEN=1
 if ! invalidate_activation_receipt; then
