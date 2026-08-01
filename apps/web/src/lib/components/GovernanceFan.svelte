@@ -84,7 +84,8 @@
     aria-controls="governance-fan-actions"
     on:click={handleTrigger}
   >
-    <span>Mitentscheiden</span>
+    <span class="governance-symbol" aria-hidden="true">◇</span>
+    <span class="governance-label">Mitentscheiden</span>
   </button>
 
   <div
@@ -161,7 +162,7 @@
     padding: 0 0.8rem;
     border: 1px solid var(--panel-border-strong);
     border-radius: 999px;
-    background: rgba(20, 22, 28, 0.88);
+    background: var(--panel);
     color: var(--text);
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--map-lens-blur));
@@ -270,6 +271,29 @@
     .governance-menu {
       width: min(288px, calc(100vw - 16px));
       gap: 0.35rem;
+    }
+  }
+
+  .governance-symbol {
+    display: none;
+    font-size: 1.25rem;
+    line-height: 1;
+  }
+
+  @media (max-width: 360px) {
+    .governance-trigger {
+      box-sizing: border-box;
+      width: 44px;
+      min-width: 44px;
+      padding: 0;
+    }
+
+    .governance-symbol {
+      display: inline;
+    }
+
+    .governance-label {
+      display: none;
     }
   }
 

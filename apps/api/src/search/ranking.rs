@@ -151,6 +151,7 @@ mod tests {
             title: title.to_string(),
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
+            has_authoritative_created_at: true,
             created_by_account_id: None,
             search_visibility: Default::default(),
             summary: Some("Test summary".to_string()),

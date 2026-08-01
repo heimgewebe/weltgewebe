@@ -53,7 +53,7 @@
     padding: 0 0.85rem;
     border: 1px solid var(--panel-border-strong);
     border-radius: 999px;
-    background: rgba(20, 22, 28, 0.96);
+    background: var(--panel);
     color: var(--text);
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--map-lens-blur));
@@ -94,7 +94,7 @@
 
   .fan-action:hover:not(:disabled) {
     border-color: var(--accent);
-    background: rgba(32, 42, 54, 0.98);
+    background: var(--panel-solid);
   }
 
   .fan-action:focus-visible {

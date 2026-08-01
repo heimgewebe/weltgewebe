@@ -3,6 +3,8 @@
   export let label: string;
   export let level: 2 | 3 | 4 | 5 | 6 = 3;
 
+  let detailsElement: HTMLDetailsElement;
+
   function openFromLongPress(event: MouseEvent) {
     event.preventDefault();
     (event.currentTarget as HTMLElement | null)?.parentElement?.setAttribute(
@@ -26,18 +28,18 @@
   function handleKeydown(event: KeyboardEvent) {
     if (event.key !== "Escape" || event.repeat || event.defaultPrevented)
       return;
-    const details = event.currentTarget as HTMLDetailsElement;
-    if (!details.open) return;
+    if (!detailsElement.open) return;
     event.preventDefault();
     event.stopPropagation();
-    closeDetails(details);
+    closeDetails(detailsElement);
   }
 </script>
 
-<details class="info-heading" on:keydown={handleKeydown}>
+<details bind:this={detailsElement} class="info-heading">
   <summary
     aria-controls={`${id}-explanation`}
     on:contextmenu={openFromLongPress}
+    on:keydown={handleKeydown}
   >
     <span {id} class="info-heading-title" role="heading" aria-level={level}
       >{label}</span
@@ -51,7 +53,9 @@
     aria-labelledby={id}
   >
     <slot />
-    <button type="button" on:click={close}>Schließen</button>
+    <button type="button" on:click={close} on:keydown={handleKeydown}
+      >Schließen</button
+    >
   </div>
 </details>
 

@@ -16,6 +16,7 @@ fn candidate(id: &str, rank_class: u8, rank_score: f64, embedding: [f64; 2]) -> 
             title: id.to_string(),
             created_at: "2026-07-22T00:00:00Z".to_string(),
             updated_at: "2026-07-22T00:00:00Z".to_string(),
+            has_authoritative_created_at: true,
             created_by_account_id: None,
             search_visibility: Default::default(),
             summary: None,

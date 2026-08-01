@@ -12,14 +12,26 @@
 
 <div class="auth-slot">
   {#if authView.showAccountLink}
-    <a class="login-entry" href="/nachrichten" aria-label="Private Nachrichten">✉</a>
     <a
-      class="garnrolle-link"
-      href="/settings#meine-garnrolle"
-      aria-label="Meine Garnrolle einrichten"
+      class="message-entry"
+      href="/nachrichten"
+      aria-label="Private Nachrichten"
+      title="Private Nachrichten"
     >
-      <img src={garnrolleIcon} alt="" />
+      <span aria-hidden="true">✉</span>
     </a>
+  {/if}
+
+  <a
+    class="garnrolle-link"
+    href="/settings"
+    aria-label="Einstellungen öffnen"
+    title="Einstellungen"
+  >
+    <img src={garnrolleIcon} alt="" />
+  </a>
+
+  {#if authView.showAccountLink}
     {#if authView.showRetry}
       <button
         type="button"
@@ -27,11 +39,15 @@
         on:click={retryAuth}
         aria-label="Anmeldung erneut prüfen"
       >
-        {authView.retryLabel}
+        <span class="auth-symbol" aria-hidden="true">↻</span>
+        <span class="auth-label">{authView.retryLabel}</span>
       </button>
     {/if}
   {:else if authView.showLoginLink}
-    <a class="login-entry" href="/login">Anmelden</a>
+    <a class="login-entry" href="/login" aria-label="Anmelden">
+      <span class="auth-symbol" aria-hidden="true">↪</span>
+      <span class="auth-label">Anmelden</span>
+    </a>
   {:else}
     <button
       type="button"
@@ -39,7 +55,8 @@
       on:click={retryAuth}
       aria-label="Anmeldung erneut prüfen"
     >
-      {authView.retryLabel}
+      <span class="auth-symbol" aria-hidden="true">↻</span>
+      <span class="auth-label">{authView.retryLabel}</span>
     </button>
   {/if}
 </div>
@@ -73,12 +90,14 @@
   }
 
   .garnrolle-link:focus-visible,
+  .message-entry:focus-visible,
   .login-entry:focus-visible,
   .auth-retry:focus-visible {
-    outline: 2px solid var(--accent, #6aa6ff);
+    outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
 
+  .message-entry,
   .login-entry,
   .auth-retry {
     display: grid;
@@ -94,10 +113,48 @@
     font-weight: 600;
   }
 
+  .message-entry {
+    box-sizing: border-box;
+    width: 44px;
+    min-width: 44px;
+    padding: 0;
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+
+  .auth-symbol {
+    display: none;
+    font-size: 1.15rem;
+    line-height: 1;
+  }
+
   .auth-retry {
     min-height: 36px;
     max-width: 9rem;
     padding: 0 0.65rem;
     font-size: 0.75rem;
+  }
+
+  @media (max-width: 510px) {
+    .auth-slot {
+      gap: 0.125rem;
+    }
+
+    .login-entry,
+    .auth-retry {
+      box-sizing: border-box;
+      width: 44px;
+      min-width: 44px;
+      min-height: 44px;
+      padding: 0;
+    }
+
+    .auth-symbol {
+      display: inline;
+    }
+
+    .auth-label {
+      display: none;
+    }
   }
 </style>

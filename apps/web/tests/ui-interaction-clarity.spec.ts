@@ -63,18 +63,23 @@ test.describe("Interaction Clarity & State Feedback", () => {
     );
   });
 
-  test("Garnrolle führt ohne Zwischenmenü direkt zu ihren Einstellungen", async ({
+  test("Einstellungen bündeln Garnrolle, Konto und Darstellung nachvollziehbar", async ({
     page,
   }) => {
-    const garnrolleLink = page.getByRole("link", {
-      name: "Meine Garnrolle einrichten",
+    const settingsLink = page.getByRole("link", {
+      name: "Einstellungen öffnen",
     });
 
-    await expect(garnrolleLink).toBeVisible();
-    await expect(garnrolleLink).toHaveAttribute(
-      "href",
-      "/settings#meine-garnrolle",
-    );
+    await expect(settingsLink).toBeVisible();
+    await expect(settingsLink).toHaveAttribute("href", "/settings");
+    await settingsLink.click();
+    await expect(page).toHaveURL(/\/settings$/);
+
+    const menu = page.getByTestId("settings-menu");
+    const garnrolleLink = menu.getByRole("link", { name: /Meine Garnrolle/ });
+    await expect(garnrolleLink).toHaveAttribute("href", "#meine-garnrolle");
+    await garnrolleLink.click();
+    await expect(page).toHaveURL(/\/settings#meine-garnrolle$/);
   });
 
   test("focus does not return to the tool fan trigger when entering komposition from Finden", async ({

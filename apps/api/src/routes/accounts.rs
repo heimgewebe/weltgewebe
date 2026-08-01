@@ -7,7 +7,7 @@ use super::{
     },
 };
 use crate::auth::{accounts::AccountStore, role::Role};
-use crate::config::DomainAccountWriteSource;
+use crate::config::{DomainAccountWriteSource, DomainReadSource};
 use crate::domain_db::{
     insert_account_from_jsonl_record, load_account_profile_from_postgres,
     update_account_profile_in_postgres, AccountProfileUpdate, AccountProfileUpdateError,
@@ -20,7 +20,7 @@ use axum::{
     http::StatusCode,
     Extension, Json,
 };
-use chrono::Utc;
+use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -573,6 +573,149 @@ pub async fn list_accounts(
     }
 }
 
+async fn load_account_postgres_activity(
+    state: &ApiState,
+    account_id: &str,
+) -> Result<Vec<AccountActivity>, StatusCode> {
+    let pool = match state.config.domain_read_source {
+        DomainReadSource::Jsonl => return Ok(Vec::new()),
+        DomainReadSource::Postgres => state.db_pool.as_ref().ok_or_else(|| {
+            tracing::error!(
+                account_id,
+                "PostgreSQL is the canonical domain read source but no pool is available for account activity"
+            );
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?,
+    };
+
+    // Knoten creation is durable domain history while the creator identity is
+    // still linked. Only the original created_at timestamp may date a creation;
+    // updated_at is mutation history and must never be promoted into an invented
+    // creation event. The live payload binding is authoritative. A narrow
+    // timestamp-bound origin-Faden fallback also covers older rows that have no
+    // payload binding. It deliberately requires the Faden to remain present:
+    // guest exit deletes those Fäden, so a later account reusing the same text
+    // id cannot inherit the departed person's history through create_actor_id.
+    let node_rows = sqlx::query_as::<_, (DateTime<Utc>, String)>(
+        "SELECT node.created_at, node.title \
+         FROM domain_nodes AS node \
+         WHERE node.created_at IS NOT NULL \
+           AND ( \
+                NULLIF(BTRIM(node.payload ->> 'created_by_account_id'), '') = $1 \
+                OR ( \
+                NULLIF(BTRIM(node.payload ->> 'created_by_account_id'), '') IS NULL \
+                AND ( \
+                    NULLIF(BTRIM(node.create_actor_id), '') IS NULL \
+                    OR NULLIF(BTRIM(node.create_actor_id), '') = $1 \
+                ) \
+                AND EXISTS ( \
+                    SELECT 1 \
+                    FROM domain_edges AS origin \
+                    WHERE origin.source_id = $1 \
+                      AND origin.target_id = node.id \
+                      AND NULLIF(BTRIM(origin.payload ->> 'source_type'), '') = 'account' \
+                      AND NULLIF(BTRIM(origin.payload ->> 'target_type'), '') = 'node' \
+                      AND origin.created_at IS NOT NULL \
+                      AND origin.created_at BETWEEN \
+                          node.created_at - INTERVAL '1 second' \
+                          AND node.created_at + INTERVAL '1 second' \
+                      AND NOT EXISTS ( \
+                          SELECT 1 \
+                          FROM domain_conversations AS origin_conversation \
+                          JOIN domain_messages AS origin_message \
+                            ON origin_message.conversation_id = origin_conversation.id \
+                          WHERE origin_conversation.node_id = node.id \
+                            AND origin_message.author_account_id = $1 \
+                            AND origin_message.created_at BETWEEN \
+                                origin.created_at - INTERVAL '1 second' \
+                                AND origin.created_at + INTERVAL '1 second' \
+                      ) \
+                      AND NOT EXISTS ( \
+                          SELECT 1 \
+                          FROM domain_edges AS earlier \
+                          WHERE earlier.target_id = node.id \
+                            AND NULLIF(BTRIM(earlier.payload ->> 'source_type'), '') = 'account' \
+                            AND NULLIF(BTRIM(earlier.payload ->> 'target_type'), '') = 'node' \
+                            AND earlier.created_at IS NOT NULL \
+                            AND (earlier.created_at, earlier.id) < \
+                                (origin.created_at, origin.id) \
+                      ) \
+                ) \
+            ) \
+           ) \
+         ORDER BY node.created_at DESC, node.id DESC",
+    )
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(
+            %error,
+            account_id,
+            "failed to load durable node-creation activity for account"
+        );
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    // Individual Fäden are temporary hotspot projections. Conversation
+    // messages are the durable action records, so aggregate same-day
+    // contributions to avoid a wall of visually identical timeline entries.
+    let contribution_rows = sqlx::query_as::<_, (DateTime<Utc>, String, i64)>(
+        "SELECT MAX(message.created_at), \
+                COALESCE(node.title, conversation.node_title_snapshot), \
+                COUNT(*)::bigint \
+         FROM domain_messages AS message \
+         JOIN domain_conversations AS conversation \
+           ON conversation.id = message.conversation_id \
+         LEFT JOIN domain_nodes AS node ON node.id = conversation.node_id \
+         WHERE message.author_account_id = $1 \
+           AND conversation.deleted_at IS NULL \
+           AND COALESCE(node.title, conversation.node_title_snapshot) IS NOT NULL \
+         GROUP BY conversation.id, \
+                  COALESCE(node.title, conversation.node_title_snapshot), \
+                  (message.created_at AT TIME ZONE 'UTC')::date \
+         ORDER BY MAX(message.created_at) DESC, conversation.id DESC",
+    )
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| {
+        tracing::error!(
+            %error,
+            account_id,
+            "failed to load durable conversation activity for account"
+        );
+        StatusCode::INTERNAL_SERVER_ERROR
+    })?;
+
+    let mut activity = Vec::with_capacity(node_rows.len() + contribution_rows.len());
+    activity.extend(
+        node_rows
+            .into_iter()
+            .map(|(activity_at, node_title)| AccountActivity {
+                date: activity_at.to_rfc3339_opts(SecondsFormat::Micros, true),
+                event: format!("Hat den Knoten \"{}\" geknüpft.", node_title),
+            }),
+    );
+    activity.extend(contribution_rows.into_iter().map(
+        |(latest_at, node_title, contribution_count)| AccountActivity {
+            date: latest_at.to_rfc3339_opts(SecondsFormat::Micros, true),
+            event: if contribution_count == 1 {
+                format!(
+                    "Hat einen Beitrag zum Gespräch über den Knoten \"{}\" geschrieben.",
+                    node_title
+                )
+            } else {
+                format!(
+                    "Hat {} Beiträge zum Gespräch über den Knoten \"{}\" geschrieben.",
+                    contribution_count, node_title
+                )
+            },
+        },
+    ));
+    Ok(activity)
+}
+
 pub async fn get_account(
     State(state): State<ApiState>,
     Path(id): Path<String>,
@@ -588,11 +731,9 @@ pub async fn get_account(
             .ok_or(StatusCode::NOT_FOUND)?
     };
 
-    // Fäden are the source of truth for which Knoten belong to a Garnrolle.
-    // Both directions are accepted, but a raw id match is insufficient: an
-    // explicitly node-typed endpoint must never be projected as an account.
-    // Missing legacy type metadata remains readable; newly created edges always
-    // carry explicit validated types.
+    // Active Fäden remain the source of truth for the current Knoten tab. They
+    // are deliberately not an activity history: each Faden expires after 168
+    // hours and several distinct actions may create parallel projections.
     let related_edges = {
         let now = Utc::now();
         let edges = state.edges.read().await;
@@ -609,57 +750,70 @@ pub async fn get_account(
             .collect::<Vec<_>>()
     };
 
-    let node_cache = state.nodes.read().await;
-    let mut seen_nodes = HashSet::new();
-    let mut nodes = Vec::new();
-    let mut activity = Vec::new();
+    // Build the current Knoten projection while holding only the node lock.
+    // JSONL has no durable conversation store, but explicit node creator
+    // metadata still provides a correct creation history.
+    let (mut nodes, mut activity) = {
+        let node_cache = state.nodes.read().await;
+        let mut seen_nodes = HashSet::new();
+        let mut nodes = Vec::new();
 
-    for edge in related_edges {
-        let account_is_source = edge.source_id == id;
-        let (related_id, related_type) = if account_is_source {
-            (edge.target_id.as_str(), edge.target_type.as_deref())
-        } else {
-            (edge.source_id.as_str(), edge.source_type.as_deref())
-        };
-        if !matches!(related_type, Some("node") | None) {
-            continue;
-        }
-        let Some(node) = node_cache.get(related_id) else {
-            continue;
-        };
-
-        if seen_nodes.insert(node.id.clone()) {
-            nodes.push(AccountNodeRelation {
-                node_id: node.id.clone(),
-                node_title: node.title.clone(),
-                node_kind: node.kind.clone(),
-                edge_kind: edge.edge_kind.clone(),
-            });
-        }
-
-        if let Some(date) = edge
-            .created_at
-            .as_ref()
-            .map(|timestamp| timestamp.as_str().to_owned())
-        {
-            let event = if account_is_source {
-                format!("Hat den Knoten \"{}\" geknüpft.", node.title)
+        for edge in related_edges {
+            let (related_id, related_type) = if edge.source_id == id {
+                (edge.target_id.as_str(), edge.target_type.as_deref())
             } else {
-                format!(
-                    "Wurde über einen Faden mit dem Knoten \"{}\" verknüpft.",
-                    node.title
-                )
+                (edge.source_id.as_str(), edge.source_type.as_deref())
             };
-            activity.push(AccountActivity { date, event });
+            if !matches!(related_type, Some("node") | None) {
+                continue;
+            }
+            let Some(node) = node_cache.get(related_id) else {
+                continue;
+            };
+
+            if seen_nodes.insert(node.id.clone()) {
+                nodes.push(AccountNodeRelation {
+                    node_id: node.id.clone(),
+                    node_title: node.title.clone(),
+                    node_kind: node.kind.clone(),
+                    edge_kind: edge.edge_kind.clone(),
+                });
+            }
         }
-    }
+
+        let activity = match state.config.domain_read_source {
+            DomainReadSource::Jsonl => node_cache
+                .iter_in_order()
+                .filter(|node| {
+                    node.has_authoritative_created_at
+                        && node.created_by_account_id.as_deref() == Some(id.as_str())
+                })
+                .map(|node| AccountActivity {
+                    date: node.created_at.clone(),
+                    event: format!("Hat den Knoten \"{}\" geknüpft.", node.title),
+                })
+                .collect(),
+            DomainReadSource::Postgres => Vec::new(),
+        };
+
+        (nodes, activity)
+    };
+
+    // PostgreSQL can reconstruct the complete durable history, including
+    // faded origin Fäden and correctly classified conversation contributions.
+    activity.extend(load_account_postgres_activity(&state, &id).await?);
 
     nodes.sort_by(|left, right| {
         left.node_title
             .cmp(&right.node_title)
             .then_with(|| left.node_id.cmp(&right.node_id))
     });
-    activity.sort_by(|left, right| right.date.cmp(&left.date));
+    activity.sort_by(|left, right| {
+        right
+            .date
+            .cmp(&left.date)
+            .then_with(|| left.event.cmp(&right.event))
+    });
 
     Ok(Json(AccountDetails {
         account,

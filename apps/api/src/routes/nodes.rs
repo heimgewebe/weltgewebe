@@ -201,6 +201,10 @@ pub struct Node {
     pub title: String,
     pub created_at: String,
     pub updated_at: String,
+    /// True only when the durable source carried a valid original creation
+    /// timestamp. This is runtime provenance and is never exposed or persisted.
+    #[serde(skip)]
+    pub has_authoritative_created_at: bool,
     /// Server-owned, immutable creator binding. Legacy records remain `None`.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub created_by_account_id: Option<String>,
@@ -462,6 +466,10 @@ where
 impl From<NodeDto> for Node {
     fn from(dto: NodeDto) -> Self {
         let default_timestamp = "1970-01-01T00:00:00Z";
+        let has_authoritative_created_at = dto
+            .created_at
+            .as_deref()
+            .is_some_and(|timestamp| chrono::DateTime::parse_from_rfc3339(timestamp).is_ok());
 
         let created_at = dto
             .created_at
@@ -482,6 +490,7 @@ impl From<NodeDto> for Node {
             title: dto.title.unwrap_or_else(|| DEFAULT_TITLE.to_string()),
             created_at,
             updated_at,
+            has_authoritative_created_at,
             created_by_account_id: normalize_account_id(dto.created_by_account_id.as_deref()),
             search_visibility: dto.search_visibility.unwrap_or_default(),
             summary: dto.summary,
@@ -548,6 +557,8 @@ pub(crate) fn map_json_to_node(v: &Value) -> Option<Node> {
     let created_at_raw = v.get("created_at").and_then(|v| v.as_str());
     let updated_at_raw = v.get("updated_at").and_then(|v| v.as_str());
     let default_timestamp = "1970-01-01T00:00:00Z";
+    let has_authoritative_created_at = created_at_raw
+        .is_some_and(|timestamp| chrono::DateTime::parse_from_rfc3339(timestamp).is_ok());
 
     let created_at = created_at_raw
         .or(updated_at_raw)
@@ -598,6 +609,7 @@ pub(crate) fn map_json_to_node(v: &Value) -> Option<Node> {
         title,
         created_at,
         updated_at,
+        has_authoritative_created_at,
         created_by_account_id,
         search_visibility,
         summary,
@@ -838,6 +850,7 @@ fn build_node_record(
         title: validated.title,
         created_at: now.clone(),
         updated_at: now,
+        has_authoritative_created_at: true,
         created_by_account_id: Some(created_by_account_id),
         search_visibility: validated.search_visibility.unwrap_or_default(),
         summary: validated.summary,
@@ -2073,7 +2086,9 @@ fn set_node_record_fields(record: &mut Value, node: &Node) -> std::io::Result<()
     object.insert("id".to_string(), json!(node.id));
     object.insert("kind".to_string(), json!(node.kind));
     object.insert("title".to_string(), json!(node.title));
-    object.insert("created_at".to_string(), json!(node.created_at));
+    if node.has_authoritative_created_at {
+        object.insert("created_at".to_string(), json!(node.created_at));
+    }
     object.insert("updated_at".to_string(), json!(node.updated_at));
     if let Some(created_by_account_id) = &node.created_by_account_id {
         object.insert(
@@ -2105,6 +2120,32 @@ fn set_node_record_fields(record: &mut Value, node: &Node) -> std::io::Result<()
     }
     object.remove("steckbrief");
     Ok(())
+}
+
+#[cfg(test)]
+mod node_record_tests {
+    use super::*;
+
+    #[test]
+    fn jsonl_replace_does_not_promote_fallback_time_to_creation_time() {
+        let mut record = json!({
+            "id": "legacy-undated",
+            "kind": "resource",
+            "title": "Vorher",
+            "updated_at": "2026-07-13T05:00:00Z",
+            "location": { "lat": 53.5, "lon": 10.0 }
+        });
+        let mut node = map_json_to_node(&record).expect("legacy node must load");
+        assert!(!node.has_authoritative_created_at);
+        node.title = "Nachher".to_string();
+
+        set_node_record_fields(&mut record, &node).expect("legacy node record must update");
+
+        assert!(record.get("created_at").is_none());
+        assert_eq!(record["updated_at"], "2026-07-13T05:00:00Z");
+        let reloaded = map_json_to_node(&record).expect("updated legacy node must reload");
+        assert!(!reloaded.has_authoritative_created_at);
+    }
 }
 
 async fn replace_node_jsonl(node: &Node) -> std::io::Result<bool> {
@@ -2764,6 +2805,7 @@ pub async fn replace_node(
         title: validated.title,
         created_at: existing.created_at.clone(),
         updated_at: existing.updated_at.clone(),
+        has_authoritative_created_at: existing.has_authoritative_created_at,
         created_by_account_id: existing.created_by_account_id.clone(),
         search_visibility: validated
             .search_visibility

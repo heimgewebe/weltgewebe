@@ -5,9 +5,10 @@ body,
   height: 100%;
   margin: 0;
 }
+
 body {
   background: var(--bg);
-  color: var(--fg);
+  color: var(--text);
   font:
     14px/1.4 ui-sans-serif,
     system-ui,
@@ -19,10 +20,12 @@ body {
     "Helvetica Neue",
     Arial;
 }
+
 :focus {
   outline: 2px solid transparent;
   outline-offset: 3px;
 }
+
 :focus-visible {
   outline-color: var(--accent);
 }
@@ -32,43 +35,52 @@ body {
   gap: 0.75rem;
   align-items: center;
 }
+
 .col {
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
 }
+
 .panel {
   background: var(--panel);
-  border: 1px solid #1f2630;
-  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  border-radius: var(--radius);
   padding: 0.75rem;
+  box-shadow: var(--shadow);
 }
+
 .badge {
-  border: 1px solid #223244;
+  border: 1px solid var(--panel-border);
   padding: 0.15rem 0.45rem;
   border-radius: 999px;
   color: var(--muted);
 }
+
 .ghost {
   opacity: 0.7;
 }
+
 .divider {
   height: 1px;
-  background: #1f2630;
+  background: var(--panel-border);
   margin: 0.5rem 0;
 }
+
 .btn {
   padding: 0.4rem 0.6rem;
-  border: 1px solid #263240;
-  background: #101821;
-  color: var(--fg);
+  border: 1px solid var(--panel-border-strong);
+  background: var(--panel-solid);
+  color: var(--text);
   border-radius: 8px;
   cursor: pointer;
 }
+
 .btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
+
 .legend-dot {
   width: 0.8rem;
   height: 0.8rem;
@@ -77,21 +89,27 @@ body {
   margin-right: 0.4rem;
   vertical-align: middle;
 }
+
 .dot-blue {
   background: #4ea1ff;
 }
+
 .dot-gray {
   background: #9aa3ad;
 }
+
 .dot-yellow {
   background: #ffd65a;
 }
+
 .dot-red {
   background: #ff6b6b;
 }
+
 .dot-green {
   background: #54e1a6;
 }
+
 .dot-violet {
   background: #b392f0;
 }
@@ -106,16 +124,14 @@ body {
   overscroll-behavior-x: contain;
 }
 
-/* ------------------------------------
-   Panel & Tab Shared Components
-   ------------------------------------ */
 .tabs {
   display: flex;
   gap: 0.5rem;
-  border-bottom: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
+  border-bottom: 1px solid var(--panel-border);
   margin-bottom: 1rem;
   overflow-x: auto;
 }
+
 .tabs button {
   background: none;
   border: none;
@@ -124,33 +140,33 @@ body {
   box-sizing: border-box;
   cursor: pointer;
   border-bottom: 2px solid transparent;
-  color: var(--ghost, #666);
+  color: var(--muted);
   white-space: nowrap;
 }
+
 .tabs button.active {
-  border-bottom-color: var(--accent, #0070f3);
-  color: var(--text, #333);
+  border-bottom-color: var(--accent);
+  color: var(--text);
   font-weight: bold;
 }
+
 .tab-content {
   padding-top: 0.5rem;
 }
 
-/* ------------------------------------
-   Timeline Shared Components
-   ------------------------------------ */
 .timeline {
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 0 0 0 0.5rem;
   border-left: 2px solid var(--panel-border-strong);
-  margin-left: 0.5rem;
 }
+
 .timeline li {
   padding-left: 1rem;
   position: relative;
   margin-bottom: 1.5rem;
 }
+
 .timeline li::before {
   content: "";
   position: absolute;
@@ -159,14 +175,16 @@ body {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--accent, #6aa6ff);
+  background: var(--accent);
 }
+
 .timeline .date {
   display: block;
   font-size: 0.8rem;
-  color: var(--muted, #9aa4b2);
+  color: var(--muted);
   margin-bottom: 0.25rem;
 }
+
 .timeline .event {
   font-size: 0.95rem;
 }

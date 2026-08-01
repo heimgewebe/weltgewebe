@@ -1,6 +1,7 @@
 import { json, error } from "@sveltejs/kit";
 import {
   resolveAccount,
+  resolveAccountActivity,
   resolveAccountNodes,
   getAccountEntries,
 } from "$lib/demo/resolvers";
@@ -27,15 +28,6 @@ export function GET({ params }: RequestEvent) {
   return json({
     ...account,
     nodes,
-    activity: [
-      {
-        date: account.created_at,
-        event: "Account erstellt.",
-      },
-      ...nodes.map((n) => ({
-        date: account.created_at, // Mocking date
-        event: `Hat den Knoten "${n.node_title}" geknüpft.`,
-      })),
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
+    activity: resolveAccountActivity(id),
   });
 }

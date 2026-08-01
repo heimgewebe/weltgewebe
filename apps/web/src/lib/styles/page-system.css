@@ -4,7 +4,7 @@
   --wg-border-strong: var(--panel-border-strong);
   --wg-action: var(--accent);
   --wg-action-soft: var(--accent-soft);
-  --wg-on-action: var(--accent-contrast);
+  --wg-on-action: var(--bg);
   --wg-muted: var(--muted);
   min-height: 100vh;
   min-height: 100dvh;
@@ -89,7 +89,7 @@
 
 .wg-card {
   border: 1px solid var(--wg-border);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: color-mix(in srgb, var(--wg-surface) 94%, transparent);
   box-shadow: var(--shadow);
 }
@@ -115,7 +115,7 @@
   padding: 0.75rem 0.85rem;
   border: 1px solid var(--wg-border-strong);
   border-radius: 12px;
-  background: color-mix(in srgb, var(--bg) 82%, black);
+  background: var(--panel-solid);
   color: var(--text);
   font: inherit;
 }
@@ -207,8 +207,8 @@ textarea.wg-control {
 }
 
 .wg-state--success {
-  border-color: color-mix(in srgb, #54e1a6 55%, transparent);
-  background: color-mix(in srgb, #54e1a6 12%, var(--wg-surface));
+  border-color: color-mix(in srgb, var(--accent) 55%, transparent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--wg-surface));
 }
 
 .wg-state--error {

@@ -170,7 +170,7 @@ test("camera movement remains sticky after returning to the initial view", async
   });
   releaseAuth();
   await expect(
-    page.getByRole("link", { name: "Meine Garnrolle einrichten" }),
+    page.getByRole("link", { name: "Einstellungen öffnen" }),
   ).toBeVisible();
   const finalCamera = await page.evaluate(() => {
     const map = (window as any).__TEST_MAP__;

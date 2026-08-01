@@ -619,6 +619,7 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
         _ => anyhow::bail!("domain node {} has NULL location", id),
     };
     let payload = parse_payload(&payload_text);
+    let has_authoritative_created_at = created_at.is_some();
     let (created_at, updated_at) = node_timestamps(created_at, updated_at);
     let search_visibility = search_visibility_str
         .parse::<SearchVisibility>()
@@ -636,6 +637,7 @@ fn node_from_row(row: NodeRow) -> Result<Node, anyhow::Error> {
         title,
         created_at,
         updated_at,
+        has_authoritative_created_at,
         created_by_account_id: normalize_account_id(
             payload_string(&payload, "created_by_account_id").as_deref(),
         ),
