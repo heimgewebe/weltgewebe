@@ -653,7 +653,6 @@ async fn postgres_account_activity_reconstructs_expired_legacy_origin_faden() ->
     sqlx::query(
         "UPDATE domain_nodes \
          SET created_at = NULL, \
-             updated_at = NULL, \
              payload = payload || jsonb_build_object('created_by_account_id', $2::text) \
          WHERE id = $1",
     )
@@ -661,7 +660,19 @@ async fn postgres_account_activity_reconstructs_expired_legacy_origin_faden() ->
     .bind(ACCOUNT_ID)
     .execute(&pool)
     .await
-    .context("make owned legacy node fully undated")?;
+    .context("make owned legacy node lack its creation timestamp")?;
+    let half_dated_details = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(
+        half_dated_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "updated_at must not be substituted for a missing creation timestamp"
+    );
+
+    sqlx::query("UPDATE domain_nodes SET updated_at = NULL WHERE id = $1")
+        .bind(NODE_ID)
+        .execute(&pool)
+        .await
+        .context("make owned legacy node fully undated")?;
     let undated_details = read_account_details(&app, ACCOUNT_ID).await?;
     assert_eq!(
         undated_details["activity"].as_array().map(Vec::len),

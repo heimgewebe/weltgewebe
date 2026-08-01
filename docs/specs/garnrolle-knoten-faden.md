@@ -190,8 +190,9 @@ Für die Projektion gelten folgende Regeln:
    Urheberbindung abgeleitet. Fehlt diese bei einem Legacy-Knoten, darf nur ein
    eng zeitgebundener, frühester Herkunftsfaden mit explizit als Account und
    Knoten typisierten Endpunkten als Rückfallevidenz dienen; untypisierte Fäden
-   und Gesprächsfäden sind davon auszuschließen. Fehlt jeder belastbare
-   Zeitstempel, wird keine Aktivität geraten. Wird eine Accountidentität
+   und Gesprächsfäden sind davon auszuschließen. Fehlt der ursprüngliche
+   Erstellungszeitstempel `created_at`, wird keine Aktivität aus einem späteren
+   Änderungszeitpunkt geraten. Wird eine Accountidentität
    abgelöst, dürfen interne Erzeugungs- oder Idempotenzfelder die entfernte
    Urheberbindung nicht wiederherstellen.
 2. Gesprächsbeiträge werden aus den dauerhaften Beitragsdatensätzen als eigene

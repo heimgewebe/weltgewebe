@@ -8,9 +8,11 @@ use chrono::{Duration, SecondsFormat, Utc};
 mod helpers;
 
 use helpers::{
-    assert_account_has_single_node_relation, read_account_details, test_node, TEST_NODE_TIMESTAMP,
+    assert_account_has_single_node_relation, read_account_details, set_gewebe_in_dir, test_node,
+    TEST_NODE_TIMESTAMP,
 };
-use std::sync::Arc;
+use serial_test::serial;
+use std::{fs, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
 use weltgewebe_api::{
@@ -22,6 +24,7 @@ use weltgewebe_api::{
         accounts::{AccountInternal, AccountPublic},
         api_router,
         edges::Edge,
+        nodes,
     },
     state::{ApiState, OrderedCache},
     telemetry::{BuildInfo, Metrics},
@@ -535,6 +538,45 @@ async fn account_details_omit_expired_faden_projection() -> Result<()> {
         "Hat den Knoten \"Vergangener Knoten\" geknüpft."
     );
     assert_eq!(value["activity"][0]["date"], TEST_NODE_TIMESTAMP);
+
+    Ok(())
+}
+
+#[tokio::test]
+#[serial]
+async fn account_details_skip_jsonl_creation_without_original_timestamp() -> Result<()> {
+    const ACCOUNT_ID: &str = "account-undated-jsonl";
+    const NODE_ID: &str = "node-undated-jsonl";
+    const UPDATED_AT: &str = "2026-07-13T05:00:00Z";
+
+    let tmp = tempfile::tempdir()?;
+    let in_dir = tmp.path().join("in");
+    fs::create_dir_all(&in_dir)?;
+    let _env = set_gewebe_in_dir(&in_dir);
+    fs::write(
+        in_dir.join("demo.nodes.jsonl"),
+        format!(
+            "{{\"id\":\"{NODE_ID}\",\"kind\":\"resource\",\"title\":\"Undatierter Knoten\",\"updated_at\":\"{UPDATED_AT}\",\"created_by_account_id\":\"{ACCOUNT_ID}\",\"location\":{{\"lat\":53.5,\"lon\":10.0}}}}\n"
+        ),
+    )?;
+
+    let loaded_nodes = nodes::load_nodes().await;
+    let loaded = loaded_nodes.get(NODE_ID).context("legacy node must load")?;
+    assert_eq!(
+        loaded.created_at, UPDATED_AT,
+        "public compatibility fallback remains stable"
+    );
+    assert!(!loaded.has_authoritative_created_at);
+
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    accounts.insert(seed_account(ACCOUNT_ID));
+    state.accounts = Arc::new(RwLock::new(accounts));
+    state.nodes = Arc::new(RwLock::new(loaded_nodes));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+    let value = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(value["activity"].as_array().map(Vec::len), Some(0));
 
     Ok(())
 }

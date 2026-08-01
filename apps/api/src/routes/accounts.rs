@@ -589,15 +589,17 @@ async fn load_account_postgres_activity(
     };
 
     // Knoten creation is durable domain history while the creator identity is
-    // still linked. The live payload binding is authoritative. A narrow
+    // still linked. Only the original created_at timestamp may date a creation;
+    // updated_at is mutation history and must never be promoted into an invented
+    // creation event. The live payload binding is authoritative. A narrow
     // timestamp-bound origin-Faden fallback also covers older rows that have no
     // payload binding. It deliberately requires the Faden to remain present:
     // guest exit deletes those Fäden, so a later account reusing the same text
     // id cannot inherit the departed person's history through create_actor_id.
-    let node_rows = sqlx::query_as::<_, (Option<DateTime<Utc>>, String)>(
-        "SELECT COALESCE(node.created_at, node.updated_at), node.title \
+    let node_rows = sqlx::query_as::<_, (DateTime<Utc>, String)>(
+        "SELECT node.created_at, node.title \
          FROM domain_nodes AS node \
-         WHERE COALESCE(node.created_at, node.updated_at) IS NOT NULL \
+         WHERE node.created_at IS NOT NULL \
            AND ( \
                 NULLIF(BTRIM(node.payload ->> 'created_by_account_id'), '') = $1 \
                 OR ( \
@@ -615,8 +617,8 @@ async fn load_account_postgres_activity(
                       AND NULLIF(BTRIM(origin.payload ->> 'target_type'), '') = 'node' \
                       AND origin.created_at IS NOT NULL \
                       AND origin.created_at BETWEEN \
-                          COALESCE(node.created_at, node.updated_at) - INTERVAL '1 second' \
-                          AND COALESCE(node.created_at, node.updated_at) + INTERVAL '1 second' \
+                          node.created_at - INTERVAL '1 second' \
+                          AND node.created_at + INTERVAL '1 second' \
                       AND NOT EXISTS ( \
                           SELECT 1 \
                           FROM domain_conversations AS origin_conversation \
@@ -641,7 +643,7 @@ async fn load_account_postgres_activity(
                 ) \
             ) \
            ) \
-         ORDER BY COALESCE(node.created_at, node.updated_at) DESC, node.id DESC",
+         ORDER BY node.created_at DESC, node.id DESC",
     )
     .bind(account_id)
     .fetch_all(pool)
@@ -690,11 +692,9 @@ async fn load_account_postgres_activity(
     activity.extend(
         node_rows
             .into_iter()
-            .filter_map(|(activity_at, node_title)| {
-                activity_at.map(|activity_at| AccountActivity {
-                    date: activity_at.to_rfc3339_opts(SecondsFormat::Micros, true),
-                    event: format!("Hat den Knoten \"{}\" geknüpft.", node_title),
-                })
+            .map(|(activity_at, node_title)| AccountActivity {
+                date: activity_at.to_rfc3339_opts(SecondsFormat::Micros, true),
+                event: format!("Hat den Knoten \"{}\" geknüpft.", node_title),
             }),
     );
     activity.extend(contribution_rows.into_iter().map(
@@ -784,7 +784,10 @@ pub async fn get_account(
         let activity = match state.config.domain_read_source {
             DomainReadSource::Jsonl => node_cache
                 .iter_in_order()
-                .filter(|node| node.created_by_account_id.as_deref() == Some(id.as_str()))
+                .filter(|node| {
+                    node.has_authoritative_created_at
+                        && node.created_by_account_id.as_deref() == Some(id.as_str())
+                })
                 .map(|node| AccountActivity {
                     date: node.created_at.clone(),
                     event: format!("Hat den Knoten \"{}\" geknüpft.", node.title),
