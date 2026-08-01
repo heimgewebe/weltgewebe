@@ -55,6 +55,14 @@ path_state() {
   fi
 }
 
+on_interrupt() {
+  exit 130
+}
+
+on_terminate() {
+  exit 143
+}
+
 [[ "$BASEMAP_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] ||
   fail "BASEMAP_VERSION must use numeric semantic versioning"
 command -v pnpm > /dev/null 2>&1 || fail "pnpm is required"
@@ -202,25 +210,54 @@ cleanup_publish() {
     [[ "$ARTIFACT_CREATED" == "1" ]] && rm -f "$TARGET_ARTIFACT"
   fi
 }
+
+publish_immutable_set() {
+  local failed=0
+
+  # Protect the non-atomic three-link publication window. Ownership flags and
+  # all three links become visible as one cleanup transaction before signals
+  # are handled again.
+  trap '' INT TERM
+
+  if ! ln "$ARTIFACT_TMP" "$TARGET_ARTIFACT"; then
+    echo "ERROR: could not publish immutable Germany artifact: $TARGET_ARTIFACT" >&2
+    failed=1
+  else
+    ARTIFACT_CREATED=1
+  fi
+
+  if [[ "$failed" == "0" ]]; then
+    if ! ln "$PROOF_TMP" "$TARGET_PROOF"; then
+      echo "ERROR: could not publish immutable Germany validation report: $TARGET_PROOF" >&2
+      failed=1
+    else
+      PROOF_CREATED=1
+    fi
+  fi
+
+  if [[ "$failed" == "0" ]]; then
+    if ! ln "$META_TMP" "$TARGET_META"; then
+      echo "ERROR: could not publish immutable Germany sentinel: $TARGET_META" >&2
+      failed=1
+    else
+      META_CREATED=1
+    fi
+  fi
+
+  trap on_interrupt INT
+  trap on_terminate TERM
+  return "$failed"
+}
+
 trap cleanup_publish EXIT
+trap on_interrupt INT
+trap on_terminate TERM
 
 install -m 0644 "$ARTIFACT" "$ARTIFACT_TMP"
 install -m 0644 "$PROOF_OUTPUT" "$PROOF_TMP"
 install -m 0644 "$META" "$META_TMP"
 
-ln "$ARTIFACT_TMP" "$TARGET_ARTIFACT" ||
-  fail "could not publish immutable Germany artifact: $TARGET_ARTIFACT"
-ARTIFACT_CREATED=1
-ln "$PROOF_TMP" "$TARGET_PROOF" ||
-  fail "could not publish immutable Germany validation report: $TARGET_PROOF"
-PROOF_CREATED=1
-ln "$META_TMP" "$TARGET_META" ||
-  fail "could not publish immutable Germany sentinel: $TARGET_META"
-META_CREATED=1
-
-PUBLISH_COMPLETE=1
-cleanup_publish
-trap - EXIT
+publish_immutable_set || fail "could not publish the immutable Germany version set"
 
 for published_path in "$TARGET_ARTIFACT" "$TARGET_PROOF" "$TARGET_META"; do
   [[ -s "$published_path" ]] || fail "published Germany version file missing: $published_path"
@@ -235,6 +272,10 @@ ALIAS_META_STATE_AFTER="$(path_state "$ALIAS_META")"
   fail "preparation changed the stable Germany artifact alias"
 [[ "$ALIAS_META_STATE_AFTER" == "$ALIAS_META_STATE_BEFORE" ]] ||
   fail "preparation changed the stable Germany metadata alias"
+
+PUBLISH_COMPLETE=1
+cleanup_publish
+trap - EXIT INT TERM
 
 echo "Germany PMTiles version preparation is complete."
 echo "Isolated build: $BUILD_DIR"
