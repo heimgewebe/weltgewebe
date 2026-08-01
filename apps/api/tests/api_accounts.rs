@@ -7,7 +7,9 @@ use axum::{
 use chrono::{Duration, SecondsFormat, Utc};
 mod helpers;
 
-use helpers::{assert_account_has_single_node_relation, read_account_details, test_node};
+use helpers::{
+    assert_account_has_single_node_relation, read_account_details, test_node, TEST_NODE_TIMESTAMP,
+};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -452,10 +454,9 @@ async fn account_details_project_outgoing_relation_without_public_note() -> Resu
     state.accounts = Arc::new(RwLock::new(accounts));
 
     let mut nodes = OrderedCache::new();
-    nodes.insert(
-        NODE_ID.to_string(),
-        test_node(NODE_ID, "fairschenkbox", Some("sharing is caring")),
-    );
+    let mut node = test_node(NODE_ID, "fairschenkbox", Some("sharing is caring"));
+    node.created_by_account_id = Some(ACCOUNT_ID.to_string());
+    nodes.insert(NODE_ID.to_string(), node);
     state.nodes = Arc::new(RwLock::new(nodes));
 
     let mut edges = OrderedCache::new();
@@ -487,7 +488,7 @@ async fn account_details_project_outgoing_relation_without_public_note() -> Resu
         "reference",
         "Hat den Knoten \"fairschenkbox\" geknüpft.",
     );
-    assert_eq!(projected_at, created_at);
+    assert_eq!(projected_at, TEST_NODE_TIMESTAMP);
 
     Ok(())
 }
@@ -503,10 +504,9 @@ async fn account_details_omit_expired_faden_projection() -> Result<()> {
     state.accounts = Arc::new(RwLock::new(accounts));
 
     let mut nodes = OrderedCache::new();
-    nodes.insert(
-        NODE_ID.to_string(),
-        test_node(NODE_ID, "Vergangener Knoten", None),
-    );
+    let mut node = test_node(NODE_ID, "Vergangener Knoten", None);
+    node.created_by_account_id = Some(ACCOUNT_ID.to_string());
+    nodes.insert(NODE_ID.to_string(), node);
     state.nodes = Arc::new(RwLock::new(nodes));
 
     let mut edges = OrderedCache::new();
@@ -529,13 +529,69 @@ async fn account_details_omit_expired_faden_projection() -> Result<()> {
     let app = Router::new().merge(api_router()).with_state(state);
     let value = read_account_details(&app, ACCOUNT_ID).await?;
     assert_eq!(value["nodes"].as_array().map(Vec::len), Some(0));
-    assert_eq!(value["activity"].as_array().map(Vec::len), Some(0));
+    assert_eq!(value["activity"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        value["activity"][0]["event"],
+        "Hat den Knoten \"Vergangener Knoten\" geknüpft."
+    );
+    assert_eq!(value["activity"][0]["date"], TEST_NODE_TIMESTAMP);
 
     Ok(())
 }
 
 #[tokio::test]
-async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result<()> {
+async fn account_details_deduplicate_parallel_faeden_without_inventing_activity() -> Result<()> {
+    const ACCOUNT_ID: &str = "account-parallel";
+    const NODE_ID: &str = "node-parallel";
+    let (created_at, expires_at) = active_faden_timestamps();
+
+    let mut state = test_state().await?;
+    let mut accounts = AccountStore::new();
+    accounts.insert(seed_account(ACCOUNT_ID));
+    state.accounts = Arc::new(RwLock::new(accounts));
+
+    let mut node = test_node(NODE_ID, "Mehrfach beteiligter Knoten", None);
+    node.created_by_account_id = Some(ACCOUNT_ID.to_string());
+    let mut nodes = OrderedCache::new();
+    nodes.insert(NODE_ID.to_string(), node);
+    state.nodes = Arc::new(RwLock::new(nodes));
+
+    let mut edges = OrderedCache::new();
+    for edge_id in ["edge-parallel-a", "edge-parallel-b"] {
+        edges.insert(
+            edge_id.to_string(),
+            Edge {
+                id: edge_id.to_string(),
+                source_id: ACCOUNT_ID.to_string(),
+                source_type: Some("account".to_string()),
+                target_id: NODE_ID.to_string(),
+                target_type: Some("node".to_string()),
+                edge_kind: "reference".to_string(),
+                note: None,
+                created_at: Some(created_at.clone().into()),
+                expires_at: Some(Some(expires_at.clone().into())),
+            },
+        );
+    }
+    state.edges = Arc::new(RwLock::new(edges));
+
+    let app = Router::new().merge(api_router()).with_state(state);
+    let value = read_account_details(&app, ACCOUNT_ID).await?;
+    let projected_at = assert_account_has_single_node_relation(
+        &value,
+        ACCOUNT_ID,
+        NODE_ID,
+        "Mehrfach beteiligter Knoten",
+        "reference",
+        "Hat den Knoten \"Mehrfach beteiligter Knoten\" geknüpft.",
+    );
+    assert_eq!(projected_at, TEST_NODE_TIMESTAMP);
+
+    Ok(())
+}
+
+#[tokio::test]
+async fn account_details_do_not_turn_incoming_relation_into_account_activity() -> Result<()> {
     const ACCOUNT_ID: &str = "account-incoming";
     const NODE_ID: &str = "node-incoming";
     let (created_at, expires_at) = active_faden_timestamps();
@@ -571,15 +627,11 @@ async fn account_details_attribute_incoming_admin_relation_neutrally() -> Result
 
     let app = Router::new().merge(api_router()).with_state(state);
     let value = read_account_details(&app, ACCOUNT_ID).await?;
-    let projected_at = assert_account_has_single_node_relation(
-        &value,
-        ACCOUNT_ID,
-        NODE_ID,
-        "Importknoten",
-        "reference",
-        "Wurde über einen Faden mit dem Knoten \"Importknoten\" verknüpft.",
-    );
-    assert_eq!(projected_at, created_at);
+    assert_eq!(value["nodes"].as_array().map(Vec::len), Some(1));
+    assert_eq!(value["nodes"][0]["node_id"], NODE_ID);
+    assert_eq!(value["nodes"][0]["node_title"], "Importknoten");
+    assert_eq!(value["nodes"][0]["edge_kind"], "reference");
+    assert_eq!(value["activity"].as_array().map(Vec::len), Some(0));
 
     Ok(())
 }

@@ -172,6 +172,37 @@ nicht auf der Karte. Exakte Aktionszahlen bleiben als Text erhalten; nur die Zah
 gleichzeitig gezeichneter paralleler Linien darf zur Renderbegrenzung gedeckelt
 werden.
 
+### Aktivität einer Garnrolle
+
+Die Aktivitätsansicht einer Garnrolle ist eine dauerhafte Leseprojektion
+belegter fachlicher Handlungen und ausdrücklich **keine Liste ihrer derzeit
+aktiven Fäden**. Ein Faden zeigt die zeitlich begrenzte Beteiligung im aktuellen
+Gewebe; sein Verblassen darf die zugrunde liegende Aktivität nicht aus der
+Chronik entfernen.
+
+Für die Projektion gelten folgende Regeln:
+
+1. Das Knüpfen eines Knotens wird aus seiner weiterhin aktiven
+   Urheberbindung abgeleitet. Fehlt diese bei einem Legacy-Knoten, darf nur ein
+   eng zeitgebundener, frühester Herkunftsfaden mit explizit als Account und
+   Knoten typisierten Endpunkten als Rückfallevidenz dienen; untypisierte Fäden
+   und Gesprächsfäden sind davon auszuschließen. Fehlt jeder belastbare
+   Zeitstempel, wird keine Aktivität geraten. Wird eine Accountidentität
+   abgelöst, dürfen interne Erzeugungs- oder Idempotenzfelder die entfernte
+   Urheberbindung nicht wiederherstellen.
+2. Gesprächsbeiträge werden aus den dauerhaften Beitragsdatensätzen als eigene
+   Aktivitätsart ausgewiesen und niemals als erneutes Knotenknüpfen bezeichnet.
+   Eine Tombstone-Löschung entfernt den Inhalt, nicht den belegten
+   Beitragsvorgang oder dessen Zählung.
+3. Mehrere Beiträge derselben Garnrolle zum selben Knotengespräch am selben
+   UTC-Kalendertag dürfen zu einem Eintrag mit exakter Anzahl zusammengefasst
+   werden. Inhalte der Beiträge gehören nicht in die öffentliche
+   Aktivitätsprojektion.
+4. Ein bloßer, eingehender oder aus einer nicht klassifizierten Beteiligung
+   abgeleiteter Faden darf keine Aktivität erfinden.
+5. Der Fadenverfall begrenzt weiterhin die aktuelle Karten- und
+   Knotenbeziehungsprojektion, nicht die dauerhafte Aktivitätschronik.
+
 ### Auflösung unverzwirnter Fäden
 
 Jeder neu abgeleitete, unverzwirnte Faden besitzt ab seiner Entstehung eine

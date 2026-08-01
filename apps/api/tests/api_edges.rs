@@ -9,10 +9,7 @@ use axum::{
 use serial_test::serial;
 mod helpers;
 
-use helpers::{
-    assert_account_has_single_node_relation, insert_test_node, read_account_details,
-    set_gewebe_in_dir, test_node,
-};
+use helpers::{insert_test_node, read_account_details, set_gewebe_in_dir, test_node};
 use std::{fs, path::PathBuf, sync::Arc};
 use tokio::sync::RwLock;
 use tower::ServiceExt;
@@ -710,10 +707,6 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
         .await?;
     assert_eq!(response.status(), StatusCode::CREATED);
     let created = read_json_body(response).await?;
-    let created_at = created["created_at"]
-        .as_str()
-        .context("created edge must carry created_at")?
-        .to_string();
     let created_id = created["id"]
         .as_str()
         .context("created edge must carry id")?;
@@ -725,15 +718,15 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
     assert_eq!(persisted[0]["target_id"], NODE_ID);
 
     let immediate_details = read_account_details(&app, ACCOUNT_ID).await?;
-    let immediate_date = assert_account_has_single_node_relation(
-        &immediate_details,
-        ACCOUNT_ID,
-        NODE_ID,
-        NODE_TITLE,
-        "reference",
-        "Hat den Knoten \"Vorwärtsnachweis\" geknüpft.",
+    assert_eq!(immediate_details["nodes"].as_array().map(Vec::len), Some(1));
+    assert_eq!(immediate_details["nodes"][0]["node_id"], NODE_ID);
+    assert_eq!(immediate_details["nodes"][0]["node_title"], NODE_TITLE);
+    assert_eq!(immediate_details["nodes"][0]["edge_kind"], "reference");
+    assert_eq!(
+        immediate_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "a manually written relation is current topology, not durable activity"
     );
-    assert_eq!(immediate_date, created_at);
 
     let (restarted_app, _restarted_cookie, restarted_state) = app_with_session_for_account(
         ACCOUNT_ID,
@@ -753,15 +746,15 @@ async fn post_account_edge_projects_garnrolle_relation_and_survives_reload() -> 
     .await;
 
     let restarted_details = read_account_details(&restarted_app, ACCOUNT_ID).await?;
-    let restarted_date = assert_account_has_single_node_relation(
-        &restarted_details,
-        ACCOUNT_ID,
-        NODE_ID,
-        NODE_TITLE,
-        "reference",
-        "Hat den Knoten \"Vorwärtsnachweis\" geknüpft.",
+    assert_eq!(restarted_details["nodes"].as_array().map(Vec::len), Some(1));
+    assert_eq!(restarted_details["nodes"][0]["node_id"], NODE_ID);
+    assert_eq!(restarted_details["nodes"][0]["node_title"], NODE_TITLE);
+    assert_eq!(restarted_details["nodes"][0]["edge_kind"], "reference");
+    assert_eq!(
+        restarted_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "reload must not turn a raw relation into a creation event"
     );
-    assert_eq!(restarted_date, created_at);
 
     Ok(())
 }

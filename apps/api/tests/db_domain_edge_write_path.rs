@@ -53,9 +53,7 @@ use weltgewebe_api::{
 };
 
 mod helpers;
-use helpers::{
-    assert_account_has_single_node_relation, read_account_details, set_gewebe_in_dir, test_node,
-};
+use helpers::{read_account_details, set_gewebe_in_dir, test_node};
 
 fn direct_database_url() -> String {
     let url = std::env::var("DATABASE_URL")
@@ -464,20 +462,16 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
     );
 
     let immediate_details = read_account_details(&app, ACCOUNT_ID).await?;
-    let projected_at = assert_account_has_single_node_relation(
-        &immediate_details,
-        ACCOUNT_ID,
-        NODE_ID,
-        "PostgreSQL Vorwärtsnachweis",
-        "reference",
-        "Wurde über einen Faden mit dem Knoten \"PostgreSQL Vorwärtsnachweis\" verknüpft.",
-    );
-    let projected_at = chrono::DateTime::parse_from_rfc3339(&projected_at)
-        .context("projected activity date must be RFC3339")?;
     assert_eq!(
-        projected_at.timestamp_micros(),
-        response_created.timestamp_micros(),
-        "PostgreSQL may normalize nanoseconds to microseconds, but the projected activity must preserve the same instant"
+        immediate_details["nodes"].as_array().map(Vec::len),
+        Some(1),
+        "the active Faden remains visible in the current node relation projection"
+    );
+    assert_eq!(immediate_details["nodes"][0]["node_id"], NODE_ID);
+    assert_eq!(
+        immediate_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "a raw incoming Faden must not invent account activity"
     );
 
     // Level 3: load_edges_from_postgres reconstructs the stored edge.
@@ -521,19 +515,158 @@ async fn postgres_edge_create_persists_row_cache_and_loader_roundtrip() -> Resul
     assert!(restarted_state.nodes.read().await.get(NODE_ID).is_some());
     assert!(restarted_state.edges.read().await.get(EDGE_ID_A).is_some());
     let restarted_details = read_account_details(&restarted_app, ACCOUNT_ID).await?;
-    let restarted_at = assert_account_has_single_node_relation(
-        &restarted_details,
-        ACCOUNT_ID,
-        NODE_ID,
-        "PostgreSQL Vorwärtsnachweis",
-        "reference",
-        "Wurde über einen Faden mit dem Knoten \"PostgreSQL Vorwärtsnachweis\" verknüpft.",
-    );
-    let restarted_at = chrono::DateTime::parse_from_rfc3339(&restarted_at)?;
     assert_eq!(
-        restarted_at.timestamp_micros(),
-        response_created.timestamp_micros(),
-        "full PostgreSQL reload must preserve the relation activity instant"
+        restarted_details["nodes"].as_array().map(Vec::len),
+        Some(1),
+        "the current relation survives a full PostgreSQL reload"
+    );
+    assert_eq!(restarted_details["nodes"][0]["node_id"], NODE_ID);
+    assert_eq!(
+        restarted_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "a reloaded raw Faden still must not become account history"
+    );
+
+    clean(&pool).await;
+    Ok(())
+}
+
+/// An expired legacy origin Faden remains useful only as bounded attribution
+/// evidence for the durable Knoten creation. It is not restored to the active
+/// Knoten projection, and explicit node actor metadata supersedes the fallback.
+#[tokio::test]
+#[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
+#[serial]
+async fn postgres_account_activity_reconstructs_expired_legacy_origin_faden() -> Result<()> {
+    let pool = connect_pool().await;
+    run_migrations(&pool).await;
+    clean(&pool).await;
+
+    let node = test_node(NODE_ID, "Historischer Knoten", None);
+    insert_domain_node(&pool, &node, None)
+        .await
+        .context("persist legacy activity node fixture")?;
+    ensure_operator_account(&pool, ACCOUNT_ID, &Role::Admin).await?;
+
+    let origin_created_at = chrono::DateTime::parse_from_rfc3339(&node.created_at)?
+        .with_timezone(&chrono::Utc)
+        + chrono::Duration::milliseconds(25);
+    sqlx::query(
+        "INSERT INTO domain_edges \
+            (id, source_id, target_id, edge_kind, created_at, payload) \
+         VALUES ($1, $2, $3, 'reference', $4, \
+                 jsonb_build_object( \
+                     'source_type', 'account', \
+                     'target_type', 'node' \
+                 ))",
+    )
+    .bind(EDGE_ID_A)
+    .bind(ACCOUNT_ID)
+    .bind(NODE_ID)
+    .bind(origin_created_at)
+    .execute(&pool)
+    .await
+    .context("persist expired legacy origin Faden")?;
+
+    let (app, _cookie, _state) = edge_write_app(
+        pool.clone(),
+        ACCOUNT_ID,
+        Role::Admin,
+        DomainReadSource::Postgres,
+        DomainEdgeWriteSource::Postgres,
+    )
+    .await?;
+    let legacy_details = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(
+        legacy_details["nodes"].as_array().map(Vec::len),
+        Some(0),
+        "the expired Faden must stay absent from the current Knoten projection"
+    );
+    assert_eq!(legacy_details["activity"].as_array().map(Vec::len), Some(1));
+    assert_eq!(
+        legacy_details["activity"][0]["event"],
+        "Hat den Knoten \"Historischer Knoten\" geknüpft."
+    );
+    let projected_at = chrono::DateTime::parse_from_rfc3339(
+        legacy_details["activity"][0]["date"]
+            .as_str()
+            .context("legacy creation activity date")?,
+    )?;
+    let node_created_at = chrono::DateTime::parse_from_rfc3339(&node.created_at)?;
+    assert_eq!(projected_at, node_created_at);
+
+    sqlx::query("UPDATE domain_edges SET payload = '{}'::jsonb WHERE id = $1")
+        .bind(EDGE_ID_A)
+        .execute(&pool)
+        .await
+        .context("remove endpoint types from legacy edge")?;
+    let untyped_details = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(
+        untyped_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "an untyped legacy relation must not be guessed into creator activity"
+    );
+    sqlx::query(
+        "UPDATE domain_edges \
+         SET payload = jsonb_build_object( \
+             'source_type', 'account', \
+             'target_type', 'node' \
+         ) \
+         WHERE id = $1",
+    )
+    .bind(EDGE_ID_A)
+    .execute(&pool)
+    .await
+    .context("restore typed legacy origin edge")?;
+
+    sqlx::query(
+        "UPDATE domain_nodes \
+         SET create_actor_id = $2, \
+             create_operation_id = 'edec0000-0000-4000-8000-0000000000c1' \
+         WHERE id = $1",
+    )
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .context("bind explicit create-operation metadata")?;
+
+    let explicit_with_origin = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(
+        explicit_with_origin["activity"].as_array().map(Vec::len),
+        Some(1),
+        "create-operation metadata may corroborate the still-linked origin Faden"
+    );
+
+    sqlx::query("DELETE FROM domain_edges WHERE id = $1")
+        .bind(EDGE_ID_A)
+        .execute(&pool)
+        .await
+        .context("simulate identity unlinking by removing the origin Faden")?;
+    let unlinked_details = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(
+        unlinked_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "create_actor_id alone must not revive history after identity unlinking"
+    );
+
+    sqlx::query(
+        "UPDATE domain_nodes \
+         SET created_at = NULL, \
+             updated_at = NULL, \
+             payload = payload || jsonb_build_object('created_by_account_id', $2::text) \
+         WHERE id = $1",
+    )
+    .bind(NODE_ID)
+    .bind(ACCOUNT_ID)
+    .execute(&pool)
+    .await
+    .context("make owned legacy node fully undated")?;
+    let undated_details = read_account_details(&app, ACCOUNT_ID).await?;
+    assert_eq!(
+        undated_details["activity"].as_array().map(Vec::len),
+        Some(0),
+        "a fully undated owned legacy node is skipped instead of failing account details"
     );
 
     clean(&pool).await;
