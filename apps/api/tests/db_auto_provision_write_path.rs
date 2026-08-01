@@ -84,7 +84,6 @@ fn test_metrics() -> Metrics {
 
 fn provisioning_state_postgres(pool: PgPool, allow_emails: Vec<String>) -> ApiState {
     let config = AppConfig {
-        anonymize_opt_in: true,
         max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,

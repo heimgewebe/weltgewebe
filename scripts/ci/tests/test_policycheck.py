@@ -28,9 +28,11 @@ class PolicycheckTests(unittest.TestCase):
             )
 
     def test_accepts_current_policy_surface(self) -> None:
+        # `anonymize_opt_in_default` is the declared retention policy and must stay
+        # legal; only the removed runtime switch `anonymize_opt_in` is rejected.
         result = self._run(
             policy="data_lifecycle:\n  anonymize_opt_in_default: true\n",
-            defaults="anonymize_opt_in: true\n",
+            defaults="max_guest_owned_nodes: 1000\n",
         )
 
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -43,7 +45,7 @@ class PolicycheckTests(unittest.TestCase):
                 "  delegation_expire_days: 28\n"
                 "  anonymize_opt_in_default: true\n"
             ),
-            defaults="anonymize_opt_in: true\n",
+            defaults="max_guest_owned_nodes: 1000\n",
         )
 
         self.assertEqual(result.returncode, 1)
@@ -52,11 +54,33 @@ class PolicycheckTests(unittest.TestCase):
     def test_rejects_delegation_expire_days_in_app_defaults(self) -> None:
         result = self._run(
             policy="data_lifecycle:\n  anonymize_opt_in_default: true\n",
-            defaults="anonymize_opt_in: true\ndelegation_expire_days: 28\n",
+            defaults="max_guest_owned_nodes: 1000\ndelegation_expire_days: 28\n",
         )
 
         self.assertEqual(result.returncode, 1)
         self.assertIn("must not publish delegation_expire_days", result.stdout)
+
+    def test_rejects_anonymize_opt_in_in_retention_policy(self) -> None:
+        result = self._run(
+            policy=(
+                "data_lifecycle:\n"
+                "  anonymize_opt_in: true\n"
+                "  anonymize_opt_in_default: true\n"
+            ),
+            defaults="max_guest_owned_nodes: 1000\n",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("must not publish anonymize_opt_in", result.stdout)
+
+    def test_rejects_anonymize_opt_in_in_app_defaults(self) -> None:
+        result = self._run(
+            policy="data_lifecycle:\n  anonymize_opt_in_default: true\n",
+            defaults="max_guest_owned_nodes: 1000\nanonymize_opt_in: true\n",
+        )
+
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("must not publish anonymize_opt_in", result.stdout)
 
 
 if __name__ == "__main__":

@@ -33,7 +33,6 @@ mod tests {
         })?;
 
         let config = AppConfig {
-            anonymize_opt_in: true,
             max_guest_owned_nodes: 1_000,
             domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
             domain_account_write_source: weltgewebe_api::config::DomainAccountWriteSource::Jsonl,

@@ -76,7 +76,6 @@ fn build_state() -> Result<ApiState> {
     // no-op and `is_open_registration()` is false — an unknown email therefore
     // stays unknown instead of being auto-provisioned.
     let config = AppConfig {
-        anonymize_opt_in: true,
         max_guest_owned_nodes: 1_000,
         domain_read_source: weltgewebe_api::config::DomainReadSource::Jsonl,
         domain_account_write_source: weltgewebe_api::config::DomainAccountWriteSource::Jsonl,

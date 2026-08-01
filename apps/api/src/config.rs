@@ -332,8 +332,6 @@ const fn default_node_mutation_delete_per_hour() -> u32 {
 
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 pub struct AppConfig {
-    pub anonymize_opt_in: bool,
-
     /// Maximum number of nodes a guest account may own at once. Loaded once
     /// at startup so request handlers never re-read process environment state.
     #[serde(default = "default_max_guest_owned_nodes")]
@@ -433,7 +431,12 @@ impl AppConfig {
     fn parse_yaml(raw: &str) -> Result<Self> {
         let value: serde_yaml::Value =
             serde_yaml::from_str(raw).context("failed to parse YAML configuration")?;
-        for removed_key in ["fade_days", "ron_days", "delegation_expire_days"] {
+        for removed_key in [
+            "fade_days",
+            "ron_days",
+            "delegation_expire_days",
+            "anonymize_opt_in",
+        ] {
             let key = serde_yaml::Value::String(removed_key.to_string());
             if value
                 .as_mapping()
@@ -454,6 +457,12 @@ impl AppConfig {
                         "delegation_expire_days has been removed from runtime configuration; ",
                         "no runtime delegation-expiry consumer exists, so the setting must not be ",
                         "presented as operator-tunable"
+                    )),
+                    "anonymize_opt_in" => anyhow::bail!(concat!(
+                        "anonymize_opt_in has been removed from runtime configuration; ",
+                        "no runtime anonymization consumer exists, so the setting must not be ",
+                        "presented as operator-tunable. The privacy commitment is declared in ",
+                        "policies/retention.yml"
                     )),
                     _ => unreachable!(),
                 }
@@ -517,7 +526,14 @@ impl AppConfig {
                 "no runtime delegation-expiry consumer exists for this setting"
             ));
         }
-        apply_env_override!(self, anonymize_opt_in, "HA_ANONYMIZE_OPT_IN");
+        if env::var_os("HA_ANONYMIZE_OPT_IN").is_some() {
+            anyhow::bail!(concat!(
+                "HA_ANONYMIZE_OPT_IN has been removed; ",
+                "no runtime anonymization consumer exists for this setting. ",
+                "The privacy commitment is declared in policies/retention.yml, ",
+                "not as an operator-tunable runtime switch"
+            ));
+        }
         apply_env_override!(self, max_guest_owned_nodes, "MAX_GUEST_OWNED_NODES");
 
         if let Ok(val) = env::var("WELTGEWEBE_DOMAIN_READ_SOURCE") {
@@ -999,8 +1015,44 @@ mod tests {
     use tempfile::{tempdir, NamedTempFile};
 
     const YAML: &str = r#"
-anonymize_opt_in: true
+max_guest_owned_nodes: 1000
 "#;
+
+    #[test]
+    #[serial]
+    fn anonymize_opt_in_yaml_key_is_rejected_as_removed_setting() {
+        let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
+        let yaml = format!("anonymize_opt_in: true\n{YAML}");
+
+        let error = AppConfig::load_from_str(&yaml)
+            .expect_err("the removed anonymize_opt_in YAML key must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("anonymize_opt_in has been removed"));
+        assert!(error.contains("no runtime anonymization consumer exists"));
+        assert!(error.contains("policies/retention.yml"));
+    }
+
+    #[test]
+    #[serial]
+    fn anonymize_opt_in_env_override_is_rejected_as_removed_setting() {
+        let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
+
+        let error = AppConfig::load_from_str(YAML)
+            .expect_err("the removed HA_ANONYMIZE_OPT_IN override must fail closed");
+        let error = format!("{error:#}");
+
+        assert!(error.contains("HA_ANONYMIZE_OPT_IN has been removed"));
+        assert!(error.contains("no runtime anonymization consumer exists"));
+    }
+
+    #[test]
+    fn embedded_defaults_do_not_publish_anonymize_opt_in() {
+        assert!(
+            !AppConfig::DEFAULT_CONFIG.contains("anonymize_opt_in"),
+            "the embedded defaults must not reintroduce the removed switch"
+        );
+    }
 
     #[test]
     #[serial]
@@ -1065,7 +1117,6 @@ anonymize_opt_in: true
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
-        let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _guest_nodes = EnvGuard::unset("MAX_GUEST_OWNED_NODES");
         let _cookie_secure = EnvGuard::unset("AUTH_COOKIE_SECURE");
         let _mutation_replace_min = EnvGuard::unset("NODE_MUTATION_REPLACE_PER_MINUTE");
@@ -1075,7 +1126,6 @@ anonymize_opt_in: true
         let _mutation_bypass = EnvGuard::unset("NODE_MUTATION_ADMIN_EMERGENCY_BYPASS");
 
         let cfg = AppConfig::load_from_path(file.path())?;
-        assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.max_guest_owned_nodes, 1_000);
         assert!(cfg.auth_cookie_secure);
         assert_eq!(cfg.node_mutation_rate_limits.replace_per_minute, 30);
@@ -1167,12 +1217,10 @@ anonymize_opt_in: true
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
-        let _anonymize = EnvGuard::set("HA_ANONYMIZE_OPT_IN", "false");
         let _guest_nodes = EnvGuard::set("MAX_GUEST_OWNED_NODES", "321");
         let _cookie_secure = EnvGuard::set("AUTH_COOKIE_SECURE", "false");
 
         let cfg = AppConfig::load_from_path(file.path())?;
-        assert!(!cfg.anonymize_opt_in);
         assert_eq!(cfg.max_guest_owned_nodes, 321);
         assert!(!cfg.auth_cookie_secure);
 
@@ -1240,14 +1288,12 @@ anonymize_opt_in: true
 
         let _config_path = EnvGuard::unset("APP_CONFIG_PATH");
         let _ron = EnvGuard::unset("HA_RON_DAYS");
-        let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
         let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
         let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
         let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
-        assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
 
         Ok(())
@@ -1329,7 +1375,6 @@ anonymize_opt_in: true
     fn load_errors_when_explicit_config_fails_domain_write_validation() -> Result<()> {
         let file = NamedTempFile::new()?;
         let invalid_yaml = r#"
-anonymize_opt_in: false
 domain_read_source: jsonl
 domain_account_write_source: postgres
 "#;
@@ -1359,7 +1404,7 @@ domain_account_write_source: postgres
         let _fade = EnvGuard::unset("HA_FADE_DAYS");
         let file = NamedTempFile::new()?;
         let valid_yaml = r#"
-anonymize_opt_in: true
+max_guest_owned_nodes: 1000
 "#;
         std::fs::write(file.path(), valid_yaml)?;
 
@@ -1368,14 +1413,12 @@ anonymize_opt_in: true
             file.path().to_str().expect("path is valid utf-8"),
         );
         let _ron = EnvGuard::unset("HA_RON_DAYS");
-        let _anonymize = EnvGuard::unset("HA_ANONYMIZE_OPT_IN");
         let _read = EnvGuard::unset("WELTGEWEBE_DOMAIN_READ_SOURCE");
         let _account_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_ACCOUNT_WRITE_SOURCE");
         let _node_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_NODE_WRITE_SOURCE");
         let _edge_write = EnvGuard::unset("WELTGEWEBE_DOMAIN_EDGE_WRITE_SOURCE");
 
         let cfg = AppConfig::load()?;
-        assert!(cfg.anonymize_opt_in);
         assert_eq!(cfg.domain_read_source, DomainReadSource::Jsonl);
         assert_eq!(
             cfg.domain_account_write_source,

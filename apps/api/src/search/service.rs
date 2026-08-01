@@ -412,7 +412,6 @@ mod tests {
         .expect("metrics");
 
         let config = AppConfig {
-            anonymize_opt_in: true,
             max_guest_owned_nodes: 1_000,
             domain_read_source: DomainReadSource::Jsonl,
             domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,
