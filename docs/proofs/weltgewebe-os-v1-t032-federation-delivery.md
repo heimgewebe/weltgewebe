@@ -66,9 +66,9 @@ Ein eigener loopbackgebundener PostgreSQL-16-Wegwerfcontainer wurde ausschließl
 4. Zwei Versionen derselben Objektadresse werden trotz paralleler Worker nicht vertauscht: Version 1 wird zuerst bestätigt, Version 2 bleibt zunächst `pending` und wird erst im folgenden Batch geliefert.
 5. Die Zielzelle endet auf Objektversion 2 ohne Quarantäne oder stille Versionslücke.
 
-Terminaler Testreceipt: `2ce6054703781e9dc621dc09114bf2c1d30e57bbe4f4e61c9a850781c59dc6c9`.
+Terminaler Testreceipt: `09bc06605ee5f278dca2e38f3127a8b47ecad9afa5389712d37e94cc2201f005`.
 
-Der Wegwerfcontainer wurde anschließend entfernt. Cleanup-Receipt: `66def7793e6ec2d2cba3e911e722f4640ec2f54ff69f1d86fbe2156417fd80d5`.
+Der Wegwerfcontainer wurde anschließend entfernt. Cleanup-Receipt: `a8c630996a3e098b12c9d35edda6e23767ff19805e759dc52ecd8740ef431602`.
 
 ## Plattform- und Geheimnisgrenze
 
