@@ -7,7 +7,7 @@ body,
 }
 
 body {
-  background: var(--weave), var(--bg);
+  background: var(--bg);
   color: var(--text);
   font:
     14px/1.4 ui-sans-serif,
@@ -43,7 +43,7 @@ body {
 }
 
 .panel {
-  background: var(--weave), var(--panel);
+  background: var(--panel);
   border: 1px solid var(--panel-border);
   border-radius: var(--radius);
   padding: 0.75rem;

@@ -11,25 +11,12 @@
 </script>
 
 <div class="auth-slot">
-  <button
-    type="button"
-    class="theme-compact"
-    data-wg-theme-cycle
-    data-testid="theme-compact-button"
-    aria-label="Farbschema wechseln"
-    title="Farbschema wechseln"
-  >
-    <span data-wg-theme-icon aria-hidden="true">◐</span>
-  </button>
-
   {#if authView.showAccountLink}
-    <a class="login-entry" href="/nachrichten" aria-label="Private Nachrichten"
-      >✉</a
-    >
     <a
       class="garnrolle-link"
-      href="/settings#meine-garnrolle"
-      aria-label="Meine Garnrolle einrichten"
+      href="/settings"
+      aria-label="Einstellungen öffnen"
+      title="Einstellungen"
     >
       <img src={garnrolleIcon} alt="" />
     </a>
@@ -65,25 +52,6 @@
     align-items: center;
     gap: 0.35rem;
     pointer-events: auto;
-  }
-
-  .theme-compact {
-    display: grid;
-    width: 42px;
-    height: 42px;
-    padding: 0;
-    place-items: center;
-    border: 1px solid var(--panel-border-strong);
-    border-radius: 999px;
-    background: var(--panel);
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-  }
-
-  .theme-compact:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
   }
 
   .garnrolle-link {

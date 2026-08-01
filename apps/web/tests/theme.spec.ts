@@ -65,22 +65,37 @@ async function expectReadableSurface(locator: Locator, label: string) {
   ).toBeGreaterThanOrEqual(4.5);
 }
 
+async function expectNoStripePattern(locator: Locator, label: string) {
+  const backgroundImage = await locator.evaluate(
+    (element) => getComputedStyle(element).backgroundImage,
+  );
+  expect(
+    backgroundImage,
+    `${label} darf kein wiederholtes Streifenmuster verwenden`,
+  ).not.toContain("repeating-linear-gradient");
+}
+
 test.describe("Farbschema", () => {
-  test("wechselt das Farbschema und teilt die Auswahl zwischen Karte und Einstellungen", async ({
+  test("steuert das Farbschema im Einstellungsmenü und behält es auf der Karte", async ({
     page,
   }) => {
-    await page.goto("/map");
+    await page.goto("/settings");
 
-    const mapButton = page.getByTestId("theme-compact-button");
-    await expect(mapButton).toBeVisible();
-    await expect(mapButton).toHaveAttribute("data-theme", "system");
-    await expect(page.getByRole("option")).toHaveCount(0);
+    const menu = page.getByTestId("settings-menu");
+    const settingsSelect = page.getByTestId("theme-select");
+    await expect(menu).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: /Meine Garnrolle/ }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: /Konto & Sicherheit/ }),
+    ).toBeVisible();
+    await expect(
+      menu.getByRole("link", { name: /Private Nachrichten/ }),
+    ).toBeVisible();
+    await expect(settingsSelect).toHaveValue("system");
 
-    await mapButton.click();
-    await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
-    await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "light");
-
-    await mapButton.click();
+    await settingsSelect.selectOption("dark");
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
     await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "dark");
     await expect
@@ -91,22 +106,15 @@ test.describe("Farbschema", () => {
 
     await page.reload();
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
-    await expect(page.getByTestId("theme-compact-button")).toHaveAttribute(
-      "data-theme",
-      "dark",
-    );
-
-    await page.goto("/settings");
-    const settingsSelect = page.getByTestId("theme-select");
-    await expect(settingsSelect).toHaveValue("dark");
-    await settingsSelect.selectOption("light");
-    await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
+    await expect(page.getByTestId("theme-select")).toHaveValue("dark");
 
     await page.goto("/map");
-    await expect(page.getByTestId("theme-compact-button")).toHaveAttribute(
-      "data-theme",
-      "light",
-    );
+    await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
+    await expect(page.getByTestId("theme-compact-button")).toHaveCount(0);
+
+    await page.goto("/settings");
+    await page.getByTestId("theme-select").selectOption("light");
+    await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
   });
 
   test("folgt im Systemmodus einer geänderten Gerätepräferenz", async ({
@@ -123,6 +131,47 @@ test.describe("Farbschema", () => {
 
     await page.emulateMedia({ colorScheme: "light" });
     await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "light");
+  });
+
+  test("verwendet glatte Flächen ohne wiederholte Streifen", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+
+    await expectNoStripePattern(page.locator("body"), "Seitenhintergrund");
+    await expectNoStripePattern(
+      page.getByTestId("settings-menu"),
+      "Einstellungsmenü",
+    );
+    await expectNoStripePattern(
+      page.locator(".settings-content .panel").first(),
+      "Inhaltskarte",
+    );
+  });
+
+  test("ordnet das Menü auf kleinen Bildschirmen ohne Überlauf unter die Überschrift", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await page.goto("/settings");
+
+    const menu = page.getByTestId("settings-menu");
+    const content = page.locator("main.settings-content");
+    const desktopMenu = await menu.boundingBox();
+    const desktopContent = await content.boundingBox();
+    expect(desktopMenu).not.toBeNull();
+    expect(desktopContent).not.toBeNull();
+    expect(desktopContent!.x).toBeGreaterThan(desktopMenu!.x);
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    const mobileMenu = await menu.boundingBox();
+    const mobileContent = await content.boundingBox();
+    expect(mobileMenu).not.toBeNull();
+    expect(mobileContent).not.toBeNull();
+    expect(mobileContent!.y).toBeGreaterThan(mobileMenu!.y);
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(390);
   });
 
   test("hält die zentralen Kartenflächen im hellen Farbschema lesbar", async ({
