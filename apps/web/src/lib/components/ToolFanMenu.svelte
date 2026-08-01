@@ -145,7 +145,7 @@
     padding: 0.75rem;
     border: 1px solid var(--panel-border);
     border-radius: 18px;
-    background: rgba(15, 17, 21, 0.9);
+    background: var(--panel);
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--map-lens-blur));
     opacity: 0;

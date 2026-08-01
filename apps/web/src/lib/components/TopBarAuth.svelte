@@ -11,18 +11,16 @@
 </script>
 
 <div class="auth-slot">
-  <label class="theme-compact" title="Farbschema">
-    <span aria-hidden="true">◐</span>
-    <select
-      aria-label="Farbschema"
-      data-wg-theme-control
-      data-testid="theme-compact-select"
-    >
-      <option value="system">System</option>
-      <option value="light">Hell</option>
-      <option value="dark">Dunkel</option>
-    </select>
-  </label>
+  <button
+    type="button"
+    class="theme-compact"
+    data-wg-theme-cycle
+    data-testid="theme-compact-button"
+    aria-label="Farbschema wechseln"
+    title="Farbschema wechseln"
+  >
+    <span data-wg-theme-icon aria-hidden="true">◐</span>
+  </button>
 
   {#if authView.showAccountLink}
     <a class="login-entry" href="/nachrichten" aria-label="Private Nachrichten"
@@ -70,23 +68,20 @@
   }
 
   .theme-compact {
-    position: relative;
     display: grid;
     width: 42px;
     height: 42px;
+    padding: 0;
     place-items: center;
     border: 1px solid var(--panel-border-strong);
     border-radius: 999px;
     background: var(--panel);
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
   }
 
-  .theme-compact select {
-    position: absolute;
-    inset: 0;
-    opacity: 0;
-  }
-
-  .theme-compact:focus-within {
+  .theme-compact:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
   }

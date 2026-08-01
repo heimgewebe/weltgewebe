@@ -129,7 +129,7 @@
     padding: 0.9rem;
     border: 1px solid var(--panel-border-strong);
     border-radius: 16px;
-    background: rgba(20, 22, 28, 0.95);
+    background: var(--panel);
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--map-lens-blur));
     display: flex;
@@ -197,7 +197,7 @@
     align-items: center;
     gap: 0.5rem;
     cursor: pointer;
-    background: rgba(15, 17, 21, 0.72);
+    background: var(--panel-solid);
   }
   .filter-item.active {
     border-color: var(--accent);

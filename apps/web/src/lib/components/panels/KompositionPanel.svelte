@@ -53,7 +53,6 @@
     return nodeOperationId;
   }
 
-
   async function returnToGarnrolleSettings(withLocation: boolean) {
     const location = withLocation ? $kompositionDraft?.lngLat : undefined;
     const accountId = $authStore.account_id;
@@ -408,7 +407,7 @@
 
   .btn-primary {
     background: var(--accent, #6aa6ff);
-    color: #0f1115; /* dark text on light accent */
+    color: var(--bg);
   }
 
   .btn-primary:hover:not(:disabled) {

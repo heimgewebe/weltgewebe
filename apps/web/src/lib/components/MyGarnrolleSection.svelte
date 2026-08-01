@@ -961,7 +961,7 @@
 
   .btn-primary {
     background: var(--accent, #6aa6ff);
-    color: #0f1115;
+    color: var(--bg);
   }
 
   .btn:focus-visible,

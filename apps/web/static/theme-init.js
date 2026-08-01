@@ -17,6 +17,11 @@
       "repeating-linear-gradient(135deg, transparent 0 24px, rgba(114, 200, 182, 0.04) 24px 25px)",
     "--shadow": "0 14px 36px rgba(0, 0, 0, 0.38)",
   };
+  const themeMeta = {
+    system: { label: "System", icon: "◐", next: "light" },
+    light: { label: "Hell", icon: "☀", next: "dark" },
+    dark: { label: "Dunkel", icon: "☾", next: "system" },
+  };
   const normalize = (value) =>
     value === "light" || value === "dark" ? value : "system";
   let current = "system";
@@ -27,16 +32,38 @@
     // System bleibt der sichere Standard ohne Speicherzugriff.
   }
 
+  const syncSelect = (control) => {
+    control.value = current;
+  };
+
+  const syncCycleButton = (button) => {
+    const meta = themeMeta[current];
+    const next = themeMeta[meta.next];
+    button.dataset.theme = current;
+    button.setAttribute(
+      "aria-label",
+      `Farbschema: ${meta.label}. Nächste Auswahl: ${next.label}.`,
+    );
+    button.title = `Farbschema: ${meta.label}`;
+    const icon = button.querySelector("[data-wg-theme-icon]");
+    if (icon) icon.textContent = meta.icon;
+  };
+
   const syncControlTree = (scope = document) => {
     if (
       scope instanceof HTMLSelectElement &&
       scope.matches("[data-wg-theme-control]")
     ) {
-      scope.value = current;
+      syncSelect(scope);
     }
-    scope.querySelectorAll?.("[data-wg-theme-control]").forEach((control) => {
-      control.value = current;
-    });
+    if (
+      scope instanceof HTMLButtonElement &&
+      scope.matches("[data-wg-theme-cycle]")
+    ) {
+      syncCycleButton(scope);
+    }
+    scope.querySelectorAll?.("[data-wg-theme-control]").forEach(syncSelect);
+    scope.querySelectorAll?.("[data-wg-theme-cycle]").forEach(syncCycleButton);
   };
 
   const watchControls = () => {
@@ -76,11 +103,13 @@
     }
   };
 
-  const getControl = (target) =>
+  const getSelect = (target) =>
     target instanceof HTMLSelectElement &&
     target.matches("[data-wg-theme-control]")
       ? target
       : null;
+  const getCycleButton = (target) =>
+    target instanceof Element ? target.closest("[data-wg-theme-cycle]") : null;
 
   apply(current);
   media?.addEventListener("change", () => {
@@ -96,17 +125,21 @@
   document.addEventListener(
     "pointerdown",
     (event) => {
-      const control = getControl(event.target);
-      if (control) control.value = current;
+      const control = getSelect(event.target);
+      if (control) syncSelect(control);
     },
     true,
   );
   document.addEventListener("focusin", (event) => {
-    const control = getControl(event.target);
-    if (control) control.value = current;
+    const control = getSelect(event.target);
+    if (control) syncSelect(control);
   });
   document.addEventListener("change", (event) => {
-    const control = getControl(event.target);
+    const control = getSelect(event.target);
     if (control) apply(control.value, true);
+  });
+  document.addEventListener("click", (event) => {
+    const button = getCycleButton(event.target);
+    if (button) apply(themeMeta[current].next, true);
   });
 })();
