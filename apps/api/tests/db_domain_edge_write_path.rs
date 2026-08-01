@@ -160,7 +160,6 @@ fn write_path_config(
     domain_edge_write_source: DomainEdgeWriteSource,
 ) -> AppConfig {
     AppConfig {
-        anonymize_opt_in: true,
         max_guest_owned_nodes: 1_000,
         domain_read_source,
         domain_account_write_source: DomainAccountWriteSource::Postgres,

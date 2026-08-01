@@ -75,7 +75,6 @@ fn account(id: &str, role: Role) -> AccountInternal {
 
 fn test_config() -> AppConfig {
     AppConfig {
-        anonymize_opt_in: true,
         max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Jsonl,
         domain_account_write_source: DomainAccountWriteSource::Jsonl,

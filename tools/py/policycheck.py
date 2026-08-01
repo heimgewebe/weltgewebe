@@ -51,6 +51,12 @@ def main() -> int:
                 "no runtime delegation-expiry consumer exists"
             )
             return 1
+        if "anonymize_opt_in" in mapping:
+            print(
+                f"::error::{source} must not publish anonymize_opt_in; "
+                "no runtime anonymization consumer exists"
+            )
+            return 1
 
     print("policy ok")
     return 0

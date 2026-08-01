@@ -1967,7 +1967,6 @@ async fn t006_search_api_against_postgres_projections() {
         nats_client: None,
         nats_configured: false,
         config: AppConfig {
-            anonymize_opt_in: true,
             max_guest_owned_nodes: 1000,
             domain_read_source: DomainReadSource::Postgres,
             domain_account_write_source: DomainAccountWriteSource::Postgres,

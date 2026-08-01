@@ -251,7 +251,6 @@ mod tests {
     fn mailer_rejects_credentials_on_plaintext_port() {
         let _smtp_auth = crate::test_helpers::EnvGuard::set("SMTP_AUTH", "on");
         let config = AppConfig {
-            anonymize_opt_in: true,
             max_guest_owned_nodes: 1_000,
             domain_read_source: crate::config::DomainReadSource::Jsonl,
             domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,
@@ -294,7 +293,6 @@ mod tests {
     #[serial]
     fn mailer_fails_with_invalid_from_address() {
         let config = AppConfig {
-            anonymize_opt_in: true,
             max_guest_owned_nodes: 1_000,
             domain_read_source: crate::config::DomainReadSource::Jsonl,
             domain_account_write_source: crate::config::DomainAccountWriteSource::Jsonl,

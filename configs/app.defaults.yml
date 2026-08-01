@@ -1,5 +1,4 @@
 ---
-anonymize_opt_in: true
 max_guest_owned_nodes: 1000
 
 # Account-scoped collective node mutation limits. All four limits must remain

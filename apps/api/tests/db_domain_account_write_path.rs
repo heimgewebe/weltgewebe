@@ -158,7 +158,6 @@ async fn postgres_write_app(pool: PgPool, operator_id: &str) -> Result<(Router, 
     accounts.insert(admin_operator(operator_id));
 
     let config = AppConfig {
-        anonymize_opt_in: true,
         max_guest_owned_nodes: 1_000,
         domain_read_source: DomainReadSource::Postgres,
         domain_account_write_source: DomainAccountWriteSource::Postgres,
