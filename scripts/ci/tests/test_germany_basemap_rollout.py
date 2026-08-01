@@ -84,7 +84,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("dt.date.fromisoformat", builder)
         self.assertIn("dt.datetime.now(dt.timezone.utc).date()", builder)
         self.assertIn("OSM_SNAPSHOT_DATE lies in the future", builder)
-        self.assertLess(builder.index("dt.date.fromisoformat"), builder.index("if ! docker"))
+        self.assertLess(
+            builder.index("dt.date.fromisoformat"), builder.index("if ! docker")
+        )
 
     def test_builder_never_replaces_version_or_activates_alias(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
@@ -163,22 +165,25 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("could not persist the Germany activation receipt", activate)
         self.assertIn('deploy_frontend_variant "regional"', activate)
 
-    def test_activation_hashes_complete_public_artifact(self) -> None:
+    def test_activation_hashes_complete_public_artifact_before_receipt(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
         range_at = activate.index("Range: bytes=0-126")
         full_hash_at = activate.index("PUBLIC_ARTIFACT_SHA256")
-        receipt_at = activate.index('"status": "activation_verified"')
+        receipt_call_at = activate.index("if ! write_activation_receipt; then")
         self.assertLess(range_at, full_hash_at)
-        self.assertLess(full_hash_at, receipt_at)
+        self.assertLess(full_hash_at, receipt_call_at)
         self.assertIn("complete public Germany PMTiles hash mismatch", activate)
         self.assertIn("complete-public-artifact-sha256", activate)
 
     def test_activation_receipt_heredoc_is_inside_if_statement(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
-        self.assertIn('if ! RECEIPT_PATH="$receipt_tmp" \\n', activate)
-        self.assertIn("python3 << 'PY'", activate)
-        self.assertIn("then\n    rm -f", activate)
-        self.assertNotIn("python3 << 'PY' || {", activate)
+        receipt_function = activate.split("write_activation_receipt() {", 1)[1].split(
+            "\n}\n", 1
+        )[0]
+        self.assertIn('if ! RECEIPT_PATH="$receipt_tmp" \\', receipt_function)
+        self.assertIn("python3 << 'PY'", receipt_function)
+        self.assertIn("\nPY\n  then\n", receipt_function)
+        self.assertNotIn("python3 << 'PY' || {", receipt_function)
 
 
 if __name__ == "__main__":
