@@ -33,13 +33,31 @@ describe("resolveBasemapMode", () => {
 });
 
 describe("resolveBasemapStyle", () => {
-  it("maps local-sovereign to the local route, never CARTO", () => {
-    const style = resolveBasemapStyle({ mode: "local-sovereign" } as any);
+  it("maps the default regional sovereign variant to style.json", () => {
+    const style = resolveBasemapStyle({
+      mode: "local-sovereign",
+      variant: "regional",
+    } as any);
     expect(style).toMatch(
       /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
     );
     expect(style).not.toContain(CARTO_HOST);
-    expect(style).not.toContain("voyager-gl-style");
+  });
+
+  it("maps the Germany sovereign variant to the isolated Germany style", () => {
+    const style = resolveBasemapStyle({
+      mode: "local-sovereign",
+      variant: "germany",
+    } as any);
+    expect(style).toMatch(
+      /^\/local-basemap\/style-germany\.json\?v=0\.3\.1&build=[^&]+$/,
+    );
+    expect(style).not.toContain(CARTO_HOST);
+  });
+
+  it("keeps legacy local config objects on the regional rollback path", () => {
+    const style = resolveBasemapStyle({ mode: "local-sovereign" } as any);
+    expect(style).toContain("/local-basemap/style.json");
   });
 
   it("returns the explicit CARTO url only for remote-style", () => {
@@ -49,7 +67,6 @@ describe("resolveBasemapStyle", () => {
     } as any);
     expect(style).toBe(CARTO_STYLE_URL);
     expect(style).toContain(CARTO_HOST);
-    expect(style).toContain("voyager-gl-style");
   });
 });
 
@@ -57,11 +74,11 @@ describe("currentBasemap (build-time generated config)", () => {
   it("never carries a CARTO style url in local-sovereign mode", () => {
     if (currentBasemap.mode === "local-sovereign") {
       expect(currentBasemap).not.toHaveProperty("styleUrl");
+      expect(["regional", "germany"]).toContain(currentBasemap.variant);
       expect(resolveBasemapStyle(currentBasemap)).toMatch(
-        /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
+        /^\/local-basemap\/style(?:-germany)?\.json\?v=0\.3\.1&build=[^&]+$/,
       );
     } else {
-      // remote-style is only reachable via an explicit PUBLIC_BASEMAP_MODE.
       expect(currentBasemap.styleUrl).toContain(CARTO_HOST);
     }
   });

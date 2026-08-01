@@ -19,7 +19,6 @@ Generated automatically. Do not edit.
 | Makefile (validate-tests) | unittest | `$(CI_TEST_GIT_ENV) python3 -m unittest discover scripts/ci/tests/` | *unclear* |
 | Makefile (validate-tests) | pytest | `python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py` | *unclear* |
 | Makefile (validate-tests) | scripts.docmeta.generate_claim_evidence_map | `python3 -m scripts.docmeta.generate_claim_evidence_map --check` | *unclear* |
-| Makefile (cell-pilot-check) | unittest | `python3 -m unittest scripts.ci.tests.test_two_operator_cell_pilot` | *unclear* |
 | Makefile (platform-check) | unittest | `python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract` | *unclear* |
 | Makefile (validate-core) | scripts.docmeta.validate_schema | `python3 -m scripts.docmeta.validate_schema` | *unclear* |
 | Makefile (validate-core) | scripts.docmeta.validate_relations | `python3 -m scripts.docmeta.validate_relations` | *unclear* |

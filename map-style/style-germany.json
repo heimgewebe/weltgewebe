@@ -1,0 +1,132 @@
+{
+  "version": 8,
+  "name": "Weltgewebe Sovereign Basemap — Germany",
+  "metadata": {
+    "weltgewebe:version": "0.3.1",
+    "weltgewebe:variant": "germany",
+    "weltgewebe:note": "Opt-in nationwide PMTiles source; production activation requires artifact and live runtime proof"
+  },
+  "sources": {
+    "basemap-germany": {
+      "type": "vector",
+      "url": "pmtiles://basemap-germany.pmtiles"
+    }
+  },
+  "glyphs": "/local-basemap/glyphs/{fontstack}/{range}.pbf",
+  "layers": [
+    {
+      "id": "background",
+      "type": "background",
+      "paint": {
+        "background-color": "#e0e0e0"
+      }
+    },
+    {
+      "id": "landcover-germany",
+      "type": "fill",
+      "source": "basemap-germany",
+      "source-layer": "landcover",
+      "minzoom": 7,
+      "paint": {
+        "fill-color": [
+          "match",
+          ["get", "class"],
+          "farmland",
+          "#e7e0cf",
+          "grass",
+          "#d9e5d3",
+          "wood",
+          "#c9d9c4",
+          "wetland",
+          "#d6e4de",
+          "sand",
+          "#eee2c8",
+          "#dedfd8"
+        ],
+        "fill-opacity": 0.92
+      }
+    },
+    {
+      "id": "landuse-germany",
+      "type": "fill",
+      "source": "basemap-germany",
+      "source-layer": "landuse",
+      "minzoom": 8,
+      "paint": {
+        "fill-color": [
+          "match",
+          ["get", "class"],
+          "residential",
+          "#ddd9d2",
+          "industrial",
+          "#d6d0cc",
+          "commercial",
+          "#e1d5d0",
+          "retail",
+          "#e4d7d2",
+          "cemetery",
+          "#d3dfd0",
+          "school",
+          "#dedbd0",
+          "university",
+          "#dedbd0",
+          "hospital",
+          "#e2d6d4",
+          "military",
+          "#d8d1c7",
+          "quarry",
+          "#d2cec5",
+          "pitch",
+          "#d2e0ce",
+          "#dedbd4"
+        ],
+        "fill-opacity": 0.72
+      }
+    },
+    {
+      "id": "water-germany",
+      "type": "fill",
+      "source": "basemap-germany",
+      "source-layer": "water",
+      "paint": {
+        "fill-color": "#a0c8f0"
+      }
+    },
+    {
+      "id": "roads-germany",
+      "type": "line",
+      "source": "basemap-germany",
+      "source-layer": "transportation",
+      "paint": {
+        "line-color": "#ffffff",
+        "line-width": 1.5
+      }
+    },
+    {
+      "id": "buildings-germany",
+      "type": "fill",
+      "source": "basemap-germany",
+      "source-layer": "building",
+      "paint": {
+        "fill-color": "#d0d0d0",
+        "fill-opacity": 0.5
+      }
+    },
+    {
+      "id": "place-labels-germany",
+      "type": "symbol",
+      "source": "basemap-germany",
+      "source-layer": "place",
+      "layout": {
+        "text-field": "{name}",
+        "text-font": ["Noto Sans Regular"],
+        "text-size": 14
+      },
+      "paint": {
+        "text-color": "#333333",
+        "text-halo-color": "#ffffff",
+        "text-halo-width": 1
+      }
+    }
+  ]
+}

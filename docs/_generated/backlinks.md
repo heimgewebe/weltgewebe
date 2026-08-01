@@ -664,10 +664,6 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/map-basemap-proof-gap-reconciliation.md
 
-## docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
-
-- [relates_to] docs/runbooks/gewebezelle-two-operator-pilot-v1.md
-
 ## docs/proofs/sqlx-pgbouncer-session-crud-proof.md
 
 - [relates_to] docs/adr/ADR-0007__auth-persistence-production-db-path.md
@@ -686,7 +682,6 @@ Generated automatically. Do not edit.
 
 ## docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
 
-- [relates_to] docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
 - [relates_to] docs/reports/weltgewebe-os-foundation-status.md
 
 ## docs/quickstart-gate-c.md
@@ -979,14 +974,6 @@ Generated automatically. Do not edit.
 ## docs/runbooks/gewebezelle-manual-pilot.md
 
 - [relates_to] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
-- [relates_to] docs/runbooks/README.md
-- [relates_to] docs/runbooks/gewebezelle-two-operator-pilot-v1.md
-
-## docs/runbooks/gewebezelle-two-operator-pilot-v1.md
-
-- [relates_to] docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
-- [relates_to] docs/runbooks/README.md
-- [relates_to] docs/runbooks/gewebezelle-manual-pilot.md
 
 ## docs/runbooks/incident-response.md
 
@@ -1076,6 +1063,7 @@ Generated automatically. Do not edit.
 ## docs/specs/map-experience.md
 
 - [relates_to] docs/blueprints/map-blaupause.md
+- [implements] docs/deploy/germany-basemap-rollout.md
 - [verifies] docs/reports/map-status.md
 - [depends_on] docs/roadmap.md
 - [relates_to] docs/vision.md
@@ -1119,7 +1107,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/deploy/secondary-domain-web-surfaces.md
-- [relates_to] docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-edge-cache-limit-design.md
 - [relates_to] docs/reports/domain-edge-create-semantics-preflight.md
@@ -1137,7 +1124,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/proof-matrix-generalization-decision.md
 - [relates_to] docs/reports/repo-audit-2026-07-02.md
 - [relates_to] docs/reports/weltgewebe-os-foundation-status.md
-- [relates_to] docs/runbooks/gewebezelle-two-operator-pilot-v1.md
 - [relates_to] docs/security/agent-write-scope-baseline.md
 - [relates_to] docs/tasks/DEPLOY-DNS-001B.md
 - [relates_to] docs/tasks/README.md
@@ -1229,16 +1215,6 @@ Generated automatically. Do not edit.
 
 - [verifies] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
 
-## platform/cell-pilot/two-operator-pilot.contract.json
-
-- [depends_on] docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
-- [relates_to] docs/runbooks/gewebezelle-manual-pilot.md
-- [depends_on] docs/runbooks/gewebezelle-two-operator-pilot-v1.md
-
-## platform/cell-pilot/two-operator-pilot.example.invalid.json
-
-- [depends_on] docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
-
 ## platform/cell-profile.contract.json
 
 - [relates_to] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
@@ -1320,10 +1296,6 @@ Generated automatically. Do not edit.
 ## scripts/ci/tests/test_repoground_vertical_pilot.py
 
 - [relates_to] docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md
-
-## scripts/ci/tests/test_two_operator_cell_pilot.py
-
-- [depends_on] docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
 
 ## scripts/ci/validate_repoground_vertical_pilot.py
 
@@ -1425,11 +1397,6 @@ Generated automatically. Do not edit.
 ## scripts/platform/validate_platform.py
 
 - [verifies] docs/reports/kubernetes-platform-foundation-status.md
-
-## scripts/platform/validate_two_operator_pilot.py
-
-- [depends_on] docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md
-- [depends_on] docs/runbooks/gewebezelle-two-operator-pilot-v1.md
 
 ## scripts/quality/review_governance.py
 

@@ -279,19 +279,6 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn(
             "automatic peer discovery or trust", contract["nonclaims"]
         )
-        self.assertIn("completed two-operator WAN pilot", contract["nonclaims"])
-        self.assertEqual(
-            contract["artifacts"]["two_operator_pilot_contract"],
-            "platform/cell-pilot/two-operator-pilot.contract.json",
-        )
-        self.assertEqual(
-            contract["artifacts"]["two_operator_pilot_example"],
-            "platform/cell-pilot/two-operator-pilot.example.invalid.json",
-        )
-        self.assertEqual(
-            contract["artifacts"]["two_operator_pilot_validator"],
-            "scripts/platform/validate_two_operator_pilot.py",
-        )
 
         config_map = yaml.safe_load(
             (
@@ -380,12 +367,6 @@ class KubernetesPlatformContractTests(unittest.TestCase):
 
         self.assertTrue(
             (ROOT / "docs/runbooks/gewebezelle-manual-pilot.md").is_file()
-        )
-        self.assertTrue(
-            (ROOT / "docs/runbooks/gewebezelle-two-operator-pilot-v1.md").is_file()
-        )
-        self.assertTrue(
-            (ROOT / "docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md").is_file()
         )
         self.assertTrue(
             (
@@ -2730,15 +2711,21 @@ time.sleep(60)
     def test_web_container_copies_postinstall_script_before_install(self) -> None:
         dockerfile = (ROOT / "apps/web/Dockerfile").read_text()
         script_copy = dockerfile.index(
-            "COPY apps/web/scripts/verify-cookie-version.js ./scripts/verify-cookie-version.js"
+            "COPY apps/web/scripts/verify-cookie-version.js ./apps/web/scripts/verify-cookie-version.js"
         )
-        install = dockerfile.index("RUN pnpm install --frozen-lockfile")
+        install = dockerfile.index("RUN pnpm -C apps/web install --frozen-lockfile")
         self.assertLess(script_copy, install)
+        self.assertIn("COPY apps/web ./apps/web", dockerfile)
+        self.assertIn("COPY map-style ./map-style", dockerfile)
         self.assertIn(
-            "COPY --from=builder /workspace/build /srv/weltgewebe",
+            "COPY policies/performance.v1.json ./policies/performance.v1.json",
             dockerfile,
         )
-        self.assertIn("pnpm run build:container", dockerfile)
+        self.assertIn(
+            "COPY --from=builder /workspace/apps/web/build /srv/weltgewebe",
+            dockerfile,
+        )
+        self.assertIn("pnpm -C apps/web run build:container", dockerfile)
         package = (ROOT / "apps/web/package.json").read_text()
         self.assertIn("assert-route-performance-budget.mjs --budget-only", package)
 

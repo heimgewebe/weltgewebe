@@ -167,9 +167,9 @@ test("packages the canonical contract before the Docker web build", () => {
     "utf8",
   );
   const contractCopy =
-    "COPY policies/performance.v1.json /policies/performance.v1.json";
+    "COPY policies/performance.v1.json ./policies/performance.v1.json";
   const copyIndex = dockerfile.indexOf(contractCopy);
-  const buildIndex = dockerfile.indexOf("pnpm run build:container");
+  const buildIndex = dockerfile.indexOf("pnpm -C apps/web run build:container");
   assert.ok(copyIndex >= 0, "Docker builder must copy the canonical contract");
   assert.ok(
     buildIndex >= 0 && copyIndex < buildIndex,

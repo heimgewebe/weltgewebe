@@ -14,12 +14,13 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 192 |
-| Dokumente mit ausgehenden Relationen | 191 |
-| Dokumente als Ziel referenziert | 146 |
-| Relationen gesamt | 692 |
-| — depends_on | 33 |
-| — relates_to | 638 |
+| Dokumente gesamt | 191 |
+| Dokumente mit ausgehenden Relationen | 190 |
+| Dokumente als Ziel referenziert | 144 |
+| Relationen gesamt | 677 |
+| — depends_on | 27 |
+| — implements | 1 |
+| — relates_to | 628 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | Isolierte Dokumente | 0 |
@@ -33,11 +34,10 @@ Generated automatically. Do not edit.
 - ⚠️ High outbound count (13): `docs/blueprints/domain-data-postgres-cutover.md` — possible over-linking
 - ⚠️ High outbound count (10): `docs/reports/domain-postgres-instance-coherence-decision.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/blueprints/blueprint-agent-safety-control-layer.md` — possible over-linking
-- ⚠️ High outbound count (9): `docs/runbooks/README.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/runbooks/db-recovery.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reference/agent-operability-fixture-matrix.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reports/domain-edge-write-path-proof.md` — possible over-linking
-- ⚠️ High inbound count (25): `docs/tasks/board.md` — central dependency, review carefully
+- ⚠️ High inbound count (23): `docs/tasks/board.md` — central dependency, review carefully
 - ⚠️ High inbound count (16): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (15): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (14): `docs/reports/auth-status-matrix.md` — central dependency, review carefully
@@ -61,14 +61,13 @@ _Keine Zyklen gefunden._
 - `docs/blueprints/domain-data-postgres-cutover.md` — 13 ausgehende Relationen
 - `docs/reports/domain-postgres-instance-coherence-decision.md` — 10 ausgehende Relationen
 - `docs/blueprints/blueprint-agent-safety-control-layer.md` — 9 ausgehende Relationen
-- `docs/runbooks/README.md` — 9 ausgehende Relationen
 - `docs/runbooks/db-recovery.md` — 9 ausgehende Relationen
 - `docs/reference/agent-operability-fixture-matrix.md` — 8 ausgehende Relationen
 - `docs/reports/domain-edge-write-path-proof.md` — 8 ausgehende Relationen
 
 **Eingehend (inbound):**
 
-- `docs/tasks/board.md` — 25 eingehende Relationen
+- `docs/tasks/board.md` — 23 eingehende Relationen
 - `docs/deploy/README.md` — 16 eingehende Relationen
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — 15 eingehende Relationen
 - `docs/reports/auth-status-matrix.md` — 14 eingehende Relationen
