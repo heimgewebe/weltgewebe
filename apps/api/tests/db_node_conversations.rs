@@ -659,6 +659,37 @@ async fn node_conversation_vertical_slice() {
         assert_eq!(status, StatusCode::CREATED);
     }
 
+    let (status, author_details) = json_response(
+        &app,
+        request(
+            "GET",
+            &format!("/accounts/{AUTHOR_ID}"),
+            None,
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let author_activity = author_details["activity"]
+        .as_array()
+        .expect("account activity must be an array");
+    assert_eq!(
+        author_activity.len(),
+        1,
+        "same-day contributions are one durable summary; replay creates no extra activity"
+    );
+    assert_eq!(
+        author_activity[0]["event"],
+        "Hat 3 Beiträge zum Gespräch über den Knoten \"Gesprächsknoten\" geschrieben."
+    );
+    assert!(author_activity[0]
+        .get("event")
+        .and_then(|event| event.as_str())
+        .is_some_and(|event| !event.contains("geknüpft")));
+    assert!(author_activity[0].get("content").is_none());
+
     let (status, page_one) = json_response(
         &app,
         request(
@@ -889,6 +920,31 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(status, StatusCode::OK);
     assert!(author_tombstone["content"].is_null());
     assert!(author_tombstone["deleted_at"].is_string());
+
+    let (status, author_activity_after_tombstones) = json_response(
+        &app,
+        request(
+            "GET",
+            &format!("/accounts/{AUTHOR_ID}"),
+            None,
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        author_activity_after_tombstones["activity"]
+            .as_array()
+            .map(Vec::len),
+        Some(1)
+    );
+    assert_eq!(
+        author_activity_after_tombstones["activity"][0]["event"],
+        "Hat 3 Beiträge zum Gespräch über den Knoten \"Gesprächsknoten\" geschrieben.",
+        "tombstoning withdraws message content but keeps the durable contribution count"
+    );
 
     let version_after_messages: i64 =
         sqlx::query_scalar("SELECT version FROM domain_projection_state WHERE singleton")
@@ -1153,6 +1209,31 @@ async fn node_conversation_vertical_slice() {
     assert_eq!(archive_view["node_id_snapshot"], NODE_ID);
     assert_eq!(archive_view["node_title_snapshot"], "Gesprächsknoten");
     assert!(archive_view["archived_at"].is_string());
+
+    let (status, guest_account_after_archive) = json_response(
+        &app,
+        request(
+            "GET",
+            &format!("/accounts/{GUEST_ID}"),
+            None,
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        guest_account_after_archive["activity"]
+            .as_array()
+            .map(Vec::len),
+        Some(1),
+        "an archived but public conversation remains durable account activity"
+    );
+    assert_eq!(
+        guest_account_after_archive["activity"][0]["event"],
+        "Hat einen Beitrag zum Gespräch über den Knoten \"Gesprächsknoten\" geschrieben."
+    );
 
     let (status, archived_messages) =
         json_response(&app, request("GET", &message_path, None, None, None, None)).await;

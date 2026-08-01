@@ -260,6 +260,7 @@ pub async fn fetch_postgres_candidates(
             title: row.try_get("title")?,
             created_at: created_at.to_rfc3339(),
             updated_at: updated_at.to_rfc3339(),
+            has_authoritative_created_at: true,
             created_by_account_id: normalize_account_id(
                 payload.get("created_by_account_id").and_then(Value::as_str),
             ),

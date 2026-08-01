@@ -464,6 +464,7 @@ mod tests {
             title: title.to_string(),
             created_at: "2026-07-31T00:00:00Z".to_string(),
             updated_at: "2026-07-31T00:00:00Z".to_string(),
+            has_authoritative_created_at: true,
             created_by_account_id: Some("actor-a".to_string()),
             search_visibility: SearchVisibility::Public,
             summary: None,

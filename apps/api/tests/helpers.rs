@@ -32,6 +32,7 @@ pub fn test_node(id: &str, title: &str, summary: Option<&str>) -> Node {
         title: title.to_string(),
         created_at: TEST_NODE_TIMESTAMP.to_string(),
         updated_at: TEST_NODE_TIMESTAMP.to_string(),
+        has_authoritative_created_at: true,
         created_by_account_id: None,
         search_visibility: Default::default(),
         summary: summary.map(str::to_string),
