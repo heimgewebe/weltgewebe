@@ -1,0 +1,210 @@
+{
+  "schema_version": 1,
+  "contract_id": "gewebezelle-two-operator-pilot-v1",
+  "document_mode": "example",
+  "activation": {
+    "approved": false,
+    "approved_by": [],
+    "approval_receipt_sha256": "REDACTED",
+    "contract_sha256": "REDACTED",
+    "source_commit": "REDACTED",
+    "generated_at": "2030-01-01T02:00:00Z"
+  },
+  "cells": [
+    {
+      "cell_id": "cell-a.operator-a.invalid",
+      "public_base_url": "https://cell-a.operator-a.invalid",
+      "operator": {
+        "operator_id": "operator-a",
+        "accountable_party": "Redacted operator A",
+        "primary_contact": "ops@operator-a.invalid",
+        "control_domain": "operator-a.invalid",
+        "independence_receipt_sha256": "REDACTED"
+      },
+      "identity": {
+        "active_key_id": "key-a-2030-01",
+        "active_public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+        "public_key_sha256": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+      },
+      "peer": {
+        "cell_id": "cell-b.operator-b.invalid",
+        "delivery_base_url": "https://cell-b.operator-b.invalid",
+        "expected_key_id": "key-b-2030-01",
+        "expected_public_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+        "state": "trusted",
+        "allow_neighbourhood": true,
+        "allowed_event_types": [
+          "object.deleted",
+          "object.upserted"
+        ]
+      },
+      "egress": {
+        "policy_kind": "CiliumNetworkPolicy",
+        "fqdn": "cell-b.operator-b.invalid",
+        "port": 443,
+        "protocol": "TCP",
+        "to_entities": [],
+        "to_cidrs": [],
+        "wildcards": []
+      },
+      "deployment": {
+        "source_commit": "REDACTED",
+        "api_image_digest": "REDACTED",
+        "web_image_digest": "REDACTED"
+      },
+      "dns_tls": {
+        "dns_owner": "operator-a",
+        "tls_owner": "operator-a",
+        "dns_receipt_sha256": "REDACTED",
+        "tls_receipt_sha256": "REDACTED"
+      },
+      "backup_restore": {
+        "target_uri": "s3://operator-a-backups.invalid/gewebezelle-a",
+        "owner": "operator-a",
+        "backup_receipt_sha256": "REDACTED",
+        "restore_receipt_sha256": "REDACTED",
+        "restore_source_commit": "REDACTED",
+        "restored_at": "2030-01-01T01:00:00Z",
+        "measured_rpo_seconds": 300,
+        "measured_rto_seconds": 900
+      },
+      "operations": {
+        "slo_availability_percent": 99.0,
+        "alert_owner": "operator-a",
+        "alert_route_id": "operator-a-primary",
+        "delivery_lag_slo_seconds": 900,
+        "delivery_lag_alarm_seconds": 300,
+        "availability_burn_alarm": true,
+        "on_call_receipt_sha256": "REDACTED",
+        "upgrade_window": {
+          "start": "2030-01-02T01:00:00Z",
+          "end": "2030-01-02T02:00:00Z"
+        },
+        "rollback_deadline": "2030-01-02T03:00:00Z",
+        "upgrade_receipt_sha256": "REDACTED",
+        "rollback_receipt_sha256": "REDACTED"
+      },
+      "verification": {
+        "verified_by_operator_id": "operator-b",
+        "channel": "telephone",
+        "identity_receipt_sha256": "REDACTED",
+        "peer_receipt_sha256": "REDACTED"
+      },
+      "evidence": {
+        "applied_receipt_sha256": "REDACTED",
+        "duplicate_receipt_sha256": "REDACTED",
+        "retry_receipt_sha256": "REDACTED",
+        "concurrency_receipt_sha256": "REDACTED",
+        "egress_receipt_sha256": "REDACTED",
+        "backup_restore_receipt_sha256": "REDACTED",
+        "rollback_receipt_sha256": "REDACTED"
+      }
+    },
+    {
+      "cell_id": "cell-b.operator-b.invalid",
+      "public_base_url": "https://cell-b.operator-b.invalid",
+      "operator": {
+        "operator_id": "operator-b",
+        "accountable_party": "Redacted operator B",
+        "primary_contact": "ops@operator-b.invalid",
+        "control_domain": "operator-b.invalid",
+        "independence_receipt_sha256": "REDACTED"
+      },
+      "identity": {
+        "active_key_id": "key-b-2030-01",
+        "active_public_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+        "public_key_sha256": "72dbb7336c76780023f83da4c355f2eeea85733b13d3477697917790c1229084"
+      },
+      "peer": {
+        "cell_id": "cell-a.operator-a.invalid",
+        "delivery_base_url": "https://cell-a.operator-a.invalid",
+        "expected_key_id": "key-a-2030-01",
+        "expected_public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+        "state": "trusted",
+        "allow_neighbourhood": true,
+        "allowed_event_types": [
+          "object.deleted",
+          "object.upserted"
+        ]
+      },
+      "egress": {
+        "policy_kind": "CiliumNetworkPolicy",
+        "fqdn": "cell-a.operator-a.invalid",
+        "port": 443,
+        "protocol": "TCP",
+        "to_entities": [],
+        "to_cidrs": [],
+        "wildcards": []
+      },
+      "deployment": {
+        "source_commit": "REDACTED",
+        "api_image_digest": "REDACTED",
+        "web_image_digest": "REDACTED"
+      },
+      "dns_tls": {
+        "dns_owner": "operator-b",
+        "tls_owner": "operator-b",
+        "dns_receipt_sha256": "REDACTED",
+        "tls_receipt_sha256": "REDACTED"
+      },
+      "backup_restore": {
+        "target_uri": "s3://operator-b-backups.invalid/gewebezelle-b",
+        "owner": "operator-b",
+        "backup_receipt_sha256": "REDACTED",
+        "restore_receipt_sha256": "REDACTED",
+        "restore_source_commit": "REDACTED",
+        "restored_at": "2030-01-01T01:30:00Z",
+        "measured_rpo_seconds": 300,
+        "measured_rto_seconds": 900
+      },
+      "operations": {
+        "slo_availability_percent": 99.0,
+        "alert_owner": "operator-b",
+        "alert_route_id": "operator-b-primary",
+        "delivery_lag_slo_seconds": 900,
+        "delivery_lag_alarm_seconds": 300,
+        "availability_burn_alarm": true,
+        "on_call_receipt_sha256": "REDACTED",
+        "upgrade_window": {
+          "start": "2030-01-02T04:00:00Z",
+          "end": "2030-01-02T05:00:00Z"
+        },
+        "rollback_deadline": "2030-01-02T06:00:00Z",
+        "upgrade_receipt_sha256": "REDACTED",
+        "rollback_receipt_sha256": "REDACTED"
+      },
+      "verification": {
+        "verified_by_operator_id": "operator-a",
+        "channel": "telephone",
+        "identity_receipt_sha256": "REDACTED",
+        "peer_receipt_sha256": "REDACTED"
+      },
+      "evidence": {
+        "applied_receipt_sha256": "REDACTED",
+        "duplicate_receipt_sha256": "REDACTED",
+        "retry_receipt_sha256": "REDACTED",
+        "concurrency_receipt_sha256": "REDACTED",
+        "egress_receipt_sha256": "REDACTED",
+        "backup_restore_receipt_sha256": "REDACTED",
+        "rollback_receipt_sha256": "REDACTED"
+      }
+    }
+  ],
+  "mutual_proofs": {
+    "a_to_b_receipt_sha256": "REDACTED",
+    "b_to_a_receipt_sha256": "REDACTED",
+    "out_of_band_pairing_receipt_sha256": "REDACTED"
+  },
+  "nonclaims": [
+    "production Kubernetes cutover",
+    "self-service cell provisioning",
+    "automatic peer discovery or trust",
+    "multi-region high availability",
+    "identity migration between cells",
+    "public quarantine administration",
+    "completed two-operator WAN pilot",
+    "GewebeZelle operator or CRD",
+    "static validator establishes activation readiness",
+    "static receipt digests establish operator or failure-domain independence"
+  ]
+}

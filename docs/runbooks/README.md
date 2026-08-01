@@ -19,6 +19,10 @@ relations:
     target: docs/runbooks/uv-tooling.md
   - type: relates_to
     target: docs/runbooks/domain-mail-cutover.md
+  - type: relates_to
+    target: docs/runbooks/gewebezelle-manual-pilot.md
+  - type: relates_to
+    target: docs/runbooks/gewebezelle-two-operator-pilot-v1.md
 ---
 # Runbooks
 
@@ -28,5 +32,7 @@ Anleitungen für wiederkehrende Aufgaben.
 - [DB Recovery](db-recovery.md)
 - [UV Tooling – Ist-Stand & Ausbauoptionen](uv-tooling.md)
 - [Domain-/Mail-Cutover](domain-mail-cutover.md)
+- [Manuelles GewebeZelle-Pilotprofil](gewebezelle-manual-pilot.md)
+- [Zwei-Betreiber-GewebeZelle-Pilotvertrag v1](gewebezelle-two-operator-pilot-v1.md)
 - [Codespaces Recovery](codespaces-recovery.md)
 - [Zurück zum Doku-Index](../index.md)

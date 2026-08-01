@@ -279,6 +279,19 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn(
             "automatic peer discovery or trust", contract["nonclaims"]
         )
+        self.assertIn("completed two-operator WAN pilot", contract["nonclaims"])
+        self.assertEqual(
+            contract["artifacts"]["two_operator_pilot_contract"],
+            "platform/cell-pilot/two-operator-pilot.contract.json",
+        )
+        self.assertEqual(
+            contract["artifacts"]["two_operator_pilot_example"],
+            "platform/cell-pilot/two-operator-pilot.example.invalid.json",
+        )
+        self.assertEqual(
+            contract["artifacts"]["two_operator_pilot_validator"],
+            "scripts/platform/validate_two_operator_pilot.py",
+        )
 
         config_map = yaml.safe_load(
             (
@@ -367,6 +380,12 @@ class KubernetesPlatformContractTests(unittest.TestCase):
 
         self.assertTrue(
             (ROOT / "docs/runbooks/gewebezelle-manual-pilot.md").is_file()
+        )
+        self.assertTrue(
+            (ROOT / "docs/runbooks/gewebezelle-two-operator-pilot-v1.md").is_file()
+        )
+        self.assertTrue(
+            (ROOT / "docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md").is_file()
         )
         self.assertTrue(
             (
