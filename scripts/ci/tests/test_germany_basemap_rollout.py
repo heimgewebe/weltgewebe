@@ -208,6 +208,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("verify_snapshot_freshness", between)
         self.assertIn("invalidate_activation_receipt", between)
         self.assertIn("ACTIVATION_TRANSACTION_OPEN=1", between)
+        transaction_at = between.index("ACTIVATION_TRANSACTION_OPEN=1")
+        receipt_at = between.index("invalidate_activation_receipt")
+        self.assertLess(transaction_at, receipt_at)
 
     def test_activation_binds_prepared_report_by_artifact_content(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
