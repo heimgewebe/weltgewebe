@@ -4,9 +4,10 @@ set -euo pipefail
 # Reproducible nationwide Germany PMTiles build.
 #
 # The default input remains a pinned historical Geofabrik snapshot. A newer
-# snapshot may be supplied only together with an explicit URL and SHA256; the
-# integrity check remains mandatory. This script builds a versioned artifact
-# and sentinel metadata. It never changes a stable alias or production config.
+# snapshot may be supplied only as a complete provenance tuple: filename, URL,
+# SHA256 and snapshot date. The integrity check remains mandatory. This script
+# builds a versioned artifact and sentinel metadata. It never changes a stable
+# alias or production config.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." >/dev/null 2>&1 && pwd)"
@@ -15,11 +16,17 @@ BASEMAP_DIR="${BASEMAP_DIR:-$REPO_ROOT/build/basemap}"
 DEFAULT_OSM_FILE="germany-260101.osm.pbf"
 DEFAULT_OSM_URL="https://download.geofabrik.de/europe/germany-260101.osm.pbf"
 DEFAULT_OSM_SHA256="4a2e3181c2cef4795b62ef9b447d4fa5f7f9bb2352d563292a7b98baa75279f8"
+DEFAULT_OSM_SNAPSHOT_DATE="2026-01-01"
+
+OSM_FILE_WAS_SET="${OSM_FILE+x}"
+OSM_URL_WAS_SET="${OSM_URL+x}"
+OSM_SHA256_WAS_SET="${OSM_SHA256+x}"
+OSM_SNAPSHOT_DATE_WAS_SET="${OSM_SNAPSHOT_DATE+x}"
 
 OSM_FILE="${OSM_FILE:-$DEFAULT_OSM_FILE}"
 OSM_URL="${OSM_URL:-$DEFAULT_OSM_URL}"
 OSM_SHA256="${OSM_SHA256:-$DEFAULT_OSM_SHA256}"
-OSM_SNAPSHOT_DATE="${OSM_SNAPSHOT_DATE:-2026-01-01}"
+OSM_SNAPSHOT_DATE="${OSM_SNAPSHOT_DATE:-$DEFAULT_OSM_SNAPSHOT_DATE}"
 BASEMAP_VERSION="${BASEMAP_VERSION:-0.1.0}"
 BASEMAP_TAG="v${BASEMAP_VERSION}"
 OUTPUT_PMTILES="basemap-germany-${BASEMAP_TAG}.pmtiles"
@@ -33,6 +40,18 @@ fail() {
   echo "ERROR: $*" >&2
   exit 1
 }
+
+SNAPSHOT_OVERRIDE_COUNT=0
+for marker in \
+  "$OSM_FILE_WAS_SET" \
+  "$OSM_URL_WAS_SET" \
+  "$OSM_SHA256_WAS_SET" \
+  "$OSM_SNAPSHOT_DATE_WAS_SET"; do
+  [[ -n "$marker" ]] && SNAPSHOT_OVERRIDE_COUNT=$((SNAPSHOT_OVERRIDE_COUNT + 1))
+done
+if ((SNAPSHOT_OVERRIDE_COUNT != 0 && SNAPSHOT_OVERRIDE_COUNT != 4)); then
+  fail "override OSM_FILE, OSM_URL, OSM_SHA256 and OSM_SNAPSHOT_DATE together"
+fi
 
 [[ "$OSM_FILE" == "$(basename -- "$OSM_FILE")" ]] ||
   fail "OSM_FILE must be a plain filename inside BASEMAP_DIR"
