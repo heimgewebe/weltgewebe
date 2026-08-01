@@ -1,0 +1,69 @@
+{
+  "schema_version": 1,
+  "profile_id": "gewebezelle-manual-v1",
+  "status": "manual-pilot",
+  "provisioning_mode": "manual-gitops-overlay",
+  "self_service": false,
+  "operator_api": false,
+  "required_contracts": {
+    "platform": [
+      "dedicated namespace or cluster ownership",
+      "digest-bound first-party images",
+      "Flux reconciliation",
+      "Gateway API with public HTTPS",
+      "default-deny network policy",
+      "explicit Cilium FQDN egress policy for every outbound federation DNS host and TCP port"
+    ],
+    "data": [
+      "PostgreSQL with migrations",
+      "JetStream",
+      "off-cluster backup target",
+      "tested PITR and blank-cluster restore"
+    ],
+    "identity": [
+      "FEDERATION_CELL_ID",
+      "FEDERATION_PUBLIC_BASE_URL",
+      "FEDERATION_KEY_ID",
+      "FEDERATION_SIGNING_KEY_B64 from an external secret path",
+      "explicit AUTH_TRUSTED_PROXIES decision"
+    ],
+    "peers": [
+      "versioned FEDERATION_PEERS_JSON without private keys",
+      "explicit peer state and event allowlist",
+      "optional HTTPS delivery_base_url per outbound peer",
+      "outbound delivery endpoints use operator-verified DNS names; IP literals require a separately reviewed CIDR policy"
+    ],
+    "delivery": [
+      "FEDERATION_DELIVERY_ENABLED=true only with at least one outbound endpoint",
+      "bounded timeout, batch and retry settings",
+      "durable federation_delivery_attempts state",
+      "operator observation of retry and dead deliveries"
+    ],
+    "operations": [
+      "DNS and TLS ownership",
+      "SLO and alert ownership",
+      "key rotation and revocation procedure",
+      "backup and restore receipt",
+      "upgrade and rollback procedure"
+    ]
+  },
+  "activation_gates": [
+    "all required secret keys are injected outside Git",
+    "cell descriptor matches the intended public URL and active public key",
+    "peer keys and delivery endpoints are independently exchanged and verified",
+    "automatic delivery retry and idempotency proof is green",
+    "backup, restore and rollback are measured for the concrete environment",
+    "rendered cell overlay contains no federation egress placeholder and permits only the exact configured peer DNS names and TCP ports"
+  ],
+  "nonclaims": [
+    "production Kubernetes cutover",
+    "self-service cell provisioning",
+    "automatic peer discovery or trust",
+    "multi-region high availability",
+    "identity migration between cells",
+    "public quarantine administration"
+  ],
+  "artifacts": {
+    "federation_delivery_egress_template": "platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml"
+  }
+}

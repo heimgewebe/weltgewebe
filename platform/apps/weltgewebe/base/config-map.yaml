@@ -15,6 +15,11 @@ data:
   GEWEBE_IN_DIR: /data
   GEWEBE_SEED_DEMO: "false"
   GEWEBE_SEED_REAL: "false"
+  FEDERATION_DELIVERY_BATCH_SIZE: "20"
+  FEDERATION_DELIVERY_ENABLED: "false"
+  FEDERATION_DELIVERY_MAX_ATTEMPTS: "8"
+  FEDERATION_DELIVERY_POLL_SECONDS: "5"
+  FEDERATION_DELIVERY_REQUEST_TIMEOUT_SECONDS: "10"
   NATS_URL: nats://nats.weltgewebe-data.svc.cluster.local:4222
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.weltgewebe-observability.svc.cluster.local:4317
   OTEL_SERVICE_NAME: weltgewebe-api

@@ -3,6 +3,7 @@ pub mod auth;
 pub mod config;
 pub mod domain_db;
 pub mod federation;
+pub mod federation_delivery;
 pub mod governance;
 pub mod mailer;
 pub mod middleware;

@@ -17,6 +17,8 @@ relations:
   - type: relates_to
     target: docs/reports/kubernetes-platform-foundation-status.md
   - type: relates_to
+    target: docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
+  - type: relates_to
     target: docs/tasks/board.md
 ---
 
@@ -36,7 +38,8 @@ Dieser Bericht verhindert, dass langfristige Architektur, Referenzbeweise und la
 - Eine logisch zonierte kind-Referenzzelle auf einem einzelnen CI-Host hat PostgreSQL-/JetStream-Failover, Barman-Backup, WAL-Archivierung, PITR und Blank-Cluster-Restore bestanden.
 - RTO, archivierungsgebundene RPO-Obergrenze, Upgrade, Rollback und Referenzfehlerbudget wurden gemessen.
 - Proofkritische OCI-Eingaben werden aus einem kontrollierten privaten Digest-Mirror geladen und anschließend offline verifiziert.
-- Der Föderationskern mit Signaturen, Inbox/Outbox, Quarantäne und unabhängigen Zellgrenzen ist implementiert; ein öffentlicher Produktionscutover bleibt davon getrennt.
+- Der Föderationskern mit Signaturen, Inbox/Outbox, Quarantäne und unabhängigen Zellgrenzen ist implementiert. Die Outbox besitzt einen dauerhaften, begrenzten und multi-instanzsicheren Delivery-Worker; Aktivierung realer Betreiberzellen bleibt davon getrennt.
+- Ein manuelles GewebeZelle-Pilotprofil bindet Zellidentität, externe Secrets, Peers, Delivery, Backup, Restore und Betreiberpflichten, ohne Self-Service oder Operator zu behaupten.
 - Task-Control, Agent-Safety und beweisgebundene Dokumentationsmechanismen sind vorhanden.
 
 ## Status der Grundlagenwelle
@@ -47,7 +50,8 @@ Dieser Bericht verhindert, dass langfristige Architektur, Referenzbeweise und la
 | Multi-Instance- und Ereignisgrundlage | belegt | gemeinsamer Zustand, Outbox und Zwei-API-Kohärenz; Produktionskapazität separat |
 | Kubernetes-/GitOps-Referenzpfad | belegt | Kustomize, Flux, Gateway, Policies, Direct-/GitOps-Proof; kein Produktionscluster |
 | HA- und Recovery-Referenzzelle | teilweise | logische Zonen in einem Single-Host-kind-Setup belegen Failover, PITR, Blank-Cluster-Restore und Messwerte; ein physisch verteilter Fehlerdomänenbeweis fehlt |
-| Föderationskern | belegt | Protokoll- und Zwei-Zellen-Referenzgrenzen; kein öffentlicher Cutover |
+| Föderationskern und automatische Auslieferung | belegt | signierter Protokollkern, dauerhafte Outbox-Delivery und logischer Zwei-Zellen-Beweis; kein realer Betreiber-Dauerbetrieb |
+| Manuelles GewebeZelle-Pilotprofil | belegt | GitOps-, Secret-, Peer-, Backup- und Betreibervertrag; kein Self-Service und kein Operator |
 | Observability- und Operator-Spine | teilweise | Telemetrieverträge und Proof-Receipts vorhanden; vollständige SLO-/Chronik-/Leitstandprojektion offen |
 | Kubernetes-Staging | offen | echter Cluster, externe Secrets, Imagepromotion, Storage, TLS/DNS/LB und produktionsnahe Lastbelege fehlen |
 | Kubernetes-Produktion | offen | `WELTGEWEBE-OS-V1-T044` bleibt der einzige autoritative Cutoverpfad |
