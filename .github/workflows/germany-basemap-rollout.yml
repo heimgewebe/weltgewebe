@@ -13,9 +13,12 @@ name: Germany Basemap Rollout
       - "apps/web/src/lib/map/config/basemap.current.test.ts"
       - "map-style/style-germany.json"
       - "scripts/basemap/build-germany-pmtiles.sh"
+      - "scripts/basemap/build-hamburg-pmtiles.sh"
+      - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
       - "scripts/basemap/prepare-germany-rollout.sh"
       - "scripts/basemap/activate-germany-basemap.sh"
       - "scripts/ci/tests/test_germany_basemap_rollout.py"
+      - "scripts/ci/tests/test_schleswig_holstein_basemap_builder.py"
       - ".github/workflows/germany-basemap-rollout.yml"
   push:
     branches: [main]
@@ -28,9 +31,12 @@ name: Germany Basemap Rollout
       - "apps/web/src/lib/map/config/basemap.current.test.ts"
       - "map-style/style-germany.json"
       - "scripts/basemap/build-germany-pmtiles.sh"
+      - "scripts/basemap/build-hamburg-pmtiles.sh"
+      - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
       - "scripts/basemap/prepare-germany-rollout.sh"
       - "scripts/basemap/activate-germany-basemap.sh"
       - "scripts/ci/tests/test_germany_basemap_rollout.py"
+      - "scripts/ci/tests/test_schleswig_holstein_basemap_builder.py"
       - ".github/workflows/germany-basemap-rollout.yml"
   workflow_dispatch: {}
 
@@ -53,14 +59,21 @@ jobs:
         run: |
           set -euo pipefail
           bash -n scripts/basemap/build-germany-pmtiles.sh
+          bash -n scripts/basemap/build-hamburg-pmtiles.sh
+          bash -n scripts/basemap/build-schleswig-holstein-pmtiles.sh
           bash -n scripts/basemap/prepare-germany-rollout.sh
           bash -n scripts/basemap/activate-germany-basemap.sh
           test -x scripts/basemap/build-germany-pmtiles.sh
+          test -x scripts/basemap/build-hamburg-pmtiles.sh
+          test -x scripts/basemap/build-schleswig-holstein-pmtiles.sh
           test -x scripts/basemap/prepare-germany-rollout.sh
           test -x scripts/basemap/activate-germany-basemap.sh
 
-      - name: Verify static Germany rollout contracts
-        run: python3 scripts/ci/tests/test_germany_basemap_rollout.py
+      - name: Verify static basemap rollout contracts
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/tests/test_germany_basemap_rollout.py
+          python3 scripts/ci/tests/test_schleswig_holstein_basemap_builder.py
 
       - name: Install pnpm
         uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
