@@ -100,6 +100,46 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertNotIn("ln -s", builder)
         self.assertNotIn("PUBLIC_BASEMAP_VARIANT=germany", builder)
 
+    def test_builder_publishes_artifact_and_metadata_as_signal_safe_pair(
+        self,
+    ) -> None:
+        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
+        docker_at = builder.index('if ! docker "${DOCKER_ARGS[@]}"')
+        publish_at = builder.index(
+            'ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"'
+        )
+        build_region = builder[docker_at:publish_at]
+        self.assertIn('--output="/data/$PARTIAL_PMTILES"', build_region)
+        self.assertNotIn('--output="/data/$OUTPUT_PMTILES"', build_region)
+        self.assertNotIn('mv "$PARTIAL_PMTILES" "$OUTPUT_PMTILES"', builder)
+
+        function_start = builder.index("publish_immutable_pair() {")
+        ignore_signals = builder.index("trap '' INT TERM", function_start)
+        artifact_link = builder.index(
+            'ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"',
+            ignore_signals,
+        )
+        artifact_owned = builder.index("FINAL_ARTIFACT_CREATED=1", artifact_link)
+        metadata_link = builder.index(
+            'ln "$PARTIAL_META_PATH" "$FINAL_META_PATH"', artifact_owned
+        )
+        metadata_owned = builder.index("FINAL_META_CREATED=1", metadata_link)
+        publication_complete = builder.index("PUBLISH_COMPLETE=1", metadata_owned)
+        restore_interrupt = builder.index(
+            "trap on_interrupt INT", publication_complete
+        )
+        restore_terminate = builder.index(
+            "trap on_terminate TERM", restore_interrupt
+        )
+
+        self.assertLess(ignore_signals, artifact_link)
+        self.assertLess(artifact_link, artifact_owned)
+        self.assertLess(artifact_owned, metadata_link)
+        self.assertLess(metadata_link, metadata_owned)
+        self.assertLess(metadata_owned, publication_complete)
+        self.assertLess(publication_complete, restore_interrupt)
+        self.assertLess(restore_interrupt, restore_terminate)
+
     def test_prepare_publishes_bound_version_without_alias_switch(self) -> None:
         prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
         validation_at = prepare.index("validate:pmtiles")
