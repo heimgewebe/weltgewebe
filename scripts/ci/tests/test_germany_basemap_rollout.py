@@ -119,12 +119,39 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn('TARGET_DIR="$REPO_ROOT/build/basemap"', prepare)
         self.assertIn('if [[ "$TARGET_DIR_EXPLICIT" == "0" ]]; then', prepare)
         self.assertIn('mkdir -p "$TARGET_DIR"', prepare)
-        self.assertIn(
-            "explicit target directory does not exist", prepare
-        )
+        self.assertIn("explicit target directory does not exist", prepare)
         self.assertIn(
             "GERMANY_BASEMAP_TARGET_DIR must not be empty when set", prepare
         )
+
+    def test_prepare_publication_is_signal_safe_until_verified(self) -> None:
+        prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
+        function_start = prepare.index("publish_immutable_set() {")
+        ignore_signals = prepare.index("trap '' INT TERM", function_start)
+        artifact_link = prepare.index(
+            'ln "$ARTIFACT_TMP" "$TARGET_ARTIFACT"', ignore_signals
+        )
+        artifact_owned = prepare.index("ARTIFACT_CREATED=1", artifact_link)
+        proof_link = prepare.index('ln "$PROOF_TMP" "$TARGET_PROOF"', artifact_owned)
+        proof_owned = prepare.index("PROOF_CREATED=1", proof_link)
+        meta_link = prepare.index('ln "$META_TMP" "$TARGET_META"', proof_owned)
+        meta_owned = prepare.index("META_CREATED=1", meta_link)
+        restore_interrupt = prepare.index("trap on_interrupt INT", meta_owned)
+        restore_terminate = prepare.index("trap on_terminate TERM", restore_interrupt)
+        compare_at = prepare.index('cmp -s "$META" "$TARGET_META"')
+        aliases_verified_at = prepare.index("ALIAS_META_STATE_AFTER")
+        publication_complete = prepare.index("PUBLISH_COMPLETE=1", compare_at)
+
+        self.assertLess(ignore_signals, artifact_link)
+        self.assertLess(artifact_link, artifact_owned)
+        self.assertLess(artifact_owned, proof_link)
+        self.assertLess(proof_link, proof_owned)
+        self.assertLess(proof_owned, meta_link)
+        self.assertLess(meta_link, meta_owned)
+        self.assertLess(meta_owned, restore_interrupt)
+        self.assertLess(restore_interrupt, restore_terminate)
+        self.assertLess(compare_at, publication_complete)
+        self.assertLess(aliases_verified_at, publication_complete)
 
     def test_activation_revalidates_checkout_and_freshness_before_aliases(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
@@ -181,6 +208,13 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("--max-time", activate)
         self.assertIn('curl "${CURL_COMMON[@]}"', activate)
         self.assertIn("within the readback deadline", activate)
+
+    def test_activation_public_readback_errors_use_explicit_if_blocks(self) -> None:
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        self.assertIn('if ! PUBLIC_META_PATH="$PUBLIC_META"', activate)
+        self.assertIn("python3 << 'PY'; then", activate)
+        self.assertIn('if ! HTTP_STATUS="$(curl "${CURL_COMMON[@]}"', activate)
+        self.assertNotIn("python3 << 'PY' ||\n", activate)
 
     def test_activation_alias_switch_and_receipt_are_rollback_bound(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
