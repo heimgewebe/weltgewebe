@@ -22,6 +22,8 @@ const buildIdentityPath = path.resolve(
   "_app",
   "basemap-build.json",
 );
+const remoteStyleUrl =
+  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
 
 function runGenerator(extraEnv = {}) {
   const env = { ...process.env };
@@ -83,7 +85,7 @@ test("emits a remote identity without a sovereign variant", () => {
   const identity = buildIdentity();
   assert.equal(identity.schema_version, 1);
   assert.equal(identity.mode, "remote-style");
-  assert.equal(identity.style_url.includes("cartocdn.com"), true);
+  assert.equal(identity.style_url, remoteStyleUrl);
   assert.equal(Object.hasOwn(identity, "variant"), false);
 });
 
