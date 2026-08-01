@@ -312,6 +312,32 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertIn(
             "federation-signing-key-b64", secret_contract["optional_keys"]
         )
+        egress_path = ROOT / contract["artifacts"]["federation_delivery_egress_template"]
+        egress_policy = yaml.safe_load(egress_path.read_text(encoding="utf-8"))
+        self.assertEqual(egress_policy["apiVersion"], "cilium.io/v2")
+        self.assertEqual(egress_policy["kind"], "CiliumNetworkPolicy")
+        selector = egress_policy["spec"]["endpointSelector"]["matchLabels"]
+        self.assertEqual(selector["app.kubernetes.io/name"], "weltgewebe-api")
+        rule = egress_policy["spec"]["egress"][0]
+        self.assertEqual(rule["toFQDNs"], [{"matchName": "peer.example.invalid"}])
+        self.assertNotIn("toEntities", rule)
+        self.assertNotIn("toCIDR", rule)
+        self.assertNotIn("toCIDRSet", rule)
+        self.assertEqual(
+            rule["toPorts"],
+            [{"ports": [{"port": "443", "protocol": "TCP"}]}],
+        )
+        self.assertNotIn(
+            "cell-pilot/federation-delivery-egress.yaml",
+            (
+                ROOT / "platform/apps/weltgewebe/base/kustomization.yaml"
+            ).read_text(encoding="utf-8"),
+        )
+        self.assertIn(
+            "rendered cell overlay contains no federation egress placeholder and permits only the exact configured peer DNS names and TCP ports",
+            contract["activation_gates"],
+        )
+
         self.assertTrue(
             (ROOT / "docs/runbooks/gewebezelle-manual-pilot.md").is_file()
         )

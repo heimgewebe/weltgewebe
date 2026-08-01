@@ -80,6 +80,12 @@ Peerbeziehungen werden vollständig und versionsgebunden über `FEDERATION_PEERS
 
 Es gibt keine automatische Peer-Discovery oder Vertrauensbildung. Beide Betreiber vergleichen Zell-ID, öffentliche URL, Key-ID und Public Key über einen getrennten Kanal, bevor `state: trusted` aktiviert wird.
 
+## Ausgehende Netzwerkfreigabe
+
+Die Kubernetes-Basis bleibt egress-default-deny und enthält bewusst keine allgemeine Internetfreigabe. Das manuelle Zelloverlay muss deshalb für jeden ausgehenden Peer eine explizite Cilium-FQDN-Regel enthalten. Ausgangspunkt ist `platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml`. Vor der Aufnahme in das Overlay werden `peer.example.invalid`, Policy-Name und gegebenenfalls Port durch den exakt verifizierten DNS-Host und TCP-Port aus `delivery_base_url` ersetzt.
+
+Zulässig sind ausschließlich exakte `matchName`-Einträge. `matchPattern`, `toEntities: world`, pauschale CIDR-Freigaben und ein unveränderter Beispielhost sind Aktivierungsblocker. IP-Literale benötigen einen gesondert geprüften CIDR-Vertrag; das Standardprofil behauptet dafür keine Freigabe. Der gerenderte Zellstand muss daher denselben Zielhost- und Portsatz wie `FEDERATION_PEERS_JSON` enthalten.
+
 ## Automatische Auslieferung
 
 Der Delivery-Worker wird explizit eingeschaltet:
@@ -112,9 +118,10 @@ Vor einer Nachbarschaftsfreigabe sind mindestens zu belegen:
 3. Die Zielzelle bestätigt `Applied`; ein identischer Replay wird als `Duplicate` abgeschlossen.
 4. Ein kontrollierter transienter Fehler führt zu `retry` und später zu `delivered`.
 5. Zwei parallele Worker senden denselben Zielzustand nicht doppelt wirksam.
-6. Ein blockierter Peer oder entfernter Delivery-Endpoint erhält keine neuen Zustellungen.
-7. Backup, PITR oder Blank-Cluster-Restore erhalten Outbox- und Deliveryzustände.
-8. Ein Rollback auf den vorherigen API-Commit lässt bereits bestätigte Ereignisse bestätigt und offene Ereignisse weiter bearbeitbar.
+6. Der gerenderte Zell-Overlay enthält für jeden ausgehenden Peer genau dessen verifizierten DNS-Host und TCP-Port als Cilium-FQDN-Egress; Beispielhost, Wildcard und allgemeiner Welt-Egress fehlen.
+7. Ein blockierter Peer oder entfernter Delivery-Endpoint erhält keine neuen Zustellungen.
+8. Backup, PITR oder Blank-Cluster-Restore erhalten Outbox- und Deliveryzustände.
+9. Ein Rollback auf den vorherigen API-Commit lässt bereits bestätigte Ereignisse bestätigt und offene Ereignisse weiter bearbeitbar.
 
 ## Betrieb und Diagnose
 

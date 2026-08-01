@@ -14,11 +14,11 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 675 |
+| Relationen gesamt | 676 |
 | — depends_on | 27 |
 | — relates_to | 628 |
 | — supersedes | 12 |
-| — verifies | 8 |
+| — verifies | 9 |
 | relates_to Anteil | 93% |
 
 ### Mögliche supersedes-Lücken

@@ -40,6 +40,7 @@ verifies_with:
 - `clusters/local/` definiert die Flux-Abhängigkeitskette `data → migration → app → gateway`.
 - `toolchain.lock.json` bindet Werkzeuge, Clusterimage und Drittartefakte an SHA-256.
 - `cell-profile.contract.json` definiert das erste manuelle, nicht selbstbedienbare GewebeZelle-Pilotprofil.
+- `apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml` ist ein nicht eingebundenes, fail-closed Cilium-FQDN-Template für exakt benannte ausgehende Peerziele.
 
 ## Sicherheitsgrenzen
 
@@ -65,6 +66,6 @@ Der unprivilegierte Workflow `kubernetes-platform` prüft Pull Requests gegen de
 
 ## Manuelles GewebeZelle-Pilotprofil
 
-Eine eigenständige Pilotzelle kann die gemeinsame Anwendungsbasis mit einem zelleigenen Overlay, externer Secretbereitstellung, eigener Zellidentität und ausdrücklich konfigurierten Peerbeziehungen verwenden. Die automatische Auslieferung ist standardmäßig deaktiviert und wird nur mit PostgreSQL, vollständiger Identität und mindestens einem gültigen HTTPS-Ziel gestartet.
+Eine eigenständige Pilotzelle kann die gemeinsame Anwendungsbasis mit einem zelleigenen Overlay, externer Secretbereitstellung, eigener Zellidentität und ausdrücklich konfigurierten Peerbeziehungen verwenden. Die automatische Auslieferung ist standardmäßig deaktiviert und wird nur mit PostgreSQL, vollständiger Identität, mindestens einem gültigen HTTPS-Ziel und einer auf dessen exakten DNS-Host und TCP-Port begrenzten Cilium-Egress-Regel gestartet. Die Basis erhält keine allgemeine Internetfreigabe.
 
 Der Betreibervertrag steht in `docs/runbooks/gewebezelle-manual-pilot.md`. Er etabliert weder Self-Service noch einen GewebeZelle-Operator und ersetzt nicht die getrennte Kubernetes-Produktionsfreigabe.

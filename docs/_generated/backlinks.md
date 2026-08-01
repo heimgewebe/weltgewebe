@@ -1210,6 +1210,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/reports/kubernetes-platform-foundation-status.md
 - [relates_to] docs/runbooks/gewebezelle-manual-pilot.md
 
+## platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml
+
+- [verifies] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md
+
 ## platform/cell-profile.contract.json
 
 - [relates_to] docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md

@@ -18,6 +18,8 @@ relations:
     target: docs/runbooks/gewebezelle-manual-pilot.md
   - type: relates_to
     target: platform/cell-profile.contract.json
+  - type: verifies
+    target: platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml
 ---
 
 # WELTGEWEBE-OS-V1-T032 — Automatische Föderationsauslieferung
@@ -40,6 +42,7 @@ Der Schnitt aktiviert weder die heutige Weltgewebe-Produktion noch eine fremde Z
 | Objektversionen bleiben geordnet | spätere Version wartet je Zielzelle auf alle früheren Versionen desselben Objekts | bestanden |
 | Automatischer Zwei-Zellen-Beweis | PostgreSQL-Sender, automatischer Workertransport und unabhängige Empfangszelle | bestanden |
 | Manuelles Betreiberprofil | `platform/cell-profile.contract.json`, Runbook und externer Secretpfad | vorhanden |
+| Ausgehender Kubernetes-Netzpfad bleibt eng und aktivierbar | nicht eingebundenes Cilium-`toFQDNs`-Template, exakte Host-/Port-Aktivierung, kein `world`-Egress | bestanden |
 
 ## Laufzeitvertrag
 
@@ -73,6 +76,8 @@ Der Wegwerfcontainer wurde anschließend entfernt. Cleanup-Receipt: `a8c630996a3
 ## Plattform- und Geheimnisgrenze
 
 Das manuelle Pilotprofil ergänzt keine Secretwerte im Repository. Der private Ed25519-Seed ist als optionaler Schlüssel `federation-signing-key-b64` im extern bereitzustellenden Secret `weltgewebe-runtime` gebunden. Nicht geheime Zell- und Peerdaten bleiben versionsgebundene Konfiguration.
+
+Die Kubernetes-Basis bleibt egress-default-deny. Ein nicht eingebundenes Cilium-FQDN-Template erlaubt ausschließlich einen absichtlich ungültigen Beispielhost auf TCP 443. Der Aktivierungsvertrag verlangt, dass das zelleigene Overlay diesen Platzhalter durch die exakten, unabhängig verifizierten Peer-DNS-Namen und Ports ersetzt; Wildcards, `toEntities: world` und pauschale CIDR-Freigaben bleiben verboten. Dadurch ist der Worker weder ohne Netzfreigabe funktionslos noch durch eine allgemeine Internetfreigabe unnötig weit berechtigt.
 
 Das Profil ist ausdrücklich:
 

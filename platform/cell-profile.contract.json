@@ -11,7 +11,8 @@
       "digest-bound first-party images",
       "Flux reconciliation",
       "Gateway API with public HTTPS",
-      "default-deny network policy"
+      "default-deny network policy",
+      "explicit Cilium FQDN egress policy for every outbound federation DNS host and TCP port"
     ],
     "data": [
       "PostgreSQL with migrations",
@@ -29,7 +30,8 @@
     "peers": [
       "versioned FEDERATION_PEERS_JSON without private keys",
       "explicit peer state and event allowlist",
-      "optional HTTPS delivery_base_url per outbound peer"
+      "optional HTTPS delivery_base_url per outbound peer",
+      "outbound delivery endpoints use operator-verified DNS names; IP literals require a separately reviewed CIDR policy"
     ],
     "delivery": [
       "FEDERATION_DELIVERY_ENABLED=true only with at least one outbound endpoint",
@@ -50,7 +52,8 @@
     "cell descriptor matches the intended public URL and active public key",
     "peer keys and delivery endpoints are independently exchanged and verified",
     "automatic delivery retry and idempotency proof is green",
-    "backup, restore and rollback are measured for the concrete environment"
+    "backup, restore and rollback are measured for the concrete environment",
+    "rendered cell overlay contains no federation egress placeholder and permits only the exact configured peer DNS names and TCP ports"
   ],
   "nonclaims": [
     "production Kubernetes cutover",
@@ -59,5 +62,8 @@
     "multi-region high availability",
     "identity migration between cells",
     "public quarantine administration"
-  ]
+  ],
+  "artifacts": {
+    "federation_delivery_egress_template": "platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml"
+  }
 }
