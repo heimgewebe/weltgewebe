@@ -9,7 +9,27 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
 BASEMAP_VERSION="${BASEMAP_VERSION:-0.1.0}"
 BUILD_DIR="${GERMANY_BASEMAP_BUILD_DIR:-$REPO_ROOT/build/basemap-staging/germany}"
-TARGET_DIR="${1:-${GERMANY_BASEMAP_TARGET_DIR:-$REPO_ROOT/build/basemap}}"
+TARGET_DIR_EXPLICIT=0
+if (($# > 1)); then
+  echo "ERROR: usage: $0 [existing-target-directory]" >&2
+  exit 1
+elif (($# == 1)); then
+  [[ -n "$1" ]] || {
+    echo "ERROR: explicit target directory must not be empty" >&2
+    exit 1
+  }
+  TARGET_DIR="$1"
+  TARGET_DIR_EXPLICIT=1
+elif [[ ${GERMANY_BASEMAP_TARGET_DIR+x} == x ]]; then
+  [[ -n "$GERMANY_BASEMAP_TARGET_DIR" ]] || {
+    echo "ERROR: GERMANY_BASEMAP_TARGET_DIR must not be empty when set" >&2
+    exit 1
+  }
+  TARGET_DIR="$GERMANY_BASEMAP_TARGET_DIR"
+  TARGET_DIR_EXPLICIT=1
+else
+  TARGET_DIR="$REPO_ROOT/build/basemap"
+fi
 ARTIFACT_NAME="basemap-germany-v${BASEMAP_VERSION}.pmtiles"
 META_NAME="basemap-germany-v${BASEMAP_VERSION}.meta.json"
 PROOF_NAME="basemap-germany-v${BASEMAP_VERSION}.validation.json"
@@ -43,7 +63,11 @@ command -v readlink > /dev/null 2>&1 || fail "readlink is required"
 command -v sha256sum > /dev/null 2>&1 || fail "sha256sum is required"
 
 mkdir -p "$BUILD_DIR"
-[[ -d "$TARGET_DIR" ]] || fail "target directory does not exist: $TARGET_DIR"
+if [[ "$TARGET_DIR_EXPLICIT" == "0" ]]; then
+  mkdir -p "$TARGET_DIR"
+else
+  [[ -d "$TARGET_DIR" ]] || fail "explicit target directory does not exist: $TARGET_DIR"
+fi
 BUILD_DIR="$(cd "$BUILD_DIR" > /dev/null 2>&1 && pwd)"
 TARGET_DIR="$(cd "$TARGET_DIR" > /dev/null 2>&1 && pwd)"
 [[ "$BUILD_DIR" != "$TARGET_DIR" ]] ||
