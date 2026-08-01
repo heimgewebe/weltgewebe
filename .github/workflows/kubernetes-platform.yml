@@ -116,7 +116,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "fa6f73e81c8cda9f4a8c4af3ae19368e6a10bacd"
+          test "$(git rev-parse HEAD^)" = "98129fc17c1ec03bf2f39f051a08b68c3e2bfb6c"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -177,18 +177,19 @@ jobs:
       - name: Cargo formatting
         run: cargo fmt --all -- --check
       - name: Federation module tests
-        run: cargo test -p weltgewebe-api federation::tests::
+        run: |
+          cargo test -p weltgewebe-api federation::tests::
       - name: Exact weak-key regression
         run: >-
           cargo test -p weltgewebe-api
           federation::tests::weak_public_keys_cannot_validate_universal_signatures
           -- --exact
-      - name: Commit hardening and remove temporary operators
+      - name: Commit hardening and restore canonical workflow
         shell: bash
         run: |
           set -euo pipefail
-          git checkout HEAD^ -- .github/workflows/kubernetes-platform.yml
-          rm .github/workflows/pr1658-bound-hardening.yml
+          git checkout dd8349fc5bf93ab1db132c783651fa3edd2804a0 -- \
+            .github/workflows/kubernetes-platform.yml
           git diff --check
           test -z "$(git status --short | grep -E '^\?\?' || true)"
           git config user.name 'heimgewebe-operator'
