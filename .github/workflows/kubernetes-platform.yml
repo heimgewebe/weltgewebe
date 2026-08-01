@@ -123,7 +123,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_REF_NAME}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "fd63f3de00982ebb7eba04b14d9a6ad0f788fc52"
+          test "$(git rev-parse HEAD^)" = "6f5850ff88e5e17e4445c7698db8cdb215566018"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - name: Merge current main and permit only workflow conflict
         shell: bash
