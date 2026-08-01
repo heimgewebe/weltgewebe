@@ -340,6 +340,27 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             with self.subTest(name=name):
                 self.assert_rejected(mutator, "operator-independence")
 
+    def test_federation_key_ids_match_runtime_bounds(self) -> None:
+        for value in ("a", "A.b_c-d", "z" * 64):
+            with self.subTest(value=value):
+                self.assertEqual(validator._key_id(value, "test.key_id"), value)
+        for value in ("a:b", "z" * 65):
+            with self.subTest(value=value):
+                with self.assertRaisesRegex(
+                    validator.PilotContractError, r"^invalid-key-id:"
+                ):
+                    validator._key_id(value, "test.key_id")
+
+    def test_federation_cell_ids_have_a_separate_64_character_limit(self) -> None:
+        valid = f"{'a' * 51}.operator.net"
+        invalid = f"{'a' * 52}.operator.net"
+        self.assertEqual(len(valid), 64)
+        self.assertEqual(validator._cell_id(valid, "test.cell_id", activation=True), valid)
+        with self.assertRaisesRegex(
+            validator.PilotContractError, r"^invalid-cell-id:"
+        ):
+            validator._cell_id(invalid, "test.cell_id", activation=True)
+
     def test_peer_binding_must_be_exact_and_symmetric(self) -> None:
         cases = {
             "wrong cell": lambda d: d["cells"][0]["peer"].update(

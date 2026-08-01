@@ -23,7 +23,7 @@ HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 IDENTIFIER = re.compile(r"^[a-z0-9][a-z0-9._-]{1,62}[a-z0-9]$")
-KEY_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]{2,127}$")
+KEY_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 DNS_LABEL = re.compile(r"^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$")
 EMAIL_LOCAL = re.compile(r"^[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+$")
 BACKUP_SEGMENT = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -235,6 +235,16 @@ def _timestamp(value: Any, path: str) -> datetime:
     return parsed
 
 
+def _key_id(value: Any, path: str) -> str:
+    source = _string(value, path)
+    if not KEY_ID.fullmatch(source):
+        _fail(
+            "invalid-key-id",
+            f"{path} must be 1..64 characters from [A-Za-z0-9._-]",
+        )
+    return source
+
+
 def _hostname(value: Any, path: str, *, activation: bool) -> str:
     host = _string(value, path)
     if host != host.lower() or host.endswith(".") or "*" in host:
@@ -262,6 +272,13 @@ def _hostname(value: Any, path: str, *, activation: bool) -> str:
     if not activation and not host.endswith(".invalid"):
         _fail("example-host", f"{path} must use the reserved .invalid suffix")
     return host
+
+
+def _cell_id(value: Any, path: str, *, activation: bool) -> str:
+    cell_id = _hostname(value, path, activation=activation)
+    if len(cell_id) > 64:
+        _fail("invalid-cell-id", f"{path} exceeds the 64-character limit")
+    return cell_id
 
 
 def _https_base_url(value: Any, path: str, *, activation: bool) -> tuple[str, str]:
@@ -534,7 +551,7 @@ def _validate_cell(
 ) -> dict[str, Any]:
     path = f"cells[{index}]"
     cell = _exact_keys(value, CELL_KEYS, path)
-    cell_id = _hostname(cell["cell_id"], f"{path}.cell_id", activation=activation)
+    cell_id = _cell_id(cell["cell_id"], f"{path}.cell_id", activation=activation)
     public_url, public_host = _https_base_url(
         cell["public_base_url"], f"{path}.public_base_url", activation=activation
     )
@@ -581,9 +598,9 @@ def _validate_cell(
     )
 
     identity = _exact_keys(cell["identity"], IDENTITY_KEYS, f"{path}.identity")
-    key_id = _string(identity["active_key_id"], f"{path}.identity.active_key_id")
-    if not KEY_ID.fullmatch(key_id):
-        _fail("invalid-key-id", f"{path}.identity.active_key_id is invalid")
+    key_id = _key_id(
+        identity["active_key_id"], f"{path}.identity.active_key_id"
+    )
     key = _public_key(
         identity["active_public_key"],
         identity["public_key_sha256"],
@@ -591,7 +608,7 @@ def _validate_cell(
     )
 
     peer = _exact_keys(cell["peer"], PEER_KEYS, f"{path}.peer")
-    peer_cell_id = _hostname(
+    peer_cell_id = _cell_id(
         peer["cell_id"], f"{path}.peer.cell_id", activation=activation
     )
     peer_url, peer_host = _https_base_url(
