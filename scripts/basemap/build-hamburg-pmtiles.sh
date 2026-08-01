@@ -1,34 +1,30 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Scripts for operational bootstrap of the sovereign PMTiles basemap artifact.
-# Phase 1: Local generation (Hamburg) with planetiler
-#
-# Determinism status:
-# - Pinned Planetiler container version (deterministic toolchain)
-# - Explicit host path and user mapping (reproducible environment)
-# - Tool presence checks
-# - OSM input is currently volatile (outputs are not yet strictly reproducible)
+# Operational bootstrap for the sovereign Hamburg PMTiles basemap. Planetiler
+# writes only to a process-local partial archive. A complete artifact and its
+# metadata are then published together without replacing an existing version.
 
-# 1. Resolve repo root securely
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
 BASEMAP_DIR="$REPO_ROOT/build/basemap"
 
-# 2. Pin tools and OSM input for reproducible input provenance
-# We use a stable, historical OSM snapshot from Geofabrik instead of the daily latest.
 OSM_FILE="hamburg-250101.osm.pbf"
 OSM_URL="https://download.geofabrik.de/europe/germany/hamburg-250101.osm.pbf"
 OSM_SHA256="e9beba6f27594a3abe571dd632e752fb43c8a136b2517fa162988fd641f8cdc9"
 
-# Versioning
 BASEMAP_VERSION="0.1.0"
 BASEMAP_TAG="v${BASEMAP_VERSION}"
 OUTPUT_PMTILES="basemap-hamburg-${BASEMAP_TAG}.pmtiles"
 OUTPUT_META="basemap-hamburg-${BASEMAP_TAG}.meta.json"
+OUTPUT_PMTILES_STEM="${OUTPUT_PMTILES%.pmtiles}"
+PARTIAL_PMTILES=".${OUTPUT_PMTILES_STEM}.partial.$$.pmtiles"
+PARTIAL_META=".${OUTPUT_META}.partial.$$"
 
-# Planetiler 0.8.2 (linux/amd64) pinned by digest for a truly deterministic toolchain
 PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb"
+PLANETILER_HTTP_TIMEOUT="${BASEMAP_PLANETILER_HTTP_TIMEOUT:-120s}"
+PLANETILER_HTTP_RETRIES="${BASEMAP_PLANETILER_HTTP_RETRIES:-3}"
+PLANETILER_HTTP_RETRY_WAIT="${BASEMAP_PLANETILER_HTTP_RETRY_WAIT:-10s}"
 
 echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Hamburg"
@@ -38,11 +34,10 @@ echo "Input:   $OSM_FILE (Pinned & Hash-Verified)"
 echo "Format:  PMTiles"
 echo "=================================="
 
-# 3. Tool checks
-if ! command -v docker > /dev/null 2>&1; then
+command -v docker > /dev/null 2>&1 || {
   echo "Error: 'docker' is required but not installed or not in PATH." >&2
   exit 1
-fi
+}
 
 DOWNLOADER=""
 if command -v wget > /dev/null 2>&1; then
@@ -54,20 +49,55 @@ else
   exit 1
 fi
 
-# 4. Working directory setup
 mkdir -p "$BASEMAP_DIR"
 cd "$BASEMAP_DIR"
 
-# 5. Fetch and verify input data
-if [ ! -f "$OSM_FILE" ]; then
+FINAL_PMTILES_PATH="$BASEMAP_DIR/$OUTPUT_PMTILES"
+FINAL_META_PATH="$BASEMAP_DIR/$OUTPUT_META"
+PARTIAL_PMTILES_PATH="$BASEMAP_DIR/$PARTIAL_PMTILES"
+PARTIAL_META_PATH="$BASEMAP_DIR/$PARTIAL_META"
+PARTIAL_LAYERSTATS_PATH="${PARTIAL_PMTILES_PATH}.layerstats.tsv.gz"
+FINAL_ARTIFACT_CREATED=0
+FINAL_META_CREATED=0
+PUBLISH_COMPLETE=0
+
+cleanup_build() {
+  rm -f -- "$PARTIAL_PMTILES_PATH" "$PARTIAL_META_PATH" "$PARTIAL_LAYERSTATS_PATH"
+  if [[ "$PUBLISH_COMPLETE" != "1" ]]; then
+    [[ "$FINAL_META_CREATED" == "1" ]] && rm -f -- "$FINAL_META_PATH"
+    [[ "$FINAL_ARTIFACT_CREATED" == "1" ]] && rm -f -- "$FINAL_PMTILES_PATH"
+  fi
+  return 0
+}
+
+on_interrupt() {
+  exit 130
+}
+
+on_terminate() {
+  exit 143
+}
+
+trap cleanup_build EXIT
+trap on_interrupt INT
+trap on_terminate TERM
+
+for published_path in "$FINAL_PMTILES_PATH" "$FINAL_META_PATH"; do
+  if [[ -e "$published_path" || -L "$published_path" ]]; then
+    echo "Error: Published version already exists and will not be replaced: $published_path" >&2
+    exit 1
+  fi
+done
+
+if [[ ! -f "$OSM_FILE" ]]; then
   echo "=> Downloading OSM data for Hamburg ($OSM_FILE)..."
-  if [ "$DOWNLOADER" = "wget" ]; then
+  if [[ "$DOWNLOADER" == "wget" ]]; then
     wget --tries=5 --waitretry=3 --retry-connrefused --timeout=30 -O "$OSM_FILE" "$OSM_URL" || {
       rm -f "$OSM_FILE"
       exit 1
     }
   else
-    curl -fL -o "$OSM_FILE" "$OSM_URL" || {
+    curl -fL --retry 5 --retry-delay 3 -o "$OSM_FILE" "$OSM_URL" || {
       rm -f "$OSM_FILE"
       exit 1
     }
@@ -87,7 +117,7 @@ else
 fi
 
 ACTUAL_SHA256="$("${SHA256_CMD[@]}" "$OSM_FILE" | awk '{print $1}')"
-if [ "$ACTUAL_SHA256" != "$OSM_SHA256" ]; then
+if [[ "$ACTUAL_SHA256" != "$OSM_SHA256" ]]; then
   echo "Error: Checksum mismatch for $OSM_FILE!" >&2
   echo "Expected: $OSM_SHA256" >&2
   echo "Actual:   $ACTUAL_SHA256" >&2
@@ -96,56 +126,50 @@ if [ "$ACTUAL_SHA256" != "$OSM_SHA256" ]; then
 fi
 echo "   [✓] Integrity verified (SHA256 match)."
 
-# 6. Build the artifact
+rm -f -- "$PARTIAL_PMTILES_PATH" "$PARTIAL_LAYERSTATS_PATH"
+rm -rf -- "$BASEMAP_DIR/tmp"
 echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
-# Using a pinned docker image to ensure a deterministic toolchain without requiring local java/planetiler installation
-# Using --user to prevent creating root-owned files in the host build directory
-# Enforcing linux/amd64 platform to match the specific toolchain digest
 if ! docker run --rm \
   --platform linux/amd64 \
   --user "$(id -u):$(id -g)" \
   -v "$BASEMAP_DIR":/data \
   "$PLANETILER_IMAGE" \
   --osm-path="/data/$OSM_FILE" \
-  --output="/data/$OUTPUT_PMTILES" \
-  --download=true; then
-
+  --output="/data/$PARTIAL_PMTILES" \
+  --download=true \
+  --http-timeout="$PLANETILER_HTTP_TIMEOUT" \
+  --http-retries="$PLANETILER_HTTP_RETRIES" \
+  --http-retry-wait="$PLANETILER_HTTP_RETRY_WAIT"; then
   echo "Error: Docker execution failed." >&2
   exit 1
 fi
 
-# 7. Generate Metadata Manifest
-echo "=> Generating metadata manifest..."
-
-echo "=> Calculating size and SHA256 of $OUTPUT_PMTILES..."
-if [ ! -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
-  echo "Error: Artifact $OUTPUT_PMTILES not found. Cannot generate ready status." >&2
+if [[ ! -s "$PARTIAL_PMTILES_PATH" ]]; then
+  echo "Error: Complete partial artifact $PARTIAL_PMTILES was not produced." >&2
   exit 1
 fi
 
-PMTILES_SIZE=$(wc -c < "$BASEMAP_DIR/$OUTPUT_PMTILES" | tr -d '[:space:]')
-PMTILES_SHA256="$("${SHA256_CMD[@]}" "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')"
-
-if [ -z "$PMTILES_SHA256" ] || [ "$PMTILES_SIZE" -eq 0 ]; then
-  echo "Error: Failed to determine valid size or hash for $OUTPUT_PMTILES." >&2
+PMTILES_SIZE="$(wc -c < "$PARTIAL_PMTILES_PATH" | tr -d '[:space:]')"
+PMTILES_SHA256="$("${SHA256_CMD[@]}" "$PARTIAL_PMTILES_PATH" | awk '{print $1}')"
+if [[ -z "$PMTILES_SHA256" || "$PMTILES_SIZE" -eq 0 ]]; then
+  echo "Error: Failed to determine valid size or hash for $PARTIAL_PMTILES." >&2
   exit 1
 fi
 
 BUILD_TIMESTAMP_VALUE=""
-
-if [ "${NON_REPRODUCIBLE_BUILD_TIMESTAMP:-}" = "1" ]; then
+if [[ "${NON_REPRODUCIBLE_BUILD_TIMESTAMP:-}" == "1" ]]; then
   BUILD_TIMESTAMP_VALUE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
-elif [ -n "${SOURCE_DATE_EPOCH:-}" ]; then
+elif [[ -n "${SOURCE_DATE_EPOCH:-}" ]]; then
   BUILD_TIMESTAMP_VALUE="$(date -u -d "@${SOURCE_DATE_EPOCH}" +"%Y-%m-%dT%H:%M:%SZ")" || BUILD_TIMESTAMP_VALUE=""
 fi
 
-if [ -n "$BUILD_TIMESTAMP_VALUE" ]; then
+if [[ -n "$BUILD_TIMESTAMP_VALUE" ]]; then
   BUILD_TIMESTAMP_JSON="  \"build_timestamp\": \"${BUILD_TIMESTAMP_VALUE}\","
 else
   BUILD_TIMESTAMP_JSON=""
 fi
 
-cat << EOF > "$BASEMAP_DIR/$OUTPUT_META"
+cat << EOF_META > "$PARTIAL_META_PATH"
 {
   "version": "${BASEMAP_VERSION}",
   "region": "hamburg",
@@ -164,8 +188,43 @@ ${BUILD_TIMESTAMP_JSON}
   "size_bytes": ${PMTILES_SIZE},
   "status": "ready"
 }
-EOF
+EOF_META
+[[ -s "$PARTIAL_META_PATH" ]] || {
+  echo "Error: Failed to generate metadata for $OUTPUT_PMTILES." >&2
+  exit 1
+}
+
+publish_immutable_pair() {
+  local failed=0
+
+  trap '' INT TERM
+
+  if ! ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"; then
+    echo "Error: Could not publish immutable artifact: $FINAL_PMTILES_PATH" >&2
+    failed=1
+  else
+    FINAL_ARTIFACT_CREATED=1
+  fi
+
+  if [[ "$failed" == "0" ]]; then
+    if ! ln "$PARTIAL_META_PATH" "$FINAL_META_PATH"; then
+      echo "Error: Could not publish immutable metadata: $FINAL_META_PATH" >&2
+      failed=1
+    else
+      FINAL_META_CREATED=1
+      PUBLISH_COMPLETE=1
+    fi
+  fi
+
+  trap on_interrupt INT
+  trap on_terminate TERM
+  return "$failed"
+}
+
+publish_immutable_pair || exit 1
+cleanup_build
+trap - EXIT INT TERM
 
 echo "=> Basemap generation complete!"
-echo "Artifact: $BASEMAP_DIR/$OUTPUT_PMTILES"
-echo "Metadata: $BASEMAP_DIR/$OUTPUT_META"
+echo "Artifact: $FINAL_PMTILES_PATH"
+echo "Metadata: $FINAL_META_PATH"

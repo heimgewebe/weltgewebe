@@ -2,7 +2,9 @@
 set -euo pipefail
 
 # Operational bootstrap for the sovereign Schleswig-Holstein PMTiles basemap.
-# The OSM input and Planetiler image are pinned and hash-verified.
+# The OSM input and Planetiler image are pinned and hash-verified. Planetiler
+# retries write only to a process-local partial path; immutable version files are
+# published without replacement after a complete successful build.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
@@ -16,8 +18,14 @@ BASEMAP_VERSION="0.1.0"
 BASEMAP_TAG="v${BASEMAP_VERSION}"
 OUTPUT_PMTILES="basemap-schleswig-holstein-${BASEMAP_TAG}.pmtiles"
 OUTPUT_META="basemap-schleswig-holstein-${BASEMAP_TAG}.meta.json"
+OUTPUT_PMTILES_STEM="${OUTPUT_PMTILES%.pmtiles}"
+PARTIAL_PMTILES=".${OUTPUT_PMTILES_STEM}.partial.$$.pmtiles"
+PARTIAL_META=".${OUTPUT_META}.partial.$$"
 
 PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb"
+PLANETILER_HTTP_TIMEOUT="${BASEMAP_PLANETILER_HTTP_TIMEOUT:-120s}"
+PLANETILER_HTTP_RETRIES="${BASEMAP_PLANETILER_HTTP_RETRIES:-3}"
+PLANETILER_HTTP_RETRY_WAIT="${BASEMAP_PLANETILER_HTTP_RETRY_WAIT:-10s}"
 
 echo "=== Weltgewebe Basemap Builder ==="
 echo "Target:  Schleswig-Holstein"
@@ -44,6 +52,43 @@ fi
 
 mkdir -p "$BASEMAP_DIR"
 cd "$BASEMAP_DIR"
+
+FINAL_PMTILES_PATH="$BASEMAP_DIR/$OUTPUT_PMTILES"
+FINAL_META_PATH="$BASEMAP_DIR/$OUTPUT_META"
+PARTIAL_PMTILES_PATH="$BASEMAP_DIR/$PARTIAL_PMTILES"
+PARTIAL_META_PATH="$BASEMAP_DIR/$PARTIAL_META"
+PARTIAL_LAYERSTATS_PATH="${PARTIAL_PMTILES_PATH}.layerstats.tsv.gz"
+FINAL_ARTIFACT_CREATED=0
+FINAL_META_CREATED=0
+PUBLISH_COMPLETE=0
+
+cleanup_build() {
+  rm -f -- "$PARTIAL_PMTILES_PATH" "$PARTIAL_META_PATH" "$PARTIAL_LAYERSTATS_PATH"
+  if [[ "$PUBLISH_COMPLETE" != "1" ]]; then
+    [[ "$FINAL_META_CREATED" == "1" ]] && rm -f -- "$FINAL_META_PATH"
+    [[ "$FINAL_ARTIFACT_CREATED" == "1" ]] && rm -f -- "$FINAL_PMTILES_PATH"
+  fi
+  return 0
+}
+
+on_interrupt() {
+  exit 130
+}
+
+on_terminate() {
+  exit 143
+}
+
+trap cleanup_build EXIT
+trap on_interrupt INT
+trap on_terminate TERM
+
+for published_path in "$FINAL_PMTILES_PATH" "$FINAL_META_PATH"; do
+  if [[ -e "$published_path" || -L "$published_path" ]]; then
+    echo "Error: Published version already exists and will not be replaced: $published_path" >&2
+    exit 1
+  fi
+done
 
 if [ ! -f "$OSM_FILE" ]; then
   echo "=> Downloading OSM data for Schleswig-Holstein ($OSM_FILE)..."
@@ -90,6 +135,10 @@ if ! [[ "$PLANETILER_RETRY_DELAY_SECONDS" =~ ^[0-9]+$ ]]; then
   echo "Error: PLANETILER_RETRY_DELAY_SECONDS must be a non-negative integer." >&2
   exit 1
 fi
+if ! [[ "$PLANETILER_HTTP_RETRIES" =~ ^[1-9][0-9]*$ ]]; then
+  echo "Error: BASEMAP_PLANETILER_HTTP_RETRIES must be a positive integer." >&2
+  exit 1
+fi
 
 run_planetiler() {
   docker run --rm \
@@ -98,19 +147,20 @@ run_planetiler() {
     -v "$BASEMAP_DIR":/data \
     "$PLANETILER_IMAGE" \
     --osm-path="/data/$OSM_FILE" \
-    --output="/data/$OUTPUT_PMTILES" \
-    --download=true
+    --output="/data/$PARTIAL_PMTILES" \
+    --download=true \
+    --http-timeout="$PLANETILER_HTTP_TIMEOUT" \
+    --http-retries="$PLANETILER_HTTP_RETRIES" \
+    --http-retry-wait="$PLANETILER_HTTP_RETRY_WAIT"
 }
 
 echo "=> Running Planetiler via Docker to generate $OUTPUT_PMTILES..."
 PLANETILER_ATTEMPT=1
 while true; do
-  # Keep fully downloaded auxiliary sources across attempts, but never reuse
-  # partial output or temporary feature stores from a failed build.
-  rm -f \
-    "$BASEMAP_DIR/$OUTPUT_PMTILES" \
-    "$BASEMAP_DIR/$OUTPUT_PMTILES.layerstats.tsv.gz"
-  rm -rf "$BASEMAP_DIR/tmp"
+  # Keep fully downloaded auxiliary sources across attempts, but never reuse a
+  # partial archive or temporary feature store from a failed build.
+  rm -f -- "$PARTIAL_PMTILES_PATH" "$PARTIAL_LAYERSTATS_PATH"
+  rm -rf -- "$BASEMAP_DIR/tmp"
 
   if run_planetiler; then
     break
@@ -126,15 +176,15 @@ while true; do
   PLANETILER_ATTEMPT=$((PLANETILER_ATTEMPT + 1))
 done
 
-if [ ! -f "$BASEMAP_DIR/$OUTPUT_PMTILES" ]; then
-  echo "Error: Artifact $OUTPUT_PMTILES not found." >&2
+if [[ ! -s "$PARTIAL_PMTILES_PATH" ]]; then
+  echo "Error: Complete partial artifact $PARTIAL_PMTILES was not produced." >&2
   exit 1
 fi
 
-PMTILES_SIZE=$(wc -c < "$BASEMAP_DIR/$OUTPUT_PMTILES" | tr -d '[:space:]')
-PMTILES_SHA256="$("${SHA256_CMD[@]}" "$BASEMAP_DIR/$OUTPUT_PMTILES" | awk '{print $1}')"
+PMTILES_SIZE="$(wc -c < "$PARTIAL_PMTILES_PATH" | tr -d '[:space:]')"
+PMTILES_SHA256="$("${SHA256_CMD[@]}" "$PARTIAL_PMTILES_PATH" | awk '{print $1}')"
 if [ -z "$PMTILES_SHA256" ] || [ "$PMTILES_SIZE" -eq 0 ]; then
-  echo "Error: Failed to determine valid size or hash for $OUTPUT_PMTILES." >&2
+  echo "Error: Failed to determine valid size or hash for $PARTIAL_PMTILES." >&2
   exit 1
 fi
 
@@ -151,7 +201,7 @@ else
   BUILD_TIMESTAMP_JSON=""
 fi
 
-cat << MANIFEST > "$BASEMAP_DIR/$OUTPUT_META"
+cat << MANIFEST > "$PARTIAL_META_PATH"
 {
   "version": "${BASEMAP_VERSION}",
   "region": "schleswig-holstein",
@@ -171,7 +221,45 @@ ${BUILD_TIMESTAMP_JSON}
   "status": "ready"
 }
 MANIFEST
+[[ -s "$PARTIAL_META_PATH" ]] || {
+  echo "Error: Failed to generate metadata for $OUTPUT_PMTILES." >&2
+  exit 1
+}
+
+publish_immutable_pair() {
+  local failed=0
+
+  # INT/TERM are ignored only for the tiny non-atomic two-link publication
+  # window. This prevents an interrupt from leaving an artifact without its
+  # matching metadata. PUBLISH_COMPLETE is set before signal handling resumes.
+  trap '' INT TERM
+
+  if ! ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"; then
+    echo "Error: Could not publish immutable artifact: $FINAL_PMTILES_PATH" >&2
+    failed=1
+  else
+    FINAL_ARTIFACT_CREATED=1
+  fi
+
+  if [[ "$failed" == "0" ]]; then
+    if ! ln "$PARTIAL_META_PATH" "$FINAL_META_PATH"; then
+      echo "Error: Could not publish immutable metadata: $FINAL_META_PATH" >&2
+      failed=1
+    else
+      FINAL_META_CREATED=1
+      PUBLISH_COMPLETE=1
+    fi
+  fi
+
+  trap on_interrupt INT
+  trap on_terminate TERM
+  return "$failed"
+}
+
+publish_immutable_pair || exit 1
+cleanup_build
+trap - EXIT INT TERM
 
 echo "=> Basemap generation complete!"
-echo "Artifact: $BASEMAP_DIR/$OUTPUT_PMTILES"
-echo "Metadata: $BASEMAP_DIR/$OUTPUT_META"
+echo "Artifact: $FINAL_PMTILES_PATH"
+echo "Metadata: $FINAL_META_PATH"

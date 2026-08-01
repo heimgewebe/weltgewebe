@@ -1063,6 +1063,7 @@ Generated automatically. Do not edit.
 ## docs/specs/map-experience.md
 
 - [relates_to] docs/blueprints/map-blaupause.md
+- [implements] docs/deploy/germany-basemap-rollout.md
 - [verifies] docs/reports/map-status.md
 - [depends_on] docs/roadmap.md
 - [relates_to] docs/vision.md
