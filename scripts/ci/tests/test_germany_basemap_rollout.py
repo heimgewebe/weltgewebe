@@ -110,8 +110,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
     def test_activation_requires_fresh_exact_evidence_and_forced_build(self) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
         fresh_validation_at = activate.index("validate:pmtiles")
-        deploy_at = activate.index('PUBLIC_BASEMAP_VARIANT=germany \\\n  "$DEPLOY_COMMAND" --build-web')
+        deploy_at = activate.index("PUBLIC_BASEMAP_VARIANT=germany")
         self.assertLess(fresh_validation_at, deploy_at)
+        self.assertIn('"$DEPLOY_COMMAND" --build-web "$@"', activate)
         self.assertIn("deploy-germany-pmtiles", activate)
         self.assertIn("GERMANY_BASEMAP_MAX_SOURCE_AGE_DAYS", activate)
         self.assertIn("alias_artifact != versioned_artifact", activate)
