@@ -18,7 +18,8 @@ BASEMAP_VERSION="0.1.0"
 BASEMAP_TAG="v${BASEMAP_VERSION}"
 OUTPUT_PMTILES="basemap-schleswig-holstein-${BASEMAP_TAG}.pmtiles"
 OUTPUT_META="basemap-schleswig-holstein-${BASEMAP_TAG}.meta.json"
-PARTIAL_PMTILES=".${OUTPUT_PMTILES}.partial.$$"
+OUTPUT_PMTILES_STEM="${OUTPUT_PMTILES%.pmtiles}"
+PARTIAL_PMTILES=".${OUTPUT_PMTILES_STEM}.partial.$$.pmtiles"
 PARTIAL_META=".${OUTPUT_META}.partial.$$"
 
 PLANETILER_IMAGE="ghcr.io/onthegomap/planetiler@sha256:10e4d6850664bd2ad7a223623383c48281e7d87fb427360838b13342cac012bb"
@@ -225,19 +226,37 @@ MANIFEST
   exit 1
 }
 
-# Hard links are same-filesystem, atomic directory entries and fail instead of
-# replacing a concurrently published immutable version.
-ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH" || {
-  echo "Error: Could not publish immutable artifact: $FINAL_PMTILES_PATH" >&2
-  exit 1
+publish_immutable_pair() {
+  local failed=0
+
+  # INT/TERM are ignored only for the tiny non-atomic two-link publication
+  # window. This prevents an interrupt from leaving an artifact without its
+  # matching metadata. PUBLISH_COMPLETE is set before signal handling resumes.
+  trap '' INT TERM
+
+  if ! ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"; then
+    echo "Error: Could not publish immutable artifact: $FINAL_PMTILES_PATH" >&2
+    failed=1
+  else
+    FINAL_ARTIFACT_CREATED=1
+  fi
+
+  if [[ "$failed" == "0" ]]; then
+    if ! ln "$PARTIAL_META_PATH" "$FINAL_META_PATH"; then
+      echo "Error: Could not publish immutable metadata: $FINAL_META_PATH" >&2
+      failed=1
+    else
+      FINAL_META_CREATED=1
+      PUBLISH_COMPLETE=1
+    fi
+  fi
+
+  trap on_interrupt INT
+  trap on_terminate TERM
+  return "$failed"
 }
-FINAL_ARTIFACT_CREATED=1
-ln "$PARTIAL_META_PATH" "$FINAL_META_PATH" || {
-  echo "Error: Could not publish immutable metadata: $FINAL_META_PATH" >&2
-  exit 1
-}
-FINAL_META_CREATED=1
-PUBLISH_COMPLETE=1
+
+publish_immutable_pair || exit 1
 cleanup_build
 trap - EXIT INT TERM
 
