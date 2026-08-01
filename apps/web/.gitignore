@@ -13,6 +13,7 @@ package-lock.json
 # Generated source files (build-time)
 src/lib/generated/
 static/_app/compile-revision.json
+static/_app/basemap-build.json
 
 # Playwright artifacts
 playwright-report/
