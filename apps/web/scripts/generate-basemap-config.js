@@ -90,7 +90,9 @@ const resolveSourceCommit = () => {
     encoding: "utf8",
   }).trim();
   if (!/^[0-9a-f]{40}$/.test(commit)) {
-    throw new Error("Could not resolve a full source commit for basemap identity");
+    throw new Error(
+      "Could not resolve a full source commit for basemap identity",
+    );
   }
   return commit;
 };
