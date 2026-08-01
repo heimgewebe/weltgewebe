@@ -29,20 +29,31 @@ async function gotoMapAsAccount(page: Page, accountId: string, role = "weber") {
   await page.waitForSelector('[data-testid="tool-fan"]', { timeout: 10000 });
 }
 
-async function expectDirectSettingsEntry(page: Page) {
-  const link = page.getByRole("link", {
-    name: "Meine Garnrolle einrichten",
-  });
+async function expectSettingsEntry(page: Page) {
+  const link = page.getByRole("link", { name: "Einstellungen öffnen" });
   await expect(link).toBeVisible();
-  await expect(link).toHaveAttribute("href", "/settings#meine-garnrolle");
+  await expect(link).toHaveAttribute("href", "/settings");
 }
 
-test.describe("Own Garnrolle settings entry", () => {
-  test("uses the same direct settings entry when the Garnrolle is private", async ({
+async function openGarnrolleSettings(page: Page) {
+  const settingsLink = page.getByRole("link", { name: "Einstellungen öffnen" });
+  await settingsLink.click();
+  await expect(page).toHaveURL(/\/settings$/);
+
+  const garnrolleLink = page
+    .getByTestId("settings-menu")
+    .getByRole("link", { name: /Meine Garnrolle/ });
+  await expect(garnrolleLink).toHaveAttribute("href", "#meine-garnrolle");
+  await garnrolleLink.click();
+  await expect(page).toHaveURL(/\/settings#meine-garnrolle$/);
+}
+
+test.describe("Own settings entry", () => {
+  test("uses the same settings entry when the Garnrolle is private", async ({
     page,
   }) => {
     await gotoMapAsAccount(page, NOT_ON_MAP_ACCOUNT_ID);
-    await expectDirectSettingsEntry(page);
+    await expectSettingsEntry(page);
   });
 
   test("keeps an existing private anchor separate from onboarding and public visibility", async ({
@@ -66,11 +77,7 @@ test.describe("Own Garnrolle settings entry", () => {
       }),
     );
 
-    await page
-      .getByRole("link", { name: "Meine Garnrolle einrichten" })
-      .click();
-
-    await expect(page).toHaveURL(/\/settings#meine-garnrolle$/);
+    await openGarnrolleSettings(page);
     const section = page.locator('[data-testid="my-garnrolle-section"]');
     await expect(
       section.locator('[data-testid="garnrolle-first-user-guide"]'),
@@ -99,9 +106,7 @@ test.describe("Own Garnrolle settings entry", () => {
   }) => {
     await gotoMapAsAccount(page, MISSING_ACCOUNT_ID, "gast");
 
-    await page
-      .getByRole("link", { name: "Meine Garnrolle einrichten" })
-      .click();
+    await openGarnrolleSettings(page);
 
     const section = page.locator('[data-testid="my-garnrolle-section"]');
     await expect(
@@ -122,6 +127,6 @@ test.describe("Own Garnrolle settings entry", () => {
     page,
   }) => {
     await gotoMapAsAccount(page, EXACT_ACCOUNT_ID);
-    await expectDirectSettingsEntry(page);
+    await expectSettingsEntry(page);
   });
 });
