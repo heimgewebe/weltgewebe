@@ -11,8 +11,23 @@
 </script>
 
 <div class="auth-slot">
+  <label class="theme-compact" title="Farbschema">
+    <span aria-hidden="true">◐</span>
+    <select
+      aria-label="Farbschema"
+      data-wg-theme-control
+      data-testid="theme-compact-select"
+    >
+      <option value="system">System</option>
+      <option value="light">Hell</option>
+      <option value="dark">Dunkel</option>
+    </select>
+  </label>
+
   {#if authView.showAccountLink}
-    <a class="login-entry" href="/nachrichten" aria-label="Private Nachrichten">✉</a>
+    <a class="login-entry" href="/nachrichten" aria-label="Private Nachrichten"
+      >✉</a
+    >
     <a
       class="garnrolle-link"
       href="/settings#meine-garnrolle"
@@ -54,6 +69,28 @@
     pointer-events: auto;
   }
 
+  .theme-compact {
+    position: relative;
+    display: grid;
+    width: 42px;
+    height: 42px;
+    place-items: center;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 999px;
+    background: var(--panel);
+  }
+
+  .theme-compact select {
+    position: absolute;
+    inset: 0;
+    opacity: 0;
+  }
+
+  .theme-compact:focus-within {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
   .garnrolle-link {
     display: block;
     width: 44px;
@@ -75,7 +112,7 @@
   .garnrolle-link:focus-visible,
   .login-entry:focus-visible,
   .auth-retry:focus-visible {
-    outline: 2px solid var(--accent, #6aa6ff);
+    outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
 

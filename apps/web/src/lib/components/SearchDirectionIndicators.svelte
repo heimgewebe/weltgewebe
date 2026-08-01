@@ -56,7 +56,7 @@
     border: 2px solid var(--panel-border-strong);
     border-radius: 999px;
     background: var(--panel);
-    color: var(--primary);
+    color: var(--accent);
     box-shadow: var(--shadow);
     display: grid;
     place-items: center;
@@ -70,7 +70,7 @@
   }
 
   .search-direction:focus-visible {
-    outline: 3px solid var(--fg);
+    outline: 3px solid var(--text);
     outline-offset: 2px;
   }
 

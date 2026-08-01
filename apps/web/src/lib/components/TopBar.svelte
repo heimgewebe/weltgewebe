@@ -35,7 +35,11 @@
     grid-template-columns: minmax(44px, 1fr) auto minmax(44px, 1fr);
     align-items: center;
     padding: env(safe-area-inset-top) 12px 0;
-    background: linear-gradient(180deg, rgba(0, 0, 0, 0.46), rgba(0, 0, 0, 0));
+    background: linear-gradient(
+      180deg,
+      color-mix(in srgb, var(--bg) 88%, transparent),
+      transparent
+    );
     color: var(--text);
     pointer-events: none;
     transition: right var(--motion-ui);
