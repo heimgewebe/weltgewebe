@@ -31,7 +31,9 @@ export type RemoteStyleBasemapConfig = BaseBasemapConfig & {
 
 export type LocalSovereignBasemapConfig = BaseBasemapConfig & {
   mode: "local-sovereign";
-  variant: LocalBasemapVariant;
+  // Optional for compatibility with callers created before the nationwide
+  // variant existed. The resolver treats absence as the regional rollback path.
+  variant?: LocalBasemapVariant;
   styleUrl?: never;
 };
 
