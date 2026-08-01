@@ -336,6 +336,21 @@ test.describe("Farbschema", () => {
     }
   });
 
+  test("hält den Rückweg zur Karte in Hell und Dunkel lesbar", async ({
+    page,
+  }) => {
+    await page.goto("/settings");
+
+    const backLink = page.getByRole("link", { name: /Zur Karte/ });
+    const themeSelect = page.getByTestId("theme-select");
+    await expect(backLink).toBeVisible();
+
+    for (const theme of ["dark", "light"] as const) {
+      await themeSelect.selectOption(theme);
+      await expectReadableSurface(backLink, `Rückweg im Modus ${theme}`);
+    }
+  });
+
   test("folgt im Systemmodus einer geänderten Gerätepräferenz", async ({
     page,
   }) => {

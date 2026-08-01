@@ -13,7 +13,7 @@
 <div class="settings-page">
   <div class="container">
     <header class="page-header">
-      <a class="back-link ghost" href="/map">← Zur Karte</a>
+      <a class="btn" href="/map">← Zur Karte</a>
       <h1>Einstellungen</h1>
       <p class="intro">
         Verwalte deine Garnrolle, dein Konto und die Darstellung an einem
