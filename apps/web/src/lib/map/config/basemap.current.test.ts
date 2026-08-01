@@ -39,7 +39,7 @@ describe("resolveBasemapStyle", () => {
       variant: "regional",
     } as any);
     expect(style).toMatch(
-      /^\/local-basemap\/style\.json\?v=0\.4\.0&build=[^&]+$/,
+      /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
     );
     expect(style).not.toContain(CARTO_HOST);
   });
@@ -50,7 +50,7 @@ describe("resolveBasemapStyle", () => {
       variant: "germany",
     } as any);
     expect(style).toMatch(
-      /^\/local-basemap\/style-germany\.json\?v=0\.4\.0&build=[^&]+$/,
+      /^\/local-basemap\/style-germany\.json\?v=0\.3\.1&build=[^&]+$/,
     );
     expect(style).not.toContain(CARTO_HOST);
   });
@@ -76,7 +76,7 @@ describe("currentBasemap (build-time generated config)", () => {
       expect(currentBasemap).not.toHaveProperty("styleUrl");
       expect(["regional", "germany"]).toContain(currentBasemap.variant);
       expect(resolveBasemapStyle(currentBasemap)).toMatch(
-        /^\/local-basemap\/style(?:-germany)?\.json\?v=0\.4\.0&build=[^&]+$/,
+        /^\/local-basemap\/style(?:-germany)?\.json\?v=0\.3\.1&build=[^&]+$/,
       );
     } else {
       expect(currentBasemap.styleUrl).toContain(CARTO_HOST);
