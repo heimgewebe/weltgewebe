@@ -12,6 +12,7 @@ GENERATOR = REPO / "apps" / "web" / "scripts" / "generate-basemap-config.js"
 BUILD_SCRIPT = REPO / "scripts" / "basemap" / "build-germany-pmtiles.sh"
 PREPARE_SCRIPT = REPO / "scripts" / "basemap" / "prepare-germany-rollout.sh"
 ACTIVATE_SCRIPT = REPO / "scripts" / "basemap" / "activate-germany-basemap.sh"
+HAMBURG_BUILD_SCRIPT = REPO / "scripts" / "basemap" / "build-hamburg-pmtiles.sh"
 SCHLESWIG_BUILD_SCRIPT = (
     REPO / "scripts" / "basemap" / "build-schleswig-holstein-pmtiles.sh"
 )
@@ -265,6 +266,20 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("python3 << 'PY'; then", receipt_function)
         self.assertIn("\nPY\n    rm -f", receipt_function)
         self.assertNotIn("python3 << 'PY' || {", receipt_function)
+
+    def test_hamburg_builder_never_overwrites_a_published_version(self) -> None:
+        builder = HAMBURG_BUILD_SCRIPT.read_text(encoding="utf-8")
+        docker_at = builder.index("if ! docker run")
+        publish_at = builder.index('ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"')
+        build_region = builder[docker_at:publish_at]
+        self.assertIn('--output="/data/$PARTIAL_PMTILES"', build_region)
+        self.assertNotIn('--output="/data/$OUTPUT_PMTILES"', build_region)
+        self.assertIn("Published version already exists", builder)
+        self.assertIn("publish_immutable_pair()", builder)
+        self.assertIn("trap '' INT TERM", builder)
+        self.assertIn("FINAL_ARTIFACT_CREATED=1", builder)
+        self.assertIn("FINAL_META_CREATED=1", builder)
+        self.assertIn("PUBLISH_COMPLETE=1", builder)
 
     def test_schleswig_retries_never_write_or_delete_final_version(self) -> None:
         builder = SCHLESWIG_BUILD_SCRIPT.read_text(encoding="utf-8")
