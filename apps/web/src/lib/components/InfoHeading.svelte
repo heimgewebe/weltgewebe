@@ -109,7 +109,11 @@
     z-index: 30;
     top: 5rem;
     right: 1rem;
+    box-sizing: border-box;
     width: min(24rem, calc(100vw - 2rem));
+    max-height: calc(100dvh - 6rem);
+    overflow: auto;
+    overflow-wrap: anywhere;
     padding: 0.75rem;
     border: 1px solid var(--panel-border-strong);
     border-radius: 10px;
@@ -148,13 +152,10 @@
     .info-heading-panel {
       position-anchor: --info-heading-trigger;
       top: anchor(bottom);
-      right: auto;
-      left: anchor(left);
+      right: 1rem;
+      left: auto;
       margin-top: 0.4rem;
-      position-try-fallbacks:
-        flip-inline,
-        flip-block,
-        flip-inline flip-block;
+      position-try-fallbacks: flip-block;
     }
   }
 

@@ -235,7 +235,10 @@ test.describe("T007 authorized server search contract", () => {
     const explanationBox = await explanation.boundingBox();
     expect(explanationBox).not.toBeNull();
     expect(explanationBox!.x).toBeGreaterThanOrEqual(0);
+    expect(explanationBox!.width).toBeLessThanOrEqual(384);
     expect(explanationBox!.x + explanationBox!.width).toBeLessThanOrEqual(800);
+    expect(explanationBox!.x + explanationBox!.width).toBeCloseTo(784, 0);
+    expect(explanationBox!.y + explanationBox!.height).toBeLessThanOrEqual(900);
     await explanation.getByRole("button", { name: "Schließen" }).click();
     await expect(disclosure).not.toHaveAttribute("open", "");
     await expect(explanation).not.toBeVisible();
