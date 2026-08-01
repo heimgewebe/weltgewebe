@@ -17,12 +17,9 @@ const REMOTE_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
 const LOCAL_BASEMAP_VARIANTS = ["regional", "germany"];
 const DEFAULT_LOCAL_BASEMAP_VARIANT = "regional";
+const scriptDir = path.dirname(new URL(import.meta.url).pathname);
 
-const policyPath = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "..",
-  "basemap-mode.policy.json",
-);
+const policyPath = path.resolve(scriptDir, "..", "basemap-mode.policy.json");
 const policy = JSON.parse(fs.readFileSync(policyPath, "utf8"));
 
 const validModes = new Set(["local-sovereign", "remote-style"]);
@@ -101,11 +98,7 @@ export const BUILD_BASEMAP_CONFIG: BuildBasemapConfig = {
 };
 `;
 
-const outDir = path.resolve(
-  path.dirname(new URL(import.meta.url).pathname),
-  "..",
-  "src/lib/generated",
-);
+const outDir = path.resolve(scriptDir, "..", "src/lib/generated");
 if (!fs.existsSync(outDir)) {
   fs.mkdirSync(outDir, { recursive: true });
 }
@@ -134,3 +127,35 @@ export const BASEMAP_MODE_POLICY = {
 const policyOutFile = path.join(outDir, "basemapModePolicy.ts");
 fs.writeFileSync(policyOutFile, policyHeader, "utf8");
 console.log(`Generated basemap mode policy: ${policyOutFile}`);
+
+// Emit a public, machine-readable identity next to the existing build version.
+// Deployment wrappers can therefore prove which build-time basemap contract is
+// inside a static bundle instead of guessing from source files or minified JS.
+const staticIdentityDir = path.resolve(scriptDir, "..", "static", "_app");
+fs.mkdirSync(staticIdentityDir, { recursive: true });
+const buildIdentity =
+  mode === "local-sovereign"
+    ? {
+        schema_version: 1,
+        mode,
+        variant,
+        style_path:
+          variant === "germany"
+            ? "/local-basemap/style-germany.json"
+            : "/local-basemap/style.json",
+      }
+    : {
+        schema_version: 1,
+        mode,
+        style_url: REMOTE_STYLE_URL,
+      };
+const buildIdentityPath = path.join(
+  staticIdentityDir,
+  "basemap-build.json",
+);
+fs.writeFileSync(
+  buildIdentityPath,
+  `${JSON.stringify(buildIdentity, null, 2)}\n`,
+  "utf8",
+);
+console.log(`Generated basemap build identity: ${buildIdentityPath}`);
