@@ -116,6 +116,7 @@ Generated automatically. Do not edit.
 | process.report-lifecycle | Report Lifecycle Policy | policy | active | docs/process/report-lifecycle.md |
 | process.report-lifecycle-contract-alignment | Report Lifecycle Contract Alignment | decision | active | docs/process/report-lifecycle-contract-alignment.md |
 | process.sprache | Sprache | reference | active | docs/process/sprache.md |
+| proof.gewebezelle-two-operator-pilot-contract-v1 | Beweisgrenze Zwei-Betreiber-GewebeZelle-Pilotvertrag v1 | proof | active | docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md |
 | proofs.sqlx-pgbouncer-session-crud-proof | SQLx → PgBouncer → Postgres — Session-CRUD-Proof | report | active | docs/proofs/sqlx-pgbouncer-session-crud-proof.md |
 | proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |
 | proofs.weltgewebe-os-v1-t005-two-cell-proof | WELTGEWEBE-OS-V1-T005 — Zwei-Zellen-Beweis | report | active | docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md |
@@ -167,6 +168,7 @@ Generated automatically. Do not edit.
 | reports.report-lifecycle-restbestand-triage | Report Lifecycle Restbestand Triage | report | deprecated | docs/reports/report-lifecycle-restbestand-triage.md |
 | reports.weltgewebe-os-v1-t018-conversation-convergence-plan | WELTGEWEBE-OS-V1-T018: Governance- und Knotengespräche kontrolliert konvergieren | report | active | docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md |
 | runbook.gewebezelle-manual-pilot | Manuelles GewebeZelle-Pilotprofil | runbook | active | docs/runbooks/gewebezelle-manual-pilot.md |
+| runbook.gewebezelle-two-operator-pilot-v1 | Zwei-Betreiber-GewebeZelle-Pilotvertrag v1 | runbook | active | docs/runbooks/gewebezelle-two-operator-pilot-v1.md |
 | runbook.kubernetes-ha-recovery-proof | Kubernetes-HA- und Recovery-Beweis | runbook | active | docs/runbooks/kubernetes-ha-recovery-proof.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |

@@ -9,6 +9,8 @@ import subprocess
 import sys
 import tempfile
 import unittest
+
+import yaml
 from unittest import mock
 from pathlib import Path
 from typing import Any, Callable
@@ -18,6 +20,7 @@ VALIDATOR_PATH = ROOT / "scripts/platform/validate_two_operator_pilot.py"
 EXAMPLE_PATH = ROOT / "platform/cell-pilot/two-operator-pilot.example.invalid.json"
 CONTRACT_PATH = ROOT / "platform/cell-pilot/two-operator-pilot.contract.json"
 PROFILE_PATH = ROOT / "platform/cell-profile.contract.json"
+WORKFLOW_PATH = ROOT / ".github/workflows/kubernetes-platform.yml"
 
 spec = importlib.util.spec_from_file_location(
     "two_operator_pilot_validator", VALIDATOR_PATH
@@ -746,6 +749,30 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
         )
         self.assertEqual(rejected.returncode, 1)
         self.assertIn("invalid-example-file", rejected.stderr)
+
+    def test_ci_workflow_runs_two_operator_pilot_contract(self) -> None:
+        workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+        jobs = {job.get("name", job_id): job for job_id, job in workflow["jobs"].items()}
+        self.assertIn("Two-Operator Pilot Proof", jobs)
+        proof = jobs["Two-Operator Pilot Proof"]
+        self.assertEqual(proof.get("permissions"), {"contents": "read"})
+        runs = [step.get("run", "") for step in proof["steps"]]
+        self.assertIn("make cell-pilot-check", runs)
+
+    def test_two_operator_pilot_proof_job_is_read_only(self) -> None:
+        workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+        proof = workflow["jobs"]["two-operator-pilot-proof"]
+        serialized = json.dumps(proof, sort_keys=True)
+        for forbidden in (
+            "contents: write",
+            "persist-credentials: true",
+            "git push",
+            "git add -A",
+            "PATCH_BLOB_SHAS",
+            "/tmp/harden.py",
+        ):
+            with self.subTest(forbidden=forbidden):
+                self.assertNotIn(forbidden, serialized)
 
 
 if __name__ == "__main__":
