@@ -41,7 +41,7 @@ jobs:
           test "${GITHUB_HEAD_REF}" = 'feat/gewebezelle-two-operator-pilot-v1'
           test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha }}'
           test "$(git diff --name-only HEAD^ HEAD)" = "$marker"
-          test "$(cat "$marker")" = 'pr1658 optimizer trigger v6'
+          test "$(cat "$marker")" = 'pr1658 optimizer trigger v7'
           echo 'run=true' >> "$GITHUB_OUTPUT"
           echo "bound_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
@@ -56,7 +56,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PATCH_BLOB_SHA: 037e5841b886c65cff3f06cd4396368ea2a9780f
+          PATCH_BLOB_SHA: 916c69b0cbf6bd5e86a9efb3f1665bc6e6a1fef0
           PATCH_GZIP_SHA256: b6a2a5dff763885bec46cb19107ad2d27434e65940cec2229eb4e61e72fe28bc
           PATCH_SHA256: c6afd3f7c4d21689efc378453eaa49db68fed5e25bfa335fccc7b4b47b55dc21
         run: |
