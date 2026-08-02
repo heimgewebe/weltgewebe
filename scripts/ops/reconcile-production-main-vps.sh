@@ -764,7 +764,7 @@ prune_deploy_contention_receipts() {
 
 path_contains_mount() {
   local target_path="$1"
-  run_ops_python "$target_path" <<'PY'
+  run_ops_python "$target_path" << 'PY'
 import os
 import sys
 
