@@ -32,17 +32,24 @@ Stildateien lösen den Compose-Smoke-Test aus. Die Einbindung betrifft nur den
 Entwicklungs-/Smoke-Service in `compose.core.yml`; produktive Basemap-Mounts und
 Aktivierungsverträge bleiben unverändert.
 
-Der PostgreSQL-Healthcheck prüft außerdem ausdrücklich die konfigurierte
-Datenbank `${POSTGRES_DB:-weltgewebe}`. Damit verwechselt ein erfolgreicher
-Serverstart nicht länger die nicht vorhandene Standarddatenbank des Benutzers
-`welt` mit der tatsächlichen Anwendungsdatenbank.
+Der PostgreSQL-Healthcheck verlässt sich nicht mehr darauf, dass `pg_isready`
+einen übergebenen Datenbanknamen validiert: Das Werkzeug meldet einen
+verbindungsbereiten Server auch bei einer nicht vorhandenen Datenbank als bereit.
+Der Check wartet nun zunächst auf den endgültigen, über TCP erreichbaren
+PostgreSQL-Prozess und führt anschließend in der konfigurierten Datenbank
+`${POSTGRES_DB:-weltgewebe}` eine echte `SELECT 1`-Abfrage aus. Damit wird die
+Anwendungsdatenbank tatsächlich geöffnet und abgefragt; Schema- oder
+API-Bereitschaft behauptet dieser begrenzte Check weiterhin nicht.
 
 **Prüfung:**
 
-Die gerenderte Compose-Konfiguration, der read-only-Mount, das Datenbankziel und
-der Workflow-Trigger werden statisch geprüft. Eine Containerprobe liest beide
-Stildateien über `/map-style` und erzeugt daraus die commitgebundene regionale
-Basemap-Buildidentität.
+Die gerenderte Compose-Konfiguration, der read-only-Mount, die ausführbare
+Datenbankabfrage und der Workflow-Trigger werden strukturell aus dem YAML-Modell
+geprüft. Eine Containerprobe liest beide Stildateien über `/map-style` und
+erzeugt daraus die commitgebundene regionale Basemap-Buildidentität. Eine
+separate PostgreSQL-Probe belegt außerdem: `pg_isready` liefert für eine fehlende
+Datenbank weiterhin Erfolg, während `psql ... SELECT 1` dort fehlschlägt und nur
+für die konfigurierte Datenbank erfolgreich ist.
 
 ## 2026-07-24 - Erstnutzerführung an der bestehenden Garnrolle ausrichten
 

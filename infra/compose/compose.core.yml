@@ -15,8 +15,8 @@ services:
         exec pnpm dev -- --host 0.0.0.0 --port 5173
     volumes:
       - ../../apps/web:/workspace
-      # generate-basemap-config.js resolves the repository-level style files as
-      # /map-style from the /workspace bind mount used by this dev container.
+      # generate-basemap-config.js expects repository-level style files at
+      # /map-style, outside the /workspace bind that contains only apps/web.
       - ../../map-style:/map-style:ro
       - /workspace/node_modules
     ports:
@@ -80,10 +80,13 @@ services:
       - ./sql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test:
-        [
-          "CMD-SHELL",
-          "pg_isready -U ${POSTGRES_USER:-welt} -d ${POSTGRES_DB:-weltgewebe}",
-        ]
+        - CMD-SHELL
+        - >-
+          pg_isready -q -h 127.0.0.1
+          -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}" &&
+          psql -X -w -qAt -v ON_ERROR_STOP=1
+          -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+          -c 'SELECT 1' | grep -qx '1'
       interval: 5s
       timeout: 3s
       retries: 20
