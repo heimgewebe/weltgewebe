@@ -41,7 +41,7 @@ jobs:
           test "${GITHUB_HEAD_REF}" = 'feat/gewebezelle-two-operator-pilot-v1'
           test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha }}'
           test "$(git diff --name-only HEAD^ HEAD)" = "$marker"
-          test "$(cat "$marker")" = 'pr1658 optimizer trigger v5'
+          test "$(cat "$marker")" = 'pr1658 optimizer trigger v6'
           echo 'run=true' >> "$GITHUB_OUTPUT"
           echo "bound_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
@@ -63,9 +63,22 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error \
             -H "Authorization: Bearer $GH_TOKEN" \
-            -H 'Accept: application/vnd.github.raw+json' \
+            -H 'Accept: application/vnd.github+json' \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${PATCH_BLOB_SHA}" \
-            --output /tmp/pr1658-optimize.py.gz
+            --output /tmp/pr1658-blob.json
+          jq -e '.encoding == "base64" and (.content | type == "string")' \
+            /tmp/pr1658-blob.json >/dev/null
+          jq -r '.content' /tmp/pr1658-blob.json \
+            | tr -d '\n' \
+            | base64 --decode \
+            > /tmp/pr1658-payload
+          payload_sha="$(sha256sum /tmp/pr1658-payload | cut -d' ' -f1)"
+          printf 'decoded payload sha256: %s\n' "$payload_sha"
+          if [[ "$(head -c 4 /tmp/pr1658-payload)" == 'H4sI' ]]; then
+            base64 --decode /tmp/pr1658-payload > /tmp/pr1658-optimize.py.gz
+          else
+            cp /tmp/pr1658-payload /tmp/pr1658-optimize.py.gz
+          fi
           actual_gzip_sha="$(sha256sum /tmp/pr1658-optimize.py.gz | cut -d' ' -f1)"
           printf 'gzip sha256: %s\n' "$actual_gzip_sha"
           test "$actual_gzip_sha" = "$PATCH_GZIP_SHA256"
