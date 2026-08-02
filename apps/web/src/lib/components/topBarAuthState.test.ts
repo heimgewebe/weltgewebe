@@ -14,6 +14,7 @@ describe("deriveTopBarAuthView", () => {
       showAccountLink: true,
       showLoginLink: false,
       showRetry: true,
+      isGuest: false,
     });
   });
 
@@ -42,6 +43,47 @@ describe("deriveTopBarAuthView", () => {
       showAccountLink: false,
       showLoginLink: true,
       showRetry: false,
+      isGuest: false,
+    });
+  });
+
+  it("marks an authenticated guest so the topbar can surface the role and application entry point", () => {
+    expect(
+      deriveTopBarAuthView({
+        state: "authenticated",
+        authenticated: true,
+        account_id: "account-guest",
+        role: "gast",
+      }),
+    ).toMatchObject({
+      showAccountLink: true,
+      isGuest: true,
+    });
+  });
+
+  it("does not mark an authenticated weber as guest", () => {
+    expect(
+      deriveTopBarAuthView({
+        state: "authenticated",
+        authenticated: true,
+        account_id: "account-weber",
+        role: "weber",
+      }),
+    ).toMatchObject({
+      showAccountLink: true,
+      isGuest: false,
+    });
+  });
+
+  it("does not mark an anonymous visitor as guest, even though the default role value is gast", () => {
+    expect(
+      deriveTopBarAuthView({
+        state: "unauthenticated",
+        authenticated: false,
+        role: "gast",
+      }),
+    ).toMatchObject({
+      isGuest: false,
     });
   });
 });
