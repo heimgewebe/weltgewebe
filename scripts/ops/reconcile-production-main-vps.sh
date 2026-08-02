@@ -108,9 +108,12 @@ new_deploy_invocation_id() {
 }
 
 fetch_main() {
+  # A network failure must never fall back to a stale remote-tracking ref.
+  # Propagate both commands explicitly because errexit is not reliable in every
+  # command-substitution context.
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
-    "+refs/heads/main:refs/remotes/origin/main"
-  git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main
+    "+refs/heads/main:refs/remotes/origin/main" || return 1
+  git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
 }
 
 write_state() {
@@ -688,6 +691,10 @@ PY
     esac
     [[ "$(stat --format=%u "$candidate_real")" == "0" ]] ||
       fail "observed release is not root-owned"
+    local candidate_mode
+    candidate_mode="$(stat --format=%a "$candidate_real")"
+    (((8#$candidate_mode & 022) == 0)) ||
+      fail "observed release is group- or world-writable"
     candidate_head="$(git -C "$candidate_real" rev-parse HEAD)"
     [[ "$candidate_head" == "$target_commit" ]] ||
       fail "observed release does not match the public commit"
@@ -708,6 +715,19 @@ PY
   fi
 }
 
+is_terminal_success_state() {
+  case "$1" in
+    consistent_observed_unattested | deferred | verified | verified_observed | \
+      superseded_after_observe | superseded_after_migration | \
+      superseded_after_deploy | superseded_after_verify)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 cleanup() {
   local rc=$?
   trap - EXIT
@@ -720,7 +740,8 @@ cleanup() {
   if [[ -n "$source_archive" && -f "$source_archive" && ! -L "$source_archive" ]]; then
     rm -f -- "$source_archive"
   fi
-  if ((rc != 0)) && [[ -n "$target_commit" && ! "$state_result" =~ ^(verified|superseded) ]]; then
+  if ((rc != 0)) && [[ -n "$target_commit" ]] &&
+    ! is_terminal_success_state "$state_result"; then
     write_state "failed" "" "reconciler exit code $rc" || true
   fi
   exit "$rc"
@@ -919,6 +940,7 @@ cleanup_release_runtime_paths() {
 
     if ! unsafe_path="$(
       find "$basemap_real" -xdev \
+        \( -type f -o -type d \) \
         \( ! -user "$EUID" -o -perm /022 \) -print -quit
     )"; then
       echo "could not inspect legacy release basemap: $basemap_path" >&2
@@ -940,17 +962,93 @@ cleanup_release_runtime_paths() {
 }
 
 prune_releases() {
+  local release_root_real
   local current_release=""
   local previous_release=""
+  local current_name
+  local previous_name
+  local release_candidates
   local release_dir
   local release_name
   local release_head
-  current_release="$(readlink -f "$STATE_ROOT/current-release" 2> /dev/null || true)"
-  previous_release="$(readlink -f "$STATE_ROOT/previous-release" 2> /dev/null || true)"
-  while IFS= read -r release_dir; do
-    [[ "$release_dir" == "$current_release" || "$release_dir" == "$previous_release" ]] && continue
-    release_name="${release_dir##*/}"
+  local release_status
+  local release_mode
+
+  release_root_real="$(realpath -e -- "$RELEASE_ROOT")" || {
+    echo "skipping release pruning: release root is unavailable" >&2
+    return 0
+  }
+  if [[ -e "$STATE_ROOT/current-release" || -L "$STATE_ROOT/current-release" ]]; then
+    [[ -L "$STATE_ROOT/current-release" ]] || {
+      echo "skipping release pruning: current release marker is unsafe" >&2
+      return 0
+    }
+    current_release="$(readlink -f "$STATE_ROOT/current-release" 2> /dev/null || true)"
+  fi
+  if [[ -e "$STATE_ROOT/previous-release" || -L "$STATE_ROOT/previous-release" ]]; then
+    [[ -L "$STATE_ROOT/previous-release" ]] || {
+      echo "skipping release pruning: previous release marker is unsafe" >&2
+      return 0
+    }
+    previous_release="$(readlink -f "$STATE_ROOT/previous-release" 2> /dev/null || true)"
+    if [[ -z "$previous_release" ]]; then
+      echo "skipping release pruning: previous release marker is broken" >&2
+      return 0
+    fi
+  fi
+  if [[ -z "$current_release" ]]; then
+    echo "skipping release pruning: current release marker is unavailable" >&2
+    return 0
+  fi
+
+  current_name="${current_release##*/}"
+  if [[ "${current_release%/*}" != "$release_root_real" ||
+    ! "$current_name" =~ ^[0-9a-f]{40}$ ||
+    ! -d "$current_release" || -L "$current_release" ]]; then
+    echo "skipping release pruning: current release marker is not a canonical release" >&2
+    return 0
+  fi
+  [[ "$(stat --format=%u "$current_release")" == "0" ]] || {
+    echo "skipping release pruning: current release is not root-owned" >&2
+    return 0
+  }
+  release_mode="$(stat --format=%a "$current_release")"
+  (((8#$release_mode & 022) == 0)) || {
+    echo "skipping release pruning: current release is group- or world-writable" >&2
+    return 0
+  }
+
+  if [[ -n "$previous_release" ]]; then
+    previous_name="${previous_release##*/}"
+    if [[ "${previous_release%/*}" != "$release_root_real" ||
+      ! "$previous_name" =~ ^[0-9a-f]{40}$ ||
+      ! -d "$previous_release" || -L "$previous_release" ]]; then
+      echo "skipping release pruning: previous release marker is not a canonical release" >&2
+      return 0
+    fi
+    [[ "$(stat --format=%u "$previous_release")" == "0" ]] || {
+      echo "skipping release pruning: previous release is not root-owned" >&2
+      return 0
+    }
+    release_mode="$(stat --format=%a "$previous_release")"
+    (((8#$release_mode & 022) == 0)) || {
+      echo "skipping release pruning: previous release is group- or world-writable" >&2
+      return 0
+    }
+  fi
+
+  if ! release_candidates="$(
+    find "$release_root_real" -mindepth 1 -maxdepth 1 -type d -mtime +14 -printf '%f\n'
+  )"; then
+    echo "could not enumerate release pruning candidates" >&2
+    return 1
+  fi
+
+  while IFS= read -r release_name; do
+    [[ -n "$release_name" ]] || continue
     [[ "$release_name" =~ ^[0-9a-f]{40}$ ]] || continue
+    release_dir="$release_root_real/$release_name"
+    [[ "$release_dir" == "$current_release" || "$release_dir" == "$previous_release" ]] && continue
     [[ -d "$release_dir" && ! -L "$release_dir" ]] || continue
     [[ "$(stat --format=%u "$release_dir")" == "0" ]] || continue
     release_head="$(git -C "$release_dir" rev-parse HEAD 2> /dev/null || true)"
@@ -959,10 +1057,14 @@ prune_releases() {
       echo "retaining release after guarded cleanup refusal: $release_dir" >&2
       continue
     fi
-    if [[ -z "$(git -C "$release_dir" status --porcelain --untracked-files=normal)" ]]; then
+    if ! release_status="$(git -C "$release_dir" status --porcelain --untracked-files=normal)"; then
+      echo "retaining release after Git status failure: $release_dir" >&2
+      continue
+    fi
+    if [[ -z "$release_status" ]]; then
       git -C "$SOURCE_CHECKOUT" worktree remove "$release_dir"
     fi
-  done < <(find "$RELEASE_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +14 -print)
+  done <<< "$release_candidates"
   git -C "$SOURCE_CHECKOUT" worktree prune --expire=now
 }
 
