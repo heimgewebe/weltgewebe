@@ -16,6 +16,7 @@ permissions:
       - ".github/workflows/compose-smoke.yml"
       - "apps/api/**"
       - "apps/web/**"
+      - "map-style/**"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
