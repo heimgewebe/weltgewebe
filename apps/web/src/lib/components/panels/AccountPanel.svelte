@@ -240,6 +240,10 @@
     font-size: 1.5rem;
     line-height: 1.2;
   }
+  h3[tabindex="-1"]:focus,
+  h3[tabindex="-1"]:focus-visible {
+    outline: none;
+  }
   .summary {
     color: var(--muted);
     margin: 0.5rem 0 1.25rem;

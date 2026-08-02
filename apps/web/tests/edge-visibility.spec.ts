@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { EDGE_VISUAL_STYLE } from "../src/lib/map/overlay/edges";
 
 test.describe("Edge visibility on load", () => {
   test("edges are rendered after map load without filter toggle", async ({
@@ -53,6 +54,9 @@ test.describe("Edge visibility on load", () => {
       let haloWidth = null;
       let haloOpacity = null;
       let mainOpacity = null;
+      let haloBlur = null;
+      let mainColor = null;
+      let mainWidth = null;
       let isUnderMain = false;
 
       let haloDasharray = null;
@@ -63,6 +67,9 @@ test.describe("Edge visibility on load", () => {
         haloWidth = m.getPaintProperty("edges-halo-layer", "line-width");
         haloOpacity = m.getPaintProperty("edges-halo-layer", "line-opacity");
         mainOpacity = m.getPaintProperty("edges-layer", "line-opacity");
+        haloBlur = m.getPaintProperty("edges-halo-layer", "line-blur");
+        mainColor = m.getPaintProperty("edges-layer", "line-color");
+        mainWidth = m.getPaintProperty("edges-layer", "line-width");
         haloDasharray = m.getPaintProperty(
           "edges-halo-layer",
           "line-dasharray",
@@ -99,6 +106,9 @@ test.describe("Edge visibility on load", () => {
         haloWidth,
         haloOpacity,
         mainOpacity,
+        haloBlur,
+        mainColor,
+        mainWidth,
         haloDasharray,
         mainDasharray,
         isUnderMain,
@@ -109,14 +119,21 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.source).toBe(true);
     expect(edgeState.layer).toBe(true);
     expect(edgeState.haloLayer).toBe(true);
-    expect(edgeState.haloColor).toBe("#ffffff");
-    expect(edgeState.haloWidth).toBe(4);
+    expect(edgeState.haloColor).toBe(EDGE_VISUAL_STYLE.haloColor);
+    expect(edgeState.haloWidth).toBe(EDGE_VISUAL_STYLE.haloWidth);
+    expect(edgeState.haloBlur).toBe(EDGE_VISUAL_STYLE.haloBlur);
+    expect(edgeState.mainColor).toBe(EDGE_VISUAL_STYLE.mainColor);
+    expect(edgeState.mainWidth).toBe(EDGE_VISUAL_STYLE.mainWidth);
     expect(edgeState.mainOpacity).toEqual([
       "coalesce",
       ["to-number", ["get", "opacity"]],
       0,
     ]);
-    expect(edgeState.haloOpacity).toEqual(["*", edgeState.mainOpacity, 0.8]);
+    expect(edgeState.haloOpacity).toEqual([
+      "*",
+      edgeState.mainOpacity,
+      EDGE_VISUAL_STYLE.haloOpacityFactor,
+    ]);
     // Structural invariant: Halo and main line must share the exact same dasharray
     // to prevent the solid background from visually filling the dashed gaps.
     expect(edgeState.mainDasharray).toBeDefined();

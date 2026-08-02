@@ -8,6 +8,16 @@ import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { LAYERS } from "./layers";
 
+export const EDGE_VISUAL_STYLE = {
+  haloColor: "#f5eadb",
+  haloWidth: 5,
+  haloBlur: 0.7,
+  haloOpacityFactor: 0.72,
+  mainColor: "#76523d",
+  mainWidth: 2.25,
+  dashArray: [1.4, 0.7] as [number, number],
+} as const;
+
 export function buildEdgeFeatures(
   edges: MapEdge[],
   points: MapEntityViewModel[],
@@ -90,7 +100,11 @@ function ensureEdgeLayers(
     ["to-number", ["get", "opacity"]],
     0,
   ];
-  const haloOpacity: ExpressionSpecification = ["*", opacity, 0.8];
+  const haloOpacity: ExpressionSpecification = [
+    "*",
+    opacity,
+    EDGE_VISUAL_STYLE.haloOpacityFactor,
+  ];
   const commonLayout: LineLayerSpecification["layout"] = {
     "line-join": "round",
     "line-cap": "round",
@@ -101,10 +115,11 @@ function ensureEdgeLayers(
     source: sourceId,
     layout: commonLayout,
     paint: {
-      "line-color": "#ffffff",
-      "line-width": 4,
+      "line-color": EDGE_VISUAL_STYLE.haloColor,
+      "line-width": EDGE_VISUAL_STYLE.haloWidth,
+      "line-blur": EDGE_VISUAL_STYLE.haloBlur,
       "line-opacity": haloOpacity,
-      "line-dasharray": [2, 1],
+      "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
     },
   };
   const mainLayer: LineLayerSpecification = {
@@ -113,10 +128,10 @@ function ensureEdgeLayers(
     source: sourceId,
     layout: commonLayout,
     paint: {
-      "line-color": "#888",
-      "line-width": 2,
+      "line-color": EDGE_VISUAL_STYLE.mainColor,
+      "line-width": EDGE_VISUAL_STYLE.mainWidth,
       "line-opacity": opacity,
-      "line-dasharray": [2, 1],
+      "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
     },
   };
 

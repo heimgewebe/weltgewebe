@@ -1,7 +1,15 @@
-import { expect, test } from "@playwright/test";
+import { devices, expect, test } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
 const GARNROLLE_ID = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
+const KNOTEN_ID = "b52be17c-4ab7-4434-98ce-520f86290cf0";
+const IPAD_PRO_11_LANDSCAPE = {
+  userAgent: devices["iPad Pro 11 landscape"].userAgent,
+  viewport: devices["iPad Pro 11 landscape"].viewport,
+  deviceScaleFactor: devices["iPad Pro 11 landscape"].deviceScaleFactor,
+  isMobile: devices["iPad Pro 11 landscape"].isMobile,
+  hasTouch: devices["iPad Pro 11 landscape"].hasTouch,
+};
 
 test.describe("Garnrolle marker rendering", () => {
   test.beforeEach(async ({ page }) => {
@@ -33,6 +41,70 @@ test.describe("Garnrolle marker rendering", () => {
     await expect(icon).toHaveCSS("width", "44px");
     await expect(icon).toHaveCSS("height", "44px");
     await expect(icon).toHaveCSS("object-fit", "contain");
+  });
+
+  test("renders Knoten as interlaced textile loops instead of generic dots", async ({
+    page,
+  }) => {
+    const marker = page.getByTestId(`marker-node-${KNOTEN_ID}`);
+    const visual = marker.locator(".marker-node__visual");
+    await expect(marker).toHaveCSS("outline-style", "none");
+    await expect(visual).toHaveCSS("width", "30px");
+    await expect(visual).toHaveCSS("height", "24px");
+    await expect(visual).toHaveCSS("border-top-style", "none");
+
+    const loops = await visual.evaluate((element) => {
+      const before = getComputedStyle(element, "::before");
+      const after = getComputedStyle(element, "::after");
+      return {
+        beforeContent: before.content,
+        beforeRadius: before.borderRadius,
+        beforeTransform: before.transform,
+        afterContent: after.content,
+        afterRadius: after.borderRadius,
+        afterTransform: after.transform,
+      };
+    });
+    expect(loops.beforeContent).not.toBe("none");
+    expect(loops.afterContent).not.toBe("none");
+    expect(loops.beforeRadius).toBe("50%");
+    expect(loops.afterRadius).toBe("50%");
+    expect(loops.beforeTransform).not.toBe("none");
+    expect(loops.afterTransform).not.toBe("none");
+  });
+
+  test("uses round textile haloes instead of rectangular marker and title boxes", async ({
+    page,
+  }) => {
+    const marker = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
+    await expect(marker).toHaveClass(/is-selected/);
+    await expect(marker).toHaveCSS("outline-style", "none");
+    await expect(marker).toHaveCSS("box-shadow", "none");
+
+    const halo = marker.locator(".map-marker__halo");
+    await expect(halo).toHaveCount(1);
+    await expect(halo).toHaveCSS("width", "42px");
+    await expect(halo).toHaveCSS("height", "42px");
+    await expect(halo).toHaveCSS("border-radius", "50%");
+    await expect(halo).toHaveCSS("opacity", "1");
+
+    const heading = page.getByTestId("account-heading");
+    await expect(heading).toBeFocused();
+    await expect(heading).toHaveCSS("outline-style", "none");
+  });
+
+  test("keeps the selected halo static when reduced motion is requested", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await page.reload();
+
+    const marker = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
+    const halo = marker.locator(".map-marker__halo");
+    const icon = marker.locator(".marker-account__icon");
+    await expect(halo).toHaveCSS("transition-duration", "0s");
+    await expect(icon).toHaveCSS("transition-duration", "0s");
+    await expect(halo).toHaveCSS("opacity", "1");
   });
 
   test("stays locked to its projected coordinate during a map jump", async ({
@@ -167,5 +239,38 @@ test.describe("Garnrolle marker rendering", () => {
     );
     expect(metrics.local.bottomDelta).toBeLessThanOrEqual(0.5);
     expect(metrics.regional.bottomDelta).toBeLessThanOrEqual(0.5);
+  });
+});
+
+test.describe("iPad Pro 11 landscape Garnrolle interaction", () => {
+  test.use(IPAD_PRO_11_LANDSCAPE);
+
+  test("keeps the touch target invisible and the selected state circular", async ({
+    page,
+  }) => {
+    await mockApiResponses(page);
+    await page.goto("/map");
+
+    const marker = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
+    await expect(marker).toBeVisible();
+    await expect(marker).toHaveCSS("width", "44px");
+    await expect(marker).toHaveCSS("height", "44px");
+    await expect(marker).toHaveCSS("outline-style", "none");
+    await expect(marker).toHaveCSS("box-shadow", "none");
+
+    await marker.tap();
+    await expect(page.getByTestId("account-heading")).toBeVisible();
+    await expect(marker).toHaveClass(/is-selected/);
+
+    const halo = marker.locator(".map-marker__halo");
+    await expect(halo).toHaveCSS("border-radius", "50%");
+    await expect(halo).toHaveCSS("opacity", "1");
+
+    const hasHorizontalOverflow = await page.evaluate(
+      () =>
+        document.documentElement.scrollWidth >
+        document.documentElement.clientWidth,
+    );
+    expect(hasHorizontalOverflow).toBe(false);
   });
 });
