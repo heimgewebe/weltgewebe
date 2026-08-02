@@ -15,6 +15,9 @@ services:
         exec pnpm dev -- --host 0.0.0.0 --port 5173
     volumes:
       - ../../apps/web:/workspace
+      # generate-basemap-config.js resolves the repository-level style files as
+      # /map-style from the /workspace bind mount used by this dev container.
+      - ../../map-style:/map-style:ro
       - /workspace/node_modules
     ports:
       - "5173:5173"
@@ -76,7 +79,11 @@ services:
       - pg_data:/var/lib/postgresql/data
       - ./sql/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-welt}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-welt} -d ${POSTGRES_DB:-weltgewebe}",
+        ]
       interval: 5s
       timeout: 3s
       retries: 20

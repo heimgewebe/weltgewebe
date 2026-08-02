@@ -10,6 +10,40 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-08-02 - Compose-Entwicklungsstack an repositoryweite Basemap-Stile binden
+
+**Geänderte Bereiche:**
+
+- `infra/compose/compose.core.yml`;
+- `.github/workflows/compose-smoke.yml`;
+- Compose-Vertragstests.
+
+**Beschreibung:**
+
+Der Web-Entwicklungscontainer bindet weiterhin `apps/web` als `/workspace` ein.
+Der Basemap-Generator löst die repositoryweiten Stildateien dadurch absichtlich
+unter `/map-style` auf. Seit der regionalen Deutschland-Variante benötigte der
+Compose-Pfad dort sowohl `style.json` als auch `style-germany.json`, hatte das
+Verzeichnis aber nicht eingebunden. Der Dev- und CI-Container brach deshalb beim
+Vite-Start mit einer fehlenden `/map-style/style.json` ab.
+
+`map-style` wird nun read-only nach `/map-style` eingebunden. Änderungen an den
+Stildateien lösen den Compose-Smoke-Test aus. Die Einbindung betrifft nur den
+Entwicklungs-/Smoke-Service in `compose.core.yml`; produktive Basemap-Mounts und
+Aktivierungsverträge bleiben unverändert.
+
+Der PostgreSQL-Healthcheck prüft außerdem ausdrücklich die konfigurierte
+Datenbank `${POSTGRES_DB:-weltgewebe}`. Damit verwechselt ein erfolgreicher
+Serverstart nicht länger die nicht vorhandene Standarddatenbank des Benutzers
+`welt` mit der tatsächlichen Anwendungsdatenbank.
+
+**Prüfung:**
+
+Die gerenderte Compose-Konfiguration, der read-only-Mount, das Datenbankziel und
+der Workflow-Trigger werden statisch geprüft. Eine Containerprobe liest beide
+Stildateien über `/map-style` und erzeugt daraus die commitgebundene regionale
+Basemap-Buildidentität.
+
 ## 2026-07-24 - Erstnutzerführung an der bestehenden Garnrolle ausrichten
 
 **Geänderte Bereiche:**
