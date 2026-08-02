@@ -214,7 +214,9 @@ Reconciler entfernt ein solches Altverzeichnis nur innerhalb des gebundenen
 Release-Worktrees, wenn darunter kein Mount liegt und alle Inhalte dem
 Reconciler-Nutzer gehören sowie weder gruppen- noch weltbeschreibbar sind. Ein
 Symlink wird weiterhin nur gelöst; der kanonische Kartenbestand wird nie
-rekursiv verfolgt.
+rekursiv verfolgt. Kann die sichere Bereinigung eines historischen Releases nicht
+belegt werden, bleibt dieser Worktree erhalten. Die nachgelagerte Retention macht
+einen bereits erfolgreichen Reconcile-Lauf dadurch nicht nachträglich fehlerhaft.
 
 ## Öffentlicher Nachweis
 

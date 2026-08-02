@@ -245,6 +245,89 @@ cleanup_release_runtime_paths "$1"
             self.assertIn("not exclusively owned and protected", result.stderr)
             self.assertTrue(unsafe.exists())
 
+    def test_reconciler_retains_release_when_guarded_cleanup_refuses(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        start = script.index("path_contains_mount() {")
+        end = script.index('\n[[ "$EUID" -eq 0 ]]', start)
+        cleanup_functions = script[start:end]
+        command = f"""set -Eeuo pipefail
+SCRIPT_DIR={str(ROOT / 'scripts/ops')!r}
+STATE_ROOT="$1/state"
+RELEASE_ROOT="$1/releases"
+SOURCE_CHECKOUT="$1/source"
+mkdir -p "$STATE_ROOT" "$RELEASE_ROOT" "$SOURCE_CHECKOUT"
+run_ops_python() {{
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}}
+stat() {{
+  printf '0\n'
+}}
+git() {{
+  if [[ "$#" -ge 4 && "$1" == "-C" && "$3" == "rev-parse" && "$4" == "HEAD" ]]; then
+    printf '%s\n' "${{2##*/}}"
+  fi
+  return 0
+}}
+rm() {{
+  if [[ "${{FAIL_WEB_RM:-0}}" == "1" && "$*" == *"/apps/web/build"* ]]; then
+    return 1
+  fi
+  command rm "$@"
+}}
+{cleanup_functions}
+prune_releases
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / "releases" / ("d" * 40)
+            unsafe = release / "build/basemap/mutable.pmtiles"
+            unsafe.parent.mkdir(parents=True)
+            unsafe.write_text("mutable", encoding="utf-8")
+            unsafe.chmod(0o666)
+            old = 1_600_000_000
+            os.utime(release, (old, old))
+
+            result = subprocess.run(
+                ["bash", "-c", command, "release-prune-test", str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(unsafe.exists())
+            self.assertIn(
+                "retaining release after guarded cleanup refusal", result.stderr
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / "releases" / ("e" * 40)
+            generated = release / "apps/web/build/index.html"
+            generated.parent.mkdir(parents=True)
+            generated.write_text("generated", encoding="utf-8")
+            old = 1_600_000_000
+            os.utime(release, (old, old))
+            environment = dict(os.environ)
+            environment["FAIL_WEB_RM"] = "1"
+
+            result = subprocess.run(
+                ["bash", "-c", command, "release-prune-test", str(root)],
+                cwd=ROOT,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(generated.exists())
+            self.assertIn("could not remove release web build", result.stderr)
+            self.assertIn(
+                "retaining release after guarded cleanup refusal", result.stderr
+            )
+
     def test_reconciler_release_cleanup_is_mount_and_boundary_guarded(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
         self.assertIn('/proc/self/mountinfo', script)

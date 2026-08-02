@@ -808,9 +808,15 @@ cleanup_release_runtime_paths() {
     return 1
   }
 
-  rm -rf --one-file-system -- "$release_dir/apps/web/build"
+  if ! rm -rf --one-file-system -- "$release_dir/apps/web/build"; then
+    echo "could not remove release web build: $release_dir/apps/web/build" >&2
+    return 1
+  fi
   if [[ -L "$basemap_path" ]]; then
-    rm -f -- "$basemap_path"
+    if ! rm -f -- "$basemap_path"; then
+      echo "could not unlink release basemap symlink: $basemap_path" >&2
+      return 1
+    fi
   elif [[ -d "$basemap_path" ]]; then
     basemap_real="$(realpath -e -- "$basemap_path")" || return 1
     case "$basemap_real" in
@@ -832,15 +838,21 @@ cleanup_release_runtime_paths() {
       }
     fi
 
-    unsafe_path="$(
+    if ! unsafe_path="$(
       find "$basemap_real" -xdev \
         \( ! -user "$EUID" -o -perm /022 \) -print -quit
-    )"
+    )"; then
+      echo "could not inspect legacy release basemap: $basemap_path" >&2
+      return 1
+    fi
     [[ -z "$unsafe_path" ]] || {
       echo "legacy release basemap is not exclusively owned and protected: $unsafe_path" >&2
       return 1
     }
-    rm -rf --one-file-system -- "$basemap_real"
+    if ! rm -rf --one-file-system -- "$basemap_real"; then
+      echo "could not remove legacy release basemap: $basemap_path" >&2
+      return 1
+    fi
   elif [[ -e "$basemap_path" ]]; then
     echo "legacy release basemap has an unexpected file type: $basemap_path" >&2
     return 1
@@ -864,7 +876,10 @@ prune_releases() {
     [[ "$(stat --format=%u "$release_dir")" == "0" ]] || continue
     release_head="$(git -C "$release_dir" rev-parse HEAD 2> /dev/null || true)"
     [[ "$release_head" == "$release_name" ]] || continue
-    cleanup_release_runtime_paths "$release_dir"
+    if ! cleanup_release_runtime_paths "$release_dir"; then
+      echo "retaining release after guarded cleanup refusal: $release_dir" >&2
+      continue
+    fi
     if [[ -z "$(git -C "$release_dir" status --porcelain --untracked-files=normal)" ]]; then
       git -C "$SOURCE_CHECKOUT" worktree remove "$release_dir"
     fi
