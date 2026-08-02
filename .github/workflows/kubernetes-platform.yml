@@ -138,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "7c6a93d919f4e9d7dfe430dd11bed0ba3e7ec504"
+          test "$(git rev-parse HEAD^)" = "bd8fd92584fa9e773fd5d5c6f32544d3994879b0"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -194,8 +194,10 @@ jobs:
           cargo fmt --all -- --check
           cargo test -p weltgewebe-api federation::tests::
           cargo test -p weltgewebe-api --test two_operator_pilot_example_keys
-      - name: Commit reviewed fold-in
+      - name: Commit and fast-forward reviewed fold-in
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -213,4 +215,20 @@ jobs:
             | git cat-file --batch >/dev/null
           git add -A
           git commit -m 'fix(platform): close two-operator pilot trust gaps'
-          git push origin HEAD:feat/gewebezelle-two-operator-pilot-v1
+          commit_sha="$(git rev-parse HEAD)"
+          staging_ref="operator/pr1658-foldin-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          git push origin "HEAD:refs/heads/${staging_ref}"
+          response="$(curl --fail-with-body --silent --show-error \
+            --request PATCH \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs/heads/feat/gewebezelle-two-operator-pilot-v1" \
+            --data "$(jq -cn --arg sha "$commit_sha" '{sha:$sha,force:false}')")"
+          test "$(jq -r '.object.sha' <<<"$response")" = "$commit_sha"
+          curl --fail-with-body --silent --show-error \
+            --request DELETE \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/refs/heads/${staging_ref}"
