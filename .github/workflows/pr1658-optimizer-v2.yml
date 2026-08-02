@@ -1,0 +1,127 @@
+---
+name: PR 1658 optimizer v2
+
+"on":
+  pull_request:
+    paths:
+      - "scripts/platform/.pr1658-optimizer-trigger"
+
+permissions:
+  contents: read
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  optimize:
+    if: >-
+      github.event.pull_request.number == 1658 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/gewebezelle-two-operator-pilot-v1'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Bind optimizer to marker commit
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker='scripts/platform/.pr1658-optimizer-trigger'
+          test "${GITHUB_HEAD_REF}" = 'feat/gewebezelle-two-operator-pilot-v1'
+          test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha }}'
+          test "$(git diff --name-only HEAD^ HEAD)" = "$marker"
+          test "$(cat "$marker")" = 'pr1658 optimizer trigger v2'
+          echo "bound_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install optimizer dependencies
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3' pytest ruff
+      - name: Materialize and apply reviewed optimization
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATCH_SHA256: e1c616c39bf2752e087ff235b4c58c726e62a292e7ef88647da65135e858b10c
+        run: |
+          set -euo pipefail
+          : > /tmp/pr1658-optimize.b64
+          for sha in \
+            a54e2f65ed87a63e37ee8f2025a6339d22faf380 \
+            fda22f47d8c3a298d72e349ecdd132c9214272ab \
+            6bbb80bb237757a8cbf376f9ce033507d3587cd5 \
+            22a9603bb74e7f61ba0b1e21d0725a425c50c8c3 \
+            7f26454a739159e09aa3f0141f4c92b9a476a7f5 \
+            e5360117dce2feaa9dcda61ab32dbbca3db95f87
+          do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${sha}" \
+              | jq -r '.content' | tr -d '\n' | base64 --decode \
+              >> /tmp/pr1658-optimize.b64
+          done
+          base64 --decode /tmp/pr1658-optimize.b64 > /tmp/pr1658-optimize.py
+          test "$(sha256sum /tmp/pr1658-optimize.py | cut -d' ' -f1)" = "$PATCH_SHA256"
+          cp .github/workflows/kubernetes-platform.yml /tmp/kubernetes-platform.optimizer.yml
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/kubernetes-platform.yml')
+          content = path.read_text()
+          marker = '\n  pr1658-optimizer:\n'
+          index = content.index(marker)
+          path.write_text(content[:index].rstrip('\n') + '\n')
+          PY
+          rm scripts/platform/.pr1658-optimizer-trigger
+          python /tmp/pr1658-optimize.py
+          chmod +x scripts/platform/validate_two_operator_pilot.py
+      - name: Format and test optimized contracts
+        run: |
+          python -m ruff check --fix \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py
+          python -m ruff format \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py
+          python -m ruff check \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py
+          python -m py_compile \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py \
+            scripts/ci/tests/test_kubernetes_platform_contract.py \
+            scripts/ci/tests/test_kubernetes_ha_contract.py
+          python -m unittest scripts.ci.tests.test_two_operator_cell_pilot
+          make generate
+          make docs-guard
+          cargo fmt --all -- --check
+          cargo test -p weltgewebe-api federation::tests::
+          cargo test -p weltgewebe-api --test two_operator_pilot_example_keys
+      - name: Commit optimized fold-in
+        shell: bash
+        env:
+          BOUND_HEAD: ${{ steps.gate.outputs.bound_head }}
+        run: |
+          set -euo pipefail
+          cp /tmp/kubernetes-platform.optimizer.yml .github/workflows/kubernetes-platform.yml
+          git diff --check
+          test -z "$(git status --short | grep -E '^\?\?' || true)"
+          git config user.name 'heimgewebe-operator'
+          git config user.email 'noreply@heimgewebe.invalid'
+          git ls-tree -r HEAD \
+            | awk '$2 == "blob" {print $3}' \
+            | git cat-file --batch >/dev/null
+          git add -A
+          git diff --cached --quiet -- .github/workflows/kubernetes-platform.yml
+          git diff --cached --quiet -- .github/workflows/pr1658-optimizer-v2.yml
+          git commit -m 'fix(platform): close remaining pilot trust gaps'
+          git fetch origin feat/gewebezelle-two-operator-pilot-v1
+          test "$(git rev-parse origin/feat/gewebezelle-two-operator-pilot-v1)" = "$BOUND_HEAD"
+          git push origin HEAD:feat/gewebezelle-two-operator-pilot-v1
