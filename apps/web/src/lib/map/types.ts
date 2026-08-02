@@ -44,6 +44,36 @@ export interface Account extends AccountBase {
   map_state?: GarnrolleMapState;
 }
 
+export type WebgemeindezentrumLocationState =
+  | "desired"
+  | "provisional"
+  | "confirmed"
+  | "unavailable"
+  | "relocation_proposed";
+
+export interface OrtswebereiReference {
+  id: string;
+  slug: string;
+  name: string;
+  gewebezelle_id: string;
+}
+
+/** Stable collective meeting-place structure; deliberately not a normal Knoten. */
+export interface Webgemeindezentrum {
+  type: "webgemeindezentrum";
+  id: string;
+  title: string;
+  ortsweberei: OrtswebereiReference;
+  location_state: WebgemeindezentrumLocationState;
+  location_state_label: string;
+  location: Location;
+  location_label: string;
+  meeting_note: string;
+  access_note: string;
+  created_at: string;
+  updated_at: string;
+}
+
 /**
  * @deprecated MapPoint uses lat/lng (inconsistent with domain's lat/lon).
  * Not used in the overlay pipeline. Retained only for potential external consumers.
@@ -111,12 +141,35 @@ export interface MapEntityGarnrolle {
   weight?: number;
 }
 
+/** A stable Webgemeindezentrum rendered independently from ordinary Knoten. */
+export interface MapEntityWebgemeindezentrum {
+  type: "webgemeindezentrum";
+  id: string;
+  title: string;
+  lat: number;
+  lon: number;
+  summary: string;
+  tags: string[];
+  created_at: string;
+  updated_at: string;
+  location_state: WebgemeindezentrumLocationState;
+  location_state_label: string;
+  location_label: string;
+  meeting_note: string;
+  access_note: string;
+  ortsweberei: OrtswebereiReference;
+  weight?: number;
+}
+
 /**
  * Discriminated union of all map-renderable entities.
  * The `type` field is the discriminant – it is always present and determines the variant.
  * Garnrollen without a public position are excluded from map rendering.
  */
-export type MapEntityViewModel = MapEntityNode | MapEntityGarnrolle;
+export type MapEntityViewModel =
+  | MapEntityNode
+  | MapEntityGarnrolle
+  | MapEntityWebgemeindezentrum;
 
 /**
  * @deprecated Use MapEntityViewModel for new code.
@@ -142,7 +195,11 @@ export interface RenderableMapPoint {
 // Phase 1: Explicit load state – replaces silent fallback-to-empty semantics
 export type MapLoadState = "ok" | "partial" | "failed";
 
-export type MapResourceName = "nodes" | "accounts" | "edges";
+export type MapResourceName =
+  | "nodes"
+  | "accounts"
+  | "edges"
+  | "webgemeindezentren";
 
 export type MapResourceStatus =
   | {

@@ -29,6 +29,7 @@ verifies_with:
   - apps/web/src/routes/map/+page.svelte
   - apps/web/tests/map-load-fallback.spec.ts
   - apps/web/tests/map-url-state.spec.ts
+  - apps/web/tests/webgemeindezentrum-hammer-park.spec.ts
   - apps/web/tests/edge-visibility.spec.ts
 ---
 # Kartenerlebnis
@@ -57,7 +58,7 @@ Layer-Reihenfolge:
 
 1. Basiskarte;
 2. Fäden;
-3. Knoten und Garnrollen;
+3. Knoten, Garnrollen und Webgemeindezentren;
 4. Fokus und Hervorhebung;
 5. Kompositionsvorschau.
 

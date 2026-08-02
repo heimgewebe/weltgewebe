@@ -153,7 +153,12 @@ describe("fetchCursorPages", () => {
 
 describe("loadMapResources", () => {
   it("preserves declared resource order when responses resolve out of order", async () => {
-    const delays: Record<string, number> = { nodes: 15, accounts: 5, edges: 0 };
+    const delays: Record<string, number> = {
+      nodes: 15,
+      accounts: 5,
+      edges: 0,
+      webgemeindezentren: 10,
+    };
     const fetcher = vi.fn(async (input: string) => {
       const resource = new URL(input, "http://localhost").pathname
         .split("/")
@@ -168,6 +173,7 @@ describe("loadMapResources", () => {
       "nodes",
       "accounts",
       "edges",
+      "webgemeindezentren",
     ]);
     expect(result.loadState).toBe("ok");
     expect(result.loadNotice).toBeNull();
@@ -184,11 +190,18 @@ describe("loadMapResources", () => {
       "/api/nodes?pagination=cursor&limit=1000",
       "/api/accounts?pagination=cursor&limit=1000",
       "/api/edges?pagination=cursor&limit=1000",
+      "/api/webgemeindezentren?pagination=cursor&limit=1000",
     ]);
     expect(result.resourceStatus).toEqual([
       { resource: "nodes", status: "complete", loaded: 0, pages: 1 },
       { resource: "accounts", status: "complete", loaded: 0, pages: 1 },
       { resource: "edges", status: "complete", loaded: 0, pages: 1 },
+      {
+        resource: "webgemeindezentren",
+        status: "complete",
+        loaded: 0,
+        pages: 1,
+      },
     ]);
     expect(result.loadState).toBe("ok");
     expect(result.loadNotice).toBeNull();
@@ -199,6 +212,7 @@ describe("loadMapResources", () => {
       nodes: [{ id: "node-1" }],
       accounts: [{ id: "account-1" }],
       edges: [{ id: "edge-1" }],
+      webgemeindezentren: [{ id: "center-1" }],
     };
     const fetcher = vi.fn(async (input: string) => {
       const resource = new URL(input, "http://localhost").pathname
@@ -216,14 +230,22 @@ describe("loadMapResources", () => {
       "/api/nodes",
       "/api/accounts",
       "/api/edges",
+      "/api/webgemeindezentren",
     ]);
     expect(result.nodes).toEqual([{ id: "node-1" }]);
     expect(result.accounts).toEqual([{ id: "account-1" }]);
     expect(result.edges).toEqual([{ id: "edge-1" }]);
+    expect(result.webgemeindezentren).toEqual([{ id: "center-1" }]);
     expect(result.resourceStatus).toEqual([
       { resource: "nodes", status: "complete", loaded: 1, pages: 1 },
       { resource: "accounts", status: "complete", loaded: 1, pages: 1 },
       { resource: "edges", status: "complete", loaded: 1, pages: 1 },
+      {
+        resource: "webgemeindezentren",
+        status: "complete",
+        loaded: 1,
+        pages: 1,
+      },
     ]);
     expect(result.loadState).toBe("ok");
     expect(result.loadNotice).toBeNull();

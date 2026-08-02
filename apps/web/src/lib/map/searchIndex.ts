@@ -15,7 +15,15 @@ function buildMapSearchTermsNormalized(
   const semanticTerms =
     marker.type === "node"
       ? ["Knoten", marker.kind]
-      : ["Garnrolle", "Garnrollen"];
+      : marker.type === "webgemeindezentrum"
+        ? [
+            "Webgemeindezentrum",
+            "Treffpunkt",
+            marker.location_state_label,
+            marker.location_label,
+            marker.ortsweberei.name,
+          ]
+        : ["Garnrolle", "Garnrollen"];
 
   return [
     marker.title,

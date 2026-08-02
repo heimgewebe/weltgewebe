@@ -53,16 +53,22 @@ import { enterFokus, type Selection } from "./uiView";
 export function deriveMarkerCounts(markers: MapEntityViewModel[]): {
   nodes: number;
   accounts: number;
+  webgemeindezentren: number;
 } {
   return {
-    nodes: markers.filter((e) => e.type === "node").length,
-    accounts: markers.filter((e) => e.type !== "node").length,
+    nodes: markers.filter((entity) => entity.type === "node").length,
+    accounts: markers.filter((entity) => entity.type === "garnrolle").length,
+    webgemeindezentren: markers.filter(
+      (entity) => entity.type === "webgemeindezentrum",
+    ).length,
   };
 }
 
 /** The filter bucket an entity belongs to (node kind, or "Garnrolle"). */
 export function getFilterTypeKey(m: MapEntityViewModel): string {
-  return m.type === "node" ? m.kind || "Knoten" : "Garnrolle";
+  if (m.type === "node") return m.kind || "Knoten";
+  if (m.type === "webgemeindezentrum") return "Webgemeindezentrum";
+  return "Garnrolle";
 }
 
 export type FilterType = { id: string; label: string; count: number };
@@ -153,8 +159,8 @@ export function deriveVisibleEdges<T extends Edge>(
 
 function normalizeSelectionType(
   type: MapEntityViewModel["type"],
-): "node" | "garnrolle" {
-  return type === "garnrolle" ? "garnrolle" : "node";
+): "node" | "garnrolle" | "webgemeindezentrum" {
+  return type;
 }
 
 /**

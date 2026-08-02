@@ -10,6 +10,7 @@ pub mod meta;
 pub mod nodes;
 mod query;
 pub mod search;
+pub mod webgemeindezentren;
 
 use axum::{
     middleware::from_fn,
@@ -47,6 +48,9 @@ use self::{
     },
     nodes::{get_node, list_nodes},
     search::search_nodes,
+    webgemeindezentren::{
+        get_ortsweberei, get_webgemeindezentrum, list_ortswebereien, list_webgemeindezentren,
+    },
 };
 
 pub fn api_router() -> Router<ApiState> {
@@ -103,6 +107,10 @@ pub fn api_router() -> Router<ApiState> {
         )
         .route("/edges", get(list_edges))
         .route("/edges/{id}", get(get_edge))
+        .route("/ortswebereien", get(list_ortswebereien))
+        .route("/ortswebereien/{id}", get(get_ortsweberei))
+        .route("/webgemeindezentren", get(list_webgemeindezentren))
+        .route("/webgemeindezentren/{id}", get(get_webgemeindezentrum))
         .route(
             "/accounts",
             get(list_accounts)

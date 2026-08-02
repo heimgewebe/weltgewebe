@@ -14,10 +14,12 @@ import type {
   Node,
   Account,
   Edge,
+  Webgemeindezentrum,
   MapEdge,
   MapEntityViewModel,
   MapEntityNode,
   MapEntityGarnrolle,
+  MapEntityWebgemeindezentrum,
   MapLoadState,
   MapResourceStatus,
   MapDiagnostics,
@@ -41,6 +43,7 @@ export type MapSceneInput = {
   nodes: Node[];
   accounts: Account[];
   edges: Edge[];
+  webgemeindezentren: Webgemeindezentrum[];
   loadState: MapLoadState;
   resourceStatus: MapResourceStatus[];
   apiBase: string | undefined;
@@ -101,6 +104,33 @@ function mapAccountsToEntities(accounts: Account[]): MapEntityGarnrolle[] {
   return result;
 }
 
+function mapWebgemeindezentrenToEntities(
+  centers: Webgemeindezentrum[],
+): MapEntityWebgemeindezentrum[] {
+  return centers.map((center) => ({
+    type: "webgemeindezentrum" as const,
+    id: center.id,
+    title: center.title,
+    lat: center.location.lat,
+    lon: center.location.lon,
+    summary: center.meeting_note,
+    tags: [
+      "Webgemeindezentrum",
+      center.ortsweberei.name,
+      center.location_state_label,
+      center.location_label,
+    ],
+    created_at: center.created_at,
+    updated_at: center.updated_at,
+    location_state: center.location_state,
+    location_state_label: center.location_state_label,
+    location_label: center.location_label,
+    meeting_note: center.meeting_note,
+    access_note: center.access_note,
+    ortsweberei: center.ortsweberei,
+  }));
+}
+
 /**
  * Builds the complete map scene from raw route data.
  * This is the single transformation point between data loading and map rendering.
@@ -108,12 +138,15 @@ function mapAccountsToEntities(accounts: Account[]): MapEntityGarnrolle[] {
 export function buildMapScene(input: MapSceneInput): MapSceneModel {
   const nodeEntities = mapNodesToEntities(input.nodes);
   const accountEntities = mapAccountsToEntities(input.accounts);
+  const centerEntities = mapWebgemeindezentrenToEntities(
+    input.webgemeindezentren,
+  );
 
   const apiMode = resolveApiMode(input.apiBase);
   const degraded = input.loadState !== "ok";
 
   return {
-    entities: [...nodeEntities, ...accountEntities],
+    entities: [...nodeEntities, ...accountEntities, ...centerEntities],
     edges: input.edges.map(normalizeEdgeLifecycle),
     loadState: input.loadState,
     resourceStatus: input.resourceStatus,

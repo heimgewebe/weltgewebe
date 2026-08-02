@@ -1,6 +1,6 @@
 import { writable, type Readable } from "svelte/store";
 
-export type PanelResource = "node" | "account" | "edge";
+export type PanelResource = "node" | "account" | "edge" | "webgemeindezentrum";
 
 export interface SelectionLike {
   id: string;
@@ -122,7 +122,8 @@ export function buildPanelEndpoint(
   apiBase?: string,
 ): string {
   const base = apiBase ?? import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
-  const resourcePath = `${resource}s`;
+  const resourcePath =
+    resource === "webgemeindezentrum" ? "webgemeindezentren" : `${resource}s`;
   if (base) {
     return `${base}/api/${resourcePath}/${id}`;
   }

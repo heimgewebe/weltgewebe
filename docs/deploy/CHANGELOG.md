@@ -10,6 +10,52 @@ relations:
 ---
 # Deployment-Änderungsprotokoll
 
+## 2026-08-02 - Erste Ortsweberei mit Webgemeindezentrum im Hammer Park verankern
+
+**Geänderte Bereiche:**
+
+- PostgreSQL-Domänenschema und Migrationspfad;
+- öffentliche Ortsweberei-/Webgemeindezentrum-API;
+- Kartenprojektion, Fokuspanel, Suche und Deep Links;
+- PostgreSQL-, Browser-, Tastatur- und Mobilprüfungen.
+
+**Beschreibung:**
+
+Die bisherige einzelne Gewebezelle erhält erstmals ihre kanonische lokale
+Produktgestalt: `Ortsweberei Hamm`, die stabile Gewebezelle
+`hamm.weltgewebe.net` und genau ein dauerhaftes
+`Webgemeindezentrum Hammer Park`. Der Kartenanker liegt bewusst ungefähr auf
+einer Grünfläche im Hammer Park, damit dort reale gemeinsame Treffen möglich
+sind. Sein Zustand lautet zunächst **„Gewünschter Treffort“**. Damit behauptet
+das System weder Reservierung noch Genehmigung, Barrierefreiheit oder
+regelmäßige Verfügbarkeit.
+
+Datenbankregeln erzwingen die Eins-zu-eins-Zuordnung zwischen Ortsweberei,
+Gewebezelle und aktivem Zentrum. Standortänderungen behalten die stabile
+Zentrum-ID und ergänzen eine unveränderliche Chronik. Die API liefert Listen und
+Detailansichten; die Karte behandelt das Zentrum als eigene dauerhafte
+Domänenentität statt als gewöhnlichen Knoten, Accountmarker oder verblassenden
+Faden. Gewünschte und vorgeschlagene Standorte sind durch eine gestrichelte
+Markerbegrenzung von bestätigten Orten unterscheidbar. Tastaturfokus, mobile
+Kompaktansicht und direkte URL-Fokussierung sind Teil desselben Vertrags.
+
+**Produktionswirkung:**
+
+Die neue Migration legt die drei stabilen Startidentitäten und den ersten
+Standorteintrag an. Nach dem Rollout müssen Migration, API-Projektion und
+Frontend gemeinsam auf demselben Commit laufen. Die spätere Bestätigung oder
+Verlegung des Trefforts bleibt eine eigene nachvollziehbare
+Governance-Entscheidung; dieser Schnitt stellt dafür das Datenmodell und die
+Historiengrenze bereit, simuliert aber noch keinen beschlossenen Webrat-Befehl.
+
+**Prüfung:**
+
+Ein echter Wegwerf-PostgreSQL-Lauf belegt Eindeutigkeit, gleiche
+Ortsweberei-Zuordnung, stabile Zentrum-ID, Zustandsvalidierung und
+append-only-Standortchronik. Browserprüfungen belegen Marker, Deep Link,
+Tastaturöffnung, Panelwahrheit und mobile Kerninformation. Der Karten-Build
+bleibt innerhalb des bestehenden CSS-Leistungsbudgets.
+
 ## 2026-08-02 - Compose-Entwicklungsstack an repositoryweite Basemap-Stile binden
 
 **Geänderte Bereiche:**

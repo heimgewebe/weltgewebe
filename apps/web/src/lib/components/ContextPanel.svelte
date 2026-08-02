@@ -70,6 +70,8 @@
     }
 
     if (currentSelection?.type === "node") return "Knoten";
+    if (currentSelection?.type === "webgemeindezentrum")
+      return "Webgemeindezentrum";
     if (
       currentSelection?.type === "account" ||
       currentSelection?.type === "garnrolle"
@@ -296,6 +298,12 @@
               this={accountPanel.default}
               on:selectRelated={handleRelated}
             />
+          {/await}
+        {:else if $selection.type === "webgemeindezentrum"}
+          {#await import("./panels/WebgemeindezentrumPanel.svelte")}
+            <p role="status">Lade Webgemeindezentrum…</p>
+          {:then centerPanel}
+            <svelte:component this={centerPanel.default} />
           {/await}
         {:else if $selection.type === "edge"}
           <EdgePanel />

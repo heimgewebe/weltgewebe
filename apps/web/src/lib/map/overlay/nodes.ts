@@ -51,8 +51,21 @@ export class NodesOverlay {
 
   private getMarkerCategory(
     type: MapEntityViewModel["type"],
-  ): "node" | "account" {
-    return type === "garnrolle" ? "account" : "node";
+  ): "node" | "account" | "webgemeindezentrum" {
+    if (type === "garnrolle") return "account";
+    if (type === "webgemeindezentrum") return "webgemeindezentrum";
+    return "node";
+  }
+
+  private syncWebgemeindezentrumAppearance(
+    element: HTMLElement,
+    item: MapEntityViewModel,
+  ) {
+    if (item.type !== "webgemeindezentrum") return;
+    const visual = element.children[0] as HTMLElement | undefined;
+    if (!visual) return;
+    visual.style.borderStyle =
+      item.location_state === "confirmed" ? "" : "dashed";
   }
 
   public update(points: MapEntityViewModel[], showNodes: boolean) {
@@ -81,17 +94,15 @@ export class NodesOverlay {
       const markerCategory = this.getMarkerCategory(item.type);
       let existing = this.activeMarkers.get(item.id);
 
-      // Robustness: Check if category changed (e.g. node became account, unlikely but possible)
-      if (existing) {
-        const isAccount = existing.element.classList.contains("marker-account");
-        const shouldBeAccount = markerCategory === "account";
-
-        if (isAccount !== shouldBeAccount) {
-          // Category mismatch - force recreate
-          existing.cleanup();
-          this.activeMarkers.delete(item.id);
-          existing = undefined;
-        }
+      // A stable id may only keep its DOM marker when the semantic category
+      // is unchanged. Otherwise stale styling/interaction would misdescribe it.
+      if (
+        existing &&
+        existing.element.dataset.markerCategory !== markerCategory
+      ) {
+        existing.cleanup();
+        this.activeMarkers.delete(item.id);
+        existing = undefined;
       }
 
       // Check if we need to update or create
@@ -115,6 +126,13 @@ export class NodesOverlay {
           element.setAttribute("aria-label", item.title);
         }
         element.dataset.testid = `marker-${item.type}-${item.id}`;
+        element.dataset.markerCategory = markerCategory;
+        if (item.type === "webgemeindezentrum") {
+          element.dataset.locationState = item.location_state;
+        } else {
+          delete element.dataset.locationState;
+        }
+        this.syncWebgemeindezentrumAppearance(element, item);
       } else {
         // Create new
         const element = document.createElement("button");
@@ -122,10 +140,16 @@ export class NodesOverlay {
         element.className =
           markerCategory === "account"
             ? "map-marker marker-account"
-            : "map-marker";
+            : markerCategory === "webgemeindezentrum"
+              ? "map-marker marker-webgemeindezentrum"
+              : "map-marker";
 
         // Identifying data for event delegation
         element.dataset.id = item.id;
+        element.dataset.markerCategory = markerCategory;
+        if (item.type === "webgemeindezentrum") {
+          element.dataset.locationState = item.location_state;
+        }
 
         // Robust testing selector based on domain semantics (and unique ID for stability)
         element.dataset.testid = `marker-${item.type}-${item.id}`;
@@ -137,7 +161,9 @@ export class NodesOverlay {
         visual.className =
           markerCategory === "account"
             ? "map-marker__visual marker-account__visual"
-            : "map-marker__visual";
+            : markerCategory === "webgemeindezentrum"
+              ? "map-marker__visual marker-webgemeindezentrum__visual"
+              : "map-marker__visual";
         visual.setAttribute("aria-hidden", "true");
 
         if (markerCategory === "account") {
@@ -148,9 +174,16 @@ export class NodesOverlay {
           icon.setAttribute("aria-hidden", "true");
           icon.draggable = false;
           visual.append(icon);
+        } else if (markerCategory === "webgemeindezentrum") {
+          const icon = document.createElement("span");
+          icon.className = "marker-webgemeindezentrum__icon";
+          icon.textContent = "⌂";
+          icon.setAttribute("aria-hidden", "true");
+          visual.append(icon);
         }
 
         element.append(visual);
+        this.syncWebgemeindezentrumAppearance(element, item);
 
         element.setAttribute("aria-label", item.title);
         element.title = item.title;

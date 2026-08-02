@@ -462,6 +462,31 @@ export async function mockApiResponses(
       });
     }
 
+    // Stable collective structures are empty by default so existing focused
+    // tests keep their explicit marker counts. Tests for the first real
+    // Webgemeindezentrum override this route with a deterministic fixture.
+    if (
+      new URL(url).pathname === "/api/webgemeindezentren" &&
+      method === "GET"
+    ) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockListResponse(url, [])),
+      });
+    }
+
+    if (
+      new URL(url).pathname.startsWith("/api/webgemeindezentren/") &&
+      method === "GET"
+    ) {
+      return route.fulfill({
+        status: 404,
+        contentType: "application/json",
+        body: JSON.stringify({ error: "Webgemeindezentrum not found" }),
+      });
+    }
+
     if (url.includes("/api/health")) {
       return route.fulfill({
         status: 200,

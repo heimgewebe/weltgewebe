@@ -61,6 +61,9 @@ describe("buildPanelEndpoint", () => {
     expect(buildPanelEndpoint("node", "abc", "")).toBe("/api/nodes/abc");
     expect(buildPanelEndpoint("account", "x", "")).toBe("/api/accounts/x");
     expect(buildPanelEndpoint("edge", "1", "")).toBe("/api/edges/1");
+    expect(buildPanelEndpoint("webgemeindezentrum", "center-1", "")).toBe(
+      "/api/webgemeindezentren/center-1",
+    );
   });
 
   it("returns the plural remote endpoint when apiBase is set", () => {
@@ -73,6 +76,9 @@ describe("buildPanelEndpoint", () => {
     expect(buildPanelEndpoint("edge", "1", "http://api.test")).toBe(
       "http://api.test/api/edges/1",
     );
+    expect(
+      buildPanelEndpoint("webgemeindezentrum", "center-1", "http://api.test"),
+    ).toBe("http://api.test/api/webgemeindezentren/center-1");
   });
 });
 

@@ -46,7 +46,7 @@ export const view = writable<ViewToggles>({
 });
 
 export type Selection = {
-  type: "node" | "edge" | "account" | "garnrolle";
+  type: "node" | "edge" | "account" | "garnrolle" | "webgemeindezentrum";
   id: string;
   data?: any;
 } | null;
