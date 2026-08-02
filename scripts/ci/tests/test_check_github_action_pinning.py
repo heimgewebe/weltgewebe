@@ -10,15 +10,15 @@ import unittest
 SCRIPT = Path(__file__).resolve().parents[1] / "check_github_action_pinning.py"
 CACHE_TAG_COMMIT = "55cc8345863c7cc4c66a329aec7e433d2d1c52a9"
 CACHE_UNTAGGED_COMMIT = "3edfce9056124e459a23f683a21433670d47daca"
-EXPECTED_CACHE_WORKFLOWS = (
-    "api-smoke.yml",
-    "auth-passkey-register-proof.yml",
-    "auth-session-persistence-proof.yml",
-    "ci.yml",
-    "kubernetes-platform-proof.yml",
-    "python-tooling.yml",
-    "web.yml",
-)
+EXPECTED_CACHE_WORKFLOWS = {
+    "api-smoke.yml": 1,
+    "auth-passkey-register-proof.yml": 1,
+    "auth-session-persistence-proof.yml": 1,
+    "ci.yml": 4,
+    "kubernetes-platform-proof.yml": 4,
+    "python-tooling.yml": 1,
+    "web.yml": 1,
+}
 
 
 class CheckGitHubActionPinningTest(unittest.TestCase):
@@ -298,17 +298,26 @@ jobs:
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn("selected_tag_commit", json.loads(result.stdout)["error"])
 
-    def test_repository_consumer_contract_requires_exactly_seven_files(self) -> None:
-        workflow = f"""
+    def test_repository_consumer_contract_requires_exact_counts(self) -> None:
+        def workflow(count: int) -> str:
+            uses = "\n".join(
+                f"      - uses: actions/cache@{CACHE_TAG_COMMIT} # tag: v6.1.0"
+                for _ in range(count)
+            )
+            return f"""
 name: cache
 on: workflow_dispatch
 jobs:
   cache:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/cache@{CACHE_TAG_COMMIT} # tag: v6.1.0
+{uses}
 """
-        files = {name: workflow for name in EXPECTED_CACHE_WORKFLOWS}
+
+        files = {
+            name: workflow(count)
+            for name, count in EXPECTED_CACHE_WORKFLOWS.items()
+        }
         result = self.run_checker(
             "name: other\non: workflow_dispatch\njobs: {}\n",
             arguments=("--format", "json"),
@@ -318,18 +327,32 @@ jobs:
         self.assertEqual(result.returncode, 0, result.stdout)
         self.assertEqual(json.loads(result.stdout)["consumer_contract_errors"], [])
 
-        files.pop("web.yml")
+        missing = dict(files)
+        missing.pop("web.yml")
         result = self.run_checker(
             "name: other\non: workflow_dispatch\njobs: {}\n",
             arguments=("--format", "json"),
             repo_marker=True,
-            additional_workflows=files,
+            additional_workflows=missing,
         )
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn(
             ".github/workflows/web.yml",
             " ".join(json.loads(result.stdout)["consumer_contract_errors"]),
         )
+
+        wrong_count = dict(files)
+        wrong_count["ci.yml"] = workflow(3)
+        result = self.run_checker(
+            "name: other\non: workflow_dispatch\njobs: {}\n",
+            arguments=("--format", "json"),
+            repo_marker=True,
+            additional_workflows=wrong_count,
+        )
+        self.assertEqual(result.returncode, 1, result.stdout)
+        errors = " ".join(json.loads(result.stdout)["consumer_contract_errors"])
+        self.assertIn("expected 4 uses", errors)
+        self.assertIn("observed 3", errors)
 
 
 if __name__ == "__main__":

@@ -32,16 +32,16 @@ BLOCKING_POLICIES = {"named-ref", "mutable-default-branch", "missing-ref"}
 BLOCKING_PROVENANCE = {"tag_mismatch", "unresolved"}
 PROVENANCE_ACTIONS = {"actions/cache"}
 
-EXPECTED_ACTION_CONSUMERS: Mapping[str, tuple[str, ...]] = {
-    "actions/cache": (
-        ".github/workflows/api-smoke.yml",
-        ".github/workflows/auth-passkey-register-proof.yml",
-        ".github/workflows/auth-session-persistence-proof.yml",
-        ".github/workflows/ci.yml",
-        ".github/workflows/kubernetes-platform-proof.yml",
-        ".github/workflows/python-tooling.yml",
-        ".github/workflows/web.yml",
-    )
+EXPECTED_ACTION_CONSUMERS: Mapping[str, Mapping[str, int]] = {
+    "actions/cache": {
+        ".github/workflows/api-smoke.yml": 1,
+        ".github/workflows/auth-passkey-register-proof.yml": 1,
+        ".github/workflows/auth-session-persistence-proof.yml": 1,
+        ".github/workflows/ci.yml": 4,
+        ".github/workflows/kubernetes-platform-proof.yml": 4,
+        ".github/workflows/python-tooling.yml": 1,
+        ".github/workflows/web.yml": 1,
+    }
 }
 
 
@@ -276,7 +276,8 @@ def _matching_evidence(
         candidates = [
             item
             for item in candidates
-            if item.declared_tag is None and item.readback_tag_commit == ref.ref_value
+            if item.declared_tag is None
+            and item.readback_tag_commit == ref.ref_value
         ]
     else:
         return None
@@ -338,22 +339,24 @@ def provenance_records(
 
 def consumer_contract_errors(refs: Sequence[ActionRef]) -> list[str]:
     errors: list[str] = []
-    for action, expected_paths in EXPECTED_ACTION_CONSUMERS.items():
+    for action, expected_counts in EXPECTED_ACTION_CONSUMERS.items():
         counts: dict[str, int] = {}
         for ref in refs:
             if ref.target == action:
                 path = ref.workflow.as_posix()
                 counts[path] = counts.get(path, 0) + 1
-        expected = set(expected_paths)
+        expected = set(expected_counts)
         observed = set(counts)
         for path in sorted(expected - observed):
             errors.append(f"{action}: missing expected consumer {path}")
         for path in sorted(observed - expected):
             errors.append(f"{action}: unexpected consumer {path}")
         for path in sorted(expected & observed):
-            if counts[path] != 1:
+            expected_count = expected_counts[path]
+            if counts[path] != expected_count:
                 errors.append(
-                    f"{action}: expected one use in {path}, observed {counts[path]}"
+                    f"{action}: expected {expected_count} uses in {path}, "
+                    f"observed {counts[path]}"
                 )
     return errors
 
