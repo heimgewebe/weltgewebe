@@ -19,6 +19,7 @@ ROOT = Path(__file__).resolve().parents[2]
 CONTRACT_PATH = ROOT / "platform/cell-pilot/two-operator-pilot.contract.json"
 PROFILE_PATH = ROOT / "platform/cell-profile.contract.json"
 EXAMPLE_PATH = ROOT / "platform/cell-pilot/two-operator-pilot.example.invalid.json"
+MAX_DOCUMENT_BYTES = 1024 * 1024
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -1027,10 +1028,22 @@ def validate_document(document: dict[str, Any], expected_mode: str) -> dict[str,
     }
 
 
+def _read_document_text(path: Path) -> str:
+    with path.open("rb") as source:
+        payload = source.read(MAX_DOCUMENT_BYTES + 1)
+    if len(payload) > MAX_DOCUMENT_BYTES:
+        _fail("document-too-large", "document exceeds the 1 MiB input limit")
+    try:
+        return payload.decode("utf-8")
+    except UnicodeDecodeError:
+        _fail("invalid-utf8", "document must use strict UTF-8 encoding")
+    raise AssertionError("unreachable")
+
+
 def validate_path(path: Path, expected_mode: str) -> dict[str, Any]:
     if expected_mode == "activation" and path.name.endswith(".invalid.json"):
         _fail("invalid-example-file", "an .invalid.json example can never be activated")
-    document = _loads_strict(path.read_text(encoding="utf-8"), str(path))
+    document = _loads_strict(_read_document_text(path), str(path))
     if not isinstance(document, dict):
         _fail("invalid-type", "document root must be an object")
     return validate_document(document, expected_mode)

@@ -755,6 +755,28 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             "secret-material",
         )
 
+    def test_document_path_accepts_the_canonical_example(self) -> None:
+        result = validator.validate_path(EXAMPLE_PATH, "example")
+        self.assertEqual(result["status"], "pass")
+
+    def test_document_path_rejects_oversized_input_before_json_parsing(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pilot.json"
+            path.write_bytes(b" " * (validator.MAX_DOCUMENT_BYTES + 1))
+            with self.assertRaisesRegex(
+                validator.PilotContractError, r"^document-too-large:"
+            ):
+                validator.validate_path(path, "example")
+
+    def test_document_path_rejects_non_utf8_input_with_a_stable_error(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "pilot.json"
+            path.write_bytes(b"{\"schema_version\": 1, \"bad\": \"\xff\"}")
+            with self.assertRaisesRegex(
+                validator.PilotContractError, r"^invalid-utf8:"
+            ):
+                validator.validate_path(path, "example")
+
     def test_example_must_keep_all_evidence_redacted(self) -> None:
         document = copy.deepcopy(self.example)
         document["mutual_proofs"]["a_to_b_receipt_sha256"] = "1" * 64
