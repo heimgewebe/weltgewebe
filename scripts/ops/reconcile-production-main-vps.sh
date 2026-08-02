@@ -108,9 +108,12 @@ new_deploy_invocation_id() {
 }
 
 fetch_main() {
+  # A network failure must never fall back to a stale remote-tracking ref.
+  # Propagate both commands explicitly because errexit is not reliable in every
+  # command-substitution context.
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
-    "+refs/heads/main:refs/remotes/origin/main"
-  git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main
+    "+refs/heads/main:refs/remotes/origin/main" || return 1
+  git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
 }
 
 write_state() {
@@ -688,6 +691,10 @@ PY
     esac
     [[ "$(stat --format=%u "$candidate_real")" == "0" ]] ||
       fail "observed release is not root-owned"
+    local candidate_mode
+    candidate_mode="$(stat --format=%a "$candidate_real")"
+    (((8#$candidate_mode & 022) == 0)) ||
+      fail "observed release is group- or world-writable"
     candidate_head="$(git -C "$candidate_real" rev-parse HEAD)"
     [[ "$candidate_head" == "$target_commit" ]] ||
       fail "observed release does not match the public commit"
@@ -708,6 +715,19 @@ PY
   fi
 }
 
+is_terminal_success_state() {
+  case "$1" in
+    consistent_observed_unattested | deferred | verified | verified_observed | \
+      superseded_after_observe | superseded_after_migration | \
+      superseded_after_deploy | superseded_after_verify)
+      return 0
+      ;;
+    *)
+      return 1
+      ;;
+  esac
+}
+
 cleanup() {
   local rc=$?
   trap - EXIT
@@ -720,7 +740,8 @@ cleanup() {
   if [[ -n "$source_archive" && -f "$source_archive" && ! -L "$source_archive" ]]; then
     rm -f -- "$source_archive"
   fi
-  if ((rc != 0)) && [[ -n "$target_commit" && ! "$state_result" =~ ^(verified|superseded) ]]; then
+  if ((rc != 0)) && [[ -n "$target_commit" ]] &&
+    ! is_terminal_success_state "$state_result"; then
     write_state "failed" "" "reconciler exit code $rc" || true
   fi
   exit "$rc"
@@ -762,29 +783,288 @@ prune_deploy_contention_receipts() {
   fi
 }
 
+path_contains_mount() {
+  local target_path="$1"
+  local boundary_path="$2"
+  run_ops_python "$target_path" "$boundary_path" /proc/self/mountinfo << 'PY'
+import os
+import sys
+
+
+def decode_mount_path(value: str) -> str:
+    for escaped, plain in (
+        (r"\040", " "),
+        (r"\011", "\t"),
+        (r"\012", "\n"),
+        (r"\134", "\\"),
+    ):
+        value = value.replace(escaped, plain)
+    return value
+
+
+target = os.path.realpath(sys.argv[1])
+boundary = os.path.realpath(sys.argv[2])
+mountinfo_path = sys.argv[3]
+boundary_prefix = boundary + os.sep
+if target != boundary and not target.startswith(boundary_prefix):
+    raise SystemExit(2)
+target_prefix = target + os.sep
+with open(mountinfo_path, encoding="utf-8") as mountinfo:
+    for raw_line in mountinfo:
+        fields = raw_line.split()
+        if len(fields) < 5:
+            raise SystemExit(2)
+        mount_path = decode_mount_path(fields[4])
+        mount_within_boundary = (
+            mount_path == boundary or mount_path.startswith(boundary_prefix)
+        )
+        target_within_mount = target == mount_path or target.startswith(
+            mount_path + os.sep
+        )
+        mount_within_target = mount_path == target or mount_path.startswith(
+            target_prefix
+        )
+        if mount_within_boundary and (target_within_mount or mount_within_target):
+            raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+cleanup_release_runtime_paths() {
+  local release_dir="$1"
+  local release_real
+  local web_parent_path="$release_dir/apps/web"
+  local web_build_path="$web_parent_path/build"
+  local web_build_real
+  local basemap_path="$release_dir/build/basemap"
+  local basemap_real
+  local mount_rc
+  local protected_path
+  local unsafe_path
+
+  release_real="$(realpath -e -- "$release_dir")" || return 1
+  [[ "$release_real" == "$release_dir" ]] || {
+    echo "release cleanup path changed identity: $release_dir" >&2
+    return 1
+  }
+
+  for protected_path in "$release_real" "$release_dir/apps" "$web_parent_path" "$release_dir/build"; do
+    [[ -e "$protected_path" || -L "$protected_path" ]] || continue
+    [[ -d "$protected_path" && ! -L "$protected_path" ]] || {
+      echo "release cleanup parent is unsafe: $protected_path" >&2
+      return 1
+    }
+    if ! unsafe_path="$(
+      find "$protected_path" -maxdepth 0 -xdev \( ! -user "$EUID" -o -perm /022 \) -print -quit
+    )"; then
+      echo "could not inspect release cleanup parent: $protected_path" >&2
+      return 1
+    fi
+    [[ -z "$unsafe_path" ]] || {
+      echo "release cleanup parent is not exclusively owned and protected: $unsafe_path" >&2
+      return 1
+    }
+  done
+
+  for protected_path in "$web_parent_path" "$release_dir/build"; do
+    [[ -d "$protected_path" && ! -L "$protected_path" ]] || continue
+    if path_contains_mount "$protected_path" "$release_real"; then
+      echo "release cleanup parent intersects a mount: $protected_path" >&2
+      return 1
+    else
+      mount_rc=$?
+      ((mount_rc == 1)) || {
+        echo "could not verify release cleanup parent mount state: $protected_path" >&2
+        return 1
+      }
+    fi
+  done
+
+  if [[ -L "$web_build_path" ]]; then
+    if ! rm -f -- "$web_build_path"; then
+      echo "could not unlink release web build symlink: $web_build_path" >&2
+      return 1
+    fi
+  elif [[ -d "$web_build_path" ]]; then
+    web_build_real="$(realpath -e -- "$web_build_path")" || return 1
+    case "$web_build_real" in
+      "$release_real"/*) ;;
+      *)
+        echo "release web build escaped release root: $web_build_path" >&2
+        return 1
+        ;;
+    esac
+    if path_contains_mount "$web_build_real" "$release_real"; then
+      echo "release web build contains a mount: $web_build_path" >&2
+      return 1
+    else
+      mount_rc=$?
+      ((mount_rc == 1)) || {
+        echo "could not verify release web build mount state: $web_build_path" >&2
+        return 1
+      }
+    fi
+    if ! rm -rf --one-file-system -- "$web_build_real"; then
+      echo "could not remove release web build: $web_build_path" >&2
+      return 1
+    fi
+  elif [[ -e "$web_build_path" ]]; then
+    echo "release web build has an unexpected file type: $web_build_path" >&2
+    return 1
+  fi
+  if [[ -L "$basemap_path" ]]; then
+    if ! rm -f -- "$basemap_path"; then
+      echo "could not unlink release basemap symlink: $basemap_path" >&2
+      return 1
+    fi
+  elif [[ -d "$basemap_path" ]]; then
+    basemap_real="$(realpath -e -- "$basemap_path")" || return 1
+    case "$basemap_real" in
+      "$release_real"/*) ;;
+      *)
+        echo "legacy release basemap escaped release root: $basemap_path" >&2
+        return 1
+        ;;
+    esac
+
+    if path_contains_mount "$basemap_real" "$release_real"; then
+      echo "legacy release basemap contains a mount: $basemap_path" >&2
+      return 1
+    else
+      mount_rc=$?
+      ((mount_rc == 1)) || {
+        echo "could not verify legacy release basemap mount state: $basemap_path" >&2
+        return 1
+      }
+    fi
+
+    if ! unsafe_path="$(
+      find "$basemap_real" -xdev \
+        \( -type f -o -type d \) \
+        \( ! -user "$EUID" -o -perm /022 \) -print -quit
+    )"; then
+      echo "could not inspect legacy release basemap: $basemap_path" >&2
+      return 1
+    fi
+    [[ -z "$unsafe_path" ]] || {
+      echo "legacy release basemap is not exclusively owned and protected: $unsafe_path" >&2
+      return 1
+    }
+    if ! rm -rf --one-file-system -- "$basemap_real"; then
+      echo "could not remove legacy release basemap: $basemap_path" >&2
+      return 1
+    fi
+  elif [[ -e "$basemap_path" ]]; then
+    echo "legacy release basemap has an unexpected file type: $basemap_path" >&2
+    return 1
+  fi
+  rmdir "$release_dir/build" 2> /dev/null || true
+}
+
 prune_releases() {
+  local release_root_real
   local current_release=""
   local previous_release=""
+  local current_name
+  local previous_name
+  local release_candidates
   local release_dir
   local release_name
   local release_head
-  current_release="$(readlink -f "$STATE_ROOT/current-release" 2> /dev/null || true)"
-  previous_release="$(readlink -f "$STATE_ROOT/previous-release" 2> /dev/null || true)"
-  while IFS= read -r release_dir; do
-    [[ "$release_dir" == "$current_release" || "$release_dir" == "$previous_release" ]] && continue
-    release_name="${release_dir##*/}"
+  local release_status
+  local release_mode
+
+  release_root_real="$(realpath -e -- "$RELEASE_ROOT")" || {
+    echo "skipping release pruning: release root is unavailable" >&2
+    return 0
+  }
+  if [[ -e "$STATE_ROOT/current-release" || -L "$STATE_ROOT/current-release" ]]; then
+    [[ -L "$STATE_ROOT/current-release" ]] || {
+      echo "skipping release pruning: current release marker is unsafe" >&2
+      return 0
+    }
+    current_release="$(readlink -f "$STATE_ROOT/current-release" 2> /dev/null || true)"
+  fi
+  if [[ -e "$STATE_ROOT/previous-release" || -L "$STATE_ROOT/previous-release" ]]; then
+    [[ -L "$STATE_ROOT/previous-release" ]] || {
+      echo "skipping release pruning: previous release marker is unsafe" >&2
+      return 0
+    }
+    previous_release="$(readlink -f "$STATE_ROOT/previous-release" 2> /dev/null || true)"
+    if [[ -z "$previous_release" ]]; then
+      echo "skipping release pruning: previous release marker is broken" >&2
+      return 0
+    fi
+  fi
+  if [[ -z "$current_release" ]]; then
+    echo "skipping release pruning: current release marker is unavailable" >&2
+    return 0
+  fi
+
+  current_name="${current_release##*/}"
+  if [[ "${current_release%/*}" != "$release_root_real" ||
+    ! "$current_name" =~ ^[0-9a-f]{40}$ ||
+    ! -d "$current_release" || -L "$current_release" ]]; then
+    echo "skipping release pruning: current release marker is not a canonical release" >&2
+    return 0
+  fi
+  [[ "$(stat --format=%u "$current_release")" == "0" ]] || {
+    echo "skipping release pruning: current release is not root-owned" >&2
+    return 0
+  }
+  release_mode="$(stat --format=%a "$current_release")"
+  (((8#$release_mode & 022) == 0)) || {
+    echo "skipping release pruning: current release is group- or world-writable" >&2
+    return 0
+  }
+
+  if [[ -n "$previous_release" ]]; then
+    previous_name="${previous_release##*/}"
+    if [[ "${previous_release%/*}" != "$release_root_real" ||
+      ! "$previous_name" =~ ^[0-9a-f]{40}$ ||
+      ! -d "$previous_release" || -L "$previous_release" ]]; then
+      echo "skipping release pruning: previous release marker is not a canonical release" >&2
+      return 0
+    fi
+    [[ "$(stat --format=%u "$previous_release")" == "0" ]] || {
+      echo "skipping release pruning: previous release is not root-owned" >&2
+      return 0
+    }
+    release_mode="$(stat --format=%a "$previous_release")"
+    (((8#$release_mode & 022) == 0)) || {
+      echo "skipping release pruning: previous release is group- or world-writable" >&2
+      return 0
+    }
+  fi
+
+  if ! release_candidates="$(
+    find "$release_root_real" -mindepth 1 -maxdepth 1 -type d -mtime +14 -printf '%f\n'
+  )"; then
+    echo "could not enumerate release pruning candidates" >&2
+    return 1
+  fi
+
+  while IFS= read -r release_name; do
+    [[ -n "$release_name" ]] || continue
     [[ "$release_name" =~ ^[0-9a-f]{40}$ ]] || continue
+    release_dir="$release_root_real/$release_name"
+    [[ "$release_dir" == "$current_release" || "$release_dir" == "$previous_release" ]] && continue
     [[ -d "$release_dir" && ! -L "$release_dir" ]] || continue
     [[ "$(stat --format=%u "$release_dir")" == "0" ]] || continue
     release_head="$(git -C "$release_dir" rev-parse HEAD 2> /dev/null || true)"
     [[ "$release_head" == "$release_name" ]] || continue
-    rm -rf -- "$release_dir/apps/web/build"
-    rm -f -- "$release_dir/build/basemap"
-    rmdir "$release_dir/build" 2> /dev/null || true
-    if [[ -z "$(git -C "$release_dir" status --porcelain --untracked-files=normal)" ]]; then
+    if ! cleanup_release_runtime_paths "$release_dir"; then
+      echo "retaining release after guarded cleanup refusal: $release_dir" >&2
+      continue
+    fi
+    if ! release_status="$(git -C "$release_dir" status --porcelain --untracked-files=normal)"; then
+      echo "retaining release after Git status failure: $release_dir" >&2
+      continue
+    fi
+    if [[ -z "$release_status" ]]; then
       git -C "$SOURCE_CHECKOUT" worktree remove "$release_dir"
     fi
-  done < <(find "$RELEASE_ROOT" -mindepth 1 -maxdepth 1 -type d -mtime +14 -print)
+  done <<< "$release_candidates"
   git -C "$SOURCE_CHECKOUT" worktree prune --expire=now
 }
 

@@ -212,6 +212,104 @@ fetch_main() {
   git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
 }
 
+path_contains_mount() {
+  local target_path="$1"
+  local boundary_path="$2"
+  run_ops_python "$target_path" "$boundary_path" /proc/self/mountinfo << 'PY'
+import os
+import sys
+
+
+def decode_mount_path(value: str) -> str:
+    for escaped, plain in (
+        (r"\040", " "),
+        (r"\011", "\t"),
+        (r"\012", "\n"),
+        (r"\134", "\\"),
+    ):
+        value = value.replace(escaped, plain)
+    return value
+
+
+target = os.path.realpath(sys.argv[1])
+boundary = os.path.realpath(sys.argv[2])
+mountinfo_path = sys.argv[3]
+boundary_prefix = boundary + os.sep
+if target != boundary and not target.startswith(boundary_prefix):
+    raise SystemExit(2)
+target_prefix = target + os.sep
+with open(mountinfo_path, encoding="utf-8") as mountinfo:
+    for raw_line in mountinfo:
+        fields = raw_line.split()
+        if len(fields) < 5:
+            raise SystemExit(2)
+        mount_path = decode_mount_path(fields[4])
+        mount_within_boundary = (
+            mount_path == boundary or mount_path.startswith(boundary_prefix)
+        )
+        target_within_mount = target == mount_path or target.startswith(
+            mount_path + os.sep
+        )
+        mount_within_target = mount_path == target or mount_path.startswith(
+            target_prefix
+        )
+        if mount_within_boundary and (target_within_mount or mount_within_target):
+            raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+remove_release_web_build() {
+  local web_parent_path="$release_dir/apps/web"
+  local web_build_path="$web_parent_path/build"
+  local web_build_real
+  local mount_rc
+  local protected_path
+  local unsafe_path
+
+  for protected_path in "$release_real" "$release_dir/apps" "$web_parent_path"; do
+    [[ -d "$protected_path" && ! -L "$protected_path" ]] ||
+      fail "release web cleanup parent is unsafe: $protected_path"
+    if ! unsafe_path="$(
+      find "$protected_path" -maxdepth 0 -xdev \
+        \( ! -user "$EUID" -o -perm /022 \) -print -quit
+    )"; then
+      fail "could not inspect release web cleanup parent: $protected_path"
+    fi
+    [[ -z "$unsafe_path" ]] ||
+      fail "release web cleanup parent is not exclusively owned and protected: $unsafe_path"
+  done
+
+  if path_contains_mount "$web_parent_path" "$release_real"; then
+    fail "release web cleanup parent intersects a mount: $web_parent_path"
+  else
+    mount_rc=$?
+    ((mount_rc == 1)) ||
+      fail "could not verify release web cleanup parent mount state: $web_parent_path"
+  fi
+
+  if [[ -L "$web_build_path" ]]; then
+    rm -f -- "$web_build_path" || fail "could not unlink release web build symlink"
+  elif [[ -d "$web_build_path" ]]; then
+    web_build_real="$(realpath -e -- "$web_build_path")" ||
+      fail "could not resolve release web build"
+    case "$web_build_real" in
+      "$release_real"/*) ;;
+      *) fail "release web build escaped release root" ;;
+    esac
+    if path_contains_mount "$web_build_real" "$release_real"; then
+      fail "release web build contains a mount"
+    else
+      mount_rc=$?
+      ((mount_rc == 1)) || fail "could not verify release web build mount state"
+    fi
+    rm -rf --one-file-system -- "$web_build_real" ||
+      fail "could not remove release web build"
+  elif [[ -e "$web_build_path" ]]; then
+    fail "release web build has an unexpected file type"
+  fi
+}
+
 write_deploy_receipt() {
   local result="$1"
   local completed_at="$2"
@@ -413,7 +511,7 @@ validate_release_tree
 "$ARCHIVE_VALIDATOR" "$artifact_real"
 validated_artifact_sha="$(sha256sum "$artifact_real" | awk '{print $1}')"
 [[ "$validated_artifact_sha" == "$WEB_SHA256" ]] || fail "web artifact changed during validation"
-rm -rf -- "$release_dir/apps/web/build"
+remove_release_web_build
 tar --no-same-owner --no-same-permissions -xzf "$artifact_real" -C "$release_dir/apps/web"
 chown -R --no-dereference root:root "$release_dir/apps/web/build"
 find "$release_dir/apps/web/build" -type d -exec chmod 0755 {} +

@@ -169,6 +169,390 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertGreaterEqual(script.count('sha256sum "$artifact_real"'), 2)
         self.assertIn('write_deploy_receipt \\\n      "failed"', script)
 
+    def run_release_cleanup(self, release: Path) -> subprocess.CompletedProcess[str]:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        start = script.index("path_contains_mount() {")
+        end = script.index("\nprune_releases() {", start)
+        cleanup_functions = script[start:end]
+        command = f"""set -Eeuo pipefail
+SCRIPT_DIR={str(ROOT / 'scripts/ops')!r}
+run_ops_python() {{
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}}
+{cleanup_functions}
+cleanup_release_runtime_paths "$1"
+"""
+        return subprocess.run(
+            ["bash", "-c", command, "release-cleanup-test", str(release)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def run_deploy_web_cleanup(self, release: Path) -> subprocess.CompletedProcess[str]:
+        script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
+        start = script.index("path_contains_mount() {")
+        end = script.index("\nwrite_deploy_receipt() {", start)
+        cleanup_functions = script[start:end]
+        command = f"""set -Eeuo pipefail
+SCRIPT_DIR={str(ROOT / 'scripts/ops')!r}
+run_ops_python() {{
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}}
+fail() {{
+  echo "ERROR: $*" >&2
+  exit 1
+}}
+release_dir="$1"
+release_real="$(realpath -e -- "$release_dir")"
+{cleanup_functions}
+remove_release_web_build
+"""
+        return subprocess.run(
+            ["bash", "-c", command, "deploy-web-cleanup-test", str(release)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_reconciler_preserves_explicit_terminal_success_states(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        start = script.index("is_terminal_success_state() {")
+        end = script.index("\ntrap cleanup EXIT", start)
+        cleanup_functions = script[start:end]
+        terminal_states = (
+            "consistent_observed_unattested",
+            "deferred",
+            "verified",
+            "verified_observed",
+            "superseded_after_observe",
+            "superseded_after_migration",
+            "superseded_after_deploy",
+            "superseded_after_verify",
+        )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            command = f"""set +e
+temporary_artifact=""
+temporary_source=""
+source_archive=""
+target_commit=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+state_result="$1"
+OUTPUT="$2"
+write_state() {{
+  printf '%s\n' "$1" > "$OUTPUT"
+}}
+{cleanup_functions}
+false
+cleanup
+"""
+            for state in terminal_states:
+                output = root / f"{state}.txt"
+                result = subprocess.run(
+                    ["bash", "-c", command, "state-test", state, str(output)],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 1, state)
+                self.assertFalse(output.exists(), state)
+
+            output = root / "building.txt"
+            result = subprocess.run(
+                ["bash", "-c", command, "state-test", "building", str(output)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual(output.read_text(encoding="utf-8"), "failed\n")
+
+        self.assertIn('! is_terminal_success_state "$state_result"', script)
+        self.assertNotIn('^\(verified|superseded\)', script)
+
+    def test_deploy_helper_web_cleanup_is_boundary_guarded(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("6" * 40)
+            web = release / "apps/web"
+            external = root / "external-web"
+            web.mkdir(parents=True)
+            external.mkdir()
+            sentinel = external / "sentinel"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (web / "build").symlink_to(external, target_is_directory=True)
+
+            result = self.run_deploy_web_cleanup(release)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((web / "build").exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("7" * 40)
+            apps = release / "apps"
+            external = root / "external-web"
+            external_build = external / "build"
+            apps.mkdir(parents=True)
+            external_build.mkdir(parents=True)
+            sentinel = external_build / "sentinel"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (apps / "web").symlink_to(external, target_is_directory=True)
+
+            result = self.run_deploy_web_cleanup(release)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("cleanup parent is unsafe", result.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+        script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
+        self.assertIn('path_contains_mount "$web_build_real" "$release_real"', script)
+        self.assertIn('rm -rf --one-file-system -- "$web_build_real"', script)
+        self.assertNotIn('rm -rf -- "$release_dir/apps/web/build"', script)
+
+    def test_reconciler_prunes_legacy_basemap_directory_safely(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("a" * 40)
+            legacy_basemap = release / "build/basemap"
+            web_build = release / "apps/web/build"
+            persistent_basemap = root / "persistent-basemap"
+            legacy_basemap.mkdir(parents=True)
+            web_build.mkdir(parents=True)
+            persistent_basemap.mkdir()
+            (legacy_basemap / "legacy.pmtiles").write_text("legacy", encoding="utf-8")
+            (web_build / "index.html").write_text("generated", encoding="utf-8")
+            sentinel = persistent_basemap / "canonical.pmtiles"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (legacy_basemap / "external-link").symlink_to(sentinel)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(legacy_basemap.exists())
+            self.assertFalse(web_build.exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+    def test_reconciler_unlinks_basemap_symlink_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("b" * 40)
+            build = release / "build"
+            persistent_basemap = root / "persistent-basemap"
+            build.mkdir(parents=True)
+            persistent_basemap.mkdir()
+            sentinel = persistent_basemap / "canonical.pmtiles"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (build / "basemap").symlink_to(persistent_basemap, target_is_directory=True)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((build / "basemap").exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+    def test_reconciler_unlinks_web_build_symlink_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("f" * 40)
+            web = release / "apps/web"
+            external = root / "external-web"
+            web.mkdir(parents=True)
+            external.mkdir()
+            sentinel = external / "sentinel"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (web / "build").symlink_to(external, target_is_directory=True)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((web / "build").exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+    def test_reconciler_refuses_intermediate_web_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("1" * 40)
+            apps = release / "apps"
+            external = root / "external-web"
+            external_build = external / "build"
+            apps.mkdir(parents=True)
+            external_build.mkdir(parents=True)
+            sentinel = external_build / "sentinel"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (apps / "web").symlink_to(external, target_is_directory=True)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("release cleanup parent is unsafe", result.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+    def test_reconciler_refuses_unprotected_legacy_basemap_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            release = Path(temporary) / ("c" * 40)
+            legacy_basemap = release / "build/basemap"
+            legacy_basemap.mkdir(parents=True)
+            unsafe = legacy_basemap / "mutable.pmtiles"
+            unsafe.write_text("mutable", encoding="utf-8")
+            unsafe.chmod(0o666)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("not exclusively owned and protected", result.stderr)
+            self.assertTrue(unsafe.exists())
+
+    def test_reconciler_retains_release_when_guarded_cleanup_refuses(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        start = script.index("path_contains_mount() {")
+        end = script.index('\n[[ "$EUID" -eq 0 ]]', start)
+        cleanup_functions = script[start:end]
+        command = f"""set -Eeuo pipefail
+SCRIPT_DIR={str(ROOT / 'scripts/ops')!r}
+STATE_ROOT="$1/state"
+RELEASE_ROOT="$1/releases"
+SOURCE_CHECKOUT="$1/source"
+mkdir -p "$STATE_ROOT" "$RELEASE_ROOT" "$SOURCE_CHECKOUT"
+protected_release="$RELEASE_ROOT/0000000000000000000000000000000000000000"
+mkdir -p "$protected_release"
+ln -s "$protected_release" "$STATE_ROOT/current-release"
+run_ops_python() {{
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}}
+stat() {{
+  printf '0\n'
+}}
+git() {{
+  if [[ "$#" -ge 4 && "$1" == "-C" && "$3" == "rev-parse" && "$4" == "HEAD" ]]; then
+    printf '%s\n' "${{2##*/}}"
+  fi
+  return 0
+}}
+rm() {{
+  if [[ "${{FAIL_WEB_RM:-0}}" == "1" && "$*" == *"/apps/web/build"* ]]; then
+    return 1
+  fi
+  command rm "$@"
+}}
+{cleanup_functions}
+prune_releases
+"""
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / "releases" / ("d" * 40)
+            unsafe = release / "build/basemap/mutable.pmtiles"
+            unsafe.parent.mkdir(parents=True)
+            unsafe.write_text("mutable", encoding="utf-8")
+            unsafe.chmod(0o666)
+            old = 1_600_000_000
+            os.utime(release, (old, old))
+
+            result = subprocess.run(
+                ["bash", "-c", command, "release-prune-test", str(root)],
+                cwd=ROOT,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(unsafe.exists())
+            self.assertIn(
+                "retaining release after guarded cleanup refusal", result.stderr
+            )
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / "releases" / ("e" * 40)
+            generated = release / "apps/web/build/index.html"
+            generated.parent.mkdir(parents=True)
+            generated.write_text("generated", encoding="utf-8")
+            old = 1_600_000_000
+            os.utime(release, (old, old))
+            environment = dict(os.environ)
+            environment["FAIL_WEB_RM"] = "1"
+
+            result = subprocess.run(
+                ["bash", "-c", command, "release-prune-test", str(root)],
+                cwd=ROOT,
+                env=environment,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertTrue(generated.exists())
+            self.assertIn("could not remove release web build", result.stderr)
+            self.assertIn(
+                "retaining release after guarded cleanup refusal", result.stderr
+            )
+
+    def test_mount_intersection_detects_ancestor_and_descendant_mounts(self) -> None:
+        for script_path in (
+            "scripts/ops/reconcile-production-main-vps.sh",
+            "scripts/ops/deploy-exact-commit-vps.sh",
+        ):
+            script = self.read(script_path)
+            function_start = script.index("path_contains_mount() {")
+            source_start = script.index("import os\n", function_start)
+            source_end = script.index("\nPY\n}", source_start)
+            source = script[source_start:source_end]
+
+            with tempfile.TemporaryDirectory() as temporary:
+                root = Path(temporary).resolve()
+                boundary = root / "release"
+                target = boundary / "apps/web/build"
+                target.mkdir(parents=True)
+
+                def probe(*mount_paths: Path) -> int:
+                    mountinfo = root / "mountinfo"
+                    mountinfo.write_text(
+                        "".join(
+                            f"36 25 0:32 / {path} rw - ext4 /dev/root rw\n"
+                            for path in mount_paths
+                        ),
+                        encoding="utf-8",
+                    )
+                    return subprocess.run(
+                        [
+                            sys.executable,
+                            "-I",
+                            "-",
+                            str(target),
+                            str(boundary),
+                            str(mountinfo),
+                        ],
+                        input=source,
+                        text=True,
+                        capture_output=True,
+                        check=False,
+                    ).returncode
+
+                self.assertEqual(probe(boundary / "apps/web"), 0, script_path)
+                self.assertEqual(probe(target / "cache"), 0, script_path)
+                self.assertEqual(probe(boundary), 0, script_path)
+                self.assertEqual(
+                    probe(Path("/"), root / "outside"), 1, script_path
+                )
+
+    def test_reconciler_release_cleanup_is_mount_and_boundary_guarded(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        self.assertIn('/proc/self/mountinfo', script)
+        self.assertIn('mount_within_boundary', script)
+        self.assertIn('target_within_mount', script)
+        self.assertIn('legacy release basemap contains a mount', script)
+        self.assertIn('legacy release basemap escaped release root', script)
+        self.assertIn('rm -rf --one-file-system -- "$basemap_real"', script)
+        self.assertNotIn('rm -f -- "$release_dir/build/basemap"', script)
+
     def test_reconciler_has_bounded_storage_and_state_transitions(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
         for state in (
@@ -188,6 +572,16 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("MIN_FREE_KIB", script)
         self.assertIn("prune_artifacts", script)
         self.assertIn("prune_releases", script)
+        self.assertIn("current release marker is unavailable", script)
+        self.assertIn("retaining release after Git status failure", script)
+        self.assertIn('realpath -e -- "$RELEASE_ROOT"', script)
+        self.assertIn(
+            '"+refs/heads/main:refs/remotes/origin/main" || return 1', script
+        )
+        self.assertIn(
+            "rev-parse refs/remotes/origin/main || return 1", script
+        )
+        self.assertIn("observed release is group- or world-writable", script)
         self.assertIn('rm -f -- "$source_archive"', script)
         self.assertIn('worktree remove "$release_dir"', script)
         self.assertNotIn("worktree remove --force", script)

@@ -208,7 +208,22 @@ werden auf höchstens 20 Exemplare und grundsätzlich sieben Tage begrenzt.
 Release-Worktrees werden frühestens nach 14 Tagen entfernt. Der aktuelle und der
 vorherige Release bleiben geschützt. Ein Worktree wird nur ohne `--force`
 entfernt, wenn er root-eigen, commitförmig, unverändert und nicht einer der zwei
-geschützten Releases ist.
+geschützten Releases ist. Historische Releases können unter `build/basemap`
+noch ein echtes Verzeichnis statt des heutigen Symlinks enthalten. Der
+Reconciler entfernt ein solches Altverzeichnis nur innerhalb des gebundenen
+Release-Worktrees, wenn darunter kein Mount liegt und alle Inhalte dem
+Reconciler-Nutzer gehören sowie weder gruppen- noch weltbeschreibbar sind. Auch
+der Web-Build-Pfad wird im Reconciler und im exakten Deploy-Helfer vor der
+Löschung realpfadgebunden geprüft; Symlinks in seinen Elternverzeichnissen sowie
+Mounts zwischen Release-Grenze und Ziel oder unter dem Ziel führen zur
+Verweigerung. Ein finaler Symlink wird jeweils nur gelöst, sein Ziel nie rekursiv
+verfolgt. Kann die sichere Bereinigung eines historischen Releases nicht belegt
+werden, bleibt dieser Worktree erhalten und die Prüfung fährt mit dem nächsten
+Kandidaten fort. Andere Wartungsfehler bleiben weiterhin sichtbar und können den
+Unit-Lauf fehlschlagen lassen. Ein bereits geschriebener terminaler Erfolgsbeleg
+wie `consistent_observed_unattested`, `deferred`, `verified` oder ein
+`superseded_*`-Ergebnis wird dadurch jedoch nicht nachträglich als `failed`
+umgeschrieben.
 
 ## Öffentlicher Nachweis
 
