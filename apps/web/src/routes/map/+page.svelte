@@ -68,7 +68,7 @@
   import { getGarnrolleMarkerScale } from "$lib/map/markerScale";
   import { buildMapScene } from "$lib/map/scene";
 
-  import { NodesOverlay } from "$lib/map/overlay/nodes";
+  import type { NodesOverlay as NodesOverlayController } from "$lib/map/overlay/nodes";
   import { updateEdges } from "$lib/map/overlay/edges";
   import {
     FADEN_PROJECTION_REFRESH_MS,
@@ -209,7 +209,7 @@
   let edgeExpiryTimeout: ReturnType<typeof setTimeout> | undefined;
   let lastFocusedElement: HTMLElement | null = null;
 
-  let nodesOverlay: NodesOverlay | null = null;
+  let nodesOverlay: NodesOverlayController | null = null;
   let searchDirectionIndicators: SearchDirectionIndicator[] = [];
   let searchDirectionFrame: number | null = null;
   let usableSearchViewportCache: ViewportBounds | null = null;
@@ -365,6 +365,10 @@
 
   $: if (nodesOverlay) {
     nodesOverlay.updateSearchMatches(searchMatchIds);
+  }
+
+  $: if (nodesOverlay) {
+    nodesOverlay.updateSelection($selection?.id ?? null);
   }
 
   // Search content changes only require indicator and highlight refreshes. ResizeObserver already
@@ -685,7 +689,10 @@
     (async () => {
       // Public map rendering never waits for session verification. Auth loads
       // after map creation and may perform one guarded convergence later.
-      const maplibregl = await import("maplibre-gl");
+      const [maplibregl, { NodesOverlay }] = await Promise.all([
+        import("maplibre-gl"),
+        import("$lib/map/overlay/nodes"),
+      ]);
       const initialAuth = { authenticated: false };
       if (destroyed) return;
       const container = mapContainer;
@@ -932,109 +939,6 @@
   }
   #map :global(canvas) {
     filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95);
-  }
-
-  /*
-   * MapLibre owns the outer marker transform and updates it every render frame.
-   * Weltgewebe effects belong on the inner visual so markers stay map-locked.
-   */
-  #map :global(.map-marker) {
-    appearance: none;
-    -webkit-appearance: none;
-    width: 44px;
-    height: 44px;
-    min-width: 0;
-    min-height: 0;
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-    border: 0;
-    border-radius: 0;
-    background: transparent;
-    display: grid;
-    place-items: center;
-    color: var(--bg);
-    cursor: pointer;
-    box-shadow: none;
-    transition: none;
-  }
-
-  #map :global(.map-marker__visual) {
-    width: 24px;
-    height: 24px;
-    box-sizing: border-box;
-    border-radius: 999px;
-    border: 2px solid var(--panel-border);
-    background: var(--accent, #ff8c42);
-    display: grid;
-    place-items: center;
-    color: var(--bg);
-    box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.25);
-    align-self: end;
-    justify-self: center;
-    transform-origin: center;
-    transition: transform 0.15s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    pointer-events: none;
-  }
-
-  #map :global(.marker-account) {
-    width: 44px;
-    height: 44px;
-  }
-
-  #map :global(.marker-account__visual) {
-    width: 44px;
-    height: 44px;
-    background: transparent;
-    border: none;
-    box-shadow: none;
-    border-radius: 0;
-    transform-origin: center bottom;
-  }
-
-  #map :global(.marker-account__icon) {
-    display: block;
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    transform: scale(var(--garnrolle-marker-scale, 1));
-    transform-origin: center bottom;
-    pointer-events: none;
-    user-select: none;
-    -webkit-user-drag: none;
-  }
-
-  @media (hover: hover) and (pointer: fine) {
-    #map :global(.map-marker:hover .map-marker__visual) {
-      transform: scale(1.2);
-    }
-    #map :global(.map-marker:hover) {
-      z-index: 10;
-    }
-  }
-
-  #map :global(.map-marker:focus-visible) {
-    outline: 2px solid var(--text);
-    outline-offset: 2px;
-    z-index: 10;
-  }
-
-  #map :global(.map-marker.search-highlight) {
-    outline: 2px solid var(--primary, #005fcc);
-    outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--primary, rgba(0, 95, 204, 0.6));
-    z-index: 5;
-  }
-
-  #map :global(.marker-account.search-highlight) {
-    outline: 2px solid var(--primary, #005fcc);
-    outline-offset: 2px;
-    box-shadow: 0 0 8px 2px var(--primary, rgba(0, 95, 204, 0.6));
-  }
-
-  #map :global(.marker-account:focus-visible) {
-    outline: 2px solid var(--accent);
-    outline-offset: 2px;
   }
 
   #map :global(.maplibregl-ctrl-bottom-right) {

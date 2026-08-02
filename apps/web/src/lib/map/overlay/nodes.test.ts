@@ -28,6 +28,13 @@ class FakeClassList {
   remove(value: string) {
     this.values.delete(value);
   }
+
+  toggle(value: string, force?: boolean) {
+    const enabled = force ?? !this.values.has(value);
+    if (enabled) this.values.add(value);
+    else this.values.delete(value);
+    return enabled;
+  }
 }
 
 class FakeElement {
@@ -57,8 +64,20 @@ class FakeElement {
     this.attributes.set(name, value);
   }
 
-  append(child: FakeElement) {
-    this.children.push(child);
+  getAttribute(name: string) {
+    return this.attributes.get(name) ?? null;
+  }
+
+  hasAttribute(name: string) {
+    return this.attributes.has(name);
+  }
+
+  removeAttribute(name: string) {
+    this.attributes.delete(name);
+  }
+
+  append(...children: FakeElement[]) {
+    this.children.push(...children);
   }
 }
 
@@ -223,6 +242,43 @@ describe("NodesOverlay search-highlight lifecycle", () => {
     expect(overlay.getActiveMarker("a")?.element.dataset.searchMatch).toBe(
       "true",
     );
+  });
+});
+
+describe("NodesOverlay selection lifecycle", () => {
+  it("applies a selected state as a round-halo hook without recreating markers", () => {
+    const overlay = makeOverlay();
+    overlay.update([makeNode("a"), makeNode("b")], true);
+    const markerA = overlay.getActiveMarker("a");
+
+    overlay.updateSelection("a");
+    expect(markerA?.element.classList.contains("is-selected")).toBe(true);
+    expect(markerA?.element.dataset.selected).toBe("true");
+    expect(markerA?.element.getAttribute("aria-current")).toBe("true");
+    expect(
+      markerA?.element.children[0].classList.contains("marker-node__visual"),
+    ).toBe(true);
+    expect(
+      markerA?.element.children[1].classList.contains("map-marker__halo"),
+    ).toBe(true);
+
+    overlay.updateSelection("b");
+    expect(markerA?.element.classList.contains("is-selected")).toBe(false);
+    expect(markerA?.element.dataset.selected).toBeUndefined();
+    expect(markerA?.element.hasAttribute("aria-current")).toBe(false);
+    expect(overlay.getActiveMarker("a")?.marker).toBe(markerA?.marker);
+    expect(overlay.getActiveMarker("b")?.element.dataset.selected).toBe("true");
+  });
+
+  it("restores selection when a filtered marker is recreated", () => {
+    const overlay = makeOverlay();
+    overlay.updateSelection("a");
+    overlay.update([makeNode("a")], true);
+    expect(overlay.getActiveMarker("a")?.element.dataset.selected).toBe("true");
+
+    overlay.update([], true);
+    overlay.update([makeNode("a")], true);
+    expect(overlay.getActiveMarker("a")?.element.dataset.selected).toBe("true");
   });
 });
 
