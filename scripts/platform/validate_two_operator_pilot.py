@@ -341,7 +341,7 @@ def _receipt(value: Any, path: str, *, activation: bool) -> str:
     return source
 
 
-def _public_key(value: Any, digest: Any, path: str) -> str:
+def _decode_public_key(value: Any, path: str) -> tuple[str, str]:
     source = _string(value, path)
     if "=" in source or not re.fullmatch(r"[A-Za-z0-9_-]{43}", source):
         _fail("invalid-public-key", f"{path} must be unpadded base64url Ed25519")
@@ -351,10 +351,17 @@ def _public_key(value: Any, digest: Any, path: str) -> str:
         _fail("invalid-public-key", f"{path}: {error}")
     if len(raw) != 32:
         _fail("invalid-public-key", f"{path} must decode to 32 bytes")
-    observed = hashlib.sha256(raw).hexdigest()
+    canonical = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+    if source != canonical:
+        _fail("invalid-public-key", f"{path} must use canonical base64url encoding")
+    return source, hashlib.sha256(raw).hexdigest()
+
+
+def _public_key(value: Any, digest: Any, path: str) -> tuple[str, str]:
+    source, observed = _decode_public_key(value, path)
     if digest != observed:
         _fail("public-key-digest-mismatch", f"{path} digest does not match")
-    return source
+    return source, observed
 
 
 def _backup_target(value: Any, path: str, *, activation: bool) -> tuple[str, str]:
@@ -601,7 +608,7 @@ def _validate_cell(
     key_id = _key_id(
         identity["active_key_id"], f"{path}.identity.active_key_id"
     )
-    key = _public_key(
+    key, key_digest = _public_key(
         identity["active_public_key"],
         identity["public_key_sha256"],
         f"{path}.identity.active_public_key",
@@ -617,7 +624,7 @@ def _validate_cell(
         activation=activation,
     )
     expected_key_id = _string(peer["expected_key_id"], f"{path}.peer.expected_key_id")
-    expected_public_key = _string(
+    expected_public_key, expected_public_key_digest = _decode_public_key(
         peer["expected_public_key"], f"{path}.peer.expected_public_key"
     )
     if peer["state"] != "trusted" or peer["allow_neighbourhood"] is not True:
@@ -818,10 +825,12 @@ def _validate_cell(
         "control_domain": control_domain,
         "key_id": key_id,
         "public_key": key,
+        "public_key_digest": key_digest,
         "peer_cell_id": peer_cell_id,
         "peer_url": peer_url,
         "peer_expected_key_id": expected_key_id,
         "peer_expected_public_key": expected_public_key,
+        "peer_expected_public_key_digest": expected_public_key_digest,
         "verified_by": verified_by,
         "backup_target": backup_target,
         "backup_authority": backup_authority,
@@ -891,21 +900,23 @@ def validate_document(document: dict[str, Any], expected_mode: str) -> dict[str,
         for index, cell in enumerate(cells)
     ]
 
-    unique_fields = (
+    casefold_unique_fields = (
         "cell_id",
         "public_url",
         "operator_id",
         "accountable_party",
         "contact",
         "control_domain",
-        "key_id",
-        "public_key",
         "backup_target",
         "backup_authority",
         "alert_route_id",
     )
-    for field in unique_fields:
+    for field in casefold_unique_fields:
         values = [str(item[field]).casefold() for item in observed]
+        if len(set(values)) != 2:
+            _fail("operator-independence", f"cells must have different {field}")
+    for field in ("key_id", "public_key_digest"):
+        values = [str(item[field]) for item in observed]
         if len(set(values)) != 2:
             _fail("operator-independence", f"cells must have different {field}")
 
@@ -946,6 +957,8 @@ def validate_document(document: dict[str, Any], expected_mode: str) -> dict[str,
             or item["peer_url"] != other["public_url"]
             or item["peer_expected_key_id"] != other["key_id"]
             or item["peer_expected_public_key"] != other["public_key"]
+            or item["peer_expected_public_key_digest"]
+            != other["public_key_digest"]
         ):
             _fail(
                 "asymmetric-peer",

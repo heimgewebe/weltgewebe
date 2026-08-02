@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import copy
 import hashlib
 import importlib.util
@@ -279,6 +280,41 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
                     ),
                     "invalid-timestamp",
                 )
+
+    def test_public_keys_require_canonical_base64url_and_raw_byte_identity(self) -> None:
+        canonical = self.example["cells"][0]["identity"]["active_public_key"]
+        digest = self.example["cells"][0]["identity"]["public_key_sha256"]
+        parsed, observed_digest = validator._public_key(
+            canonical, digest, "test.public_key"
+        )
+        self.assertEqual(parsed, canonical)
+        self.assertEqual(observed_digest, digest)
+
+        raw = base64.urlsafe_b64decode(canonical + "=")
+        alphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
+        aliases = [
+            canonical[:-1] + suffix
+            for suffix in alphabet
+            if suffix != canonical[-1]
+            and base64.urlsafe_b64decode(canonical[:-1] + suffix + "=") == raw
+        ]
+        self.assertGreaterEqual(len(aliases), 1)
+        for alias in aliases:
+            with self.subTest(alias=alias):
+                with self.assertRaisesRegex(
+                    validator.PilotContractError, r"^invalid-public-key:"
+                ):
+                    validator._public_key(alias, digest, "test.public_key")
+
+        document = activation_document()
+        for cell in document["cells"]:
+            cell["identity"]["active_public_key"] = canonical
+            cell["identity"]["public_key_sha256"] = digest
+            cell["peer"]["expected_public_key"] = canonical
+        with self.assertRaisesRegex(
+            validator.PilotContractError, r"^operator-independence:"
+        ):
+            validator.validate_document(document, "activation")
 
     def test_identity_and_operator_independence_is_fail_closed(self) -> None:
         cases = {
