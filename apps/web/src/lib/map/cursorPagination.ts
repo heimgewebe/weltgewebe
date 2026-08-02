@@ -5,6 +5,7 @@ import type {
   MapResourceName,
   MapResourceStatus,
   Node,
+  Webgemeindezentrum,
 } from "./types";
 
 export const MAP_CURSOR_PAGE_SIZE = 1000;
@@ -249,6 +250,7 @@ export type MapResourceLoad = {
   nodes: Node[];
   accounts: Account[];
   edges: Edge[];
+  webgemeindezentren: Webgemeindezentrum[];
   loadState: MapLoadState;
   loadNotice: string | null;
   resourceStatus: MapResourceStatus[];
@@ -299,18 +301,22 @@ export async function loadMapResources(
     }
   }
 
-  const [nodesResult, accountsResult, edgesResult] = await Promise.all([
-    loadResource<Node>("nodes"),
-    loadResource<Account>("accounts"),
-    loadResource<Edge>("edges"),
-  ]);
+  const [nodesResult, accountsResult, edgesResult, centersResult] =
+    await Promise.all([
+      loadResource<Node>("nodes"),
+      loadResource<Account>("accounts"),
+      loadResource<Edge>("edges"),
+      loadResource<Webgemeindezentrum>("webgemeindezentren"),
+    ]);
   const nodes = nodesResult.items;
   const accounts = accountsResult.items;
   const edges = edgesResult.items;
+  const webgemeindezentren = centersResult.items;
   const resourceStatus: MapResourceStatus[] = [
     nodesResult.status,
     accountsResult.status,
     edgesResult.status,
+    centersResult.status,
   ];
   const failedCount = resourceStatus.filter(
     (status) => status.status === "failed",
@@ -328,6 +334,7 @@ export async function loadMapResources(
     nodes: "Knoten",
     accounts: "Garnrollen",
     edges: "Fäden",
+    webgemeindezentren: "Webgemeindezentren",
   };
   const labelsFor = (status: "failed" | "truncated") =>
     resourceStatus
@@ -349,5 +356,13 @@ export async function loadMapResources(
           .join(" ")
       : null;
 
-  return { nodes, accounts, edges, loadState, loadNotice, resourceStatus };
+  return {
+    nodes,
+    accounts,
+    edges,
+    webgemeindezentren,
+    loadState,
+    loadNotice,
+    resourceStatus,
+  };
 }

@@ -56,10 +56,12 @@ test.describe("Map Loader Data Resilience", () => {
 
     // Verify the data output directly via the debug badge.
     // This stable test signal confirms the loader returned:
-    // { nodes: [1 item], accounts: [], edges: [] }
+    // { nodes: [1 item], accounts: [], edges: [], webgemeindezentren: [] }
     const debugBadge = page.getByTestId("debug-badge");
     await expect(debugBadge).toBeVisible();
-    await expect(debugBadge).toContainText("Nodes: 1 / Accounts: 0 / Edges: 0");
+    await expect(debugBadge).toContainText(
+      "Nodes: 1 / Accounts: 0 / Zentren: 0 / Edges: 0",
+    );
 
     // Phase 1: Verify the degraded state banner is visible for partial failures
     const partialBanner = page.getByTestId("load-state-partial");
@@ -123,7 +125,7 @@ test.describe("Map Loader Data Resilience", () => {
   test("shows failed state when all API resources fail", async ({ page }) => {
     await mockApiResponses(page);
 
-    // All three endpoints fail
+    // All four map-resource endpoints fail
     await page.route("**/api/nodes*", async (route) => {
       await route.fulfill({
         status: 500,
@@ -137,6 +139,14 @@ test.describe("Map Loader Data Resilience", () => {
     });
 
     await page.route("**/api/edges*", async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: "text/plain",
+        body: "Service Unavailable",
+      });
+    });
+
+    await page.route("**/api/webgemeindezentren*", async (route) => {
       await route.fulfill({
         status: 503,
         contentType: "text/plain",

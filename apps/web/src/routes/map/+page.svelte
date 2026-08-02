@@ -88,6 +88,7 @@
     nodes: data.nodes || [],
     accounts: data.accounts || [],
     edges: data.edges || [],
+    webgemeindezentren: data.webgemeindezentren || [],
     loadState: data.loadState ?? "ok",
     resourceStatus: data.resourceStatus ?? [],
     apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
@@ -102,9 +103,10 @@
   $: availableTypes = deriveAvailableFilterTypes(markersData);
   $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
   $: showNodes = $view.showNodes;
-  // T007: node search comes from the authorized T006 server contract. The only
-  // client-side search left here is for Garnrollen that are already public map
-  // markers; node visibility is never reconstructed from the downloaded scene.
+  // T007: node search comes from the authorized T006 server contract. Public
+  // non-node structures (Garnrollen and Webgemeindezentren) are searched only
+  // inside the map projection already delivered to this client; node visibility
+  // is never reconstructed from the downloaded scene.
   // The search client itself is lazy-loaded so opening the map does not pay the
   // search runtime cost before a person actually starts searching.
   let nodeSearchItems: MapEntityViewModel[] = [];
@@ -180,12 +182,12 @@
   );
   $: searchBaseMarkers =
     $activeFilters.size === 0 ? markersData : filteredMarkersData;
-  $: localGarnrolleResults = deriveSearchResults(
-    searchBaseMarkers.filter((item) => item.type === "garnrolle"),
+  $: localPublicStructureResults = deriveSearchResults(
+    searchBaseMarkers.filter((item) => item.type !== "node"),
     $searchQuery,
     $isSearchOpen,
   );
-  $: filteredResults = [...nodeSearchItems, ...localGarnrolleResults];
+  $: filteredResults = [...nodeSearchItems, ...localPublicStructureResults];
   $: searchMatchIds = deriveSearchMatchIds(filteredResults);
   $: edgesData = deriveVisibleEdges(scene.edges, filteredMarkersData);
 
@@ -513,7 +515,7 @@
   //  - Immediate intents (compose=node, lens=filter|search) need no map data and
   //    are applied as soon as the URL is known. They also leave any stale
   //    focus/composition state so the addressed surface always starts clean.
-  //  - Focus intents (focus=node|garnrolle|account:<id>) need the scene entities
+  //  - Focus intents (focus=node|garnrolle|account|zentrum:<id>) need the scene entities
   //    and only count as resolved once their target is actually found.
   // Priority is compose > focus > lens. A valid-but-unresolved focus deliberately
   // blocks the lens fallback so a deep link never lands on the wrong surface.
@@ -886,7 +888,8 @@
   <ToolFan />
   {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
     <div class="debug-badge" data-testid="debug-badge">
-      Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Edges: {edgesData.length}
+      Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Zentren: {markerCounts.webgemeindezentren}
+      / Edges: {edgesData.length}
       <br />
       API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
       {#if diagnostics.degraded}

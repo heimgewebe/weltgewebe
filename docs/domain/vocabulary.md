@@ -33,9 +33,9 @@ relations:
 | Gesprächsarchiv | Conversation mit `lifecycle_state=archived` | vom früheren Elternobjekt gelöste, stabile und öffentlich lesbare Gesprächsgeschichte | für Knotengespräche implementiert |
 | Beitrag | Message, `/conversations/{id}/messages` | Klartextbeitrag mit Autoren-Snapshot und möglichem Tombstone | Knotengespräch produktiv |
 | Berechtigungsrolle | `role` (`gast`, `weber`, `admin`) | Gast webt und spricht mit; Weber pflegt zusätzlich fremde gemeinschaftliche Inhalte und besitzt formale Veto-/Stimmrechte; Admin moderiert | implementiert |
-| Ortsweberei | künftige lokale Governance-Domäne | lokale Gemeinschaft mit Mitgliedschaft, Regeln, Vorhaben und gemeinsamen Mitteln | kanonisch entschieden, Runtime noch nicht eingeführt |
-| Gewebezelle | Cell-ID und betriebliche Primärwahrheit | technische und föderative Heimat genau einer Ortsweberei; ein Betreiber darf mehrere Zellen hosten | Architekturgrundlage vorhanden, Produktbindung noch nicht eingeführt |
-| Webgemeindezentrum | künftiger typisierter Strukturknoten | genau ein aktiver Karten-, Treff- und Governance-Anker je aktiver Ortsweberei | kanonisch entschieden, Runtime noch nicht eingeführt |
+| Ortsweberei | `/ortswebereien` | lokale Gemeinschaft mit Mitgliedschaft, Regeln, Vorhaben und gemeinsamen Mitteln | erste Runtime-Instanz `Ortsweberei Hamm`; Governance-Schreibpfad noch offen |
+| Gewebezelle | `gewebezellen.id` / Cell-ID | technische und föderative Heimat genau einer Ortsweberei; ein Betreiber darf mehrere Zellen hosten | erste Produktbindung `hamm.weltgewebe.net` in PostgreSQL |
+| Webgemeindezentrum | `/webgemeindezentren` | genau ein aktiver Karten-, Treff- und Governance-Anker je aktiver Ortsweberei | erste Runtime-Instanz im Hammer Park, Zustand `desired`; Bestätigung noch offen |
 
 ## Lebenszyklusverben
 

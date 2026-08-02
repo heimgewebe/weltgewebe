@@ -25,6 +25,17 @@ describe("parseFocusParam", () => {
     });
   });
 
+  it("parses a Webgemeindezentrum focus and its compact alias", () => {
+    expect(parseFocusParam("webgemeindezentrum:center-1")).toEqual({
+      type: "webgemeindezentrum",
+      id: "center-1",
+    });
+    expect(parseFocusParam("zentrum:center-1")).toEqual({
+      type: "webgemeindezentrum",
+      id: "center-1",
+    });
+  });
+
   it("keeps colons inside the id (only the first colon splits)", () => {
     expect(parseFocusParam("node:a:b:c")).toEqual({
       type: "node",
@@ -97,6 +108,15 @@ describe("parseMapUrlState", () => {
   it("parses focus=account:<id> as garnrolle", () => {
     const result = parse("focus=account:abc");
     expect(result.focus).toEqual({ type: "garnrolle", id: "abc" });
+  });
+
+  it("parses a Webgemeindezentrum deep link", () => {
+    const result = parse("focus=zentrum:webgemeindezentrum-hammer-park");
+    expect(result.focus).toEqual({
+      type: "webgemeindezentrum",
+      id: "webgemeindezentrum-hammer-park",
+    });
+    expect(result.invalidKeys).toEqual([]);
   });
 
   it("decodes a URL-encoded focus id", () => {

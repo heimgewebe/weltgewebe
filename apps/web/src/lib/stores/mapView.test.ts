@@ -1,7 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
 import { buildMapScene, type MapSceneModel } from "$lib/map/scene";
-import type { Account, Edge, MapEntityViewModel, Node } from "$lib/map/types";
+import type {
+  Account,
+  Edge,
+  MapEntityViewModel,
+  Node,
+  Webgemeindezentrum,
+} from "$lib/map/types";
 import {
   deriveMarkerCounts,
   deriveAvailableFilterTypes,
@@ -38,15 +44,40 @@ const makeAccount = (overrides: Partial<Account> = {}): Account => ({
   ...overrides,
 });
 
+const makeCenter = (
+  overrides: Partial<Webgemeindezentrum> = {},
+): Webgemeindezentrum => ({
+  type: "webgemeindezentrum",
+  id: "webgemeindezentrum-hammer-park",
+  title: "Webgemeindezentrum Hammer Park",
+  ortsweberei: {
+    id: "ortsweberei-hamm",
+    slug: "hamm",
+    name: "Ortsweberei Hamm",
+    gewebezelle_id: "hamm.weltgewebe.net",
+  },
+  location_state: "desired",
+  location_state_label: "Gewünschter Treffort",
+  location: { lat: 53.5585, lon: 10.058 },
+  location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
+  meeting_note: "Gemeinsamer Treffpunkt der Ortsweberei.",
+  access_note: "Noch nicht bestätigt.",
+  created_at: "2026-08-02T10:08:00.000Z",
+  updated_at: "2026-08-02T10:08:00.000Z",
+  ...overrides,
+});
+
 function sceneFrom(
   nodes: Node[],
   accounts: Account[],
   edges: Edge[] = [],
+  webgemeindezentren: Webgemeindezentrum[] = [],
 ): MapSceneModel {
   return buildMapScene({
     nodes,
     accounts,
     edges,
+    webgemeindezentren,
     loadState: "ok",
     resourceStatus: [],
     apiBase: undefined,
@@ -73,6 +104,31 @@ describe("mapView presentation helpers", () => {
     expect(deriveMarkerCounts(scene.entities)).toEqual({
       nodes: 1,
       accounts: 1,
+      webgemeindezentren: 0,
+    });
+  });
+
+  it("counts, filters and selects Webgemeindezentren independently from Knoten", () => {
+    const scene = sceneFrom([], [], [], [makeCenter()]);
+
+    expect(deriveMarkerCounts(scene.entities)).toEqual({
+      nodes: 0,
+      accounts: 0,
+      webgemeindezentren: 1,
+    });
+    expect(deriveAvailableFilterTypes(scene.entities)).toEqual([
+      {
+        id: "Webgemeindezentrum",
+        label: "Webgemeindezentrum",
+        count: 1,
+      },
+    ]);
+    expect(
+      deriveSearchResults(scene.entities, "Ortsweberei Hamm", true),
+    ).toHaveLength(1);
+    expect(toMapSelection(scene.entities[0])).toMatchObject({
+      type: "webgemeindezentrum",
+      id: "webgemeindezentrum-hammer-park",
     });
   });
 
@@ -264,7 +320,7 @@ describe("mapView presentation helpers", () => {
     expect(deriveVisibleEdges(edges, onlyNodes)).toHaveLength(0);
   });
 
-  it("getFilterTypeKey distinguishes nodes from garnrollen", () => {
+  it("getFilterTypeKey distinguishes nodes, Garnrollen and Webgemeindezentren", () => {
     const nodeEntity: MapEntityViewModel = {
       type: "node",
       id: "node-1",
@@ -285,9 +341,11 @@ describe("mapView presentation helpers", () => {
       tags: [],
       created_at: "2025-01-01T00:00:00Z",
     };
+    const centerEntity = sceneFrom([], [], [], [makeCenter()]).entities[0];
 
     expect(getFilterTypeKey(nodeEntity)).toBe("Werkstatt");
     expect(getFilterTypeKey(garnrolleEntity)).toBe("Garnrolle");
+    expect(getFilterTypeKey(centerEntity)).toBe("Webgemeindezentrum");
   });
 
   it("toMapSelection carries panel data and normalizes the type", () => {
