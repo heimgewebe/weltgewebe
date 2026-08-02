@@ -41,7 +41,7 @@ jobs:
           test "${GITHUB_HEAD_REF}" = 'feat/gewebezelle-two-operator-pilot-v1'
           test "$(git rev-parse HEAD)" = '${{ github.event.pull_request.head.sha }}'
           test "$(git diff --name-only HEAD^ HEAD)" = "$marker"
-          test "$(cat "$marker")" = 'pr1658 optimizer trigger v4'
+          test "$(cat "$marker")" = 'pr1658 optimizer trigger v5'
           echo 'run=true' >> "$GITHUB_OUTPUT"
           echo "bound_head=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
@@ -63,13 +63,16 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error \
             -H "Authorization: Bearer $GH_TOKEN" \
-            -H 'Accept: application/vnd.github+json' \
+            -H 'Accept: application/vnd.github.raw+json' \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${PATCH_BLOB_SHA}" \
-            | jq -r '.content' | tr -d '\n' | base64 --decode \
-            > /tmp/pr1658-optimize.py.gz
-          test "$(sha256sum /tmp/pr1658-optimize.py.gz | cut -d' ' -f1)" = "$PATCH_GZIP_SHA256"
+            --output /tmp/pr1658-optimize.py.gz
+          actual_gzip_sha="$(sha256sum /tmp/pr1658-optimize.py.gz | cut -d' ' -f1)"
+          printf 'gzip sha256: %s\n' "$actual_gzip_sha"
+          test "$actual_gzip_sha" = "$PATCH_GZIP_SHA256"
           gzip --decompress --stdout /tmp/pr1658-optimize.py.gz > /tmp/pr1658-optimize.py
-          test "$(sha256sum /tmp/pr1658-optimize.py | cut -d' ' -f1)" = "$PATCH_SHA256"
+          actual_patch_sha="$(sha256sum /tmp/pr1658-optimize.py | cut -d' ' -f1)"
+          printf 'patch sha256: %s\n' "$actual_patch_sha"
+          test "$actual_patch_sha" = "$PATCH_SHA256"
           cp .github/workflows/kubernetes-platform.yml /tmp/kubernetes-platform.optimizer.yml
           python - <<'PY'
           from pathlib import Path
