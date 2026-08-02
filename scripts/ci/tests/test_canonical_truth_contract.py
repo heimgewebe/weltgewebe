@@ -74,6 +74,30 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertEqual(required_context, "Review evidence gate")
         self.assertNotEqual(review_job["name"], required_context)
 
+        self.assertNotIn("concurrency", review_data)
+        concurrency = review_job["concurrency"]
+        self.assertEqual(
+            concurrency["group"],
+            "review-evidence-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}",
+        )
+        self.assertIs(concurrency["cancel-in-progress"], True)
+
+        eligibility = review_job["if"]
+        self.assertIn("github.event_name != 'issue_comment'", eligibility)
+        self.assertIn("github.event.issue.pull_request != null", eligibility)
+        self.assertIn("github.event.comment.author_association", eligibility)
+        self.assertIn("github.event.action == 'edited'", eligibility)
+        self.assertIn("<!-- weltgewebe-review-evidence", eligibility)
+        self.assertIn("<!-- weltgewebe-forwarded-review", eligibility)
+        self.assertIn("/review-evidence recheck", eligibility)
+        self.assertIn("github.event_name != 'pull_request_target'", eligibility)
+        self.assertIn("github.event_name != 'pull_request_review'", eligibility)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            eligibility,
+        )
+        self.assertIn("github.event.pull_request.user.login != 'dependabot[bot]'", eligibility)
+
         evaluate_step = next(
             step
             for step in review_job["steps"]
