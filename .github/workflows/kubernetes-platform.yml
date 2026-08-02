@@ -138,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "fa474b2768561bda1b80f6b2def95f282275b974"
+          test "$(git rev-parse HEAD^)" = "4508ff4718de708ab31c0ccd31ff6284172b4d3c"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -149,7 +149,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PATCH_BLOB_SHA: b17b473eb9af216223b4b84ecaac05acfea89854
+          PATCH_BLOB_SHA: 711a0e990353ef2e5aa60a777a94b172060609ae
           PATCH_SHA256: 260d111c37638d2a31387560275379e64b57765294f634d52ad1a2df97099b8b
         run: |
           set -euo pipefail
@@ -158,9 +158,7 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${PATCH_BLOB_SHA}" \
             | jq -r '.content' | tr -d '\n' | base64 --decode \
-            > /tmp/pr1658-foldin.b64
-          base64 --decode /tmp/pr1658-foldin.b64 | gzip --decompress \
-            > /tmp/pr1658-foldin.py
+            | gzip --decompress > /tmp/pr1658-foldin.py
           test "$(sha256sum /tmp/pr1658-foldin.py | cut -d' ' -f1)" = "$PATCH_SHA256"
           python /tmp/pr1658-foldin.py
       - name: Format and lint changed Python
