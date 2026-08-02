@@ -1,5 +1,6 @@
 import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
 import type { MapEntityViewModel } from "$lib/map/types";
+import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
 
 function hasRenderablePosition(item: MapEntityViewModel): boolean {
@@ -43,6 +44,7 @@ export class NodesOverlay {
     }
   >();
   private searchMatchIds = new Set<string>();
+  private selectedMarkerId: string | null = null;
 
   constructor(
     private map: MapLibreMap,
@@ -163,7 +165,7 @@ export class NodesOverlay {
             ? "map-marker__visual marker-account__visual"
             : markerCategory === "webgemeindezentrum"
               ? "map-marker__visual marker-webgemeindezentrum__visual"
-              : "map-marker__visual";
+              : "map-marker__visual marker-node__visual";
         visual.setAttribute("aria-hidden", "true");
 
         if (markerCategory === "account") {
@@ -182,7 +184,11 @@ export class NodesOverlay {
           visual.append(icon);
         }
 
-        element.append(visual);
+        const halo = document.createElement("span");
+        halo.className = "map-marker__halo";
+        halo.setAttribute("aria-hidden", "true");
+
+        element.append(visual, halo);
         this.syncWebgemeindezentrumAppearance(element, item);
 
         element.setAttribute("aria-label", item.title);
@@ -199,6 +205,11 @@ export class NodesOverlay {
         if (this.searchMatchIds.has(item.id)) {
           element.classList.add("search-highlight");
           element.dataset.searchMatch = "true";
+        }
+        if (this.selectedMarkerId === item.id) {
+          element.classList.add("is-selected");
+          element.dataset.selected = "true";
+          element.setAttribute("aria-current", "true");
         }
 
         this.activeMarkers.set(item.id, {
@@ -234,6 +245,32 @@ export class NodesOverlay {
     }
   }
 
+  private setSelected(id: string, selected: boolean) {
+    const entry = this.activeMarkers.get(id);
+    if (!entry) return;
+
+    entry.element.classList.toggle("is-selected", selected);
+    if (selected) {
+      entry.element.dataset.selected = "true";
+      entry.element.setAttribute("aria-current", "true");
+    } else {
+      delete entry.element.dataset.selected;
+      entry.element.removeAttribute("aria-current");
+    }
+  }
+
+  public updateSelection(nextSelectedMarkerId: string | null) {
+    if (this.selectedMarkerId === nextSelectedMarkerId) return;
+
+    if (this.selectedMarkerId !== null) {
+      this.setSelected(this.selectedMarkerId, false);
+    }
+    if (nextSelectedMarkerId !== null) {
+      this.setSelected(nextSelectedMarkerId, true);
+    }
+    this.selectedMarkerId = nextSelectedMarkerId;
+  }
+
   public updateSearchMatches(nextSearchMatchIds: ReadonlySet<string>) {
     const { added, removed } = diffSearchMatchIds(
       this.searchMatchIds,
@@ -254,5 +291,6 @@ export class NodesOverlay {
     this.activeMarkers.forEach(({ cleanup }) => cleanup());
     this.activeMarkers.clear();
     this.searchMatchIds.clear();
+    this.selectedMarkerId = null;
   }
 }

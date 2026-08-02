@@ -1,0 +1,150 @@
+.map-marker {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  display: grid;
+  place-items: center;
+  color: var(--bg);
+  cursor: pointer;
+  box-shadow: none;
+  outline: none;
+  transition: none;
+  --marker-halo-color: var(--accent);
+}
+
+.map-marker__visual {
+  grid-area: 1 / 1;
+  width: 24px;
+  height: 24px;
+  box-sizing: border-box;
+  border: 2px solid var(--panel-border);
+  border-radius: 50%;
+  background: var(--accent);
+  display: grid;
+  place-items: center;
+  align-self: end;
+  position: relative;
+  z-index: 2;
+  transform-origin: center bottom;
+  transition: transform 0.16s ease-out;
+  pointer-events: none;
+}
+
+.marker-node__visual {
+  width: 30px;
+  height: 24px;
+  border: 0;
+  background: radial-gradient(
+    circle at center,
+    var(--accent) 0 3px,
+    #6f4936 4px 6px,
+    transparent 7px
+  );
+  color: #6f4936;
+  filter: drop-shadow(0 1px 1px rgba(35, 22, 15, 0.35));
+}
+
+.marker-node__visual::before,
+.marker-node__visual::after {
+  content: "";
+  position: absolute;
+  top: 6px;
+  width: 16px;
+  height: 10px;
+  box-sizing: border-box;
+  border: 3px solid currentColor;
+  border-radius: 50%;
+}
+
+.marker-node__visual::before {
+  left: 0;
+  transform: rotate(28deg);
+}
+
+.marker-node__visual::after {
+  right: 0;
+  transform: rotate(-28deg);
+}
+
+.map-marker__halo {
+  position: absolute;
+  left: 50%;
+  bottom: -1px;
+  width: 34px;
+  aspect-ratio: 1;
+  box-sizing: border-box;
+  border: 2px solid var(--marker-halo-color);
+  border-radius: 50%;
+  opacity: 0;
+  transform: translateX(-50%) scale(0.8);
+  box-shadow: 0 0 9px var(--marker-halo-color);
+  transition:
+    opacity 0.14s ease,
+    transform 0.16s ease-out;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.marker-account__visual {
+  width: 44px;
+  height: 44px;
+  border: 0;
+  background: transparent;
+}
+
+.marker-account .map-marker__halo {
+  width: 42px;
+  bottom: 0;
+}
+
+.marker-account__icon {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  transform: scale(var(--garnrolle-marker-scale, 1));
+  transform-origin: center bottom;
+  filter: drop-shadow(0 1px 1px rgba(34, 24, 16, 0.42));
+  transition: transform 0.2s ease-out;
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}
+
+.map-marker:hover {
+  z-index: 10;
+}
+
+.map-marker:focus-visible {
+  --marker-halo-color: var(--text);
+  z-index: 10;
+}
+.map-marker.search-highlight {
+  --marker-halo-color: var(--primary, #005fcc);
+  z-index: 5;
+}
+.map-marker.is-selected {
+  --marker-halo-color: var(--accent);
+  z-index: 8;
+}
+
+.map-marker:focus-visible .map-marker__halo,
+.map-marker.search-highlight .map-marker__halo,
+.map-marker.is-selected .map-marker__halo {
+  opacity: 1;
+  transform: translateX(-50%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .map-marker__visual,
+  .map-marker__halo,
+  .marker-account__icon {
+    transition: none;
+  }
+}
