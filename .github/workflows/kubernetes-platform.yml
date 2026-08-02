@@ -138,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "de02bdc7fa8797da18ef5dee71862151e996a0fe"
+          test "$(git rev-parse HEAD^)" = "7c6a93d919f4e9d7dfe430dd11bed0ba3e7ec504"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -208,7 +208,9 @@ jobs:
           test -z "$(git status --short | grep -E '^\?\?' || true)"
           git config user.name 'heimgewebe-operator'
           git config user.email 'noreply@heimgewebe.invalid'
-          test "$(printf '' | git hash-object -w --stdin)" = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391"
+          git ls-tree -r HEAD \
+            | awk '$2 == "blob" {print $3}' \
+            | git cat-file --batch >/dev/null
           git add -A
           git commit -m 'fix(platform): close two-operator pilot trust gaps'
           git push origin HEAD:feat/gewebezelle-two-operator-pilot-v1
