@@ -1264,7 +1264,17 @@ class WorkflowContractTests(unittest.TestCase):
         self.assertEqual(required_context, "Review evidence gate")
         self.assertEqual(self.review_job["name"], "Review evidence evaluator")
         self.assertNotEqual(self.review_job["name"], required_context)
-        self.assertTrue(self.workflow_data["concurrency"]["cancel-in-progress"])
+        self.assertNotIn("concurrency", self.workflow_data)
+        concurrency = self.review_job["concurrency"]
+        self.assertEqual(
+            concurrency["group"],
+            "review-evidence-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}",
+        )
+        self.assertIs(concurrency["cancel-in-progress"], True)
+        eligibility = self.review_job["if"]
+        self.assertIn("github.event.action == 'edited'", eligibility)
+        self.assertIn("github.event_name != 'pull_request_target'", eligibility)
+        self.assertIn("github.event_name != 'pull_request_review'", eligibility)
 
         evaluate_step = next(
             step
