@@ -946,7 +946,9 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
 
     def test_public_key_point_validation_rejects_weak_and_off_curve_keys(self) -> None:
         cases = {
-            "small-order": bytes([1]) + bytes(31),
+            "identity-small-order": bytes([1]) + bytes(31),
+            # ed25519-dalek 2.2.0 tests derive this from EIGHT_TORSION[4].
+            "dalek-order-two": bytes([236]) + bytes([255]) * 30 + bytes([127]),
             "off-curve": bytes([2]) + bytes(31),
         }
         for name, raw in cases.items():
