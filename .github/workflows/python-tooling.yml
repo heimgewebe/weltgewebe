@@ -68,7 +68,7 @@ jobs:
           version: ${{ steps.uv-version.outputs.uv_version }}
 
       - name: Cache uv downloads
-        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # tag: v6.1.0
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
         with:
           path: ~/.cache/uv
           key: uv-${{ runner.os }}-${{ hashFiles('**/pyproject.toml', '**/requirements*.txt', '**/uv.lock') }}
