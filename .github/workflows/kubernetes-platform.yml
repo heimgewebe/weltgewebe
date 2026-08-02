@@ -138,13 +138,13 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "fdd5a9f734d9a4d05a43b7caec1819f6ef844460"
+          test "$(git rev-parse HEAD^)" = "9077373fed9ba572b48d0ab1a538e99384a3df04"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
           python-version: "3.12"
       - name: Install fold-in dependencies
-        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3' ruff
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3' pytest ruff
       - name: Materialize and apply reviewed fold-in
         shell: bash
         env:
