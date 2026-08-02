@@ -89,24 +89,29 @@
   aria-labelledby="similar-nodes-heading"
   aria-busy={requested && loading}
 >
-  <InfoHeading id="similar-nodes-heading" label="Ähnliche Knoten" level={4}>
-    <p class="similar-explainer">
-      Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet. Das sind
-      Vorschläge – keine Fäden, keine kuratierten Beziehungen und keine Aussage
-      über gemeinsame Autorenschaft.
-    </p>
-  </InfoHeading>
-  {#if !requested}
-    <button
-      class="similar-trigger"
-      type="button"
-      disabled={!sourceId || !query}
-      on:click={() => void load(query)}>Ähnliche Knoten suchen</button
-    >
-    <p class="similar-note">
-      Erst beim Anklicken wird eine Suche an den Server gesendet.
-    </p>
-  {:else if loading}
+  <div class="similar-heading-row">
+    <InfoHeading id="similar-nodes-heading" label="Ähnliche Knoten" level={4}>
+      <p class="similar-explainer">
+        Maschinell aus Inhalt und Schlagwörtern dieses Knotens berechnet. Das
+        sind Vorschläge – keine Fäden, keine kuratierten Beziehungen und keine
+        Aussage über gemeinsame Autorenschaft.
+      </p>
+      <p class="similar-explainer">
+        Die Suche wird erst nach deinem ausdrücklichen Klick an den Server
+        gesendet.
+      </p>
+    </InfoHeading>
+    {#if !requested}
+      <button
+        class="similar-trigger"
+        type="button"
+        aria-label="Ähnliche Knoten suchen"
+        disabled={!sourceId || !query}
+        on:click={() => void load(query)}>Suchen</button
+      >
+    {/if}
+  </div>
+  {#if requested && loading}
     <p class="ghost" role="status" aria-live="polite">
       Ähnliche Knoten werden berechnet…
     </p>
@@ -157,9 +162,13 @@
 
 <style>
   .similar-nodes {
-    margin-top: 1rem;
-    padding-top: 1rem;
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
     border-top: 1px solid var(--panel-border);
+  }
+  .similar-heading-row {
+    display: flex;
+    align-items: center;
   }
   .similar-nodes :global(.info-heading-title) {
     font-size: 1rem;
@@ -210,7 +219,10 @@
     opacity: 0.6;
   }
   .similar-trigger {
-    margin-top: 0.75rem;
+    width: auto;
+    margin-left: auto;
+    padding: 0.45rem 0.8rem;
+    border-radius: 999px;
     font-weight: 650;
   }
   button span {
