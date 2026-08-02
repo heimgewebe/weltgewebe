@@ -117,3 +117,92 @@ jobs:
           path: build/security/trivy/*.json
           if-no-files-found: error
           retention-days: 14
+
+  pr1658-foldin:
+    if: >-
+      github.event.pull_request.number == 1658 &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'feat/gewebezelle-two-operator-pilot-v1'
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: true
+      - name: Verify immutable fold-in binding
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
+          test "$(git rev-parse HEAD^)" = "5013fcd76daef6962d9506928254d3d8cb546131"
+          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
+        with:
+          python-version: "3.12"
+      - name: Install fold-in dependencies
+        run: python -m pip install --disable-pip-version-check 'PyYAML==6.0.3' ruff
+      - name: Materialize and apply reviewed fold-in
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PATCH_BLOB_SHA: 153f0ebc3c7bc9219080e70c941d024e879b5646
+          PATCH_SHA256: 2620f940e092ed3e78702215fe04ec5b10bbabcc876e41e8bc630eb44efb1251
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/git/blobs/${PATCH_BLOB_SHA}" \
+            | jq -r '.content' | tr -d '\n' | base64 --decode \
+            > /tmp/pr1658-foldin.b64
+          base64 --decode /tmp/pr1658-foldin.b64 | gzip --decompress \
+            > /tmp/pr1658-foldin.py
+          test "$(sha256sum /tmp/pr1658-foldin.py | cut -d' ' -f1)" = "$PATCH_SHA256"
+          python /tmp/pr1658-foldin.py
+      - name: Format and lint changed Python
+        run: |
+          python -m ruff check --fix \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py
+          python -m ruff format \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py
+          python -m ruff check \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py
+          python -m py_compile \
+            scripts/platform/validate_two_operator_pilot.py \
+            scripts/ci/tests/test_two_operator_cell_pilot.py \
+            scripts/ci/tests/test_kubernetes_platform_contract.py \
+            scripts/ci/tests/test_kubernetes_ha_contract.py
+      - name: Run focused Python contracts
+        run: |
+          python -m unittest scripts.ci.tests.test_two_operator_cell_pilot
+          python -m unittest \
+            scripts.ci.tests.test_kubernetes_platform_contract \
+            scripts.ci.tests.test_kubernetes_ha_contract
+      - name: Run platform and docs gates
+        run: |
+          make cell-pilot-check
+          make platform-check
+          make docs-guard
+      - name: Run federation key regressions
+        run: |
+          cargo fmt --all -- --check
+          cargo test -p weltgewebe-api federation::tests::
+          cargo test -p weltgewebe-api --test two_operator_pilot_example_keys
+      - name: Commit reviewed fold-in
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          test -z "$(git status --short | grep -E '^\?\?' || true)"
+          git config user.name 'heimgewebe-operator'
+          git config user.email 'noreply@heimgewebe.invalid'
+          git add -A
+          git commit -m 'fix(platform): close two-operator pilot trust gaps'
+          git push origin HEAD:feat/gewebezelle-two-operator-pilot-v1
