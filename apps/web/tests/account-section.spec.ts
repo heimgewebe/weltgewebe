@@ -117,6 +117,39 @@ test.describe("Settings — AccountSection", () => {
     await expect(
       section.locator('[data-testid="account-section-passkey"]'),
     ).toHaveCount(0);
+    await expect(
+      section.locator('[data-testid="account-section-guest-cta"]'),
+    ).toHaveCount(0);
+  });
+
+  test("shows a formatted role and the primary Weber application CTA for guests", async ({
+    page,
+  }) => {
+    await setupAuthMocks(page, {
+      initial: {
+        authenticated: true,
+        account_id: "acc-guest",
+        role: "gast",
+      },
+    });
+
+    await page.goto("/settings");
+
+    const section = page.locator('[data-testid="account-section"]');
+    await expect(
+      section.locator('[data-testid="account-section-role"]'),
+    ).toHaveText("Gast");
+
+    const cta = section.locator('[data-testid="account-section-guest-cta"]');
+    await expect(cta).toBeVisible();
+    const ctaLink = cta.locator(
+      '[data-testid="account-section-guest-cta-link"]',
+    );
+    await expect(ctaLink).toHaveAttribute("href", "/antraege#antrag-stellen");
+
+    const box = await ctaLink.boundingBox();
+    expect(box, "guest CTA link has no visible box").not.toBeNull();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
   });
 
   test("shows account status, devices and logout when authenticated", async ({
@@ -152,7 +185,10 @@ test.describe("Settings — AccountSection", () => {
     ).toHaveText("acc-1");
     await expect(
       section.locator('[data-testid="account-section-role"]'),
-    ).toHaveText("weber");
+    ).toHaveText("Weber");
+    await expect(
+      section.locator('[data-testid="account-section-guest-cta"]'),
+    ).toHaveCount(0);
 
     const deviceItems = section.locator(
       '[data-testid="account-section-device"]',

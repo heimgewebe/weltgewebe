@@ -1,8 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { browser } from "$app/environment";
-  import { authStore } from "$lib/auth/store";
+  import { authStore, type AuthRole } from "$lib/auth/store";
   import { isRecord } from "$lib/utils/guards";
+
+  const ROLE_LABELS: Record<AuthRole, string> = {
+    gast: "Gast",
+    weber: "Weber",
+    admin: "Administrator",
+  };
 
   interface DeviceInfo {
     device_id: string;
@@ -188,8 +194,22 @@
         {$authStore.account_id ?? "–"}
       </dd>
       <dt>Rolle</dt>
-      <dd data-testid="account-section-role">{$authStore.role}</dd>
+      <dd data-testid="account-section-role">
+        {ROLE_LABELS[$authStore.role]}
+      </dd>
     </dl>
+
+    {#if $authStore.role === "gast"}
+      <div class="row" data-testid="account-section-guest-cta">
+        <a
+          class="btn btn-primary"
+          href="/antraege#antrag-stellen"
+          data-testid="account-section-guest-cta-link"
+        >
+          Weberstatus beantragen
+        </a>
+      </div>
+    {/if}
 
     <div class="actions">
       <button
@@ -327,6 +347,7 @@
     flex-wrap: wrap;
   }
   .btn {
+    min-height: 44px;
     cursor: pointer;
     padding: 0.45rem 0.9rem;
     border-radius: 6px;

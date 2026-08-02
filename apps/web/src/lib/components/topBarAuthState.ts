@@ -5,6 +5,7 @@ export interface TopBarAuthView {
   showLoginLink: boolean;
   showRetry: boolean;
   retryLabel: string;
+  isGuest: boolean;
 }
 
 export function deriveTopBarAuthView(auth: AuthStatus): TopBarAuthView {
@@ -17,5 +18,6 @@ export function deriveTopBarAuthView(auth: AuthStatus): TopBarAuthView {
       auth.state === "checking"
         ? "Prüfe Anmeldung …"
         : "Verbindung erneut prüfen",
+    isGuest: auth.authenticated && auth.role === "gast",
   };
 }
