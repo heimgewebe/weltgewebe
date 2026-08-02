@@ -23,7 +23,32 @@ permissions:
 
 concurrency:
   group: review-evidence-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}
-  cancel-in-progress: true
+  # Cancellation happens before the job-level `if`. Only events that are
+  # eligible to evaluate evidence may supersede an in-flight evaluation.
+  cancel-in-progress: >-
+    ${{
+      (
+        github.event_name != 'issue_comment' ||
+        (
+          github.event.issue.pull_request != null &&
+          contains(fromJSON('["OWNER","MEMBER","COLLABORATOR"]'), github.event.comment.author_association) &&
+          (
+            contains(github.event.comment.body, '<!-- weltgewebe-review-evidence') ||
+            contains(github.event.comment.body, '<!-- weltgewebe-forwarded-review') ||
+            contains(github.event.changes.body.from, '<!-- weltgewebe-review-evidence') ||
+            contains(github.event.changes.body.from, '<!-- weltgewebe-forwarded-review') ||
+            startsWith(github.event.comment.body, '/review-evidence recheck')
+          )
+        )
+      ) &&
+      (
+        github.event_name != 'pull_request_review' ||
+        (
+          github.event.pull_request.head.repo.full_name == github.repository &&
+          github.event.pull_request.user.login != 'dependabot[bot]'
+        )
+      )
+    }}
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"

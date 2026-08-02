@@ -74,6 +74,27 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertEqual(required_context, "Review evidence gate")
         self.assertNotEqual(review_job["name"], required_context)
 
+        concurrency = review_data["concurrency"]
+        self.assertEqual(
+            concurrency["group"],
+            "review-evidence-${{ github.event.pull_request.number || github.event.issue.number || inputs.pr_number }}",
+        )
+        cancel_policy = concurrency["cancel-in-progress"]
+        self.assertIsInstance(cancel_policy, str)
+        self.assertIn("github.event_name != 'issue_comment'", cancel_policy)
+        self.assertIn("github.event.issue.pull_request != null", cancel_policy)
+        self.assertIn("github.event.comment.author_association", cancel_policy)
+        self.assertIn("<!-- weltgewebe-review-evidence", cancel_policy)
+        self.assertIn("<!-- weltgewebe-forwarded-review", cancel_policy)
+        self.assertIn("/review-evidence recheck", cancel_policy)
+        self.assertIn("github.event_name != 'pull_request_review'", cancel_policy)
+        self.assertIn(
+            "github.event.pull_request.head.repo.full_name == github.repository",
+            cancel_policy,
+        )
+        self.assertIn("github.event.pull_request.user.login != 'dependabot[bot]'", cancel_policy)
+        self.assertNotEqual(cancel_policy.strip(), "true")
+
         evaluate_step = next(
             step
             for step in review_job["steps"]
