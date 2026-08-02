@@ -138,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "5013fcd76daef6962d9506928254d3d8cb546131"
+          test "$(git rev-parse HEAD^)" = "fa474b2768561bda1b80f6b2def95f282275b974"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -149,8 +149,8 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          PATCH_BLOB_SHA: 153f0ebc3c7bc9219080e70c941d024e879b5646
-          PATCH_SHA256: 2620f940e092ed3e78702215fe04ec5b10bbabcc876e41e8bc630eb44efb1251
+          PATCH_BLOB_SHA: b17b473eb9af216223b4b84ecaac05acfea89854
+          PATCH_SHA256: 260d111c37638d2a31387560275379e64b57765294f634d52ad1a2df97099b8b
         run: |
           set -euo pipefail
           curl --fail --silent --show-error \
