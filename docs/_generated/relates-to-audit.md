@@ -14,13 +14,13 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 687 |
-| — depends_on | 27 |
+| Relationen gesamt | 703 |
+| — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 638 |
+| — relates_to | 648 |
 | — supersedes | 12 |
 | — verifies | 9 |
-| relates_to Anteil | 93% |
+| relates_to Anteil | 92% |
 
 ### Mögliche supersedes-Lücken
 
@@ -32,7 +32,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (270 Dokumente):
+**Cluster 1** (273 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -154,6 +154,7 @@ _Keine Lücken erkannt._
 - `docs/process/report-lifecycle.md`
 - `docs/process/sprache.md`
 - `docs/proofs/basemap-hamburg-artifact-proof.md`
+- `docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md`
 - `docs/proofs/repoground-agent-utility-v1-t003-vertical-pilot.md`
 - `docs/proofs/sqlx-pgbouncer-session-crud-proof.md`
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
@@ -224,6 +225,7 @@ _Keine Lücken erkannt._
 - `docs/runbooks/db-recovery.md`
 - `docs/runbooks/domain-mail-cutover.md`
 - `docs/runbooks/gewebezelle-manual-pilot.md`
+- `docs/runbooks/gewebezelle-two-operator-pilot-v1.md`
 - `docs/runbooks/incident-response.md`
 - `docs/runbooks/kubernetes-ha-recovery-proof.md`
 - `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
@@ -261,6 +263,7 @@ _Keine Lücken erkannt._
 - `infra/compose/compose.prod.override.yml`
 - `infra/compose/compose.vps.override.yml`
 - `platform/README.md`
+- `platform/cell-pilot/two-operator-pilot.contract.json`
 - `platform/cell-profile.contract.json`
 - `repo.meta.yaml`
 - `runbooks/README.md`

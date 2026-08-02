@@ -196,6 +196,42 @@ def _assert_oci_proof_mirror() -> None:
     if retention.get("orphan_grace_days") != 14:
         raise ContractError("OCI proof mirror orphan grace must remain 14 days")
 
+def _assert_two_operator_pilot_contract() -> None:
+    command = [
+        sys.executable,
+        str(ROOT / "scripts/platform/validate_two_operator_pilot.py"),
+        "--mode",
+        "example",
+        str(PLATFORM / "cell-pilot/two-operator-pilot.example.invalid.json"),
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        result = json.loads(completed.stdout)
+    except (
+        OSError,
+        subprocess.CalledProcessError,
+        subprocess.TimeoutExpired,
+        json.JSONDecodeError,
+    ) as error:
+        raise ContractError(f"two-operator cell pilot contract failed: {error}") from error
+    expected = {
+        "status": "pass",
+        "contract_id": "gewebezelle-two-operator-pilot-v1",
+        "document_mode": "example",
+        "activatable": False,
+    }
+    observed = {key: result.get(key) for key in expected}
+    if observed != expected:
+        raise ContractError(f"two-operator cell pilot contract mismatch: {observed}")
+
+
 def _assert_local_fixture_scope() -> None:
     """Keep public disposable fixture credentials and names local."""
     for path in sorted(PLATFORM.rglob("*")):
@@ -592,6 +628,10 @@ def validate(render: bool) -> dict[str, Any]:
         ROOT / "scripts/platform/ha_reference.py",
         ROOT / "scripts/platform/oci_proof_mirror.py",
         PLATFORM / "oci-proof-mirror.lock.json",
+        PLATFORM / "cell-profile.contract.json",
+        PLATFORM / "cell-pilot/two-operator-pilot.contract.json",
+        PLATFORM / "cell-pilot/two-operator-pilot.example.invalid.json",
+        ROOT / "scripts/platform/validate_two_operator_pilot.py",
     ]
     missing = [str(path.relative_to(ROOT)) for path in required_paths if not path.is_file()]
     if missing:
@@ -600,6 +640,7 @@ def validate(render: bool) -> dict[str, Any]:
     _assert_first_party_deployments()
     _assert_images()
     _assert_oci_proof_mirror()
+    _assert_two_operator_pilot_contract()
     _assert_local_fixture_scope()
     _assert_migration_job()
     _assert_flux_chain()

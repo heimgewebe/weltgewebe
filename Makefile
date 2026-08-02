@@ -1,4 +1,4 @@
-.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests platform-check platform-render platform-kind-proof generate diagnose prepare-commit generate-system-map check-system-map-drift
+.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests cell-pilot-check platform-check platform-render platform-kind-proof generate diagnose prepare-commit generate-system-map check-system-map-drift
 
 # Fixture repositories are short-lived. Detached Git maintenance can outlive a
 # command and race with TemporaryDirectory cleanup or a following local clone.
@@ -18,7 +18,11 @@ validate-tests:
 	python3 scripts/docmeta/validate_doc_freshness_registry.py
 	python3 -m scripts.docmeta.generate_claim_evidence_map --check
 
-platform-check:
+cell-pilot-check:
+	python3 scripts/platform/validate_two_operator_pilot.py --mode example platform/cell-pilot/two-operator-pilot.example.invalid.json
+	python3 -m unittest scripts.ci.tests.test_two_operator_cell_pilot
+
+platform-check: cell-pilot-check
 	python3 scripts/platform/validate_platform.py
 	python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract
 

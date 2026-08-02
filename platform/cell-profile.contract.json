@@ -44,7 +44,8 @@
       "SLO and alert ownership",
       "key rotation and revocation procedure",
       "backup and restore receipt",
-      "upgrade and rollback procedure"
+      "upgrade and rollback procedure",
+      "joint two-operator structural preflight validated against the canonical pilot contract only for jointly approved reciprocal federation between independent operators"
     ]
   },
   "activation_gates": [
@@ -53,7 +54,8 @@
     "peer keys and delivery endpoints are independently exchanged and verified",
     "automatic delivery retry and idempotency proof is green",
     "backup, restore and rollback are measured for the concrete environment",
-    "rendered cell overlay contains no federation egress placeholder and permits only the exact configured peer DNS names and TCP ports"
+    "rendered cell overlay contains no federation egress placeholder and permits only the exact configured peer DNS names and TCP ports",
+    "when jointly approved reciprocal federation between independent operators is enabled, the two-operator structural preflight passes with joint approval and exact release binding; external receipt artifacts, trust anchors and replay ledger are independently verified before that federation activation"
   ],
   "nonclaims": [
     "production Kubernetes cutover",
@@ -61,9 +63,15 @@
     "automatic peer discovery or trust",
     "multi-region high availability",
     "identity migration between cells",
-    "public quarantine administration"
+    "public quarantine administration",
+    "completed two-operator WAN pilot",
+    "static validator establishes activation readiness",
+    "static receipt digests establish operator or failure-domain independence"
   ],
   "artifacts": {
-    "federation_delivery_egress_template": "platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml"
+    "federation_delivery_egress_template": "platform/apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml",
+    "two_operator_pilot_contract": "platform/cell-pilot/two-operator-pilot.contract.json",
+    "two_operator_pilot_example": "platform/cell-pilot/two-operator-pilot.example.invalid.json",
+    "two_operator_pilot_validator": "scripts/platform/validate_two_operator_pilot.py"
   }
 }
