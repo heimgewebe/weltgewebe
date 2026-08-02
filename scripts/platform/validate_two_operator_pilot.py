@@ -623,7 +623,7 @@ def _validate_cell(
         f"{path}.peer.delivery_base_url",
         activation=activation,
     )
-    expected_key_id = _string(peer["expected_key_id"], f"{path}.peer.expected_key_id")
+    expected_key_id = _key_id(peer["expected_key_id"], f"{path}.peer.expected_key_id")
     expected_public_key, expected_public_key_digest = _decode_public_key(
         peer["expected_public_key"], f"{path}.peer.expected_public_key"
     )

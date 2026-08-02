@@ -390,6 +390,16 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
                 ):
                     validator._key_id(value, "test.key_id")
 
+    def test_peer_expected_key_ids_match_runtime_bounds(self) -> None:
+        for value in ("a:b", "z" * 65):
+            with self.subTest(value=value):
+                self.assert_rejected(
+                    lambda document, value=value: document["cells"][0]["peer"].update(
+                        {"expected_key_id": value}
+                    ),
+                    "invalid-key-id",
+                )
+
     def test_federation_cell_ids_have_a_separate_64_character_limit(self) -> None:
         valid = f"{'a' * 51}.operator.net"
         invalid = f"{'a' * 52}.operator.net"
