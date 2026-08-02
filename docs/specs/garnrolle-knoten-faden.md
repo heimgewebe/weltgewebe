@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-02
 review_after: 2026-10-12
 depends_on: []
 relations:
@@ -169,12 +169,13 @@ serialisiert. Schlägt die Projektion dauerhaft fehl, darf kein verwaister neuer
 Knoten als erfolgreicher Gesamtvorgang zurückbleiben.
 
 Anträge, Vetos, Abstimmungen und Gesprächsbeiträge bleiben eigene dauerhafte
-Governance-Datensätze. Das Antragsgewebe auf der Informationsseite wird daraus
-als reine Leseprojektion berechnet; es erzeugt keinen zweiten `domain_edges`-
-Bestand. Da Anträge keinen geografischen Ort besitzen, erscheint diese Projektion
-nicht auf der Karte. Exakte Aktionszahlen bleiben als Text erhalten; nur die Zahl
-gleichzeitig gezeichneter paralleler Linien darf zur Renderbegrenzung gedeckelt
-werden.
+Governance-Datensätze. Sie sind keine Fäden und werden auf der
+Antragsinformationsseite nicht als Fadenbündel gezeichnet. Ihre Oberfläche zeigt
+stattdessen Verfahrensphase, Fristen, nächsten möglichen Ausgang und die jeweils
+relevanten Zähler. Eine spätere Governance-Linse darf nur ausdrücklich
+spezifizierte, aus einer belegten Handlung abgeleitete Beziehungen mit echten,
+typisierten Endpunkten darstellen. Zähler, Kategorien und Verfahrensphasen
+erzeugen weder `domain_edges` noch eine zweite Beziehungswahrheit.
 
 ### Aktivität einer Garnrolle
 

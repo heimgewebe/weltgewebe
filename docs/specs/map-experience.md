@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-map
 owner: product-map
-last_reviewed: 2026-07-11
+last_reviewed: 2026-08-02
 review_after: 2026-10-11
 depends_on:
   - specs.ui-interaction
@@ -20,6 +20,8 @@ relations:
     target: docs/blueprints/kartenklarheit.md
   - type: relates_to
     target: docs/blueprints/map-blaupause.md
+  - type: relates_to
+    target: docs/specs/ortsweberei-webgemeindezentrum.md
 verifies_with:
   - apps/web/src/lib/map/scene.ts
   - apps/web/src/lib/map/types.ts
@@ -67,9 +69,14 @@ Kartenelemente verwenden typisierte Varianten statt eines beliebigen Punktcontai
 
 - Knoten;
 - Garnrolle;
+- Webgemeindezentrum als dauerhafter Strukturknoten einer Ortsweberei;
 - später weitere klar definierte Varianten.
 
-Eine Garnrolle mit `not_on_map` erhält keinen öffentlichen Marker. `exact` und `radius` bleiben im Datenmodell unterscheidbar; ihre visuelle Darstellung darf nicht wertend sein.
+Eine Garnrolle mit `not_on_map` erhält keinen öffentlichen Marker. `exact` und
+`radius` bleiben im Datenmodell unterscheidbar; ihre visuelle Darstellung darf
+nicht wertend sein. Das Webgemeindezentrum wird bewusst von der Ortsweberei
+verortet. Die Karte darf weder einen geografischen Mittelpunkt noch eine
+private Accountadresse als Zentrum erraten.
 
 ## Fäden und Dichte
 

@@ -29,6 +29,7 @@ Generated automatically. Do not edit.
 | adr.ADR-0011__foederierte-gewebezellen | ADR-0011 — Föderierte Gewebe-Zellen | reference | active | docs/adr/ADR-0011__foederierte-gewebezellen.md |
 | adr.ADR-0012__ereignisrueckgrat-transactional-outbox | ADR-0012 — Ereignisrückgrat mit Transactional Outbox | reference | active | docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md |
 | adr.ADR-0013__ha-referenzzelle-und-wiederherstellung | ADR-0013 — Hochverfügbare Referenzzelle und Wiederherstellungsbeweis | reference | active | docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md |
+| adr.ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum | ADR-0015 — Ortsweberei, Gewebezelle und Webgemeindezentrum | reference | active | docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md |
 | blueprint-doc-structure-task-control | Weltgewebe Dokumentationsstruktur und Task-Steuerung | blueprint | draft | docs/blueprints/doc-structure-task-control.md |
 | blueprint-doc-structure-task-control-examples | Dokumentationsstruktur und Task-Steuerung Beispiele | reference | draft | docs/blueprints/doc-structure-task-control-examples.md |
 | blueprint-doc-structure-task-control-roadmap | Dokumentationsstruktur und Task-Steuerung Roadmap | roadmap | draft | docs/blueprints/doc-structure-task-control-roadmap.md |
@@ -186,6 +187,7 @@ Generated automatically. Do not edit.
 | specs.list-pagination-api | List Pagination API Spec | reference | active | docs/specs/list-pagination-api.md |
 | specs.map-experience | Kartenerlebnis | specification | canonical | docs/specs/map-experience.md |
 | specs.objektlebenszyklen-und-loeschwirkungen | Objektlebenszyklen und Löschwirkungen | specification | canonical | docs/specs/objektlebenszyklen-und-loeschwirkungen.md |
+| specs.ortsweberei-webgemeindezentrum | Ortsweberei und Webgemeindezentrum | specification | canonical | docs/specs/ortsweberei-webgemeindezentrum.md |
 | specs.privacy-api | Garnrollen-Sichtbarkeit API | reference | active | docs/specs/privacy-api.md |
 | specs.privacy-ui | Garnrollen-Sichtbarkeit UI | reference | deprecated | docs/specs/privacy-ui.md |
 | specs.private-nachrichten | Private Nachrichten zwischen Konten | specification | canonical | docs/specs/private-nachrichten.md |

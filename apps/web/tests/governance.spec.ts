@@ -699,15 +699,19 @@ test("guest can read, discuss, and submit the own Weber application", async ({
 
   await page.goto(`/antraege?id=${PROPOSAL_ID}`);
   await expect(
-    page.getByRole("heading", { name: "Fäden dieses Antrags" }),
+    page.getByRole("heading", { name: "Ablauf dieses Antrags" }),
   ).toBeVisible();
-  await expect(page.getByTestId("faden-count-proposal")).toContainText("1");
-  await expect(page.getByTestId("faden-count-vetoes")).toContainText("0");
-  await expect(page.getByTestId("faden-count-messages")).toContainText("1");
-  await expect(page.getByTestId("faden-count-votes")).toContainText("0");
   await expect(
-    page.getByTestId("governance-faden").locator("path"),
-  ).toHaveCount(2);
+    page.getByTestId("proposal-process-step-consent"),
+  ).toHaveAttribute("aria-current", "step");
+  await expect(page.getByTestId("proposal-process-vetoes")).toContainText("0");
+  await expect(page.getByTestId("proposal-process-messages")).toContainText(
+    "1",
+  );
+  await expect(page.getByTestId("proposal-process-votes")).toHaveCount(0);
+  await expect(
+    page.getByRole("heading", { name: "Fäden dieses Antrags" }),
+  ).toHaveCount(0);
   expect(directFadenWrites).toEqual([]);
   await expect(
     page.getByText("Willkommen im öffentlichen Gesprächsraum."),
@@ -785,7 +789,9 @@ test("Weber veto opens the second phase and voting uses yes greater than no with
     .fill("Bitte die offene Verantwortungsfrage zuerst klären.");
   await page.getByRole("button", { name: "Veto einlegen" }).click();
 
-  await expect(page.getByText("Gespräch und Abstimmung")).toBeVisible();
+  await expect(
+    page.getByTestId("proposal-process-step-voting"),
+  ).toHaveAttribute("aria-current", "step");
   await expect(
     page.getByText(/Es gibt keine Mindestbeteiligung/),
   ).toBeVisible();
