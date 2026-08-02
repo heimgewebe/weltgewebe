@@ -138,7 +138,7 @@ jobs:
         run: |
           set -euo pipefail
           test "${GITHUB_HEAD_REF}" = "feat/gewebezelle-two-operator-pilot-v1"
-          test "$(git rev-parse HEAD^)" = "9077373fed9ba572b48d0ab1a538e99384a3df04"
+          test "$(git rev-parse HEAD^)" = "27d2e59400db4be09aef58b6f3fac5b4eeddc6e1"
           test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/kubernetes-platform.yml"
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # tag: v7.0.0
         with:
@@ -198,6 +198,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('.github/workflows/kubernetes-platform.yml')
+          path.write_text(path.read_text().rstrip('\n') + '\n')
+          PY
           git diff --check
           test -z "$(git status --short | grep -E '^\?\?' || true)"
           git config user.name 'heimgewebe-operator'
