@@ -169,6 +169,90 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertGreaterEqual(script.count('sha256sum "$artifact_real"'), 2)
         self.assertIn('write_deploy_receipt \\\n      "failed"', script)
 
+    def run_release_cleanup(self, release: Path) -> subprocess.CompletedProcess[str]:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        start = script.index("path_contains_mount() {")
+        end = script.index("\nprune_releases() {", start)
+        cleanup_functions = script[start:end]
+        command = f"""set -Eeuo pipefail
+SCRIPT_DIR={str(ROOT / 'scripts/ops')!r}
+run_ops_python() {{
+  WELTGEWEBE_OPS_SCRIPT_DIR="$SCRIPT_DIR" python3 -I - "$@"
+}}
+{cleanup_functions}
+cleanup_release_runtime_paths "$1"
+"""
+        return subprocess.run(
+            ["bash", "-c", command, "release-cleanup-test", str(release)],
+            cwd=ROOT,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    def test_reconciler_prunes_legacy_basemap_directory_safely(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("a" * 40)
+            legacy_basemap = release / "build/basemap"
+            web_build = release / "apps/web/build"
+            persistent_basemap = root / "persistent-basemap"
+            legacy_basemap.mkdir(parents=True)
+            web_build.mkdir(parents=True)
+            persistent_basemap.mkdir()
+            (legacy_basemap / "legacy.pmtiles").write_text("legacy", encoding="utf-8")
+            (web_build / "index.html").write_text("generated", encoding="utf-8")
+            sentinel = persistent_basemap / "canonical.pmtiles"
+            sentinel.write_text("persistent", encoding="utf-8")
+
+            result = self.run_release_cleanup(release)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(legacy_basemap.exists())
+            self.assertFalse(web_build.exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+    def test_reconciler_unlinks_basemap_symlink_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("b" * 40)
+            build = release / "build"
+            persistent_basemap = root / "persistent-basemap"
+            build.mkdir(parents=True)
+            persistent_basemap.mkdir()
+            sentinel = persistent_basemap / "canonical.pmtiles"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (build / "basemap").symlink_to(persistent_basemap, target_is_directory=True)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((build / "basemap").exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+    def test_reconciler_refuses_unprotected_legacy_basemap_content(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            release = Path(temporary) / ("c" * 40)
+            legacy_basemap = release / "build/basemap"
+            legacy_basemap.mkdir(parents=True)
+            unsafe = legacy_basemap / "mutable.pmtiles"
+            unsafe.write_text("mutable", encoding="utf-8")
+            unsafe.chmod(0o666)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("not exclusively owned and protected", result.stderr)
+            self.assertTrue(unsafe.exists())
+
+    def test_reconciler_release_cleanup_is_mount_and_boundary_guarded(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        self.assertIn('/proc/self/mountinfo', script)
+        self.assertIn('legacy release basemap contains a mount', script)
+        self.assertIn('legacy release basemap escaped release root', script)
+        self.assertIn('rm -rf --one-file-system -- "$basemap_real"', script)
+        self.assertNotIn('rm -f -- "$release_dir/build/basemap"', script)
+
     def test_reconciler_has_bounded_storage_and_state_transitions(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
         for state in (

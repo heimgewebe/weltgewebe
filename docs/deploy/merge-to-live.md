@@ -208,7 +208,13 @@ werden auf höchstens 20 Exemplare und grundsätzlich sieben Tage begrenzt.
 Release-Worktrees werden frühestens nach 14 Tagen entfernt. Der aktuelle und der
 vorherige Release bleiben geschützt. Ein Worktree wird nur ohne `--force`
 entfernt, wenn er root-eigen, commitförmig, unverändert und nicht einer der zwei
-geschützten Releases ist.
+geschützten Releases ist. Historische Releases können unter `build/basemap`
+noch ein echtes Verzeichnis statt des heutigen Symlinks enthalten. Der
+Reconciler entfernt ein solches Altverzeichnis nur innerhalb des gebundenen
+Release-Worktrees, wenn darunter kein Mount liegt und alle Inhalte dem
+Reconciler-Nutzer gehören sowie weder gruppen- noch weltbeschreibbar sind. Ein
+Symlink wird weiterhin nur gelöst; der kanonische Kartenbestand wird nie
+rekursiv verfolgt.
 
 ## Öffentlicher Nachweis
 
