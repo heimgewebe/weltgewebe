@@ -23,14 +23,14 @@
       },
       "identity": {
         "active_key_id": "key-a-2030-01",
-        "active_public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
-        "public_key_sha256": "630dcd2966c4336691125448bbb25b4ff412a49c732db2c8abc1b8581bd710dd"
+        "active_public_key": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
+        "public_key_sha256": "21fe31dfa154a261626bf854046fd2271b7bed4b6abe45aa58877ef47f9721b9"
       },
       "peer": {
         "cell_id": "cell-b.operator-b.invalid",
         "delivery_base_url": "https://cell-b.operator-b.invalid",
         "expected_key_id": "key-b-2030-01",
-        "expected_public_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
+        "expected_public_key": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw",
         "state": "trusted",
         "allow_neighbourhood": true,
         "allowed_event_types": [
@@ -112,14 +112,14 @@
       },
       "identity": {
         "active_key_id": "key-b-2030-01",
-        "active_public_key": "ICEiIyQlJicoKSorLC0uLzAxMjM0NTY3ODk6Ozw9Pj8",
-        "public_key_sha256": "72dbb7336c76780023f83da4c355f2eeea85733b13d3477697917790c1229084"
+        "active_public_key": "PUAXw-hDiVqStwqnTRt-vJyYLM8uxJaMwM1V8Sr0Zgw",
+        "public_key_sha256": "39f713d0a644253f04529421b9f51b9b08979d08295959c4f3990ee617f5139f"
       },
       "peer": {
         "cell_id": "cell-a.operator-a.invalid",
         "delivery_base_url": "https://cell-a.operator-a.invalid",
         "expected_key_id": "key-a-2030-01",
-        "expected_public_key": "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8",
+        "expected_public_key": "11qYAYKxCrfVS_7TyWQHOg7hcvPapiMlrwIaaPcHURo",
         "state": "trusted",
         "allow_neighbourhood": true,
         "allowed_event_types": [
