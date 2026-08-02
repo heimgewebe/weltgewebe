@@ -13,9 +13,7 @@
 <div class="settings-page">
   <div class="container">
     <header class="page-header">
-      <div class="row">
-        <a class="btn touch-target" href="/map">← Zur Karte</a>
-      </div>
+      <a class="back-link touch-target" href="/map">← Zur Karte</a>
       <h1>Einstellungen</h1>
       <p class="intro">
         Verwalte deine Garnrolle, dein Konto und die Darstellung an einem
@@ -63,7 +61,7 @@
         </div>
 
         <a
-          class="diagnostics-link"
+          class="diagnostics-link touch-target"
           href="/build"
           data-testid="build-diagnostics-link"
         >
@@ -99,9 +97,11 @@
   }
 
   .page-header {
+    display: grid;
     margin-bottom: clamp(1.5rem, 4vw, 2.5rem);
   }
 
+  .page-header h1,
   .intro,
   .menu-heading,
   .menu-hint {
@@ -118,6 +118,7 @@
   .settings-menu {
     position: sticky;
     top: 1rem;
+    display: grid;
     gap: 1rem;
   }
 
@@ -135,10 +136,11 @@
     font-size: 0.82rem;
   }
 
-  .appearance-section,
+  .back-link,
   .diagnostics-link {
-    padding-top: 0.8rem;
-    border-top: 1px solid var(--panel-border);
+    display: inline-flex;
+    align-items: center;
+    width: fit-content;
   }
 
   .touch-target {
