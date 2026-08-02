@@ -9,13 +9,15 @@ lifecycle_state: active
 role: norm
 organ: governance
 owner: governance
-last_reviewed: 2026-07-20
+last_reviewed: 2026-08-02
 review_after: 2026-10-12
 depends_on:
   - specs.garnrolle-knoten-faden
 relations:
   - type: relates_to
     target: docs/domain/vocabulary.md
+  - type: relates_to
+    target: docs/specs/ortsweberei-webgemeindezentrum.md
 verifies_with:
   - apps/api/tests/api_governance_guards.rs
   - apps/api/tests/db_governance.rs
@@ -195,18 +197,25 @@ und einen eigenen späteren Governance- und Datenschutzprozess benötigt.
 
 ## Anträge-Oberfläche
 
-Der Wurzelknopf **Gemeinsam** befindet sich im Kartenkopf oben mittig. Er zeigt
-reale Governance-Sichten: alle Anträge, offene Konsentverfahren, Vetos,
-Gespräche mit tatsächlichen Beiträgen und laufende Abstimmungen. Das Stellen
-eines Antrags erscheint
-als eigene Webungsaktion im unteren Werkzeugfächer.
+Bis zur produktiven Ortsweberei-Zuordnung bleibt der Wurzelknopf **Gemeinsam**
+im Kartenkopf die globale Governance-Sicht. Im Zielmodell öffnet das
+Webgemeindezentrum zusätzlich den Webrat seiner Ortsweberei. Globale und lokale
+Sicht referenzieren dieselben Anträge; sie erzeugen keine Duplikate.
+
+Der globale Einstieg zeigt reale Governance-Sichten: alle Anträge, offene
+Konsentverfahren, Vetos, Gespräche mit tatsächlichen Beiträgen und laufende
+Abstimmungen. Das Stellen eines Antrags erscheint als eigene Webungsaktion im
+unteren Werkzeugfächer.
 
 Die Oberfläche bietet:
 
 - Liste und Informationsseite aller Anträge;
-- Status und verbleibende Zeit;
-- Vetos, Beitrags- und Stimmenzahlen;
-- ein aus belegten Aktionen abgeleitetes, nicht editierbares Antragsgewebe;
+- Verfahrensart, Status, vollständige Frist und nächsten möglichen Ausgang;
+- eine zugängliche Prozessanzeige für Antragstellung, Einspruchsfrist,
+  gegebenenfalls Gespräch und Abstimmung sowie Entscheidung;
+- Vetos und Beitragszahlen sowie Stimmen erst, wenn eine Abstimmungsphase
+  existiert oder abgeschlossen wurde;
+- keine als Fäden gezeichneten Kategorien, Zähler oder Verfahrensphasen;
 - den öffentlichen Gesprächsraum;
 - für angemeldete Accounts das Beitragsfeld;
 - für Weber und Administratoren bei fremden Anträgen die kontextabhängigen

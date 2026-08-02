@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 677 |
+| Relationen gesamt | 687 |
 | — depends_on | 27 |
 | — implements | 1 |
-| — relates_to | 628 |
+| — relates_to | 638 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | relates_to Anteil | 93% |
@@ -32,7 +32,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (268 Dokumente):
+**Cluster 1** (270 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -84,6 +84,7 @@ _Keine Lücken erkannt._
 - `docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md`
 - `docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md`
 - `docs/adr/ADR-0014__accountable-collective-node-mutations.md`
+- `docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md`
 - `docs/architecture/weltgewebe-os-convergence-adapter.md`
 - `docs/architekturstruktur.md`
 - `docs/blueprints/agent-operability-blaupause.md`
@@ -241,6 +242,7 @@ _Keine Lücken erkannt._
 - `docs/specs/list-pagination-api.md`
 - `docs/specs/map-experience.md`
 - `docs/specs/objektlebenszyklen-und-loeschwirkungen.md`
+- `docs/specs/ortsweberei-webgemeindezentrum.md`
 - `docs/specs/privacy-api.md`
 - `docs/specs/privacy-ui.md`
 - `docs/specs/private-nachrichten.md`
