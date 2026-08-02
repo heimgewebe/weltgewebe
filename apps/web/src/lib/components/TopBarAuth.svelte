@@ -31,6 +31,19 @@
     <img src={garnrolleIcon} alt="" />
   </a>
 
+  {#if authView.isGuest}
+    <a
+      class="guest-badge"
+      href="/antraege#antrag-stellen"
+      data-testid="topbar-guest-badge"
+      aria-label="Rolle: Gast – Weberstatus beantragen"
+      title="Weberstatus beantragen"
+    >
+      <span class="guest-badge-role">Gast</span>
+      <span class="guest-badge-cta">Weber werden</span>
+    </a>
+  {/if}
+
   {#if authView.showAccountLink}
     {#if authView.showRetry}
       <button
@@ -92,9 +105,38 @@
   .garnrolle-link:focus-visible,
   .message-entry:focus-visible,
   .login-entry:focus-visible,
-  .auth-retry:focus-visible {
+  .auth-retry:focus-visible,
+  .guest-badge:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
+  }
+
+  .guest-badge {
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+    min-height: 44px;
+    padding: 0 0.75rem;
+    border: 1px solid var(--accent);
+    border-radius: 999px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    text-decoration: none;
+    font: inherit;
+    font-weight: 700;
+    white-space: nowrap;
+  }
+
+  .guest-badge-role {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .guest-badge-cta {
+    font-size: 0.75rem;
+    opacity: 0.9;
   }
 
   .message-entry,
@@ -154,6 +196,15 @@
     }
 
     .auth-label {
+      display: none;
+    }
+
+    .guest-badge {
+      gap: 0;
+      padding: 0 0.6rem;
+    }
+
+    .guest-badge-cta {
       display: none;
     }
   }
