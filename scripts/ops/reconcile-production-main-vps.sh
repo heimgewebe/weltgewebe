@@ -764,7 +764,8 @@ prune_deploy_contention_receipts() {
 
 path_contains_mount() {
   local target_path="$1"
-  run_ops_python "$target_path" << 'PY'
+  local boundary_path="$2"
+  run_ops_python "$target_path" "$boundary_path" /proc/self/mountinfo << 'PY'
 import os
 import sys
 
@@ -774,21 +775,35 @@ def decode_mount_path(value: str) -> str:
         (r"\040", " "),
         (r"\011", "\t"),
         (r"\012", "\n"),
-        (r"\134", "\"),
+        (r"\134", "\\"),
     ):
         value = value.replace(escaped, plain)
     return value
 
 
 target = os.path.realpath(sys.argv[1])
-prefix = target + os.sep
-with open("/proc/self/mountinfo", encoding="utf-8") as mountinfo:
+boundary = os.path.realpath(sys.argv[2])
+mountinfo_path = sys.argv[3]
+boundary_prefix = boundary + os.sep
+if target != boundary and not target.startswith(boundary_prefix):
+    raise SystemExit(2)
+target_prefix = target + os.sep
+with open(mountinfo_path, encoding="utf-8") as mountinfo:
     for raw_line in mountinfo:
         fields = raw_line.split()
         if len(fields) < 5:
             raise SystemExit(2)
         mount_path = decode_mount_path(fields[4])
-        if mount_path == target or mount_path.startswith(prefix):
+        mount_within_boundary = (
+            mount_path == boundary or mount_path.startswith(boundary_prefix)
+        )
+        target_within_mount = target == mount_path or target.startswith(
+            mount_path + os.sep
+        )
+        mount_within_target = mount_path == target or mount_path.startswith(
+            target_prefix
+        )
+        if mount_within_boundary and (target_within_mount or mount_within_target):
             raise SystemExit(0)
 raise SystemExit(1)
 PY
@@ -797,9 +812,13 @@ PY
 cleanup_release_runtime_paths() {
   local release_dir="$1"
   local release_real
+  local web_parent_path="$release_dir/apps/web"
+  local web_build_path="$web_parent_path/build"
+  local web_build_real
   local basemap_path="$release_dir/build/basemap"
   local basemap_real
   local mount_rc
+  local protected_path
   local unsafe_path
 
   release_real="$(realpath -e -- "$release_dir")" || return 1
@@ -808,8 +827,68 @@ cleanup_release_runtime_paths() {
     return 1
   }
 
-  if ! rm -rf --one-file-system -- "$release_dir/apps/web/build"; then
-    echo "could not remove release web build: $release_dir/apps/web/build" >&2
+  for protected_path in "$release_real" "$release_dir/apps" "$web_parent_path" "$release_dir/build"; do
+    [[ -e "$protected_path" || -L "$protected_path" ]] || continue
+    [[ -d "$protected_path" && ! -L "$protected_path" ]] || {
+      echo "release cleanup parent is unsafe: $protected_path" >&2
+      return 1
+    }
+    if ! unsafe_path="$(
+      find "$protected_path" -maxdepth 0 -xdev \( ! -user "$EUID" -o -perm /022 \) -print -quit
+    )"; then
+      echo "could not inspect release cleanup parent: $protected_path" >&2
+      return 1
+    fi
+    [[ -z "$unsafe_path" ]] || {
+      echo "release cleanup parent is not exclusively owned and protected: $unsafe_path" >&2
+      return 1
+    }
+  done
+
+  for protected_path in "$web_parent_path" "$release_dir/build"; do
+    [[ -d "$protected_path" && ! -L "$protected_path" ]] || continue
+    if path_contains_mount "$protected_path" "$release_real"; then
+      echo "release cleanup parent intersects a mount: $protected_path" >&2
+      return 1
+    else
+      mount_rc=$?
+      ((mount_rc == 1)) || {
+        echo "could not verify release cleanup parent mount state: $protected_path" >&2
+        return 1
+      }
+    fi
+  done
+
+  if [[ -L "$web_build_path" ]]; then
+    if ! rm -f -- "$web_build_path"; then
+      echo "could not unlink release web build symlink: $web_build_path" >&2
+      return 1
+    fi
+  elif [[ -d "$web_build_path" ]]; then
+    web_build_real="$(realpath -e -- "$web_build_path")" || return 1
+    case "$web_build_real" in
+      "$release_real"/*) ;;
+      *)
+        echo "release web build escaped release root: $web_build_path" >&2
+        return 1
+        ;;
+    esac
+    if path_contains_mount "$web_build_real" "$release_real"; then
+      echo "release web build contains a mount: $web_build_path" >&2
+      return 1
+    else
+      mount_rc=$?
+      ((mount_rc == 1)) || {
+        echo "could not verify release web build mount state: $web_build_path" >&2
+        return 1
+      }
+    fi
+    if ! rm -rf --one-file-system -- "$web_build_real"; then
+      echo "could not remove release web build: $web_build_path" >&2
+      return 1
+    fi
+  elif [[ -e "$web_build_path" ]]; then
+    echo "release web build has an unexpected file type: $web_build_path" >&2
     return 1
   fi
   if [[ -L "$basemap_path" ]]; then
@@ -827,7 +906,7 @@ cleanup_release_runtime_paths() {
         ;;
     esac
 
-    if path_contains_mount "$basemap_real"; then
+    if path_contains_mount "$basemap_real" "$release_real"; then
       echo "legacy release basemap contains a mount: $basemap_path" >&2
       return 1
     else

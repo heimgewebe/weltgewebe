@@ -212,8 +212,10 @@ geschützten Releases ist. Historische Releases können unter `build/basemap`
 noch ein echtes Verzeichnis statt des heutigen Symlinks enthalten. Der
 Reconciler entfernt ein solches Altverzeichnis nur innerhalb des gebundenen
 Release-Worktrees, wenn darunter kein Mount liegt und alle Inhalte dem
-Reconciler-Nutzer gehören sowie weder gruppen- noch weltbeschreibbar sind. Ein
-Symlink wird weiterhin nur gelöst; der kanonische Kartenbestand wird nie
+Reconciler-Nutzer gehören sowie weder gruppen- noch weltbeschreibbar sind. Auch
+der Web-Build-Pfad wird vor der Löschung realpfadgebunden geprüft; Symlinks in
+seinen Elternverzeichnissen sowie Mounts zwischen Release-Grenze und Ziel oder
+unter dem Ziel führen zur Verweigerung. Ein finaler Symlink wird jeweils nur gelöst, sein Ziel nie
 rekursiv verfolgt. Kann die sichere Bereinigung eines historischen Releases nicht
 belegt werden, bleibt dieser Worktree erhalten. Die nachgelagerte Retention macht
 einen bereits erfolgreichen Reconcile-Lauf dadurch nicht nachträglich fehlerhaft.

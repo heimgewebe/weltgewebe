@@ -230,6 +230,43 @@ cleanup_release_runtime_paths "$1"
             self.assertFalse((build / "basemap").exists())
             self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
 
+    def test_reconciler_unlinks_web_build_symlink_without_following_it(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("f" * 40)
+            web = release / "apps/web"
+            external = root / "external-web"
+            web.mkdir(parents=True)
+            external.mkdir()
+            sentinel = external / "sentinel"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (web / "build").symlink_to(external, target_is_directory=True)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse((web / "build").exists())
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
+    def test_reconciler_refuses_intermediate_web_symlink(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            release = root / ("1" * 40)
+            apps = release / "apps"
+            external = root / "external-web"
+            external_build = external / "build"
+            apps.mkdir(parents=True)
+            external_build.mkdir(parents=True)
+            sentinel = external_build / "sentinel"
+            sentinel.write_text("persistent", encoding="utf-8")
+            (apps / "web").symlink_to(external, target_is_directory=True)
+
+            result = self.run_release_cleanup(release)
+
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("release cleanup parent is unsafe", result.stderr)
+            self.assertEqual(sentinel.read_text(encoding="utf-8"), "persistent")
+
     def test_reconciler_refuses_unprotected_legacy_basemap_content(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             release = Path(temporary) / ("c" * 40)
@@ -328,9 +365,53 @@ prune_releases
                 "retaining release after guarded cleanup refusal", result.stderr
             )
 
+    def test_mount_intersection_detects_ancestor_and_descendant_mounts(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        function_start = script.index("path_contains_mount() {")
+        source_start = script.index("import os\n", function_start)
+        source_end = script.index("\nPY\n}", source_start)
+        source = script[source_start:source_end]
+
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary).resolve()
+            boundary = root / "release"
+            target = boundary / "apps/web/build"
+            target.mkdir(parents=True)
+
+            def probe(*mount_paths: Path) -> int:
+                mountinfo = root / "mountinfo"
+                mountinfo.write_text(
+                    "".join(
+                        f"36 25 0:32 / {path} rw - ext4 /dev/root rw\n"
+                        for path in mount_paths
+                    ),
+                    encoding="utf-8",
+                )
+                return subprocess.run(
+                    [
+                        sys.executable,
+                        "-I",
+                        "-",
+                        str(target),
+                        str(boundary),
+                        str(mountinfo),
+                    ],
+                    input=source,
+                    text=True,
+                    capture_output=True,
+                    check=False,
+                ).returncode
+
+            self.assertEqual(probe(boundary / "apps/web"), 0)
+            self.assertEqual(probe(target / "cache"), 0)
+            self.assertEqual(probe(boundary), 0)
+            self.assertEqual(probe(Path("/"), root / "outside"), 1)
+
     def test_reconciler_release_cleanup_is_mount_and_boundary_guarded(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
         self.assertIn('/proc/self/mountinfo', script)
+        self.assertIn('mount_within_boundary', script)
+        self.assertIn('target_within_mount', script)
         self.assertIn('legacy release basemap contains a mount', script)
         self.assertIn('legacy release basemap escaped release root', script)
         self.assertIn('rm -rf --one-file-system -- "$basemap_real"', script)
