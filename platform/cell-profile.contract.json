@@ -45,7 +45,7 @@
       "key rotation and revocation procedure",
       "backup and restore receipt",
       "upgrade and rollback procedure",
-      "joint two-operator structural preflight validated against the canonical pilot contract"
+      "joint two-operator structural preflight validated against the canonical pilot contract only for jointly approved reciprocal federation between independent operators"
     ]
   },
   "activation_gates": [
@@ -55,7 +55,7 @@
     "automatic delivery retry and idempotency proof is green",
     "backup, restore and rollback are measured for the concrete environment",
     "rendered cell overlay contains no federation egress placeholder and permits only the exact configured peer DNS names and TCP ports",
-    "two-operator structural preflight passes with joint approval and exact release binding; external receipt artifacts, trust anchors and replay ledger are independently verified before any activation"
+    "when jointly approved reciprocal federation between independent operators is enabled, the two-operator structural preflight passes with joint approval and exact release binding; external receipt artifacts, trust anchors and replay ledger are independently verified before that federation activation"
   ],
   "nonclaims": [
     "production Kubernetes cutover",

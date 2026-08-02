@@ -9,6 +9,7 @@ import socket
 import subprocess
 import sys
 import tempfile
+import traceback
 import unittest
 
 import yaml
@@ -216,6 +217,53 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
                 ),
             ):
                 validator.validate_document(activation_document(), "activation")
+
+    def test_contract_snapshot_comparison_is_recursively_type_strict(self) -> None:
+        mutations = {
+            "boolean port": lambda contract: contract["network_contract"].update(
+                {"port": True}
+            ),
+            "integer availability": lambda contract: contract[
+                "operational_limits"
+            ].update({"minimum_availability_percent": 95}),
+        }
+        for name, mutate in mutations.items():
+            with self.subTest(name=name), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                contract_path = root / "contract.json"
+                profile_path = root / "profile.json"
+                contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
+                mutate(contract)
+                contract_path.write_text(json.dumps(contract), encoding="utf-8")
+                profile_path.write_bytes(PROFILE_PATH.read_bytes())
+                with (
+                    mock.patch.object(validator, "CONTRACT_PATH", contract_path),
+                    mock.patch.object(validator, "PROFILE_PATH", profile_path),
+                    self.assertRaisesRegex(
+                        validator.PilotContractError, r"^contract-drift:"
+                    ),
+                ):
+                    validator._contract()
+
+    def test_cell_profile_scopes_two_operator_gate_to_reciprocal_federation(
+        self,
+    ) -> None:
+        profile = json.loads(PROFILE_PATH.read_text(encoding="utf-8"))
+        operations = profile["required_contracts"]["operations"]
+        self.assertTrue(
+            any(
+                "only for jointly approved reciprocal federation" in item
+                for item in operations
+            )
+        )
+        self.assertTrue(
+            any(
+                item.startswith(
+                    "when jointly approved reciprocal federation between independent operators is enabled"
+                )
+                for item in profile["activation_gates"]
+            )
+        )
 
     def test_public_endpoint_and_contact_are_bound_to_control_domain(self) -> None:
         self.assert_rejected(
@@ -488,6 +536,8 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
                     function(value, "test.url", activation=True)
                 except validator.PilotContractError as error:
                     self.assertNotIn(sentinel, str(error))
+                    rendered = "".join(traceback.format_exception(error))
+                    self.assertNotIn(sentinel, rendered)
                 else:
                     self.fail("invalid port text must fail")
 
@@ -540,16 +590,34 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
                     "backup-authority-collision",
                 )
 
-    def test_reserved_example_domains_are_rejected_for_activation(self) -> None:
-        self.assert_rejected(
-            lambda d: d["cells"][0].update(
-                {
-                    "cell_id": "cell-a.operator-a.invalid",
-                    "public_base_url": "https://cell-a.operator-a.invalid",
-                }
-            ),
-            "reserved-host",
+    def test_special_use_domains_are_rejected_for_activation(self) -> None:
+        hosts = (
+            "cell.alt",
+            "cell.example",
+            "cell.invalid",
+            "cell.local",
+            "cell.localhost",
+            "cell.onion",
+            "cell.test",
+            "cell.example.com",
+            "cell.example.net",
+            "cell.example.org",
+            "cell.home.arpa",
+            "cell.resolver.arpa",
+            "cell.service.arpa",
+            "cell.eap-noob.arpa",
+            "cell.6tisch.arpa",
+            "1.0.0.127.in-addr.arpa",
+            "cell.ip6.arpa",
         )
+        for host in hosts:
+            with self.subTest(host=host), self.assertRaisesRegex(
+                validator.PilotContractError, r"^special-use-host:"
+            ):
+                validator._hostname(host, "test.host", activation=True)
+        for host in ("alt", "example", "invalid", "local", "localhost", "onion", "test"):
+            with self.subTest(exact=host):
+                self.assertTrue(validator._is_special_use_hostname(host))
 
     def test_release_binding_cannot_drift(self) -> None:
         cases = {
@@ -656,6 +724,29 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             ),
             "overlapping-change-windows",
         )
+        for name, mutate, code in (
+            (
+                "example restore after activation",
+                lambda d: d["cells"][0]["backup_restore"].update(
+                    {"restored_at": d["activation"]["generated_at"]}
+                ),
+                "restore-after-activation",
+            ),
+            (
+                "example activation after change window",
+                lambda d: d["activation"].update(
+                    {"generated_at": d["cells"][0]["operations"]["upgrade_window"]["start"]}
+                ),
+                "activation-after-change-window",
+            ),
+        ):
+            with self.subTest(name=name):
+                document = copy.deepcopy(self.example)
+                mutate(document)
+                with self.assertRaisesRegex(
+                    validator.PilotContractError, rf"^{code}:"
+                ):
+                    validator.validate_document(document, "example")
 
     def test_recovery_and_verification_receipts_are_not_shared(self) -> None:
         cases = {
@@ -748,12 +839,23 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             ),
             "secret-material",
         )
-        self.assert_rejected(
-            lambda d: d["cells"][0]["operator"].update(
-                {"accountable_party": "-----BEGIN PRIVATE KEY-----\nforbidden"}
-            ),
-            "secret-material",
-        )
+        for label in (
+            "PRIVATE KEY",
+            "ENCRYPTED PRIVATE KEY",
+            "OPENSSH PRIVATE KEY",
+            "RSA PRIVATE KEY",
+            "EC PRIVATE KEY",
+            "DSA PRIVATE KEY",
+        ):
+            with self.subTest(label=label):
+                self.assert_rejected(
+                    lambda d, label=label: d["cells"][0]["operator"].update(
+                        {
+                            "accountable_party": f"-----BEGIN {label}-----\nforbidden"
+                        }
+                    ),
+                    "secret-material",
+                )
 
     def test_document_path_accepts_the_canonical_example(self) -> None:
         result = validator.validate_path(EXAMPLE_PATH, "example")

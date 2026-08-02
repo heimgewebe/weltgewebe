@@ -2,7 +2,7 @@
   "schema_version": 1,
   "contract_id": "gewebezelle-two-operator-pilot-v1",
   "profile_contract": "platform/cell-profile.contract.json",
-  "profile_contract_sha256": "c42cb1293bd96c3c1621a92ea3068096c6f0f2b15ea9910e0672add7a121ff07",
+  "profile_contract_sha256": "487186fed61907422fb95fb5fc2bff148eae88cd972be15d8d311fda2f7f41a1",
   "required_cell_count": 2,
   "document_modes": {
     "example": {
@@ -15,10 +15,10 @@
       "structurally_validatable": true,
       "activatable_by_static_validator": false,
       "requires_joint_approval": true,
-      "requires_real_dns_names": true,
       "requires_complete_evidence_digests": true,
       "requires_external_receipt_verification": true,
-      "requires_authoritative_replay_ledger": true
+      "requires_authoritative_replay_ledger": true,
+      "requires_non_special_use_dns_names": true
     }
   },
   "release_binding": {

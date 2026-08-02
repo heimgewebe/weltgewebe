@@ -274,10 +274,12 @@ Generated automatically. Do not edit.
 
 ## docs/adr/ADR-0011__foederierte-gewebezellen.md
 
+- [relates_to] docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
 - [relates_to] docs/specs/federation-core.md
 - [relates_to] docs/specs/federation-wire-v1.md
+- [relates_to] docs/specs/ortsweberei-webgemeindezentrum.md
 
 ## docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
 
@@ -287,6 +289,10 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md
 
 - [relates_to] docs/runbooks/kubernetes-ha-recovery-proof.md
+
+## docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
+
+- [relates_to] docs/specs/ortsweberei-webgemeindezentrum.md
 
 ## docs/architekturstruktur.md
 
@@ -1065,6 +1071,7 @@ Generated automatically. Do not edit.
 
 ## docs/specs/governance-antraege.md
 
+- [relates_to] docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
 - [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
 - [relates_to] docs/specs/objektlebenszyklen-und-loeschwirkungen.md
@@ -1075,10 +1082,12 @@ Generated automatically. Do not edit.
 
 ## docs/specs/map-experience.md
 
+- [relates_to] docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
 - [relates_to] docs/blueprints/map-blaupause.md
 - [implements] docs/deploy/germany-basemap-rollout.md
 - [verifies] docs/reports/map-status.md
 - [depends_on] docs/roadmap.md
+- [relates_to] docs/specs/ortsweberei-webgemeindezentrum.md
 - [relates_to] docs/vision.md
 
 ## docs/specs/objektlebenszyklen-und-loeschwirkungen.md
@@ -1089,6 +1098,13 @@ Generated automatically. Do not edit.
 - [relates_to] docs/specs/contract.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
 - [relates_to] docs/specs/private-nachrichten.md
+
+## docs/specs/ortsweberei-webgemeindezentrum.md
+
+- [relates_to] docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
+- [relates_to] docs/domain/vocabulary.md
+- [relates_to] docs/specs/governance-antraege.md
+- [relates_to] docs/specs/map-experience.md
 
 ## docs/specs/privacy-api.md
 

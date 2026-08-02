@@ -1,7 +1,7 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
-  import GovernanceFaden from "./GovernanceFaden.svelte";
+  import ProposalProcess from "./ProposalProcess.svelte";
   import {
     GovernanceApiError,
     formatRemaining,
@@ -54,9 +54,12 @@
 
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
-      if (cause.status === 403) return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
-      if (cause.status === 409) return "Die Aktion passt nicht mehr zur aktuellen Antragsphase.";
-      if (cause.status === 503) return "Das Antragssystem ist vorübergehend nicht verfügbar.";
+      if (cause.status === 403)
+        return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
+      if (cause.status === 409)
+        return "Die Aktion passt nicht mehr zur aktuellen Antragsphase.";
+      if (cause.status === 503)
+        return "Das Antragssystem ist vorübergehend nicht verfügbar.";
     }
     return "Der Antrag konnte nicht geladen oder geändert werden.";
   }
@@ -158,21 +161,28 @@
     <header class="proposal-header">
       <div class="topline">
         <span class:open={isOpen}>{statusLabel(proposal.status)}</span>
-        {#if proposal.remaining_seconds !== undefined}<strong>Noch {formatRemaining(proposal.remaining_seconds)}</strong>{/if}
+        {#if proposal.remaining_seconds !== undefined}<strong
+            >Noch {formatRemaining(proposal.remaining_seconds)}</strong
+          >{/if}
       </div>
       <p class="eyebrow">Weberantrag</p>
       <h1>{proposal.applicant_title}</h1>
       {#if proposal.summary}<p class="summary">{proposal.summary}</p>{/if}
       <dl>
-        <div><dt>Gestellt</dt><dd>{new Date(proposal.created_at).toLocaleString("de-DE")}</dd></div>
-        <div><dt>Vetos</dt><dd>{proposal.veto_count}</dd></div>
-        <div><dt>Abstimmung</dt><dd>{proposal.yes_votes} Ja · {proposal.no_votes} Nein · {proposal.abstain_votes} Enthaltung</dd></div>
+        <div>
+          <dt>Gestellt</dt>
+          <dd>{new Date(proposal.created_at).toLocaleString("de-DE")}</dd>
+        </div>
+        <div>
+          <dt>Verfahrensart</dt>
+          <dd>Aufnahme als Weber</dd>
+        </div>
       </dl>
     </header>
 
     {#if error}<div class="error" role="alert">{error}</div>{/if}
 
-    <GovernanceFaden {proposal} {messages} />
+    <ProposalProcess {proposal} messageCount={knownMessageCount} />
 
     {#if proposal.vetoes.length > 0}
       <section class="card" aria-labelledby="vetos-heading">
@@ -180,7 +190,12 @@
         <div class="entries">
           {#each proposal.vetoes as item}
             <article>
-              <div class="entry-meta"><strong>{item.weber_title}</strong><time datetime={item.created_at}>{new Date(item.created_at).toLocaleString("de-DE")}</time></div>
+              <div class="entry-meta">
+                <strong>{item.weber_title}</strong><time
+                  datetime={item.created_at}
+                  >{new Date(item.created_at).toLocaleString("de-DE")}</time
+                >
+              </div>
               <p>{item.reason}</p>
             </article>
           {/each}
@@ -191,20 +206,43 @@
     {#if canDecide && proposal.status === "consent"}
       <section class="card action-card" aria-labelledby="veto-heading">
         <h2 id="veto-heading">Begründetes Veto einlegen</h2>
-        <p>Ein Veto verhindert keine Entscheidung. Es eröffnet nach Ablauf der ersten sieben Tage eine weitere siebentägige Gesprächs- und Abstimmungsphase.</p>
-        <textarea bind:value={vetoReason} maxlength="2000" rows="4" placeholder="Konkreter Einwand und mögliche Lösung"></textarea>
-        <button class="primary" on:click={veto} disabled={!vetoReason.trim() || submitting}>Veto einlegen</button>
+        <p>
+          Ein Veto verhindert keine Entscheidung. Es eröffnet nach Ablauf der
+          ersten sieben Tage eine weitere siebentägige Gesprächs- und
+          Abstimmungsphase.
+        </p>
+        <textarea
+          bind:value={vetoReason}
+          maxlength="2000"
+          rows="4"
+          placeholder="Konkreter Einwand und mögliche Lösung"></textarea>
+        <button
+          class="primary"
+          on:click={veto}
+          disabled={!vetoReason.trim() || submitting}>Veto einlegen</button
+        >
       </section>
     {/if}
 
     {#if canDecide && proposal.status === "voting"}
       <section class="card action-card" aria-labelledby="vote-heading">
         <h2 id="vote-heading">Abstimmen</h2>
-        <p>Es gibt keine Mindestbeteiligung. Der Antrag wird angenommen, wenn am Ende mehr Ja- als Nein-Stimmen vorliegen.</p>
+        <p>
+          Es gibt keine Mindestbeteiligung. Der Antrag wird angenommen, wenn am
+          Ende mehr Ja- als Nein-Stimmen vorliegen.
+        </p>
         <div class="vote-buttons">
           {#each ["ja", "nein", "enthaltung"] as choice}
-            <button class:active={proposal.own_vote === choice} on:click={() => vote(choice as VoteChoice)} disabled={submitting}>
-              {choice === "ja" ? "Ja" : choice === "nein" ? "Nein" : "Enthaltung"}
+            <button
+              class:active={proposal.own_vote === choice}
+              on:click={() => vote(choice as VoteChoice)}
+              disabled={submitting}
+            >
+              {choice === "ja"
+                ? "Ja"
+                : choice === "nein"
+                  ? "Nein"
+                  : "Enthaltung"}
             </button>
           {/each}
         </div>
@@ -213,11 +251,18 @@
 
     <section class="card" aria-labelledby="conversation-heading">
       <h2 id="conversation-heading">Gesprächsraum</h2>
-      {#if messages.length === 0}<p class="muted">Noch keine Gesprächsbeiträge.</p>{/if}
+      {#if messages.length === 0}<p class="muted">
+          Noch keine Gesprächsbeiträge.
+        </p>{/if}
       <div class="entries">
         {#each messages as message}
           <article>
-            <div class="entry-meta"><strong>{message.author_title}</strong><time datetime={message.created_at}>{new Date(message.created_at).toLocaleString("de-DE")}</time></div>
+            <div class="entry-meta">
+              <strong>{message.author_title}</strong><time
+                datetime={message.created_at}
+                >{new Date(message.created_at).toLocaleString("de-DE")}</time
+              >
+            </div>
             <p>{message.body}</p>
           </article>
         {/each}
@@ -225,50 +270,197 @@
       {#if canDiscuss && isOpen}
         <div class="message-form">
           <label for="message-body">Beitrag verfassen</label>
-          <textarea id="message-body" bind:value={messageBody} maxlength="4000" rows="4"></textarea>
-          <button class="primary" on:click={postMessage} disabled={!messageBody.trim() || submitting}>Beitrag senden</button>
+          <textarea
+            id="message-body"
+            bind:value={messageBody}
+            maxlength="4000"
+            rows="4"></textarea>
+          <button
+            class="primary"
+            on:click={postMessage}
+            disabled={!messageBody.trim() || submitting}>Beitrag senden</button
+          >
         </div>
       {:else if !$authStore.authenticated}
-        <p class="guest-note">Melde dich an, um im Gesprächsraum mitzuschreiben.</p>
+        <p class="guest-note">
+          Melde dich an, um im Gesprächsraum mitzuschreiben.
+        </p>
       {/if}
     </section>
   {/if}
 </main>
 
 <style>
-  :global(body) { margin: 0; background: #f3f1e9; color: #18251f; font-family: system-ui, sans-serif; }
-  .page-shell { width: min(820px, calc(100% - 32px)); margin: 0 auto; padding: 32px 0 72px; }
-  .back-link { color: inherit; text-decoration: none; font-weight: 700; }
-  .proposal-header { padding: 44px 0 28px; }
-  .topline, .entry-meta, dl, .vote-buttons { display: flex; gap: 12px; align-items: center; }
-  .topline { justify-content: space-between; color: #526259; }
-  .topline span { padding: 5px 10px; border-radius: 999px; background: #e4e3dc; }
-  .topline span.open { background: #dcecdf; color: #1f5b42; }
-  .eyebrow { margin: 28px 0 5px; text-transform: uppercase; letter-spacing: .09em; font-size: .76rem; font-weight: 750; color: #4d6759; }
-  h1 { margin: 0; font-size: clamp(2.2rem, 8vw, 4.2rem); line-height: 1; }
-  h2 { margin: 0 0 12px; }
-  .summary { max-width: 65ch; font-size: 1.1rem; line-height: 1.6; }
-  dl { flex-wrap: wrap; margin: 24px 0 0; }
-  dl div { min-width: 150px; }
-  dt { color: #607168; font-size: .8rem; }
-  dd { margin: 3px 0 0; font-weight: 700; }
-  .card, .error { border: 1px solid rgba(24,37,31,.16); border-radius: 18px; background: rgba(255,255,255,.72); padding: 22px; margin-top: 16px; }
-  .action-card { background: #eef3ec; }
-  .entries { display: grid; gap: 14px; }
-  article { border-top: 1px solid rgba(24,37,31,.12); padding-top: 14px; }
-  article:first-child { border-top: 0; padding-top: 0; }
-  .entry-meta { justify-content: space-between; color: #607168; font-size: .84rem; }
-  article p { margin-bottom: 0; white-space: pre-wrap; line-height: 1.5; }
-  textarea { box-sizing: border-box; width: 100%; resize: vertical; border: 1px solid rgba(24,37,31,.28); border-radius: 12px; padding: 12px; font: inherit; background: #fff; }
-  button { border: 1px solid rgba(24,37,31,.25); border-radius: 999px; padding: 10px 16px; font: inherit; font-weight: 720; cursor: pointer; background: #fff; }
-  button.active { outline: 3px solid rgba(31,91,66,.28); background: #dcecdf; }
-  button:disabled { opacity: .55; cursor: wait; }
-  .primary { border: 0; background: #1f5b42; color: #fff; }
-  .action-card, .message-form { display: grid; gap: 12px; }
-  .message-form { margin-top: 20px; }
-  .vote-buttons { flex-wrap: wrap; }
-  .error { color: #7f2424; background: #fff0f0; }
-  .muted, .guest-note { color: #607168; }
-  .guest-note { padding: 12px; border-radius: 10px; background: #eeece5; }
-  @media (max-width: 560px) { .topline, .entry-meta { align-items: flex-start; flex-direction: column; } }
+  :global(body) {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: system-ui, sans-serif;
+  }
+  .page-shell {
+    width: min(820px, calc(100% - 32px));
+    margin: 0 auto;
+    padding: 32px 0 72px;
+  }
+  .back-link {
+    color: inherit;
+    text-decoration: none;
+    font-weight: 700;
+  }
+  .proposal-header {
+    padding: 44px 0 28px;
+  }
+  .topline,
+  .entry-meta,
+  dl,
+  .vote-buttons {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .topline {
+    justify-content: space-between;
+    color: var(--muted);
+  }
+  .topline span {
+    padding: 5px 10px;
+    border-radius: 999px;
+    background: var(--panel-border);
+  }
+  .topline span.open {
+    background: var(--accent-soft);
+    color: var(--accent);
+  }
+  .eyebrow {
+    margin: 28px 0 5px;
+    text-transform: uppercase;
+    letter-spacing: 0.09em;
+    font-size: 0.76rem;
+    font-weight: 750;
+    color: var(--accent);
+  }
+  h1 {
+    margin: 0;
+    font-size: clamp(2.2rem, 8vw, 4.2rem);
+    line-height: 1;
+  }
+  h2 {
+    margin: 0 0 12px;
+  }
+  .summary {
+    max-width: 65ch;
+    font-size: 1.1rem;
+    line-height: 1.6;
+  }
+  dl {
+    flex-wrap: wrap;
+    margin: 24px 0 0;
+  }
+  dl div {
+    min-width: 150px;
+  }
+  dt {
+    color: var(--muted);
+    font-size: 0.8rem;
+  }
+  dd {
+    margin: 3px 0 0;
+    font-weight: 700;
+  }
+  .card,
+  .error {
+    border: 1px solid var(--panel-border);
+    border-radius: 18px;
+    background: var(--panel);
+    padding: 22px;
+    margin-top: 16px;
+  }
+  .action-card {
+    background: var(--accent-soft);
+  }
+  .entries {
+    display: grid;
+    gap: 14px;
+  }
+  article {
+    border-top: 1px solid var(--panel-border);
+    padding-top: 14px;
+  }
+  article:first-child {
+    border-top: 0;
+    padding-top: 0;
+  }
+  .entry-meta {
+    justify-content: space-between;
+    color: var(--muted);
+    font-size: 0.84rem;
+  }
+  article p {
+    margin-bottom: 0;
+    white-space: pre-wrap;
+    line-height: 1.5;
+  }
+  textarea {
+    box-sizing: border-box;
+    width: 100%;
+    resize: vertical;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 12px;
+    padding: 12px;
+    font: inherit;
+    background: var(--panel-solid);
+  }
+  button {
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 999px;
+    padding: 10px 16px;
+    font: inherit;
+    font-weight: 720;
+    cursor: pointer;
+    background: var(--panel-solid);
+  }
+  button.active {
+    outline: 3px solid var(--accent-soft);
+    background: var(--accent-soft);
+  }
+  button:disabled {
+    opacity: 0.55;
+    cursor: wait;
+  }
+  .primary {
+    border: 0;
+    background: var(--accent);
+    color: #fff;
+  }
+  .action-card,
+  .message-form {
+    display: grid;
+    gap: 12px;
+  }
+  .message-form {
+    margin-top: 20px;
+  }
+  .vote-buttons {
+    flex-wrap: wrap;
+  }
+  .error {
+    color: var(--danger);
+    background: color-mix(in srgb, var(--danger) 10%, var(--panel-solid));
+  }
+  .muted,
+  .guest-note {
+    color: var(--muted);
+  }
+  .guest-note {
+    padding: 12px;
+    border-radius: 10px;
+    background: var(--panel-solid);
+  }
+  @media (max-width: 560px) {
+    .topline,
+    .entry-meta {
+      align-items: flex-start;
+      flex-direction: column;
+    }
+  }
 </style>

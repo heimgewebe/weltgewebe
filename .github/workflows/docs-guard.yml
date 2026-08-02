@@ -26,8 +26,6 @@ name: Docs Guard
       - 'scripts/ci/tests/test_two_operator_cell_pilot.py'
       - 'docs/runbooks/**'
       - 'docs/_generated/**'
-      - 'docs/runbooks/gewebezelle-manual-pilot.md'
-      - 'docs/runbooks/gewebezelle-two-operator-pilot-v1.md'
       - 'docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md'
       - 'Makefile'
       - 'docs/_generated/system-map.md'

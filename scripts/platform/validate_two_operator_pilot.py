@@ -32,7 +32,22 @@ UTC_TIMESTAMP = re.compile(
     r"^[0-9]{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12][0-9]|3[01])"
     r"T(?:[01][0-9]|2[0-3]):[0-5][0-9]:[0-5][0-9]Z$"
 )
-RESERVED_SUFFIXES = (".invalid", ".example", ".test", ".localhost")
+SPECIAL_USE_DNS_SUFFIXES = (
+    "alt",
+    "example",
+    "invalid",
+    "local",
+    "localhost",
+    "onion",
+    "test",
+    "example.com",
+    "example.net",
+    "example.org",
+)
+PRIVATE_KEY_PEM = re.compile(
+    r"-----begin(?:[ \t]+[a-z0-9-]+)*[ \t]+private[ \t]+key-----",
+    re.IGNORECASE,
+)
 FORBIDDEN_KEY_MARKERS = (
     "private_key",
     "signing_key",
@@ -43,9 +58,6 @@ FORBIDDEN_KEY_MARKERS = (
     "credential",
 )
 FORBIDDEN_VALUE_MARKERS = (
-    "-----begin private key-----",
-    "-----begin encrypted private key-----",
-    "-----begin openssh private key-----",
     "federation_signing_key_b64=",
     "aws_secret_access_key=",
 )
@@ -158,7 +170,7 @@ class PilotContractError(RuntimeError):
 
 
 def _fail(code: str, message: str) -> None:
-    raise PilotContractError(code, message)
+    raise PilotContractError(code, message) from None
 
 
 def _reject_duplicate_pairs(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -201,6 +213,20 @@ def _exact_keys(value: Any, expected: set[str], path: str) -> dict[str, Any]:
     return obj
 
 
+def _strict_equal(observed: Any, expected: Any) -> bool:
+    if type(observed) is not type(expected):
+        return False
+    if isinstance(expected, dict):
+        return observed.keys() == expected.keys() and all(
+            _strict_equal(observed[key], value) for key, value in expected.items()
+        )
+    if isinstance(expected, list):
+        return len(observed) == len(expected) and all(
+            _strict_equal(left, right) for left, right in zip(observed, expected)
+        )
+    return observed == expected
+
+
 def _string(value: Any, path: str) -> str:
     if not isinstance(value, str) or not value or value != value.strip():
         _fail("invalid-string", f"{path} must be a non-empty trimmed string")
@@ -219,7 +245,9 @@ def _scan_forbidden_keys(value: Any, path: str = "document") -> None:
             _scan_forbidden_keys(child, f"{path}[{index}]")
     elif isinstance(value, str):
         lowered = value.lower()
-        if any(marker in lowered for marker in FORBIDDEN_VALUE_MARKERS):
+        if PRIVATE_KEY_PEM.search(value) or any(
+            marker in lowered for marker in FORBIDDEN_VALUE_MARKERS
+        ):
             _fail("secret-material", f"{path} contains forbidden private material")
 
 
@@ -246,6 +274,15 @@ def _key_id(value: Any, path: str) -> str:
     return source
 
 
+def _is_special_use_hostname(host: str) -> bool:
+    if host == "arpa" or host.endswith(".arpa"):
+        return True
+    return any(
+        host == suffix or host.endswith(f".{suffix}")
+        for suffix in SPECIAL_USE_DNS_SUFFIXES
+    )
+
+
 def _hostname(value: Any, path: str, *, activation: bool) -> str:
     host = _string(value, path)
     if host != host.lower() or host.endswith(".") or "*" in host:
@@ -268,8 +305,8 @@ def _hostname(value: Any, path: str, *, activation: bool) -> str:
     labels = host.split(".")
     if len(labels) < 2 or any(not DNS_LABEL.fullmatch(label) for label in labels):
         _fail("invalid-host", f"{path} is not a valid DNS name")
-    if activation and host.endswith(RESERVED_SUFFIXES):
-        _fail("reserved-host", f"{path} uses a reserved non-production suffix")
+    if activation and _is_special_use_hostname(host):
+        _fail("special-use-host", f"{path} uses a special-use DNS name")
     if not activation and not host.endswith(".invalid"):
         _fail("example-host", f"{path} must use the reserved .invalid suffix")
     return host
@@ -449,7 +486,7 @@ def _contract() -> tuple[dict[str, Any], str]:
                 "structurally_validatable": True,
                 "activatable_by_static_validator": False,
                 "requires_joint_approval": True,
-                "requires_real_dns_names": True,
+                "requires_non_special_use_dns_names": True,
                 "requires_complete_evidence_digests": True,
                 "requires_external_receipt_verification": True,
                 "requires_authoritative_replay_ledger": True,
@@ -542,7 +579,7 @@ def _contract() -> tuple[dict[str, Any], str]:
         ],
     }
     for field, expected in expected_values.items():
-        if contract[field] != expected:
+        if not _strict_equal(contract[field], expected):
             _fail(
                 "contract-drift",
                 f"contract.{field} changed without a schema version bump",
@@ -933,18 +970,17 @@ def validate_document(document: dict[str, Any], expected_mode: str) -> dict[str,
             )
 
     first, second = sorted(observed, key=lambda item: item["upgrade_start"])
-    if activation_mode:
-        for index, item in enumerate(observed):
-            if item["restored_at"] >= generated_at:
-                _fail(
-                    "restore-after-activation",
-                    f"cells[{index}] restore evidence must predate activation.generated_at",
-                )
-        if generated_at >= first["upgrade_start"]:
+    for index, item in enumerate(observed):
+        if item["restored_at"] >= generated_at:
             _fail(
-                "activation-after-change-window",
-                "activation.generated_at must predate both upgrade windows",
+                "restore-after-activation",
+                f"cells[{index}] restore evidence must predate activation.generated_at",
             )
+    if generated_at >= first["upgrade_start"]:
+        _fail(
+            "activation-after-change-window",
+            "activation.generated_at must predate both upgrade windows",
+        )
     if first["rollback_deadline"] >= second["upgrade_start"]:
         _fail(
             "overlapping-change-windows",
