@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "contract_id": "gewebezelle-two-operator-pilot-v1",
+  "profile_contract": "platform/cell-profile.contract.json",
+  "profile_contract_sha256": "c42cb1293bd96c3c1621a92ea3068096c6f0f2b15ea9910e0672add7a121ff07",
+  "required_cell_count": 2,
+  "document_modes": {
+    "example": {
+      "structurally_validatable": true,
+      "activatable_by_static_validator": false,
+      "requires_reserved_invalid_domains": true,
+      "requires_redacted_evidence": true
+    },
+    "activation": {
+      "structurally_validatable": true,
+      "activatable_by_static_validator": false,
+      "requires_joint_approval": true,
+      "requires_real_dns_names": true,
+      "requires_complete_evidence_digests": true,
+      "requires_external_receipt_verification": true,
+      "requires_authoritative_replay_ledger": true
+    }
+  },
+  "release_binding": {
+    "same_source_commit_for_both_cells": true,
+    "same_api_image_digest_for_both_cells": true,
+    "same_web_image_digest_for_both_cells": true
+  },
+  "identity_contract": {
+    "algorithm": "Ed25519",
+    "public_key_encoding": "base64url-unpadded",
+    "public_key_bytes": 32,
+    "private_material_forbidden": true
+  },
+  "allowed_event_types": [
+    "object.deleted",
+    "object.upserted"
+  ],
+  "verification_channels": [
+    "independent-auditor",
+    "in-person",
+    "postal",
+    "telephone"
+  ],
+  "network_contract": {
+    "scheme": "https",
+    "port": 443,
+    "protocol": "TCP",
+    "policy_kind": "CiliumNetworkPolicy",
+    "exact_fqdn_only": true,
+    "forbid_ip_literals": true,
+    "forbid_wildcards": true,
+    "forbid_world_entities": true,
+    "forbid_cidrs": true
+  },
+  "backup_contract": {
+    "allowed_schemes": [
+      "az",
+      "gs",
+      "https",
+      "s3"
+    ],
+    "canonical_dns_authority_only": true,
+    "custom_ports_forbidden": true,
+    "safe_prefix_segments_only": true,
+    "separate_authorities": true,
+    "authority_must_differ_from_cell_and_control_hosts": true
+  },
+  "operational_limits": {
+    "minimum_availability_percent": 95.0,
+    "maximum_measured_rpo_seconds": 86400,
+    "maximum_measured_rto_seconds": 86400,
+    "maximum_delivery_lag_slo_seconds": 86400,
+    "maximum_delivery_lag_alarm_seconds": 86400
+  },
+  "timestamp_contract": {
+    "format": "RFC3339-seconds-UTC-Z",
+    "restore_not_after_activation": true,
+    "activation_before_upgrade_windows": true
+  },
+  "operational_safety": {
+    "staggered_change_windows": true,
+    "separate_alert_routes": true,
+    "delivery_lag_alarm_precedes_slo": true,
+    "availability_burn_alarm_required": true,
+    "separate_recovery_receipts": true,
+    "duplicate_json_keys_forbidden": true,
+    "invalid_example_filename_blocks_activation": true,
+    "separate_backup_authorities": true,
+    "restore_precedes_activation_document": true,
+    "activation_precedes_change_windows": true,
+    "document_unique_receipts": true,
+    "external_receipt_verification_required": true,
+    "authoritative_replay_ledger_required": true
+  },
+  "required_evidence_fields": [
+    "applied_receipt_sha256",
+    "duplicate_receipt_sha256",
+    "retry_receipt_sha256",
+    "concurrency_receipt_sha256",
+    "egress_receipt_sha256",
+    "backup_restore_receipt_sha256",
+    "rollback_receipt_sha256"
+  ],
+  "required_nonclaims": [
+    "production Kubernetes cutover",
+    "self-service cell provisioning",
+    "automatic peer discovery or trust",
+    "multi-region high availability",
+    "identity migration between cells",
+    "public quarantine administration",
+    "completed two-operator WAN pilot",
+    "GewebeZelle operator or CRD",
+    "static validator establishes activation readiness",
+    "static receipt digests establish operator or failure-domain independence"
+  ]
+}

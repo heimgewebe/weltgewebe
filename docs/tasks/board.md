@@ -85,7 +85,7 @@ Disposition.
 
 | ID | PR-Schnitt | Akzeptanzkriterium |
 |---|---|---|
-| WELTGEWEBE-OS-V1-T044 | Kubernetes-Staging und späteren Produktionscutover getrennt aktivieren | Echter Staging-Cluster, externe Secrets, commitgebundene Imagepromotion, produktionsnahe Last/Recovery sowie gestufter Traffic- und Rollbackbeweis vor jeder Produktionsumschaltung |
+| WELTGEWEBE-OS-V1-T044 | Kubernetes-Staging und späteren Produktionscutover getrennt aktivieren | Vorstufe: fail-closed Zwei-Betreiber-Zellvertrag für Identität, Peer-, Egress-, Release-, Restore- und Rollbackbelege; weiterhin erforderlich bleiben echter Staging-Cluster, externe Secrets, commitgebundene Imagepromotion, produktionsnahe Last/Recovery sowie gestufter Traffic- und Rollbackbeweis vor jeder Produktionsumschaltung |
 | DB-PROOF-001 | Edge-Orphan-/Referenz-Audit (read-only, keine Migration) | Reproduzierbarer redigierter Bericht: valide/Orphan-Counts + Policy-Empfehlung (Option A FK vs. Option B Guard) |
 
 ## Zurückgestellte / optionale Tasks

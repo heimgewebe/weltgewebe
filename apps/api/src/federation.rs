@@ -19,7 +19,7 @@ use axum::{
 };
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use chrono::{DateTime, Duration, SecondsFormat, Utc};
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -410,6 +410,11 @@ impl FederationService {
         let mut key_ids = HashSet::new();
         for key in &policy.keys {
             validate_key_id(&key.key_id)?;
+            let verifying_key =
+                VerifyingKey::from_bytes(&key.public_key).context("peer public key is invalid")?;
+            if verifying_key.is_weak() {
+                bail!("peer public key is weak");
+            }
             if !key_ids.insert(key.key_id.clone()) {
                 bail!("peer policy contains duplicate key id {}", key.key_id);
             }
@@ -1602,7 +1607,7 @@ fn verify_signature(event: &FederationEvent, public_key: [u8; 32]) -> anyhow::Re
     let verifying_key =
         VerifyingKey::from_bytes(&public_key).context("peer public key is invalid")?;
     verifying_key
-        .verify(&signing_bytes(event)?, &signature)
+        .verify_strict(&signing_bytes(event)?, &signature)
         .context("event signature verification failed")
 }
 
@@ -2690,6 +2695,63 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn weak_peer_key_is_rejected_before_install() {
+        let service = FederationService::new(
+            identity("cell-b", 50),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        let mut weak_public_key = [0_u8; 32];
+        weak_public_key[0] = 1;
+        let error = service
+            .install_peer(PeerPolicy {
+                remote_cell_id: "cell-a".to_string(),
+                state: "trusted".to_string(),
+                allow_neighbourhood: true,
+                allowed_event_types: [EVENT_UPSERTED.to_string()].into_iter().collect(),
+                keys: vec![PeerKey {
+                    key_id: "weak-key".to_string(),
+                    public_key: weak_public_key,
+                    active: true,
+                }],
+            })
+            .await
+            .unwrap_err();
+        assert!(error.to_string().contains("weak"));
+    }
+
+    #[tokio::test]
+    async fn strict_verification_rejects_weak_key_universal_signature() {
+        let sender = FederationService::new(
+            identity("cell-a", 49),
+            Arc::new(MemoryFederationRepository::new()),
+        );
+        let mut event = sender
+            .publish_local(PublishRequest {
+                actor: "system:weak-key-test".to_string(),
+                event_type: EVENT_UPSERTED.to_string(),
+                object_address: "wg://cell-a/node/weak-key-signature".to_string(),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: SCOPE_GLOBAL.to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"title": "Must not verify"}),
+            })
+            .await
+            .unwrap();
+        let mut weak_public_key = [0_u8; 32];
+        weak_public_key[0] = 1;
+        let mut universal_signature = [0_u8; 64];
+        universal_signature[0] = 1;
+        event.signature = URL_SAFE_NO_PAD.encode(universal_signature);
+
+        let error = verify_signature(&event, weak_public_key).unwrap_err();
+        assert!(error
+            .to_string()
+            .contains("event signature verification failed"));
+    }
+
+    #[tokio::test]
     async fn peer_key_bytes_are_immutable_and_failed_reinstall_rolls_back() {
         let repository = Arc::new(MemoryFederationRepository::new());
         let service = FederationService::new(identity("cell-b", 51), repository.clone());
@@ -2705,7 +2767,7 @@ mod tests {
             .await
             .unwrap();
         let mut replacement = original.clone();
-        replacement.public_key = [99; 32];
+        replacement.public_key = *SigningKey::from_bytes(&[53; 32]).verifying_key().as_bytes();
         let error = service
             .install_peer(PeerPolicy {
                 remote_cell_id: "cell-a".to_string(),

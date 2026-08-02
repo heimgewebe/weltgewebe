@@ -14,6 +14,10 @@ relations:
     target: docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md
   - type: relates_to
     target: platform/README.md
+  - type: relates_to
+    target: docs/runbooks/gewebezelle-two-operator-pilot-v1.md
+  - type: relates_to
+    target: platform/cell-pilot/two-operator-pilot.contract.json
 ---
 
 # Manuelles GewebeZelle-Pilotprofil
@@ -38,7 +42,7 @@ Eine Pilotzelle benötigt mindestens:
 - ein vom Cluster unabhängiges Backupziel sowie einen gemessenen Restore;
 - SLO-, Alarm-, Upgrade- und Rollbackverantwortung.
 
-`platform/cell-profile.contract.json` ist die maschinenlesbare Mindestgrenze.
+`platform/cell-profile.contract.json` ist die maschinenlesbare Mindestgrenze. Für die strukturelle Vorbereitung einer gemeinsamen Aktivierungsentscheidung zweier unabhängiger Betreiber gilt zusätzlich `platform/cell-pilot/two-operator-pilot.contract.json` mit dem Runbook [Zwei-Betreiber-GewebeZelle-Pilotvertrag v1](gewebezelle-two-operator-pilot-v1.md). Die öffentliche `.invalid`-Vorlage ist absichtlich nicht aktivierbar und ersetzt keinen realen WAN-Pilot.
 
 ## Zellidentität
 
@@ -145,6 +149,7 @@ Die sichere erste Rücknahme ist `FEDERATION_DELIVERY_ENABLED: "false"`. Dadurch
 Dieses Profil belegt nicht:
 
 - einen produktiven Kubernetes-Cutover von weltgewebe.net;
+- einen bereits ausgeführten Zwei-Betreiber-WAN-Pilot;
 - Self-Service-Provisionierung;
 - einen GewebeZelle-Operator oder eine Zell-API;
 - automatische Peer-Discovery;
