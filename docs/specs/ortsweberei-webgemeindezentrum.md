@@ -21,7 +21,13 @@ relations:
     target: docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
   - type: relates_to
     target: docs/specs/map-experience.md
-verifies_with: []
+verifies_with:
+  - apps/api/migrations/20260802000001_ortsweberei_webgemeindezentrum.up.sql
+  - apps/api/src/routes/webgemeindezentren.rs
+  - apps/api/tests/db_ortsweberei_webgemeindezentrum.rs
+  - apps/web/src/lib/map/scene.ts
+  - apps/web/src/lib/components/panels/WebgemeindezentrumPanel.svelte
+  - apps/web/tests/webgemeindezentrum-hammer-park.spec.ts
 ---
 
 # Ortsweberei und Webgemeindezentrum
@@ -96,6 +102,25 @@ Bewohner ausdrücklich zustimmt und Zugangszeiten sowie Bedingungen öffentlich
 angegeben werden. Ohne diese Voraussetzungen wird ein anderer öffentlicher oder
 hinreichend ungenauer Ort gewählt. Das System darf eine private Adresse nicht
 automatisch aus Account- oder Garnrollendaten übernehmen.
+
+
+## Erste produktive Instanz
+
+Die bisherige einzelne Gewebezelle wird als **Ortsweberei Hamm** gebunden:
+
+- Ortsweberei-ID: `ortsweberei-hamm`;
+- Gewebezellen-ID: `hamm.weltgewebe.net`;
+- Zentrum-ID: `webgemeindezentrum-hammer-park`;
+- öffentlicher Name: **Webgemeindezentrum Hammer Park**;
+- erster Kartenanker: ungefähr `53.5585, 10.0580` auf einer Grünfläche im
+  Hammer Park;
+- Standortzustand: `desired` / **Gewünschter Treffort**.
+
+Die Koordinate ist ein bewusst gesetzter gemeinschaftlicher Kartenanker, keine
+Vermessungs-, Reservierungs- oder Genehmigungsbehauptung. Die genaue Stelle,
+Zugänglichkeit und regelmäßige Nutzbarkeit werden erst durch einen späteren
+Ortsweberei-Entscheid und reale Prüfung präzisiert. Bis dahin muss jede
+öffentliche Darstellung den gewünschten Status sichtbar erhalten.
 
 ## Kartenvertrag
 
@@ -180,19 +205,20 @@ Bedeutungen und Übergänge müssen jedoch eindeutig bleiben.
 
 ## Einführungsgrenze
 
-Die sofortige UX-Korrektur entfernt das synthetische Antragsgewebe und ersetzt
-es durch eine Prozessanzeige. Sie führt noch keine Ortsweberei- oder
-Zentrum-Datensätze ein.
+Der erste Runtime-Schnitt führt kanonische Ortsweberei-, Gewebezellen- und
+Zentrum-Datensätze, serverseitige Eindeutigkeitsregeln, öffentliche
+Leseendpunkte, Kartenprojektion und Standortchronik ein. Die erste Instanz wird
+nicht im Client erfunden, sondern durch die PostgreSQL-Migration als
+Primärwahrheit angelegt.
 
-Für die produktive Kartenverankerung fehlen derzeit ein kanonischer
-Ortsweberei-Datensatz, der beschlossene Standort der ersten Ortsweberei sowie
-die serverseitigen Eindeutigkeits- und Migrationspfade. Diese Lücke darf nicht
-durch eine im Client erfundene Standard-Ortsweberei oder einen geratenen
-Kartenpunkt verdeckt werden.
+Noch nicht Teil dieses Schnitts sind Webrat-Schreibbefehle, Trefftermine,
+Gewebekonto, mehrere Betreiber oder die Bestätigung der tatsächlichen Nutzung im
+Hammer Park. Diese Bereiche dürfen nicht als funktionsfähige Schaltflächen oder
+als bestätigte Zugänglichkeit simuliert werden.
 
 ## Abnahmekriterien für die Runtime
 
-Die spätere Runtime-Einführung ist erst abgeschlossen, wenn:
+Der erste Runtime-Schnitt gilt als belegt, wenn:
 
 - Datenbank und API die Eins-zu-eins-Invarianten erzwingen;
 - eine Ortsweberei nicht ohne Zentrum aktiviert werden kann;

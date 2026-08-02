@@ -362,6 +362,7 @@ targets=(
   db_domain_node_write_path
   db_governance
   db_multi_instance_foundation
+  db_ortsweberei_webgemeindezentrum
   db_domain_read_path
   db_domain_schema_migrations
   db_passkey_fk_readiness

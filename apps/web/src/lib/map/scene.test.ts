@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { buildMapScene, resolveApiMode } from "./scene";
-import type { Node, Account, Edge } from "./types";
+import type { Node, Account, Edge, Webgemeindezentrum } from "./types";
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
   id: "node-1",
@@ -34,6 +34,29 @@ const makeEdge = (overrides: Partial<Edge> = {}): Edge => ({
   ...overrides,
 });
 
+const makeCenter = (
+  overrides: Partial<Webgemeindezentrum> = {},
+): Webgemeindezentrum => ({
+  type: "webgemeindezentrum",
+  id: "webgemeindezentrum-hammer-park",
+  title: "Webgemeindezentrum Hammer Park",
+  ortsweberei: {
+    id: "ortsweberei-hamm",
+    slug: "hamm",
+    name: "Ortsweberei Hamm",
+    gewebezelle_id: "hamm.weltgewebe.net",
+  },
+  location_state: "desired",
+  location_state_label: "Gewünschter Treffort",
+  location: { lat: 53.5585, lon: 10.058 },
+  location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
+  meeting_note: "Hier kann die Ortsweberei tatsächlich zusammenkommen.",
+  access_note: "Nutzung und Barrierefreiheit sind noch nicht bestätigt.",
+  created_at: "2026-08-02T10:08:00.000Z",
+  updated_at: "2026-08-02T10:08:00.000Z",
+  ...overrides,
+});
+
 describe("resolveApiMode", () => {
   it("returns 'remote' when apiBase is set", () => {
     expect(resolveApiMode("https://api.example.com")).toBe("remote");
@@ -54,6 +77,7 @@ describe("buildMapScene", () => {
       nodes: [makeNode()],
       accounts: [],
       edges: [],
+      webgemeindezentren: [],
       loadState: "ok",
       resourceStatus: [
         { resource: "nodes", status: "complete", loaded: 1, pages: 1 },
@@ -74,6 +98,7 @@ describe("buildMapScene", () => {
       nodes: [],
       accounts: [makeAccount({ tags: ["skill:Kochen", "interest:Commons"] })],
       edges: [],
+      webgemeindezentren: [],
       loadState: "ok",
       resourceStatus: [
         { resource: "accounts", status: "complete", loaded: 1, pages: 1 },
@@ -103,6 +128,7 @@ describe("buildMapScene", () => {
       nodes: [],
       accounts: [account],
       edges: [],
+      webgemeindezentren: [],
       loadState: "ok",
       resourceStatus: [],
       apiBase: undefined,
@@ -117,6 +143,7 @@ describe("buildMapScene", () => {
       nodes: [makeNode()],
       accounts: [makeAccount()],
       edges: [makeEdge()],
+      webgemeindezentren: [],
       loadState: "ok",
       resourceStatus: [],
       apiBase: undefined,
@@ -127,11 +154,44 @@ describe("buildMapScene", () => {
     expect(scene.edges).toHaveLength(1);
   });
 
+  it("maps a desired Webgemeindezentrum as an independent permanent structure", () => {
+    const scene = buildMapScene({
+      nodes: [],
+      accounts: [],
+      edges: [],
+      webgemeindezentren: [makeCenter()],
+      loadState: "ok",
+      resourceStatus: [
+        {
+          resource: "webgemeindezentren",
+          status: "complete",
+          loaded: 1,
+          pages: 1,
+        },
+      ],
+      apiBase: undefined,
+      basemapMode: "local-sovereign",
+    });
+
+    expect(scene.entities).toHaveLength(1);
+    expect(scene.entities[0]).toMatchObject({
+      type: "webgemeindezentrum",
+      id: "webgemeindezentrum-hammer-park",
+      title: "Webgemeindezentrum Hammer Park",
+      lat: 53.5585,
+      lon: 10.058,
+      location_state: "desired",
+      location_state_label: "Gewünschter Treffort",
+    });
+    expect(scene.entities[0].tags).toContain("Ortsweberei Hamm");
+  });
+
   it("passes through loadState and resourceStatus", () => {
     const scene = buildMapScene({
       nodes: [],
       accounts: [],
       edges: [],
+      webgemeindezentren: [],
       loadState: "partial",
       resourceStatus: [
         { resource: "nodes", status: "complete", loaded: 1, pages: 1 },
@@ -151,6 +211,7 @@ describe("buildMapScene", () => {
       nodes: [],
       accounts: [],
       edges: [],
+      webgemeindezentren: [],
       loadState: "ok",
       resourceStatus: [],
       apiBase: undefined,
@@ -167,6 +228,7 @@ describe("buildMapScene", () => {
       nodes: [],
       accounts: [],
       edges: [],
+      webgemeindezentren: [],
       loadState: "failed",
       resourceStatus: [],
       apiBase: "https://api.example.com",

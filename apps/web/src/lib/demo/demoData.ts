@@ -118,3 +118,61 @@ export const demoEdges = [
     created_at: "2025-01-01T12:00:00Z",
   },
 ];
+
+export const demoWebgemeindezentren = [
+  {
+    type: "webgemeindezentrum" as const,
+    id: "webgemeindezentrum-hammer-park",
+    title: "Webgemeindezentrum Hammer Park",
+    ortsweberei: {
+      id: "ortsweberei-hamm",
+      slug: "hamm",
+      name: "Ortsweberei Hamm",
+      gewebezelle_id: "hamm.weltgewebe.net",
+    },
+    location_state: "desired" as const,
+    location_state_label: "Gewünschter Treffort",
+    location: { lat: 53.5585, lon: 10.058 },
+    location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
+    meeting_note:
+      "Ein bewusst gewählter öffentlicher Treffpunkt, an dem die Ortsweberei tatsächlich zusammenkommen kann. Die genaue Stelle kann später gemeinsam präzisiert werden.",
+    access_note:
+      "Gewünschter Treffort: Nutzung, Barrierefreiheit und regelmäßige Verfügbarkeit sind noch nicht bestätigt.",
+    created_at: "2026-08-02T10:08:00.000Z",
+    updated_at: "2026-08-02T10:08:00.000Z",
+  },
+];
+
+export const demoOrtswebereien = [
+  {
+    id: "ortsweberei-hamm",
+    slug: "hamm",
+    name: "Ortsweberei Hamm",
+    description: "Die erste lokale Ortsweberei der bisherigen Gewebezelle.",
+    gewebezelle_id: "hamm.weltgewebe.net",
+    lifecycle_state: "active",
+    created_at: "2026-08-02T10:08:00.000Z",
+    updated_at: "2026-08-02T10:08:00.000Z",
+    webgemeindezentrum: demoWebgemeindezentren[0],
+  },
+];
+
+export const demoWebgemeindezentrumDetails = [
+  {
+    ...demoWebgemeindezentren[0],
+    location_history: [
+      {
+        event_id: 1,
+        event_type: "placement_desired",
+        location_state: "desired" as const,
+        location_state_label: "Gewünschter Treffort",
+        location: { lat: 53.5585, lon: 10.058 },
+        location_label:
+          "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
+        reason:
+          "Erste Ortsweberei: gewünschter gemeinsamer Treffpunkt auf einer Grünfläche im Hammer Park.",
+        decided_at: "2026-08-02T10:08:00.000Z",
+      },
+    ],
+  },
+];

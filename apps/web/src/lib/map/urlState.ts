@@ -17,14 +17,16 @@
  *  - `focus=node:<id>`        → focus a node deep link
  *  - `focus=garnrolle:<id>`   → focus a garnrolle deep link
  *  - `focus=account:<id>`     → alias for `garnrolle:<id>`
+ *  - `focus=webgemeindezentrum:<id>` → focus a collective meeting place
+ *  - `focus=zentrum:<id>`       → compact alias for a Webgemeindezentrum
  *  - `lens=filter|search`     → open a filter/search lens
  *  - `compose=node`           → enter node composition
  *  - `compose=garnrolle`      → choose the own Garnrolle map point
  *  - `tab=<tab>`              → tolerated parser-side only (not wired to UI tabs)
  */
 
-/** Focus target types addressable via the URL (first slice: node + garnrolle). */
-export type MapUrlFocusType = "node" | "garnrolle";
+/** Focus target types addressable via the URL. */
+export type MapUrlFocusType = "node" | "garnrolle" | "webgemeindezentrum";
 
 export type MapUrlFocus = {
   type: MapUrlFocusType;
@@ -84,6 +86,9 @@ export function parseFocusParam(value: string | null): MapUrlFocus | null {
     // `account` is accepted as an alias for `garnrolle` (located account).
     case "account":
       return { type: "garnrolle", id };
+    case "webgemeindezentrum":
+    case "zentrum":
+      return { type: "webgemeindezentrum", id };
     default:
       return null;
   }

@@ -83,6 +83,22 @@ Chronik bleiben stabil. Eine aktive Ortsweberei darf nicht ohne aktives Zentrum
 bestehen. Bei Auflösung wird das Zentrum gemeinsam mit der Ortsweberei
 archiviert.
 
+
+## Fortschreibung: erste Instanz
+
+Am 2. August 2026 wird die bisherige einzelne Gewebezelle als
+`Ortsweberei Hamm` mit der stabilen Zellen-ID `hamm.weltgewebe.net` und dem
+`Webgemeindezentrum Hammer Park` umgesetzt. Der erste Kartenanker liegt
+ungefähr bei `53.5585, 10.0580` auf einer Grünfläche im Hammer Park. Die
+fachliche Absicht ist ein tatsächlich nutzbarer gemeinsamer Treffpunkt; der
+Runtimezustand bleibt zunächst `desired`.
+
+Diese Fortschreibung entscheidet also Ort, Identitäten und Ausgangszustand. Sie
+entscheidet ausdrücklich noch keine Reservierung, Genehmigung,
+Barrierefreiheit, regelmäßige Nutzungszeit oder endgültige Feinposition. Eine
+spätere Präzisierung oder Bestätigung erfolgt als chronologisch erhaltene
+Governance-Änderung unter derselben Zentrum-ID.
+
 ## Alternativen
 
 ### Nur globale Antragslisten
@@ -119,7 +135,6 @@ eine dekorative zweite Semantik neben den echten Fäden.
 
 ## Nicht entschieden
 
-- der konkrete Standort der ersten produktiven Ortsweberei;
 - das endgültige Kartensymbol;
 - Neben- oder temporäre Trefforte zusätzlich zum einen aktiven Zentrum;
 - die technische Betreiberzuordnung einer später selbst gehosteten Zelle.
