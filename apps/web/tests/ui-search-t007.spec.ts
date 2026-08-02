@@ -209,9 +209,23 @@ test.describe("T007 authorized server search contract", () => {
     );
     await expect(disclosure).not.toHaveAttribute("open", "");
     await expect(explanation).not.toBeVisible();
-    await expect(section).toContainText(
-      "Erst beim Anklicken wird eine Suche an den Server gesendet.",
-    );
+    await expect(section.locator(":scope > p.similar-note")).toHaveCount(0);
+
+    const trigger = section.getByRole("button", {
+      name: "Ähnliche Knoten suchen",
+    });
+    await expect(trigger).toHaveText("Suchen");
+    const sectionBox = await section.boundingBox();
+    const headingBox = await headingTrigger.boundingBox();
+    const triggerBox = await trigger.boundingBox();
+    expect(sectionBox).not.toBeNull();
+    expect(headingBox).not.toBeNull();
+    expect(triggerBox).not.toBeNull();
+    expect(triggerBox!.height).toBeGreaterThanOrEqual(44);
+    expect(triggerBox!.width).toBeLessThan(sectionBox!.width / 2);
+    expect(triggerBox!.x).toBeGreaterThan(headingBox!.x);
+    expect(triggerBox!.y).toBeLessThan(headingBox!.y + headingBox!.height);
+    expect(headingBox!.y).toBeLessThan(triggerBox!.y + triggerBox!.height);
 
     await headingTrigger.focus();
     await headingTrigger.press("Enter");
@@ -222,6 +236,9 @@ test.describe("T007 authorized server search contract", () => {
     );
     await expect(explanation).toContainText("keine Fäden");
     await expect(explanation).toContainText("keine kuratierten Beziehungen");
+    await expect(explanation).toContainText(
+      "Die Suche wird erst nach deinem ausdrücklichen Klick an den Server gesendet.",
+    );
 
     await headingTrigger.press("Escape");
     await expect(disclosure).not.toHaveAttribute("open", "");
