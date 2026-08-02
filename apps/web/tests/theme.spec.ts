@@ -336,6 +336,39 @@ test.describe("Farbschema", () => {
     }
   });
 
+  test("ordnet Kopf und Darstellungssteuerung ohne Überlappung", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1180, height: 820 });
+    await page.goto("/settings");
+
+    const backLink = page.getByRole("link", { name: /Zur Karte/ });
+    const heading = page.getByRole("heading", { name: "Einstellungen" });
+    const themeSelect = page.getByTestId("theme-select");
+    const diagnostics = page.getByTestId("build-diagnostics-link");
+
+    const backLinkBox = await backLink.boundingBox();
+    const headingBox = await heading.boundingBox();
+    const themeSelectBox = await themeSelect.boundingBox();
+    const diagnosticsBox = await diagnostics.boundingBox();
+
+    expect(backLinkBox).not.toBeNull();
+    expect(headingBox).not.toBeNull();
+    expect(themeSelectBox).not.toBeNull();
+    expect(diagnosticsBox).not.toBeNull();
+
+    expect(backLinkBox!.width).toBeLessThanOrEqual(180);
+    expect(headingBox!.y).toBeGreaterThanOrEqual(
+      backLinkBox!.y + backLinkBox!.height,
+    );
+    expect(
+      headingBox!.y - (backLinkBox!.y + backLinkBox!.height),
+    ).toBeLessThanOrEqual(24);
+    expect(diagnosticsBox!.y).toBeGreaterThanOrEqual(
+      themeSelectBox!.y + themeSelectBox!.height + 8,
+    );
+  });
+
   test("hält den Rückweg zur Karte in Hell und Dunkel lesbar", async ({
     page,
   }) => {
