@@ -26,8 +26,14 @@ permissions:
       - "scripts/platform/**"
       - "scripts/security/**"
       - "scripts/ci/tests/test_kubernetes_platform_contract.py"
+      - "scripts/ci/tests/test_two_operator_cell_pilot.py"
       - "scripts/ci/tests/test_trivy_rendered_manifests.py"
       - "scripts/ci/tests/test_kubernetes_ha_contract.py"
+      - "docs/runbooks/gewebezelle-manual-pilot.md"
+      - "docs/runbooks/gewebezelle-two-operator-pilot-v1.md"
+      - "docs/proofs/gewebezelle-two-operator-pilot-contract-v1.md"
+      - "docs/tasks/board.md"
+      - "Makefile"
       - "repo.meta.yaml"
 
 concurrency:
@@ -55,6 +61,7 @@ jobs:
           scripts/platform/proof_identity.py
           scripts/platform/oci_proof_mirror.py
           scripts/platform/validate_platform.py
+          scripts/platform/validate_two_operator_pilot.py
           scripts/platform/kind_reference.py
           scripts/platform/ha_reference.py
           scripts/security/trivy_rendered_manifests.py
@@ -62,6 +69,7 @@ jobs:
         run: >-
           python -m unittest
           scripts.ci.tests.test_kubernetes_platform_contract
+          scripts.ci.tests.test_two_operator_cell_pilot
           scripts.ci.tests.test_kubernetes_ha_contract
           scripts.ci.tests.test_trivy_rendered_manifests
       - name: Render and validate all platform targets
