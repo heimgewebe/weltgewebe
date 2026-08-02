@@ -1443,7 +1443,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(set(pr_workflow["on"]), {"pull_request"})
         self.assertEqual(
             set(pr_workflow["jobs"]),
-            {"contract", "trivy-rendered-security", "two-operator-pilot-proof"},
+            {"contract", "trivy-rendered-security"},
         )
         self.assertNotIn("packages: read", pr_workflow_text)
         self.assertNotIn("github.token", pr_workflow_text)

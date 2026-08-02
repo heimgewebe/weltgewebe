@@ -20,6 +20,11 @@ CONTRACT_PATH = ROOT / "platform/cell-pilot/two-operator-pilot.contract.json"
 PROFILE_PATH = ROOT / "platform/cell-profile.contract.json"
 EXAMPLE_PATH = ROOT / "platform/cell-pilot/two-operator-pilot.example.invalid.json"
 MAX_DOCUMENT_BYTES = 1024 * 1024
+MAX_JSON_NESTING = 256
+ED25519_FIELD = 2**255 - 19
+ED25519_D = (-121665 * pow(121666, ED25519_FIELD - 2, ED25519_FIELD)) % ED25519_FIELD
+ED25519_SQRT_M1 = pow(2, (ED25519_FIELD - 1) // 4, ED25519_FIELD)
+ED25519_IDENTITY = (0, 1)
 HEX40 = re.compile(r"^[0-9a-f]{40}$")
 HEX64 = re.compile(r"^[0-9a-f]{64}$")
 IMAGE_DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
@@ -186,7 +191,41 @@ def _reject_constant(value: str) -> None:
     _fail("invalid-json", f"non-finite JSON number {value!r} is forbidden")
 
 
+def _check_json_nesting(source: str | bytes, path: str) -> None:
+    if isinstance(source, bytes):
+        try:
+            text = source.decode("utf-8")
+        except UnicodeDecodeError:
+            _fail("invalid-utf8", f"{path}: document must use strict UTF-8 encoding")
+    else:
+        text = source
+    depth = 0
+    in_string = False
+    escaped = False
+    for character in text:
+        if in_string:
+            if escaped:
+                escaped = False
+            elif character == "\\":
+                escaped = True
+            elif character == '"':
+                in_string = False
+            continue
+        if character == '"':
+            in_string = True
+        elif character in "[{":
+            depth += 1
+            if depth > MAX_JSON_NESTING:
+                _fail(
+                    "invalid-json-depth",
+                    f"{path}: JSON nesting exceeds {MAX_JSON_NESTING}",
+                )
+        elif character in "]}":
+            depth -= 1
+
+
 def _loads_strict(source: str | bytes, path: str) -> Any:
+    _check_json_nesting(source, path)
     try:
         return json.loads(
             source,
@@ -195,6 +234,8 @@ def _loads_strict(source: str | bytes, path: str) -> Any:
         )
     except json.JSONDecodeError as error:
         _fail("invalid-json", f"{path}: {error}")
+    except RecursionError:
+        _fail("invalid-json-depth", f"{path}: JSON nesting exceeds the parser limit")
 
 
 def _object(value: Any, path: str) -> dict[str, Any]:
@@ -234,21 +275,30 @@ def _string(value: Any, path: str) -> str:
 
 
 def _scan_forbidden_keys(value: Any, path: str = "document") -> None:
-    if isinstance(value, dict):
-        for key, child in value.items():
-            lowered = str(key).lower()
-            if any(marker in lowered for marker in FORBIDDEN_KEY_MARKERS):
-                _fail("secret-material", f"{path}.{key} is forbidden")
-            _scan_forbidden_keys(child, f"{path}.{key}")
-    elif isinstance(value, list):
-        for index, child in enumerate(value):
-            _scan_forbidden_keys(child, f"{path}[{index}]")
-    elif isinstance(value, str):
-        lowered = value.lower()
-        if PRIVATE_KEY_PEM.search(value) or any(
-            marker in lowered for marker in FORBIDDEN_VALUE_MARKERS
-        ):
-            _fail("secret-material", f"{path} contains forbidden private material")
+    stack: list[tuple[Any, str]] = [(value, path)]
+    while stack:
+        current, current_path = stack.pop()
+        if isinstance(current, dict):
+            for key, child in current.items():
+                child_path = f"{current_path}.{key}"
+                lowered = str(key).lower()
+                if any(marker in lowered for marker in FORBIDDEN_KEY_MARKERS):
+                    _fail("secret-material", f"{child_path} is forbidden")
+                stack.append((child, child_path))
+        elif isinstance(current, list):
+            stack.extend(
+                (child, f"{current_path}[{index}]")
+                for index, child in enumerate(current)
+            )
+        elif isinstance(current, str):
+            lowered = current.lower()
+            if PRIVATE_KEY_PEM.search(current) or any(
+                marker in lowered for marker in FORBIDDEN_VALUE_MARKERS
+            ):
+                _fail(
+                    "secret-material",
+                    f"{current_path} contains forbidden private material",
+                )
 
 
 def _timestamp(value: Any, path: str) -> datetime:
@@ -379,6 +429,58 @@ def _receipt(value: Any, path: str, *, activation: bool) -> str:
     return source
 
 
+def _ed25519_add(left: tuple[int, int], right: tuple[int, int]) -> tuple[int, int]:
+    x1, y1 = left
+    x2, y2 = right
+    product = ED25519_D * x1 * x2 * y1 * y2 % ED25519_FIELD
+    x3 = (x1 * y2 + y1 * x2) * pow(
+        (1 + product) % ED25519_FIELD, ED25519_FIELD - 2, ED25519_FIELD
+    )
+    y3 = (y1 * y2 + x1 * x2) * pow(
+        (1 - product) % ED25519_FIELD, ED25519_FIELD - 2, ED25519_FIELD
+    )
+    return x3 % ED25519_FIELD, y3 % ED25519_FIELD
+
+
+def _validate_ed25519_public_key(raw: bytes, path: str) -> None:
+    encoded = int.from_bytes(raw, "little")
+    sign = encoded >> 255
+    y = encoded & ((1 << 255) - 1)
+    if y >= ED25519_FIELD:
+        _fail(
+            "invalid-public-key",
+            f"{path} has a non-canonical Ed25519 y-coordinate",
+        )
+    y_squared = y * y % ED25519_FIELD
+    numerator = (y_squared - 1) % ED25519_FIELD
+    denominator = (ED25519_D * y_squared + 1) % ED25519_FIELD
+    if denominator == 0:
+        _fail("invalid-public-key", f"{path} is not an Ed25519 curve point")
+    x_squared = (
+        numerator * pow(denominator, ED25519_FIELD - 2, ED25519_FIELD) % ED25519_FIELD
+    )
+    x = pow(x_squared, (ED25519_FIELD + 3) // 8, ED25519_FIELD)
+    if x * x % ED25519_FIELD != x_squared:
+        x = x * ED25519_SQRT_M1 % ED25519_FIELD
+    if x * x % ED25519_FIELD != x_squared:
+        _fail("invalid-public-key", f"{path} is not an Ed25519 curve point")
+    if x & 1 != sign:
+        x = ED25519_FIELD - x
+    if x == 0 and sign == 1:
+        _fail(
+            "invalid-public-key",
+            f"{path} uses a non-canonical Ed25519 sign bit",
+        )
+    multiplied = (x, y)
+    for _ in range(3):
+        multiplied = _ed25519_add(multiplied, multiplied)
+    if multiplied == ED25519_IDENTITY:
+        _fail(
+            "invalid-public-key",
+            f"{path} is a weak small-order Ed25519 point",
+        )
+
+
 def _decode_public_key(value: Any, path: str) -> tuple[str, str]:
     source = _string(value, path)
     if "=" in source or not re.fullmatch(r"[A-Za-z0-9_-]{43}", source):
@@ -392,6 +494,7 @@ def _decode_public_key(value: Any, path: str) -> tuple[str, str]:
     canonical = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
     if source != canonical:
         _fail("invalid-public-key", f"{path} must use canonical base64url encoding")
+    _validate_ed25519_public_key(raw, path)
     return source, hashlib.sha256(raw).hexdigest()
 
 
@@ -467,8 +570,8 @@ def _contract() -> tuple[dict[str, Any], str]:
         "required_nonclaims",
     }
     _exact_keys(contract, expected_keys, "contract")
-    if type(contract["schema_version"]) is not int:
-        _fail("contract-version", "contract.schema_version must be integer 1")
+    if type(contract["schema_version"]) is not int or contract["schema_version"] != 1:
+        _fail("contract-version", "unsupported contract.schema_version")
     expected_values = {
         "schema_version": 1,
         "contract_id": "gewebezelle-two-operator-pilot-v1",
@@ -502,6 +605,13 @@ def _contract() -> tuple[dict[str, Any], str]:
             "public_key_encoding": "base64url-unpadded",
             "public_key_bytes": 32,
             "private_material_forbidden": True,
+            "public_key_validation": {
+                "canonical_compressed_point": True,
+                "curve_membership_required": True,
+                "small_order_rejected": True,
+                "runtime_strict_signature_verification_required": True,
+            },
+            "authority_claim": "static-format-and-point-validity-only",
         },
         "allowed_event_types": ["object.deleted", "object.upserted"],
         "verification_channels": [
@@ -538,7 +648,7 @@ def _contract() -> tuple[dict[str, Any], str]:
         },
         "timestamp_contract": {
             "format": "RFC3339-seconds-UTC-Z",
-            "restore_not_after_activation": True,
+            "restore_strictly_before_activation": True,
             "activation_before_upgrade_windows": True,
         },
         "operational_safety": {
@@ -578,6 +688,8 @@ def _contract() -> tuple[dict[str, Any], str]:
             "static receipt digests establish operator or failure-domain independence",
         ],
     }
+    # The JSON artifact is intentionally not self-authorizing. This independent
+    # v1 snapshot requires an explicit validator change and schema bump for drift.
     for field, expected in expected_values.items():
         if not _strict_equal(contract[field], expected):
             _fail(
@@ -643,9 +755,7 @@ def _validate_cell(
     )
 
     identity = _exact_keys(cell["identity"], IDENTITY_KEYS, f"{path}.identity")
-    key_id = _key_id(
-        identity["active_key_id"], f"{path}.identity.active_key_id"
-    )
+    key_id = _key_id(identity["active_key_id"], f"{path}.identity.active_key_id")
     key, key_digest = _public_key(
         identity["active_public_key"],
         identity["public_key_sha256"],
@@ -994,8 +1104,7 @@ def validate_document(document: dict[str, Any], expected_mode: str) -> dict[str,
             or item["peer_url"] != other["public_url"]
             or item["peer_expected_key_id"] != other["key_id"]
             or item["peer_expected_public_key"] != other["public_key"]
-            or item["peer_expected_public_key_digest"]
-            != other["public_key_digest"]
+            or item["peer_expected_public_key_digest"] != other["public_key_digest"]
         ):
             _fail(
                 "asymmetric-peer",
@@ -1057,6 +1166,11 @@ def validate_document(document: dict[str, Any], expected_mode: str) -> dict[str,
         "document_mode": expected_mode,
         "structurally_valid": True,
         "activatable": False,
+        "activation_blocker": (
+            "external_receipt_trust_and_replay_verification_required"
+            if activation_mode
+            else "example_document_not_activatable"
+        ),
         "external_receipt_verification_required": activation_mode,
         "authoritative_replay_ledger_required": activation_mode,
         "cell_ids": [item["cell_id"] for item in observed],
@@ -1077,7 +1191,7 @@ def _read_document_text(path: Path) -> str:
 
 
 def validate_path(path: Path, expected_mode: str) -> dict[str, Any]:
-    if expected_mode == "activation" and path.name.endswith(".invalid.json"):
+    if expected_mode == "activation" and path.name.casefold().endswith(".invalid.json"):
         _fail("invalid-example-file", "an .invalid.json example can never be activated")
     document = _loads_strict(_read_document_text(path), str(path))
     if not isinstance(document, dict):

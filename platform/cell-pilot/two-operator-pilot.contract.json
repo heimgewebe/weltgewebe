@@ -30,7 +30,14 @@
     "algorithm": "Ed25519",
     "public_key_encoding": "base64url-unpadded",
     "public_key_bytes": 32,
-    "private_material_forbidden": true
+    "private_material_forbidden": true,
+    "public_key_validation": {
+      "canonical_compressed_point": true,
+      "curve_membership_required": true,
+      "small_order_rejected": true,
+      "runtime_strict_signature_verification_required": true
+    },
+    "authority_claim": "static-format-and-point-validity-only"
   },
   "allowed_event_types": [
     "object.deleted",
@@ -75,8 +82,8 @@
   },
   "timestamp_contract": {
     "format": "RFC3339-seconds-UTC-Z",
-    "restore_not_after_activation": true,
-    "activation_before_upgrade_windows": true
+    "activation_before_upgrade_windows": true,
+    "restore_strictly_before_activation": true
   },
   "operational_safety": {
     "staggered_change_windows": true,

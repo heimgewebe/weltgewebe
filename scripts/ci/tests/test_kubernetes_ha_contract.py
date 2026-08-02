@@ -219,7 +219,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             for step in job.get("steps", [])
             if str(step.get("uses", "")).startswith("actions/checkout@")
         ]
-        self.assertEqual(len(pr_checkout_steps), 3)
+        self.assertEqual(len(pr_checkout_steps), 2)
         self.assertEqual(len(proof_checkout_steps), 4)
         for step in pr_checkout_steps + proof_checkout_steps:
             self.assertEqual(

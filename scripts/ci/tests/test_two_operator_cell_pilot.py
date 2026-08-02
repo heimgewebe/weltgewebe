@@ -11,11 +11,13 @@ import sys
 import tempfile
 import traceback
 import unittest
+from collections.abc import Callable
+from functools import cache
+from pathlib import Path
+from typing import Any
+from unittest import mock
 
 import yaml
-from unittest import mock
-from pathlib import Path
-from typing import Any, Callable
 
 ROOT = Path(__file__).resolve().parents[3]
 VALIDATOR_PATH = ROOT / "scripts/platform/validate_two_operator_pilot.py"
@@ -49,7 +51,8 @@ def _replace_redacted(value: Any, path: str = "document") -> None:
             _replace_redacted(child, f"{path}[{index}]")
 
 
-def activation_document() -> dict[str, Any]:
+@cache
+def _activation_template() -> dict[str, Any]:
     document = json.loads(EXAMPLE_PATH.read_text(encoding="utf-8"))
     document["document_mode"] = "activation"
     _replace_redacted(document)
@@ -101,6 +104,10 @@ def activation_document() -> dict[str, Any]:
         cell["backup_restore"]["target_uri"] = backup_target
         cell["backup_restore"]["restore_source_commit"] = commit
     return document
+
+
+def activation_document() -> dict[str, Any]:
+    return copy.deepcopy(_activation_template())
 
 
 class TwoOperatorCellPilotTests(unittest.TestCase):
@@ -329,7 +336,9 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
                     "invalid-timestamp",
                 )
 
-    def test_public_keys_require_canonical_base64url_and_raw_byte_identity(self) -> None:
+    def test_public_keys_require_canonical_base64url_and_raw_byte_identity(
+        self,
+    ) -> None:
         canonical = self.example["cells"][0]["identity"]["active_public_key"]
         digest = self.example["cells"][0]["identity"]["public_key_sha256"]
         parsed, observed_digest = validator._public_key(
@@ -348,11 +357,13 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
         ]
         self.assertGreaterEqual(len(aliases), 1)
         for alias in aliases:
-            with self.subTest(alias=alias):
-                with self.assertRaisesRegex(
+            with (
+                self.subTest(alias=alias),
+                self.assertRaisesRegex(
                     validator.PilotContractError, r"^invalid-public-key:"
-                ):
-                    validator._public_key(alias, digest, "test.public_key")
+                ),
+            ):
+                validator._public_key(alias, digest, "test.public_key")
 
         document = activation_document()
         for cell in document["cells"]:
@@ -432,11 +443,13 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             with self.subTest(value=value):
                 self.assertEqual(validator._key_id(value, "test.key_id"), value)
         for value in ("a:b", "z" * 65):
-            with self.subTest(value=value):
-                with self.assertRaisesRegex(
+            with (
+                self.subTest(value=value),
+                self.assertRaisesRegex(
                     validator.PilotContractError, r"^invalid-key-id:"
-                ):
-                    validator._key_id(value, "test.key_id")
+                ),
+            ):
+                validator._key_id(value, "test.key_id")
 
     def test_peer_expected_key_ids_match_runtime_bounds(self) -> None:
         for value in ("a:b", "z" * 65):
@@ -452,10 +465,10 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
         valid = f"{'a' * 51}.operator.net"
         invalid = f"{'a' * 52}.operator.net"
         self.assertEqual(len(valid), 64)
-        self.assertEqual(validator._cell_id(valid, "test.cell_id", activation=True), valid)
-        with self.assertRaisesRegex(
-            validator.PilotContractError, r"^invalid-cell-id:"
-        ):
+        self.assertEqual(
+            validator._cell_id(valid, "test.cell_id", activation=True), valid
+        )
+        with self.assertRaisesRegex(validator.PilotContractError, r"^invalid-cell-id:"):
             validator._cell_id(invalid, "test.cell_id", activation=True)
 
     def test_peer_binding_must_be_exact_and_symmetric(self) -> None:
@@ -519,11 +532,11 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
 
     def test_legacy_ipv4_literals_are_rejected_without_dns(self) -> None:
         for host in ("127.1", "0177.1", "0x7f.1", "2130706433"):
-            with self.subTest(host=host):
-                with self.assertRaisesRegex(
-                    validator.PilotContractError, r"^ip-literal:"
-                ):
-                    validator._hostname(host, "test.host", activation=True)
+            with (
+                self.subTest(host=host),
+                self.assertRaisesRegex(validator.PilotContractError, r"^ip-literal:"),
+            ):
+                validator._hostname(host, "test.host", activation=True)
 
     def test_invalid_url_errors_do_not_echo_secret_port_text(self) -> None:
         sentinel = "TOPSECRET"
@@ -611,11 +624,22 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             "cell.ip6.arpa",
         )
         for host in hosts:
-            with self.subTest(host=host), self.assertRaisesRegex(
-                validator.PilotContractError, r"^special-use-host:"
+            with (
+                self.subTest(host=host),
+                self.assertRaisesRegex(
+                    validator.PilotContractError, r"^special-use-host:"
+                ),
             ):
                 validator._hostname(host, "test.host", activation=True)
-        for host in ("alt", "example", "invalid", "local", "localhost", "onion", "test"):
+        for host in (
+            "alt",
+            "example",
+            "invalid",
+            "local",
+            "localhost",
+            "onion",
+            "test",
+        ):
             with self.subTest(exact=host):
                 self.assertTrue(validator._is_special_use_hostname(host))
 
@@ -735,7 +759,11 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             (
                 "example activation after change window",
                 lambda d: d["activation"].update(
-                    {"generated_at": d["cells"][0]["operations"]["upgrade_window"]["start"]}
+                    {
+                        "generated_at": d["cells"][0]["operations"]["upgrade_window"][
+                            "start"
+                        ]
+                    }
                 ),
                 "activation-after-change-window",
             ),
@@ -743,9 +771,7 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             with self.subTest(name=name):
                 document = copy.deepcopy(self.example)
                 mutate(document)
-                with self.assertRaisesRegex(
-                    validator.PilotContractError, rf"^{code}:"
-                ):
+                with self.assertRaisesRegex(validator.PilotContractError, rf"^{code}:"):
                     validator.validate_document(document, "example")
 
     def test_recovery_and_verification_receipts_are_not_shared(self) -> None:
@@ -850,9 +876,7 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
             with self.subTest(label=label):
                 self.assert_rejected(
                     lambda d, label=label: d["cells"][0]["operator"].update(
-                        {
-                            "accountable_party": f"-----BEGIN {label}-----\nforbidden"
-                        }
+                        {"accountable_party": f"-----BEGIN {label}-----\nforbidden"}
                     ),
                     "secret-material",
                 )
@@ -873,7 +897,7 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
     def test_document_path_rejects_non_utf8_input_with_a_stable_error(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "pilot.json"
-            path.write_bytes(b"{\"schema_version\": 1, \"bad\": \"\xff\"}")
+            path.write_bytes(b'{"schema_version": 1, "bad": "\xff"}')
             with self.assertRaisesRegex(
                 validator.PilotContractError, r"^invalid-utf8:"
             ):
@@ -920,29 +944,80 @@ class TwoOperatorCellPilotTests(unittest.TestCase):
         self.assertEqual(rejected.returncode, 1)
         self.assertIn("invalid-example-file", rejected.stderr)
 
-    def test_ci_workflow_runs_two_operator_pilot_contract(self) -> None:
-        workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-        jobs = {job.get("name", job_id): job for job_id, job in workflow["jobs"].items()}
-        self.assertIn("Two-Operator Pilot Proof", jobs)
-        proof = jobs["Two-Operator Pilot Proof"]
-        self.assertEqual(proof.get("permissions"), {"contents": "read"})
-        runs = [step.get("run", "") for step in proof["steps"]]
-        self.assertIn("make cell-pilot-check", runs)
+    def test_public_key_point_validation_rejects_weak_and_off_curve_keys(self) -> None:
+        cases = {
+            "small-order": bytes([1]) + bytes(31),
+            "off-curve": bytes([2]) + bytes(31),
+        }
+        for name, raw in cases.items():
+            encoded = base64.urlsafe_b64encode(raw).decode("ascii").rstrip("=")
+            digest = hashlib.sha256(raw).hexdigest()
+            with self.subTest(name=name, field="identity"):
+                self.assert_rejected(
+                    lambda d, e=encoded, h=digest: d["cells"][0]["identity"].update(
+                        {"active_public_key": e, "public_key_sha256": h}
+                    ),
+                    "invalid-public-key",
+                )
+            with self.subTest(name=name, field="peer"):
+                self.assert_rejected(
+                    lambda d, e=encoded: d["cells"][0]["peer"].update(
+                        {"expected_public_key": e}
+                    ),
+                    "invalid-public-key",
+                )
 
-    def test_two_operator_pilot_proof_job_is_read_only(self) -> None:
-        workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
-        proof = workflow["jobs"]["two-operator-pilot-proof"]
-        serialized = json.dumps(proof, sort_keys=True)
-        for forbidden in (
-            "contents: write",
-            "persist-credentials: true",
-            "git push",
-            "git add -A",
-            "PATCH_BLOB_SHAS",
-            "/tmp/harden.py",
+    def test_deep_secret_scan_and_json_depth_fail_stably(self) -> None:
+        nested: Any = "-----BEGIN EC PRIVATE KEY-----"
+        for _ in range(1500):
+            nested = {"nested": nested}
+        with self.assertRaisesRegex(validator.PilotContractError, r"^secret-material:"):
+            validator._scan_forbidden_keys(nested)
+
+        source = (
+            "[" * (validator.MAX_JSON_NESTING + 1)
+            + "0"
+            + "]" * (validator.MAX_JSON_NESTING + 1)
+        )
+        with self.assertRaisesRegex(
+            validator.PilotContractError, r"^invalid-json-depth:"
         ):
-            with self.subTest(forbidden=forbidden):
-                self.assertNotIn(forbidden, serialized)
+            validator._loads_strict(source, "deep.json")
+
+    def test_contract_comparison_is_type_strict(self) -> None:
+        self.assertFalse(validator._strict_equal(True, 1))
+        self.assertFalse(validator._strict_equal({"value": True}, {"value": 1}))
+        self.assertTrue(validator._strict_equal({"value": [1]}, {"value": [1]}))
+
+    def test_invalid_filename_check_is_case_insensitive(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "PILOT.INVALID.JSON"
+            path.write_text(json.dumps(activation_document()), encoding="utf-8")
+            with self.assertRaisesRegex(
+                validator.PilotContractError, r"^invalid-example-file:"
+            ):
+                validator.validate_path(path, "activation")
+
+    def test_result_names_the_static_activation_blocker(self) -> None:
+        example = validator.validate_document(copy.deepcopy(self.example), "example")
+        activation = validator.validate_document(activation_document(), "activation")
+        self.assertEqual(
+            example["activation_blocker"], "example_document_not_activatable"
+        )
+        self.assertEqual(
+            activation["activation_blocker"],
+            "external_receipt_trust_and_replay_verification_required",
+        )
+
+    def test_ci_workflow_integrates_pilot_contract_without_duplicate_job(self) -> None:
+        workflow = yaml.safe_load(WORKFLOW_PATH.read_text(encoding="utf-8"))
+        self.assertNotIn("two-operator-pilot-proof", workflow["jobs"])
+        contract = workflow["jobs"]["contract"]
+        compiled = " ".join(
+            step.get("run", "") for step in contract["steps"] if step.get("run")
+        )
+        self.assertIn("validate_two_operator_pilot.py", compiled)
+        self.assertIn("scripts.ci.tests.test_two_operator_cell_pilot", compiled)
 
 
 if __name__ == "__main__":
