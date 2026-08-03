@@ -16,7 +16,6 @@ if __package__ in {None, ""}:
 from scripts.docmeta.docmeta import parse_frontmatter
 from scripts.docmeta.report_lifecycle_requirements import (
     missing_required_report_field_rules,
-    source_revision_metadata,
     string_value as _string_value,
     validate_truth_contract,
 )
@@ -91,41 +90,7 @@ def validate_truth_report(path: Path, root: Path) -> tuple[str, ...]:
         contract = extract_truth_contract(path.read_text(encoding="utf-8"))
     except (OSError, ValueError, json.JSONDecodeError) as exc:
         return (str(exc) or "truth_contract_invalid_json",)
-
-    violations = list(validate_truth_contract(contract))
-    sources = contract.get("sources")
-    source_paths: list[Path] = []
-    if isinstance(sources, list):
-        for index, source in enumerate(sources):
-            if not isinstance(source, dict):
-                continue
-            relative = source.get("path")
-            digest = source.get("sha256")
-            if not isinstance(relative, str):
-                continue
-            candidate = (root / relative).resolve()
-            try:
-                candidate.relative_to(root.resolve())
-            except ValueError:
-                violations.append(f"source_outside_repository_{index}")
-                continue
-            if not candidate.is_file():
-                violations.append(f"source_missing_{index}")
-                continue
-            source_paths.append(candidate)
-            actual = __import__("hashlib").sha256(candidate.read_bytes()).hexdigest()
-            if actual != digest:
-                violations.append(f"source_digest_mismatch_{index}")
-    if source_paths:
-        revision, generated_at, fresh = source_revision_metadata(root, source_paths)
-        if contract.get("source_revision") != revision:
-            violations.append("source_revision_mismatch")
-        if contract.get("generated_at") != generated_at:
-            violations.append("generated_at_revision_mismatch")
-        coverage = contract.get("coverage")
-        if isinstance(coverage, dict) and coverage.get("fresh") is True and not fresh:
-            violations.append("coverage_fresh_but_sources_dirty")
-    return tuple(dict.fromkeys(violations))
+    return validate_truth_contract(contract, root=root)
 
 
 def _changed_report_paths(root: Path, changed_from: str, changed_to: str) -> list[Path]:

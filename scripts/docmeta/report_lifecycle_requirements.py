@@ -237,6 +237,31 @@ def truth_contract_missing_fields(
     return tuple(field for field in TRUTH_REQUIRED_FIELDS if field not in value)
 
 
+def _git_revision_is_ancestor(root: Path, revision: str) -> bool:
+    try:
+        return subprocess.run(
+            ["git", "merge-base", "--is-ancestor", revision, "HEAD"],
+            cwd=root,
+            capture_output=True,
+            check=False,
+        ).returncode == 0
+    except OSError:
+        return False
+
+
+def _git_blob_sha256(root: Path, revision: str, relative: Path) -> str | None:
+    try:
+        completed = subprocess.run(
+            ["git", "show", f"{revision}:{relative.as_posix()}"],
+            cwd=root,
+            capture_output=True,
+            check=True,
+        )
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    return hashlib.sha256(completed.stdout).hexdigest()
+
+
 def _git_commit_timestamp(root: Path, revision: str) -> str | None:
     try:
         completed = subprocess.run(
@@ -256,6 +281,36 @@ def _git_commit_timestamp(root: Path, revision: str) -> str | None:
     if parsed.tzinfo is None:
         return None
     return value
+
+
+def _ensure_git_revision(root: Path, revision: str) -> str | None:
+    generated_at = _git_commit_timestamp(root, revision)
+    if generated_at is not None:
+        return generated_at
+    try:
+        shallow = subprocess.run(
+            ["git", "rev-parse", "--is-shallow-repository"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip() == "true"
+    except (OSError, subprocess.CalledProcessError):
+        return None
+    if not shallow:
+        return None
+    try:
+        subprocess.run(
+            ["git", "fetch", "--no-tags", "--unshallow", "origin"],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+            timeout=120,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return None
+    return _git_commit_timestamp(root, revision)
 
 
 def validate_truth_contract(
@@ -330,11 +385,14 @@ def validate_truth_contract(
             violations.append("invalid_generated_at")
 
     if root is not None and revision is not None:
-        commit_timestamp = _git_commit_timestamp(root, revision)
+        commit_timestamp = _ensure_git_revision(root, revision)
         if commit_timestamp is None:
             violations.append("source_revision_not_found")
-        elif generated_at != commit_timestamp:
-            violations.append("generated_at_revision_mismatch")
+        else:
+            if not _git_revision_is_ancestor(root, revision):
+                violations.append("source_revision_not_ancestor")
+            if generated_at != commit_timestamp:
+                violations.append("generated_at_revision_mismatch")
 
     sources = value.get("sources")
     if not isinstance(sources, list) or not sources:
@@ -365,6 +423,12 @@ def validate_truth_contract(
                     violations.append(f"missing_source_{index}")
                 elif hashlib.sha256(full_path.read_bytes()).hexdigest() != digest:
                     violations.append(f"source_digest_mismatch_{index}")
+                elif revision is not None:
+                    revision_digest = _git_blob_sha256(root, revision, relative)
+                    if revision_digest is None:
+                        violations.append(f"source_missing_at_revision_{index}")
+                    elif revision_digest != digest:
+                        violations.append(f"source_revision_digest_mismatch_{index}")
 
     if not _truth_string_list(value.get("limitations")):
         violations.append("invalid_limitations")
@@ -481,6 +545,9 @@ def source_manifest(root: Path, paths: Sequence[Path]) -> list[dict[str, str]]:
 def source_revision_metadata(
     root: Path,
     source_paths: Sequence[Path],
+    *,
+    fallback_revision: str | None = None,
+    fallback_generated_at: str | None = None,
 ) -> tuple[str, str, bool]:
     relative_paths: list[str] = []
     root_resolved = root.resolve()
@@ -493,6 +560,41 @@ def source_revision_metadata(
     if not relative_paths:
         return ("0" * 40, "1970-01-01T00:00:00Z", False)
     try:
+        shallow = (
+            subprocess.run(
+                ["git", "rev-parse", "--is-shallow-repository"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+            == "true"
+        )
+        if shallow and isinstance(fallback_revision, str) and isinstance(
+            fallback_generated_at, str
+        ):
+            if _SHA40_RE.fullmatch(fallback_revision) is None:
+                raise ValueError("fallback source revision invalid")
+            parsed_fallback = datetime.fromisoformat(
+                fallback_generated_at.replace("Z", "+00:00")
+            )
+            if parsed_fallback.tzinfo is None:
+                raise ValueError("fallback generated_at timezone missing")
+            working_tree_changes = subprocess.run(
+                [
+                    "git",
+                    "status",
+                    "--porcelain=v1",
+                    "--untracked-files=all",
+                    "--",
+                    *relative_paths,
+                ],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+            return fallback_revision, fallback_generated_at, not working_tree_changes
         revision = subprocess.run(
             ["git", "log", "-1", "--format=%H", "--", *relative_paths],
             cwd=root,

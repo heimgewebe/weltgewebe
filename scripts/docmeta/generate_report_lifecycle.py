@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import sys
 from collections import defaultdict
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -21,6 +22,7 @@ from scripts.docmeta.validate_report_lifecycle import _validate_report, _load_fr
 from scripts.docmeta.report_lifecycle_requirements import (
     build_truth_contract,
     missing_required_report_fields,
+    parse_truth_contract_markdown,
     source_manifest,
     source_revision_metadata,
     string_value,
@@ -279,13 +281,34 @@ def render_markdown(
     return "\n".join(lines).rstrip() + "\n"
 
 
+def _existing_truth_contract(path: Path) -> Mapping[str, object] | None:
+    if not path.is_file():
+        return None
+    value = parse_truth_contract_markdown(path.read_text(encoding="utf-8"))
+    return value if isinstance(value, Mapping) else None
+
+
 def build_overview_truth_contract(
     root: Path,
     records: list[ReportRecord],
     summary: dict[str, int],
+    existing_contract: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     source_paths = [root / record.path for record in records]
-    revision, generated_at, fresh = source_revision_metadata(root, source_paths)
+    fallback_revision = (
+        existing_contract.get("source_revision") if existing_contract is not None else None
+    )
+    fallback_generated_at = (
+        existing_contract.get("generated_at") if existing_contract is not None else None
+    )
+    revision, generated_at, fresh = source_revision_metadata(
+        root,
+        source_paths,
+        fallback_revision=fallback_revision if isinstance(fallback_revision, str) else None,
+        fallback_generated_at=(
+            fallback_generated_at if isinstance(fallback_generated_at, str) else None
+        ),
+    )
     failures = summary["findings_total"]
     status = "pass" if fresh and failures == 0 else ("fail" if failures else "unknown")
     return build_truth_contract(
@@ -323,7 +346,9 @@ def generate(root: Path = REPO_ROOT, output_path: Path | None = None) -> Path:
     records = collect_reports(config)
     rows = collect_lifecycle_rows(root, records)
     summary = build_summary(rows)
-    truth_contract = build_overview_truth_contract(root, records, summary)
+    truth_contract = build_overview_truth_contract(
+        root, records, summary, _existing_truth_contract(out_path)
+    )
     content = render_markdown(rows, summary, truth_contract)
     
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -352,7 +377,9 @@ def main(argv: list[str] | None = None) -> int:
         records = collect_reports(config)
         rows = collect_lifecycle_rows(root_path, records)
         summary = build_summary(rows)
-        truth_contract = build_overview_truth_contract(root_path, records, summary)
+        truth_contract = build_overview_truth_contract(
+            root_path, records, summary, _existing_truth_contract(target)
+        )
         content = render_markdown(rows, summary, truth_contract)
         return write_or_check(target, content, check=True, label=str(target.relative_to(root_path)))
 

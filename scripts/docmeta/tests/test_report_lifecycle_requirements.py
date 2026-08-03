@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import datetime
+import hashlib
 from pathlib import Path
 import subprocess
 import tempfile
@@ -313,6 +314,57 @@ class TestAuditReportTruthContract(unittest.TestCase):
         self.assertIn("missing_sources", violations)
         self.assertIn("unknown_surprise", violations)
 
+    def test_false_source_revision_fails_when_revision_blob_differs(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            source = root / "docs" / "reports" / "source.md"
+            source.parent.mkdir(parents=True)
+            source.write_text("source v1\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "source v1"], cwd=root, check=True)
+            old_revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            old_timestamp = subprocess.run(
+                ["git", "show", "-s", "--format=%cI", old_revision],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+            source.write_text("source v2\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "source v2"], cwd=root, check=True)
+            contract = build_truth_contract(
+                status="partial",
+                scope="one source",
+                complete=True,
+                fresh=True,
+                method="exact",
+                checked_items=1,
+                total_items=1,
+                failures=0,
+                source_revision=old_revision,
+                generated_at=old_timestamp,
+                sources=[{
+                    "path": "docs/reports/source.md",
+                    "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
+                }],
+                limitations=["repository-only"],
+                does_not_establish=["runtime-health"],
+            )
+            self.assertIn(
+                "source_revision_digest_mismatch_0",
+                validate_truth_contract(contract, root=root),
+            )
+
     def test_migration_classification_is_explicit(self) -> None:
         self.assertEqual(
             report_truth_migration_state({"lifecycle_state": "archived", "status": "active"}),
@@ -368,6 +420,95 @@ class TestSourceRevisionMetadata(unittest.TestCase):
             revision, _, fresh = source_revision_metadata(root, [source])
             self.assertEqual(revision, source_revision)
             self.assertFalse(fresh)
+
+
+    def test_root_validation_materializes_bound_revision_in_shallow_checkout(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_root = Path(temp_dir)
+            source_repo = temp_root / "source-repo"
+            source_repo.mkdir()
+            subprocess.run(["git", "init", "-q"], cwd=source_repo, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=source_repo, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=source_repo,
+                check=True,
+            )
+            source = source_repo / "source.md"
+            source.write_text("source v1\n", encoding="utf-8")
+            subprocess.run(["git", "add", "source.md"], cwd=source_repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "source"], cwd=source_repo, check=True)
+            source_revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=source_repo,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+            generated_at = subprocess.run(
+                ["git", "show", "-s", "--format=%cI", source_revision],
+                cwd=source_repo,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+            source_digest = hashlib.sha256(source.read_bytes()).hexdigest()
+
+            (source_repo / "generator.py").write_text("# generator\n", encoding="utf-8")
+            subprocess.run(["git", "add", "generator.py"], cwd=source_repo, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "generator"], cwd=source_repo, check=True)
+
+            checkout = temp_root / "checkout"
+            subprocess.run(
+                ["git", "clone", "-q", "--depth=1", source_repo.resolve().as_uri(), str(checkout)],
+                check=True,
+            )
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "rev-parse", "--is-shallow-repository"],
+                    cwd=checkout,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip(),
+                "true",
+            )
+            self.assertNotEqual(
+                subprocess.run(
+                    ["git", "cat-file", "-e", f"{source_revision}^{{commit}}"],
+                    cwd=checkout,
+                    capture_output=True,
+                    check=False,
+                ).returncode,
+                0,
+            )
+
+            contract = build_truth_contract(
+                status="pass",
+                scope="one exact source",
+                complete=True,
+                fresh=True,
+                method="exact",
+                checked_items=1,
+                total_items=1,
+                failures=0,
+                source_revision=source_revision,
+                generated_at=generated_at,
+                sources=[{"path": "source.md", "sha256": source_digest}],
+                limitations=["repository-only"],
+                does_not_establish=["runtime_health"],
+            )
+            self.assertEqual(validate_truth_contract(contract, root=checkout), ())
+            self.assertEqual(
+                subprocess.run(
+                    ["git", "rev-parse", "--is-shallow-repository"],
+                    cwd=checkout,
+                    text=True,
+                    capture_output=True,
+                    check=True,
+                ).stdout.strip(),
+                "false",
+            )
 
 
 if __name__ == "__main__":

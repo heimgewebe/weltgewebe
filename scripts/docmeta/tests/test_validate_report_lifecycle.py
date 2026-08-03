@@ -941,11 +941,7 @@ class TestGeneratedTruthContractValidation(unittest.TestCase):
                 "```json audit-report-truth.v1\n" + payload + "\n```\n",
                 encoding="utf-8",
             )
-            with patch(
-                "scripts.docmeta.validate_report_lifecycle.source_revision_metadata",
-                return_value=("a" * 40, "2026-08-03T00:00:00+00:00", True),
-            ):
-                violations = validate_truth_report(report, root)
+            violations = validate_truth_report(report, root)
             self.assertIn("source_digest_mismatch_0", violations)
 
 
