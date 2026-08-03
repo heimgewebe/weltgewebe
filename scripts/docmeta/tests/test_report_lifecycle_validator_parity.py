@@ -12,35 +12,30 @@ from scripts.docmeta.validate_report_lifecycle import _validate_report
 FindingTuple = tuple[str, str | None, str, str]
 
 
-def legacy_string_value(value: object) -> str:
-    """Frozen normalization from the pre-refactor validator."""
-    if value is None:
-        return ""
+def contract_string_value(value: object) -> str:
+    """T065 contract normalization: only strings establish field presence."""
     if isinstance(value, str):
         return value.strip()
-    if isinstance(value, (list, tuple, set, dict)):
-        return ""
-    return str(value).strip()
+    return ""
 
 
-def legacy_expected_findings(
+def expected_required_findings(
     frontmatter: dict[str, object],
 ) -> tuple[FindingTuple, ...]:
-    """Frozen compatibility oracle from PR base 0fcd01a52156df250fe21660d7675547338b990c.
+    """Required-field oracle with the explicit T065 scalar-type decision.
 
-    This is test evidence, not a second production policy source. Changing it
-    requires an explicit behavior-change decision.
+    This remains test evidence, not a second production policy source.
     """
-    doc_type = legacy_string_value(frontmatter.get("doc_type")).lower()
+    doc_type = contract_string_value(frontmatter.get("doc_type")).lower()
     if doc_type != "report":
         return ()
 
-    status = legacy_string_value(frontmatter.get("status")).lower()
-    lifecycle_state = legacy_string_value(frontmatter.get("lifecycle_state")).lower()
-    lifecycle = legacy_string_value(frontmatter.get("lifecycle"))
-    owner_task = legacy_string_value(frontmatter.get("owner_task"))
-    review_after = legacy_string_value(frontmatter.get("review_after"))
-    superseded_by = legacy_string_value(frontmatter.get("superseded_by"))
+    status = contract_string_value(frontmatter.get("status")).lower()
+    lifecycle_state = contract_string_value(frontmatter.get("lifecycle_state")).lower()
+    lifecycle = contract_string_value(frontmatter.get("lifecycle"))
+    owner_task = contract_string_value(frontmatter.get("owner_task"))
+    review_after = contract_string_value(frontmatter.get("review_after"))
+    superseded_by = contract_string_value(frontmatter.get("superseded_by"))
 
     findings: list[FindingTuple] = []
     added_codes: set[str] = set()
@@ -214,7 +209,7 @@ class TestReportLifecycleValidatorParity(unittest.TestCase):
     ROOT = Path("/repo")
     PATH = ROOT / "docs" / "reports" / "sample.md"
 
-    def assert_matches_legacy(self, frontmatter: dict[str, object]) -> None:
+    def assert_matches_contract(self, frontmatter: dict[str, object]) -> None:
         findings = _validate_report(self.PATH, frontmatter, self.ROOT)
         actual = tuple(
             (finding.code, finding.field, finding.message, finding.severity)
@@ -223,7 +218,7 @@ class TestReportLifecycleValidatorParity(unittest.TestCase):
         )
         self.assertEqual(
             actual,
-            legacy_expected_findings(frontmatter),
+            expected_required_findings(frontmatter),
             msg=f"frontmatter={frontmatter!r}",
         )
         self.assertEqual(
@@ -236,7 +231,7 @@ class TestReportLifecycleValidatorParity(unittest.TestCase):
             msg=f"unexpected path for frontmatter={frontmatter!r}",
         )
 
-    def test_cross_product_matrix_matches_legacy_validator(self) -> None:
+    def test_cross_product_matrix_matches_contract(self) -> None:
         """Exhaustively executed cross product of doc_type, status,
         lifecycle_state, and field presence.
 
@@ -265,33 +260,33 @@ class TestReportLifecycleValidatorParity(unittest.TestCase):
                     for field, present in zip(MATRIX_FIELDS, presence, strict=True)
                 }
             )
-            self.assert_matches_legacy(frontmatter)
+            self.assert_matches_contract(frontmatter)
             case_count += 1
 
         self.assertEqual(case_count, EXPECTED_MATRIX_CASES)
 
-    def test_empty_value_normalization_matches_legacy_validator(self) -> None:
+    def test_empty_value_normalization_matches_contract(self) -> None:
         for key, empty_value in itertools.product(
             NORMALIZATION_KEYS, EMPTY_VALUES
         ):
             frontmatter = dict(NORMALIZATION_BASE)
             frontmatter[key] = empty_value
             with self.subTest(key=key, value=empty_value):
-                self.assert_matches_legacy(frontmatter)
+                self.assert_matches_contract(frontmatter)
 
-    def test_non_string_scalar_normalization_matches_legacy_validator(self) -> None:
+    def test_non_string_scalar_normalization_matches_contract(self) -> None:
         for key, scalar_value in itertools.product(
             NORMALIZATION_KEYS, NON_STRING_SCALARS
         ):
             frontmatter = dict(NORMALIZATION_BASE)
             frontmatter[key] = scalar_value
             with self.subTest(key=key, value=scalar_value):
-                self.assert_matches_legacy(frontmatter)
+                self.assert_matches_contract(frontmatter)
 
-    def test_case_and_whitespace_normalization_matches_legacy_validator(self) -> None:
+    def test_case_and_whitespace_normalization_matches_contract(self) -> None:
         for frontmatter in CASE_AND_WHITESPACE_CASES:
             with self.subTest(frontmatter=frontmatter):
-                self.assert_matches_legacy(frontmatter)
+                self.assert_matches_contract(frontmatter)
 
     def test_probe_surface_sizes_are_frozen(self) -> None:
         """Pin the documented case counts to the executed test surface.
