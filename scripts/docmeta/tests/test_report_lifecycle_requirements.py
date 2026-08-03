@@ -483,6 +483,13 @@ class TestSourceRevisionMetadata(unittest.TestCase):
                 0,
             )
 
+            resolved_revision, resolved_generated_at, resolved_fresh = source_revision_metadata(
+                checkout, [checkout / "source.md"]
+            )
+            self.assertEqual(resolved_revision, source_revision)
+            self.assertEqual(resolved_generated_at, generated_at)
+            self.assertTrue(resolved_fresh)
+
             contract = build_truth_contract(
                 status="pass",
                 scope="one exact source",

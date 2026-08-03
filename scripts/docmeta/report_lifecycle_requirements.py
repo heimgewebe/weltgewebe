@@ -283,22 +283,26 @@ def _git_commit_timestamp(root: Path, revision: str) -> str | None:
     return value
 
 
-def _ensure_git_revision(root: Path, revision: str) -> str | None:
-    generated_at = _git_commit_timestamp(root, revision)
-    if generated_at is not None:
-        return generated_at
+def _git_is_shallow_repository(root: Path) -> bool | None:
     try:
-        shallow = subprocess.run(
+        completed = subprocess.run(
             ["git", "rev-parse", "--is-shallow-repository"],
             cwd=root,
             text=True,
             capture_output=True,
             check=True,
-        ).stdout.strip() == "true"
+        )
     except (OSError, subprocess.CalledProcessError):
         return None
+    return completed.stdout.strip() == "true"
+
+
+def _ensure_full_git_history(root: Path) -> bool:
+    shallow = _git_is_shallow_repository(root)
+    if shallow is None:
+        return False
     if not shallow:
-        return None
+        return True
     try:
         subprocess.run(
             ["git", "fetch", "--no-tags", "--unshallow", "origin"],
@@ -309,6 +313,15 @@ def _ensure_git_revision(root: Path, revision: str) -> str | None:
             timeout=120,
         )
     except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
+        return False
+    return _git_is_shallow_repository(root) is False
+
+
+def _ensure_git_revision(root: Path, revision: str) -> str | None:
+    generated_at = _git_commit_timestamp(root, revision)
+    if generated_at is not None:
+        return generated_at
+    if not _ensure_full_git_history(root):
         return None
     return _git_commit_timestamp(root, revision)
 
@@ -545,9 +558,6 @@ def source_manifest(root: Path, paths: Sequence[Path]) -> list[dict[str, str]]:
 def source_revision_metadata(
     root: Path,
     source_paths: Sequence[Path],
-    *,
-    fallback_revision: str | None = None,
-    fallback_generated_at: str | None = None,
 ) -> tuple[str, str, bool]:
     relative_paths: list[str] = []
     root_resolved = root.resolve()
@@ -560,41 +570,8 @@ def source_revision_metadata(
     if not relative_paths:
         return ("0" * 40, "1970-01-01T00:00:00Z", False)
     try:
-        shallow = (
-            subprocess.run(
-                ["git", "rev-parse", "--is-shallow-repository"],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=True,
-            ).stdout.strip()
-            == "true"
-        )
-        if shallow and isinstance(fallback_revision, str) and isinstance(
-            fallback_generated_at, str
-        ):
-            if _SHA40_RE.fullmatch(fallback_revision) is None:
-                raise ValueError("fallback source revision invalid")
-            parsed_fallback = datetime.fromisoformat(
-                fallback_generated_at.replace("Z", "+00:00")
-            )
-            if parsed_fallback.tzinfo is None:
-                raise ValueError("fallback generated_at timezone missing")
-            working_tree_changes = subprocess.run(
-                [
-                    "git",
-                    "status",
-                    "--porcelain=v1",
-                    "--untracked-files=all",
-                    "--",
-                    *relative_paths,
-                ],
-                cwd=root,
-                text=True,
-                capture_output=True,
-                check=True,
-            ).stdout.strip()
-            return fallback_revision, fallback_generated_at, not working_tree_changes
+        if not _ensure_full_git_history(root):
+            raise ValueError("complete source history unavailable")
         revision = subprocess.run(
             ["git", "log", "-1", "--format=%H", "--", *relative_paths],
             cwd=root,

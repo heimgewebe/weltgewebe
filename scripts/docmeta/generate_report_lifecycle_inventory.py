@@ -5,7 +5,6 @@ import argparse
 import re
 import sys
 from collections import Counter, defaultdict
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -566,33 +565,12 @@ def build_doc_type_distribution(records: list[ReportRecord]) -> list[tuple[str, 
     return sorted(counts.items())
 
 
-def _existing_truth_contract(path: Path) -> Mapping[str, object] | None:
-    if not path.is_file():
-        return None
-    value = parse_truth_contract_markdown(path.read_text(encoding="utf-8"))
-    return value if isinstance(value, Mapping) else None
-
-
 def build_inventory_truth_contract(
     root: Path,
     records: list[ReportRecord],
-    existing_contract: Mapping[str, object] | None = None,
 ) -> dict[str, object]:
     source_paths = [root / record.path for record in records]
-    fallback_revision = (
-        existing_contract.get("source_revision") if existing_contract is not None else None
-    )
-    fallback_generated_at = (
-        existing_contract.get("generated_at") if existing_contract is not None else None
-    )
-    revision, generated_at, fresh = source_revision_metadata(
-        root,
-        source_paths,
-        fallback_revision=fallback_revision if isinstance(fallback_revision, str) else None,
-        fallback_generated_at=(
-            fallback_generated_at if isinstance(fallback_generated_at, str) else None
-        ),
-    )
+    revision, generated_at, fresh = source_revision_metadata(root, source_paths)
     failures = sum(1 for record in records if record.frontmatter_parse_warning)
     status = "no_material_drift" if fresh and failures == 0 else ("fail" if failures else "unknown")
     return build_truth_contract(
@@ -790,11 +768,7 @@ def _cell(value: str) -> str:
 
 def _render_current_inventory(config: InventoryConfig) -> str:
     records = collect_reports(config)
-    truth_contract = build_inventory_truth_contract(
-        config.repo_root,
-        records,
-        _existing_truth_contract(config.output_path),
-    )
+    truth_contract = build_inventory_truth_contract(config.repo_root, records)
     migrated_paths = (
         _as_rel(config.output_path, config.repo_root),
         "docs/_generated/report-lifecycle.md",
