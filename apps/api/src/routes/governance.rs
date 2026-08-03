@@ -403,7 +403,7 @@ pub async fn create_proposal(
         &state,
         &auth,
         &proposal.webgemeindezentrum_id,
-        "governance_proposal",
+        super::edges::FadenType::Proposal,
         &proposal.id,
     )
     .await
@@ -482,13 +482,12 @@ pub async fn veto_proposal(
             VetoError::Database(error) => internal_error("add_veto")(error),
         })?;
 
-    let action_id = format!("{id}:{account_id}");
     if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
         &state,
         &auth,
         &proposal.webgemeindezentrum_id,
-        "governance_veto",
-        &action_id,
+        super::edges::FadenType::Vote,
+        &id,
     )
     .await
     {
@@ -565,13 +564,12 @@ pub async fn vote_proposal(
             VoteError::Database(error) => internal_error("upsert_vote")(error),
         })?;
 
-    let action_id = format!("{id}:{account_id}");
     if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
         &state,
         &auth,
         &proposal.webgemeindezentrum_id,
-        "governance_vote",
-        &action_id,
+        super::edges::FadenType::Vote,
+        &id,
     )
     .await
     {
@@ -649,8 +647,8 @@ pub async fn post_proposal_message(
         &state,
         &auth,
         &proposal.webgemeindezentrum_id,
-        "governance_conversation_message",
-        &message.id,
+        super::edges::FadenType::Conversation,
+        &id,
     )
     .await
     {

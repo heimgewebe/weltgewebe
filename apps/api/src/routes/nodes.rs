@@ -911,29 +911,29 @@ fn node_create_error_message(err: &node_create::NodeCreateValidationError) -> St
 }
 
 fn node_activity_faden_operation_id(
-    activity_kind: &str,
+    faden_type: super::edges::FadenType,
     account_id: &str,
     node_id: &str,
-    action_id: &str,
+    subject_id: &str,
 ) -> String {
     fn component(value: &str) -> String {
         format!("{}:{value}", value.len())
     }
 
     let name = format!(
-        "weltgewebe:node-activity-faden:v1|{}|{}|{}|{}",
-        component(activity_kind),
+        "weltgewebe:node-participation-faden:v2|{}|{}|{}|{}",
+        component(faden_type.as_str()),
         component(account_id),
         component(node_id),
-        component(action_id),
+        component(subject_id),
     );
     Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes()).to_string()
 }
 
-/// Project one recent participation action as an expiring account-to-node
-/// Faden. Every successful edit or new node-conversation contribution gets a
-/// distinct deterministic operation id, while an idempotent replay repairs the
-/// same projection instead of increasing the hotspot twice.
+/// Project recent participation as an expiring account-to-node Faden.
+/// Each account gets at most one active Faden of a semantic type per target
+/// object. Later messages or edits replay that relation instead of drawing
+/// parallel lines; `activity_id` remains diagnostic evidence only.
 ///
 /// The strict edge contract only admits UUID endpoints. Older imported nodes
 /// and accounts can still carry historical text ids; participation on those
@@ -943,13 +943,21 @@ pub(crate) async fn ensure_node_activity_faden(
     state: &ApiState,
     auth: &AuthContext,
     node_id: &str,
-    activity_kind: &str,
-    action_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
+    activity_id: &str,
 ) -> Result<(), (StatusCode, String)> {
     super::collective_write_guard::run_node_activity_projection(
         state,
         node_id,
-        ensure_node_activity_faden_guarded(state, auth, node_id, activity_kind, action_id),
+        ensure_node_activity_faden_guarded(
+            state,
+            auth,
+            node_id,
+            faden_type,
+            subject_id,
+            activity_id,
+        ),
     )
     .await
 }
@@ -958,8 +966,9 @@ pub(crate) async fn ensure_node_activity_faden_guarded(
     state: &ApiState,
     auth: &AuthContext,
     node_id: &str,
-    activity_kind: &str,
-    action_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
+    activity_id: &str,
 ) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
@@ -967,26 +976,32 @@ pub(crate) async fn ensure_node_activity_faden_guarded(
             "authenticated account context missing".to_string(),
         )
     })?;
-    if Uuid::parse_str(account_id).is_err() || Uuid::parse_str(node_id).is_err() {
+    if Uuid::parse_str(account_id).is_err()
+        || Uuid::parse_str(node_id).is_err()
+        || Uuid::parse_str(subject_id).is_err()
+    {
         tracing::warn!(
             event = "node.faden_projection.skipped_legacy_identifier",
             node_id,
             account_id,
-            activity_kind,
+            faden_type = faden_type.as_str(),
+            subject_id,
+            activity_id,
             "Recent participation cannot be represented by the UUID-only Faden contract"
         );
         return Ok(());
     }
 
     let operation_id =
-        node_activity_faden_operation_id(activity_kind, account_id, node_id, action_id);
+        node_activity_faden_operation_id(faden_type, account_id, node_id, subject_id);
     ensure_node_faden_with_operation_id(
         state,
         auth,
         node_id,
         Some(&operation_id),
         false,
-        activity_kind,
+        faden_type,
+        subject_id,
     )
     .await
 }
@@ -1003,7 +1018,8 @@ async fn ensure_node_faden_with_operation_id(
     node_id: &str,
     node_operation_id: Option<&str>,
     account_lifecycle_guarded: bool,
-    activity_kind: &str,
+    faden_type: super::edges::FadenType,
+    faden_subject_id: &str,
 ) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
@@ -1032,7 +1048,7 @@ async fn ensure_node_faden_with_operation_id(
             )
         })?;
         let mut tx = pool.begin().await.map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, node_id, activity_kind, "failed to begin node Faden account guard");
+            tracing::error!(%error, account_id = %account_id, node_id, faden_type = faden_type.as_str(), "failed to begin node Faden account guard");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to guard creator account for derived Faden".to_string(),
@@ -1045,7 +1061,7 @@ async fn ensure_node_faden_with_operation_id(
         .fetch_optional(&mut *tx)
         .await
         .map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, node_id, activity_kind, "failed to lock creator account for node Faden");
+            tracing::error!(%error, account_id = %account_id, node_id, faden_type = faden_type.as_str(), "failed to lock creator account for node Faden");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to guard creator account for derived Faden".to_string(),
@@ -1069,6 +1085,8 @@ async fn ensure_node_faden_with_operation_id(
         "target_id": node_id,
         "target_type": "node",
         "edge_kind": "reference",
+        "faden_type": faden_type,
+        "faden_subject_id": faden_subject_id,
         "operation_id": projection_operation_id,
     });
 
@@ -1080,7 +1098,8 @@ async fn ensure_node_faden_with_operation_id(
                 event = "node.faden_projection.failed",
                 node_id,
                 account_id = %account_id,
-                activity_kind,
+                faden_type = faden_type.as_str(),
+                faden_subject_id,
                 %status,
                 error = %message,
                 "Node is durable but its derived Faden projection failed"
@@ -1093,7 +1112,7 @@ async fn ensure_node_faden_with_operation_id(
 
     if let Some(tx) = account_guard.take() {
         tx.commit().await.map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, node_id, activity_kind, "failed to commit node Faden account guard");
+            tracing::error!(%error, account_id = %account_id, node_id, faden_type = faden_type.as_str(), "failed to commit node Faden account guard");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to finalize derived Faden account guard".to_string(),
@@ -1431,7 +1450,8 @@ pub async fn create_node(
                         &existing.id,
                         semantic_request.operation_id.as_deref(),
                         false,
-                        "node_create",
+                        super::edges::FadenType::Knotting,
+                        &existing.id,
                     )
                     .await?;
                     return Ok((StatusCode::OK, Json(existing)));
@@ -1498,7 +1518,8 @@ pub async fn create_node(
         &node.id,
         semantic_request.operation_id.as_deref(),
         false,
-        "node_create",
+        super::edges::FadenType::Knotting,
+        &node.id,
     )
     .await
     {
@@ -3490,24 +3511,47 @@ mod node_activity_faden_tests {
     use super::*;
 
     #[test]
-    fn operation_ids_are_deterministic_and_activity_scoped() {
+    fn operation_ids_are_deterministic_and_relation_scoped() {
         let account = "10000000-0000-4000-8000-000000000001";
         let node = "20000000-0000-4000-8000-000000000001";
-        let action = "2026-07-29T06:00:00Z";
-        let first = node_activity_faden_operation_id("node_edit", account, node, action);
-        let replay = node_activity_faden_operation_id("node_edit", account, node, action);
-        let contribution =
-            node_activity_faden_operation_id("conversation_message", account, node, action);
+        let first = node_activity_faden_operation_id(
+            super::super::edges::FadenType::Knotting,
+            account,
+            node,
+            node,
+        );
+        let replay = node_activity_faden_operation_id(
+            super::super::edges::FadenType::Knotting,
+            account,
+            node,
+            node,
+        );
+        let conversation = node_activity_faden_operation_id(
+            super::super::edges::FadenType::Conversation,
+            account,
+            node,
+            "30000000-0000-4000-8000-000000000001",
+        );
 
         assert_eq!(first, replay);
-        assert_ne!(first, contribution);
+        assert_ne!(first, conversation);
         assert!(Uuid::parse_str(&first).is_ok());
     }
 
     #[test]
     fn length_prefixes_keep_ambiguous_components_distinct() {
-        let left = node_activity_faden_operation_id("ab", "c", "d", "e");
-        let right = node_activity_faden_operation_id("a", "bc", "d", "e");
+        let left = node_activity_faden_operation_id(
+            super::super::edges::FadenType::Knotting,
+            "ab",
+            "c",
+            "d",
+        );
+        let right = node_activity_faden_operation_id(
+            super::super::edges::FadenType::Knotting,
+            "a",
+            "bc",
+            "d",
+        );
         assert_ne!(left, right);
     }
 }

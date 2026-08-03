@@ -16,6 +16,12 @@ export const EDGE_VISUAL_STYLE = {
   mainColor: "#76523d",
   mainWidth: 2.25,
   dashArray: [1.4, 0.7] as [number, number],
+  byType: {
+    conversation: { color: "#76523d", width: 2.15, dashArray: [1.4, 0.7] },
+    proposal: { color: "#68402f", width: 3.05, dashArray: [2.4, 0.28] },
+    knotting: { color: "#7b4f30", width: 2.75, dashArray: [3.2, 0.2] },
+    vote: { color: "#5f463d", width: 1.85, dashArray: [0.35, 0.82] },
+  },
 } as const;
 
 export function buildEdgeFeatures(
@@ -55,6 +61,8 @@ export function buildEdgeFeatures(
       properties: {
         id: edge.id,
         kind: edge.edge_kind,
+        fadenType: edge.faden_type ?? "legacy",
+        fadenSubjectId: edge.faden_subject_id ?? null,
         opacity,
       },
     });
@@ -111,6 +119,51 @@ function ensureEdgeLayers(
     opacity,
     EDGE_VISUAL_STYLE.haloOpacityFactor,
   ];
+  const fadenType: ExpressionSpecification = [
+    "coalesce",
+    ["get", "fadenType"],
+    "legacy",
+  ];
+  const mainColor: ExpressionSpecification = [
+    "match",
+    fadenType,
+    "conversation",
+    EDGE_VISUAL_STYLE.byType.conversation.color,
+    "proposal",
+    EDGE_VISUAL_STYLE.byType.proposal.color,
+    "knotting",
+    EDGE_VISUAL_STYLE.byType.knotting.color,
+    "vote",
+    EDGE_VISUAL_STYLE.byType.vote.color,
+    EDGE_VISUAL_STYLE.mainColor,
+  ];
+  const mainWidth: ExpressionSpecification = [
+    "match",
+    fadenType,
+    "conversation",
+    EDGE_VISUAL_STYLE.byType.conversation.width,
+    "proposal",
+    EDGE_VISUAL_STYLE.byType.proposal.width,
+    "knotting",
+    EDGE_VISUAL_STYLE.byType.knotting.width,
+    "vote",
+    EDGE_VISUAL_STYLE.byType.vote.width,
+    EDGE_VISUAL_STYLE.mainWidth,
+  ];
+  const dashArray: ExpressionSpecification = [
+    "match",
+    fadenType,
+    "conversation",
+    ["literal", EDGE_VISUAL_STYLE.byType.conversation.dashArray],
+    "proposal",
+    ["literal", EDGE_VISUAL_STYLE.byType.proposal.dashArray],
+    "knotting",
+    ["literal", EDGE_VISUAL_STYLE.byType.knotting.dashArray],
+    "vote",
+    ["literal", EDGE_VISUAL_STYLE.byType.vote.dashArray],
+    ["literal", EDGE_VISUAL_STYLE.dashArray],
+  ];
+  const haloWidth: ExpressionSpecification = ["+", mainWidth, 2.75];
   const commonLayout: LineLayerSpecification["layout"] = {
     "line-join": "round",
     "line-cap": "round",
@@ -122,10 +175,10 @@ function ensureEdgeLayers(
     layout: commonLayout,
     paint: {
       "line-color": EDGE_VISUAL_STYLE.haloColor,
-      "line-width": EDGE_VISUAL_STYLE.haloWidth,
+      "line-width": haloWidth,
       "line-blur": EDGE_VISUAL_STYLE.haloBlur,
       "line-opacity": haloOpacity,
-      "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
+      "line-dasharray": dashArray,
     },
   };
   const mainLayer: LineLayerSpecification = {
@@ -134,10 +187,10 @@ function ensureEdgeLayers(
     source: sourceId,
     layout: commonLayout,
     paint: {
-      "line-color": EDGE_VISUAL_STYLE.mainColor,
-      "line-width": EDGE_VISUAL_STYLE.mainWidth,
+      "line-color": mainColor,
+      "line-width": mainWidth,
       "line-opacity": opacity,
-      "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
+      "line-dasharray": dashArray,
     },
   };
 
