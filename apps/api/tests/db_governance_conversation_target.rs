@@ -143,10 +143,27 @@ async fn center_hub_migration_accepts_multiple_active_centers_without_legacy_pro
     tx.execute(CENTER_HUB_DOWN_MIGRATION)
         .await
         .expect("remove center hub before multi-center proof");
+    let baseline_centers: i64 =
+        sqlx::query_scalar("SELECT count(*)::bigint FROM webgemeindezentren")
+            .fetch_one(&mut *tx)
+            .await
+            .expect("count centers before multi-center proof");
+    assert!(
+        baseline_centers >= 1,
+        "the canonical first center must exist before adding a second one"
+    );
+
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let cell_id = format!("proof-{suffix}.weltgewebe.net");
+    let weaving_id = format!("ortsweberei-proof-{suffix}");
+    let center_id = format!("webgemeindezentrum-proof-{suffix}");
+    let slug = format!("proof-{suffix}");
+
     sqlx::query(
         "INSERT INTO gewebezellen (id, lifecycle_state, created_at, updated_at)
-         VALUES ('proof.weltgewebe.net', 'active', NOW(), NOW())",
+         VALUES ($1, 'active', NOW(), NOW())",
     )
+    .bind(&cell_id)
     .execute(&mut *tx)
     .await
     .expect("insert second Gewebezelle");
@@ -155,11 +172,15 @@ async fn center_hub_migration_accepts_multiple_active_centers_without_legacy_pro
              id, slug, name, description, gewebezelle_id, lifecycle_state,
              active_webgemeindezentrum_id, created_at, updated_at
          ) VALUES (
-             'ortsweberei-proof', 'proof', 'Ortsweberei Proof',
+             $1, $2, 'Ortsweberei Proof',
              'Zweite aktive Ortsweberei für den Migrationsbeweis.',
-             'proof.weltgewebe.net', 'active', 'webgemeindezentrum-proof', NOW(), NOW()
+             $3, 'active', $4, NOW(), NOW()
          )",
     )
+    .bind(&weaving_id)
+    .bind(&slug)
+    .bind(&cell_id)
+    .bind(&center_id)
     .execute(&mut *tx)
     .await
     .expect("insert second Ortsweberei");
@@ -168,19 +189,20 @@ async fn center_hub_migration_accepts_multiple_active_centers_without_legacy_pro
              id, ortsweberei_id, name, location_state, lat, lon,
              location_label, meeting_note, access_note, created_at, updated_at
          ) VALUES (
-             'webgemeindezentrum-proof', 'ortsweberei-proof',
-             'Webgemeindezentrum Proof', 'desired', 53.55, 10.05,
+             $1, $2, 'Webgemeindezentrum Proof', 'desired', 53.55, 10.05,
              'Migrationsbeweis', 'Gemeinsamer Treffpunkt für den Migrationsbeweis.',
              'Nur Testdaten.', NOW(), NOW()
          )",
     )
+    .bind(&center_id)
+    .bind(&weaving_id)
     .execute(&mut *tx)
     .await
     .expect("insert second Webgemeindezentrum");
 
-    tx.execute(CENTER_HUB_UP_MIGRATION)
-        .await
-        .expect("center hub migration must accept two active centers without legacy proposals");
+    tx.execute(CENTER_HUB_UP_MIGRATION).await.expect(
+        "center hub migration must accept multiple active centers without legacy proposals",
+    );
     let center_contract: (i64, i64) = sqlx::query_as(
         "SELECT count(*)::bigint, count(DISTINCT faden_endpoint_id)::bigint
          FROM webgemeindezentren",
@@ -188,7 +210,10 @@ async fn center_hub_migration_accepts_multiple_active_centers_without_legacy_pro
     .fetch_one(&mut *tx)
     .await
     .expect("inspect multi-center Faden endpoints");
-    assert_eq!(center_contract, (2, 2));
+    assert_eq!(
+        center_contract,
+        (baseline_centers + 1, baseline_centers + 1)
+    );
     let center_conversations: i64 = sqlx::query_scalar(
         "SELECT count(*)::bigint FROM domain_conversations
          WHERE conversation_type = 'webgemeindezentrum'",
@@ -196,7 +221,7 @@ async fn center_hub_migration_accepts_multiple_active_centers_without_legacy_pro
     .fetch_one(&mut *tx)
     .await
     .expect("inspect multi-center conversations");
-    assert_eq!(center_conversations, 2);
+    assert_eq!(center_conversations, baseline_centers + 1);
 
     tx.rollback().await.expect("rollback multi-center proof");
     pool.close().await;

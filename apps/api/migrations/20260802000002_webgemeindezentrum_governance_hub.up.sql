@@ -11,6 +11,19 @@ ALTER TABLE webgemeindezentren
     ALTER COLUMN faden_endpoint_id SET NOT NULL,
     ADD CONSTRAINT webgemeindezentren_faden_endpoint_id_unique UNIQUE (faden_endpoint_id);
 
+CREATE OR REPLACE FUNCTION weltgewebe_assign_webgemeindezentrum_faden_endpoint_id()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.faden_endpoint_id IS NULL THEN
+        NEW.faden_endpoint_id := weltgewebe_webgemeindezentrum_faden_endpoint_id(NEW.id);
+    END IF;
+    RETURN NEW;
+END;
+$$;
+CREATE TRIGGER webgemeindezentren_assign_faden_endpoint_id
+BEFORE INSERT ON webgemeindezentren FOR EACH ROW
+EXECUTE FUNCTION weltgewebe_assign_webgemeindezentrum_faden_endpoint_id();
+
 ALTER TABLE governance_proposals
     ADD COLUMN webgemeindezentrum_id TEXT REFERENCES webgemeindezentren(id) ON DELETE RESTRICT;
 

@@ -13,6 +13,8 @@ $$;
 
 DROP TRIGGER IF EXISTS webgemeindezentren_create_conversation ON webgemeindezentren;
 DROP FUNCTION IF EXISTS weltgewebe_create_webgemeindezentrum_conversation();
+DROP TRIGGER IF EXISTS webgemeindezentren_assign_faden_endpoint_id ON webgemeindezentren;
+DROP FUNCTION IF EXISTS weltgewebe_assign_webgemeindezentrum_faden_endpoint_id();
 DELETE FROM domain_conversations WHERE conversation_type='webgemeindezentrum';
 DROP INDEX IF EXISTS domain_conversations_one_per_webgemeindezentrum;
 DROP FUNCTION IF EXISTS weltgewebe_webgemeindezentrum_conversation_id(TEXT);
