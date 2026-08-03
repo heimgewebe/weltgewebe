@@ -289,6 +289,37 @@ status: active
         findings = _validate_report(path, fm, self.tmp_root)
         self.assertEqual(findings, [])
 
+    def test_invalid_status_is_reported(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": "mystery",
+            "lifecycle_state": "active",
+            "lifecycle": "audit",
+            "owner_task": "OPT-ARC-001",
+            "review_after": "2026-07-13",
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        findings = _validate_report(path, fm, self.tmp_root)
+        self.assertIn("invalid_status", [f.code for f in findings])
+
+    def test_non_string_required_scalars_are_missing(self) -> None:
+        fm = {
+            "id": "reports.example",
+            "title": "Example",
+            "doc_type": "report",
+            "status": True,
+            "lifecycle_state": 7,
+            "lifecycle": ["audit"],
+            "owner_task": {"id": "OPT-ARC-001"},
+            "review_after": None,
+        }
+        path = self.tmp_root / "docs" / "reports" / "example.md"
+        codes = [finding.code for finding in _validate_report(path, fm, self.tmp_root)]
+        self.assertIn("missing_status", codes)
+        self.assertIn("missing_lifecycle_state", codes)
+
     def test_invalid_lifecycle_state_is_reported(self) -> None:
         fm = {
             "id": "reports.example",
@@ -646,7 +677,7 @@ lifecycle_state: active
         path = self.tmp_root / "docs" / "reports" / "example.md"
         findings = _validate_report(path, fm, self.tmp_root)
         codes = [f.code for f in findings]
-        self.assertNotIn("missing_review_after", codes)
+        self.assertIn("missing_review_after", codes)
 
     def test_run_with_unquoted_date_in_frontmatter(self) -> None:
         write_report(

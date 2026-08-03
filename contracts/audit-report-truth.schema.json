@@ -37,6 +37,14 @@
                 ]
               }
             }
+          },
+          "source_revision": {
+            "pattern": "^(?!0{40}$)[0-9a-f]{40}$",
+            "type": "string"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "type": "string"
           }
         }
       }
@@ -98,8 +106,15 @@
       "type": "array"
     },
     "generated_at": {
-      "format": "date-time",
-      "type": "string"
+      "oneOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/provenanceUnavailable"
+        }
+      ]
     },
     "limitations": {
       "items": {
@@ -113,8 +128,15 @@
       "const": 1
     },
     "source_revision": {
-      "pattern": "^[0-9a-f]{40}$",
-      "type": "string"
+      "oneOf": [
+        {
+          "pattern": "^(?!0{40}$)[0-9a-f]{40}$",
+          "type": "string"
+        },
+        {
+          "$ref": "#/$defs/provenanceUnavailable"
+        }
+      ]
     },
     "sources": {
       "items": {
@@ -163,5 +185,24 @@
     "does_not_establish"
   ],
   "title": "Audit report truth contract",
-  "type": "object"
+  "type": "object",
+  "$defs": {
+    "provenanceUnavailable": {
+      "additionalProperties": false,
+      "properties": {
+        "state": {
+          "const": "unavailable"
+        },
+        "reason": {
+          "minLength": 1,
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "reason"
+      ],
+      "type": "object"
+    }
+  }
 }

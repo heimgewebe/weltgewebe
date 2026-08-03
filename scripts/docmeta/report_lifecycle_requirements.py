@@ -121,18 +121,10 @@ LIFECYCLE_STATE_RULES = {
 
 
 def string_value(value: object) -> str:
-    """Normalize scalar values exactly like the lifecycle validator.
-
-    This module mirrors the validator's currently implemented field-presence
-    Semantic checks are implemented in the report lifecycle validator.
-    """
-    if value is None:
-        return ""
+    """Return normalized contract text; non-string scalars are not text."""
     if isinstance(value, str):
         return value.strip()
-    if isinstance(value, (list, tuple, set, dict)):
-        return ""
-    return str(value).strip()
+    return ""
 
 
 def required_report_field_rules(
@@ -220,10 +212,32 @@ TRUTH_COVERAGE_METHODS = frozenset({"exact", "bounded", "heuristic"})
 TRUTH_FENCE = "json audit-report-truth.v1"
 _SHA40_RE = re.compile(r"^[0-9a-f]{40}$")
 _SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
-_TRUTH_BLOCK_RE = re.compile(
-    rf"```{re.escape(TRUTH_FENCE)}\s*\n(?P<payload>.*?)\n```",
-    re.DOTALL,
+_TRUTH_OPENING_RE = re.compile(
+    rf"(?m)^```{re.escape(TRUTH_FENCE)}[ \t]*\r?$"
 )
+_TRUTH_CLOSING_RE = re.compile(r"(?m)^```[ \t]*\r?$")
+_TRUTH_NESTED_FENCE_RE = re.compile(r"(?m)^```[^\r\n]+\r?$")
+_TRUTH_PARSE_ERROR_KEY = "__truth_contract_parse_error__"
+_ZERO_SHA40 = "0" * 40
+_PROVENANCE_UNAVAILABLE_STATE = "unavailable"
+
+
+def unavailable_provenance(reason: str) -> dict[str, str]:
+    normalized = reason.strip()
+    if not normalized:
+        raise ValueError("unavailable provenance requires a reason")
+    return {"state": _PROVENANCE_UNAVAILABLE_STATE, "reason": normalized}
+
+
+def _is_unavailable_provenance(value: object) -> bool:
+    return (
+        isinstance(value, Mapping)
+        and set(value) == {"state", "reason"}
+        and value.get("state") == _PROVENANCE_UNAVAILABLE_STATE
+        and isinstance(value.get("reason"), str)
+        and bool(str(value.get("reason")).strip())
+    )
+
 
 def _truth_string_list(value: object) -> bool:
     return isinstance(value, list) and bool(value) and all(
@@ -294,35 +308,14 @@ def _git_is_shallow_repository(root: Path) -> bool | None:
         )
     except (OSError, subprocess.CalledProcessError):
         return None
-    return completed.stdout.strip() == "true"
-
-
-def _ensure_full_git_history(root: Path) -> bool:
-    shallow = _git_is_shallow_repository(root)
-    if shallow is None:
-        return False
-    if not shallow:
-        return True
-    try:
-        subprocess.run(
-            ["git", "fetch", "--no-tags", "--unshallow", "origin"],
-            cwd=root,
-            text=True,
-            capture_output=True,
-            check=True,
-            timeout=120,
-        )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired):
-        return False
-    return _git_is_shallow_repository(root) is False
+    value = completed.stdout.strip()
+    if value not in {"true", "false"}:
+        return None
+    return value == "true"
 
 
 def _ensure_git_revision(root: Path, revision: str) -> str | None:
-    generated_at = _git_commit_timestamp(root, revision)
-    if generated_at is not None:
-        return generated_at
-    if not _ensure_full_git_history(root):
-        return None
+    """Resolve local provenance without fetching or mutating the repository."""
     return _git_commit_timestamp(root, revision)
 
 
@@ -335,6 +328,9 @@ def validate_truth_contract(
     """Validate the machine-readable audit-report truth contract fail-closed."""
     if not isinstance(value, Mapping):
         return ("contract_not_object",)
+    if set(value) == {_TRUTH_PARSE_ERROR_KEY}:
+        parse_error = value.get(_TRUTH_PARSE_ERROR_KEY)
+        return (parse_error,) if isinstance(parse_error, str) else ("truth_contract_invalid",)
 
     violations: list[str] = []
     keys = set(value)
@@ -379,33 +375,52 @@ def validate_truth_contract(
             if isinstance(item, bool) or not isinstance(item, int) or item < 0:
                 violations.append(f"invalid_coverage_{field}")
 
-    revision = value.get("source_revision")
-    if not isinstance(revision, str) or _SHA40_RE.fullmatch(revision) is None:
+    revision_value = value.get("source_revision")
+    revision: str | None = None
+    revision_unavailable = _is_unavailable_provenance(revision_value)
+    if isinstance(revision_value, str) and _SHA40_RE.fullmatch(revision_value) is not None:
+        if revision_value == _ZERO_SHA40:
+            violations.append("invalid_source_revision")
+        else:
+            revision = revision_value
+            if expected_revision is not None and revision != expected_revision:
+                violations.append("source_revision_mismatch")
+    elif not revision_unavailable:
         violations.append("invalid_source_revision")
-        revision = None
-    elif expected_revision is not None and revision != expected_revision:
-        violations.append("source_revision_mismatch")
 
-    generated_at = value.get("generated_at")
-    if not isinstance(generated_at, str):
-        violations.append("invalid_generated_at")
-    else:
+    generated_at_value = value.get("generated_at")
+    generated_at: str | None = None
+    generated_at_unavailable = _is_unavailable_provenance(generated_at_value)
+    if isinstance(generated_at_value, str):
+        generated_at = generated_at_value
         try:
             parsed = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
             if parsed.tzinfo is None:
                 raise ValueError("timezone missing")
         except ValueError:
             violations.append("invalid_generated_at")
+            generated_at = None
+    elif not generated_at_unavailable:
+        violations.append("invalid_generated_at")
 
+    if revision_unavailable != generated_at_unavailable:
+        violations.append("inconsistent_provenance_state")
+
+    revision_resolved = False
     if root is not None and revision is not None:
-        commit_timestamp = _ensure_git_revision(root, revision)
-        if commit_timestamp is None:
-            violations.append("source_revision_not_found")
+        shallow = _git_is_shallow_repository(root)
+        if shallow is not False:
+            violations.append("source_history_unavailable")
         else:
-            if not _git_revision_is_ancestor(root, revision):
-                violations.append("source_revision_not_ancestor")
-            if generated_at != commit_timestamp:
-                violations.append("generated_at_revision_mismatch")
+            commit_timestamp = _ensure_git_revision(root, revision)
+            if commit_timestamp is None:
+                violations.append("source_revision_not_found")
+            else:
+                revision_resolved = True
+                if not _git_revision_is_ancestor(root, revision):
+                    violations.append("source_revision_not_ancestor")
+                if generated_at != commit_timestamp:
+                    violations.append("generated_at_revision_mismatch")
 
     sources = value.get("sources")
     if not isinstance(sources, list) or not sources:
@@ -436,7 +451,7 @@ def validate_truth_contract(
                     violations.append(f"missing_source_{index}")
                 elif hashlib.sha256(full_path.read_bytes()).hexdigest() != digest:
                     violations.append(f"source_digest_mismatch_{index}")
-                elif revision is not None:
+                elif revision_resolved:
                     revision_digest = _git_blob_sha256(root, revision, relative)
                     if revision_digest is None:
                         violations.append(f"source_missing_at_revision_{index}")
@@ -449,6 +464,10 @@ def validate_truth_contract(
         violations.append("invalid_does_not_establish")
 
     if status in TRUTH_POSITIVE_STATUSES:
+        if revision is None:
+            violations.append("positive_status_source_revision_unavailable")
+        if generated_at is None:
+            violations.append("positive_status_generated_at_unavailable")
         if not isinstance(coverage, Mapping):
             violations.append("positive_status_invalid_coverage")
         else:
@@ -484,8 +503,8 @@ def build_truth_contract(
     checked_items: int,
     total_items: int,
     failures: int,
-    source_revision: str,
-    generated_at: str,
+    source_revision: object,
+    generated_at: object,
     sources: list[dict[str, str]],
     limitations: list[str],
     does_not_establish: list[str],
@@ -524,14 +543,45 @@ def truth_contract_markdown(contract: Mapping[str, object]) -> str:
     )
 
 
-def parse_truth_contract_markdown(markdown: str) -> object | None:
-    match = _TRUTH_BLOCK_RE.search(markdown)
-    if match is None:
-        return None
+def extract_truth_contract_markdown(markdown: str) -> object:
+    marker = f"```{TRUTH_FENCE}"
+    marker_count = markdown.count(marker)
+    openings = list(_TRUTH_OPENING_RE.finditer(markdown))
+    if marker_count == 0:
+        raise ValueError("truth_contract_missing")
+    if marker_count != len(openings):
+        raise ValueError("truth_contract_inline_fence")
+    if len(openings) > 1:
+        first_closing = _TRUTH_CLOSING_RE.search(markdown, openings[0].end())
+        if first_closing is not None and openings[1].start() < first_closing.start():
+            raise ValueError("truth_contract_nested_fence")
+        raise ValueError("truth_contract_multiple")
+
+    opening = openings[0]
+    payload_start = markdown.find("\n", opening.end())
+    if payload_start < 0:
+        raise ValueError("truth_contract_unclosed")
+    payload_start += 1
+    closing = _TRUTH_CLOSING_RE.search(markdown, payload_start)
+    if closing is None:
+        raise ValueError("truth_contract_unclosed")
+    payload = markdown[payload_start:closing.start()]
+    if _TRUTH_NESTED_FENCE_RE.search(payload):
+        raise ValueError("truth_contract_nested_fence")
     try:
-        return json.loads(match.group("payload"))
-    except json.JSONDecodeError:
-        return {"__invalid_json__": True}
+        return json.loads(payload)
+    except json.JSONDecodeError as exc:
+        raise ValueError("truth_contract_invalid_json") from exc
+
+
+def parse_truth_contract_markdown(markdown: str) -> object | None:
+    try:
+        return extract_truth_contract_markdown(markdown)
+    except ValueError as exc:
+        code = str(exc)
+        if code == "truth_contract_missing":
+            return None
+        return {_TRUTH_PARSE_ERROR_KEY: code}
 
 
 def source_manifest(root: Path, paths: Sequence[Path]) -> list[dict[str, str]]:
@@ -558,7 +608,8 @@ def source_manifest(root: Path, paths: Sequence[Path]) -> list[dict[str, str]]:
 def source_revision_metadata(
     root: Path,
     source_paths: Sequence[Path],
-) -> tuple[str, str, bool]:
+) -> tuple[object, object, bool]:
+    """Resolve provenance from local Git state without network or repo mutation."""
     relative_paths: list[str] = []
     root_resolved = root.resolve()
     for path in source_paths:
@@ -568,10 +619,13 @@ def source_revision_metadata(
             raise ValueError(f"source outside repository: {path}") from exc
     relative_paths = sorted(dict.fromkeys(relative_paths))
     if not relative_paths:
-        return ("0" * 40, "1970-01-01T00:00:00Z", False)
+        unavailable = unavailable_provenance("no_source_paths")
+        return (unavailable, unavailable.copy(), False)
+    shallow = _git_is_shallow_repository(root)
+    if shallow is not False:
+        unavailable = unavailable_provenance("git_history_unavailable")
+        return (unavailable, unavailable.copy(), False)
     try:
-        if not _ensure_full_git_history(root):
-            raise ValueError("complete source history unavailable")
         revision = subprocess.run(
             ["git", "log", "-1", "--format=%H", "--", *relative_paths],
             cwd=root,
@@ -579,11 +633,11 @@ def source_revision_metadata(
             capture_output=True,
             check=True,
         ).stdout.strip()
-        if _SHA40_RE.fullmatch(revision) is None:
-            raise ValueError("source revision missing")
+        if _SHA40_RE.fullmatch(revision) is None or revision == _ZERO_SHA40:
+            raise ValueError("source revision unavailable in local history")
         generated_at = _git_commit_timestamp(root, revision)
         if generated_at is None:
-            raise ValueError("source revision timestamp missing")
+            raise ValueError("source revision timestamp unavailable in local history")
         differs_from_revision = subprocess.run(
             ["git", "diff", "--quiet", revision, "--", *relative_paths],
             cwd=root,
@@ -606,7 +660,8 @@ def source_revision_metadata(
         fresh = differs_from_revision == 0 and not working_tree_changes
         return revision, generated_at, fresh
     except (OSError, subprocess.CalledProcessError, ValueError):
-        return ("0" * 40, "1970-01-01T00:00:00Z", False)
+        unavailable = unavailable_provenance("git_provenance_unavailable")
+        return (unavailable, unavailable.copy(), False)
 
 
 def report_truth_migration_state(

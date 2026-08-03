@@ -10,7 +10,7 @@
   import ToolFan from "$lib/components/ToolFan.svelte";
   import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
   import FilterOverlay from "$lib/components/FilterOverlay.svelte";
-  import type { MapEntityViewModel } from "$lib/map/types";
+  import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
   import {
     deriveSearchDirectionIndicators,
     resolveInitialMapCamera,
@@ -70,6 +70,11 @@
 
   import type { NodesOverlay as NodesOverlayController } from "$lib/map/overlay/nodes";
   import { updateEdges } from "$lib/map/overlay/edges";
+  import { LAYERS } from "$lib/map/overlay/layers";
+  import type {
+    EdgeMotionController,
+    EdgeMotionInput,
+  } from "$lib/map/overlay/edgeMotion";
   import {
     FADEN_PROJECTION_REFRESH_MS,
     nextEdgeExpiryAt,
@@ -210,6 +215,10 @@
   let lastFocusedElement: HTMLElement | null = null;
 
   let nodesOverlay: NodesOverlayController | null = null;
+  let edgeMotion: EdgeMotionController | null = null;
+  let resolveMotionInput:
+    | typeof import("$lib/map/overlay/edgeMotion").resolveEdgeMotionInput
+    | null = null;
   let searchDirectionIndicators: SearchDirectionIndicator[] = [];
   let searchDirectionFrame: number | null = null;
   let usableSearchViewportCache: ViewportBounds | null = null;
@@ -391,7 +400,17 @@
     if (map) tick().then(refreshSearchViewportObservers);
   }
 
-  // Reactive update for edges – only after map style is fully loaded
+  function syncEdgeMotionProjection() {
+    if (!edgeMotion) return;
+    edgeMotion.syncCanonicalEdges(scene.edges);
+    edgeMotion.setVisibleEdgeIds(
+      $view.showEdges ? new Set(edgesData.map((edge) => edge.id)) : new Set(),
+    );
+  }
+
+  // Reactive update for edges – only after map style is fully loaded. The
+  // transient motion controller receives visibility and canonical ids, but
+  // neither filtering nor a render-only difference starts a transition.
   $: if (map && mapStyleReady && edgesData && $view) {
     updateEdges(
       map,
@@ -400,6 +419,7 @@
       $view.showEdges,
       edgeProjectionNow,
     );
+    syncEdgeMotionProjection();
   }
 
   function scheduleNextEdgeExpiryRefresh(edges = edgesData) {
@@ -489,9 +509,54 @@
       ?.focus();
   }
 
-  async function handleDomainChanged(
-    event: CustomEvent<{ action: "updated" | "deleted" | "archived" }>,
+  function edgeMotionInput(edge: MapEdge): EdgeMotionInput | null {
+    return resolveMotionInput?.(edge, markersData) ?? null;
+  }
+
+  function animateEdgesForNode(
+    nodeId: string,
+    phase: "creating" | "releasing",
   ) {
+    if (!edgeMotion) return;
+    for (const edge of scene.edges) {
+      if (edge.source_id !== nodeId && edge.target_id !== nodeId) continue;
+      const input = edgeMotionInput(edge);
+      if (!input) continue;
+      if (phase === "creating") edgeMotion.startCreate(input);
+      else edgeMotion.startRelease(input);
+    }
+  }
+
+  function animateEdgeById(
+    edgeId: string,
+    phase: "creating" | "releasing",
+  ): boolean {
+    if (!edgeMotion) return false;
+    const edge = scene.edges.find((candidate) => candidate.id === edgeId);
+    if (!edge) return false;
+    const input = edgeMotionInput(edge);
+    if (!input) return false;
+    if (phase === "creating") edgeMotion.startCreate(input);
+    else edgeMotion.startRelease(input);
+    return true;
+  }
+
+  type DomainChanged = {
+    kind: "node";
+    id: string;
+    action: "updated" | "deleted" | "archived";
+  };
+
+  async function handleDomainChanged(event: CustomEvent<DomainChanged>) {
+    const removesNode =
+      event.detail.kind === "node" &&
+      (event.detail.action === "deleted" || event.detail.action === "archived");
+    if (removesNode) {
+      // Capture the existing canonical geometry before invalidation removes it.
+      animateEdgesForNode(event.detail.id, "releasing");
+    }
+    // Archived removals deliberately keep the panel alive so its archive
+    // receipt remains reachable; only a hard deletion closes the selection.
     if (event.detail.action === "deleted") leaveToNavigation();
     await invalidate("weltgewebe:domain-data");
   }
@@ -505,6 +570,9 @@
       (m) => m.id === $lastCreatedNodeId && m.type === "node",
     );
     if (created) {
+      // The store is set only by a successful node create. By this point the
+      // route reload has supplied the server-derived Faden and its endpoints.
+      animateEdgesForNode(created.id, "creating");
       focusAndFlyToPoint(created);
       lastCreatedNodeId.set(null);
     }
@@ -669,6 +737,38 @@
     const handleSearchMapResize = () => {
       invalidateSearchViewportGeometry();
     };
+    let styleRehydrateQueued = false;
+    const hasCanonicalEdgeStyle = () =>
+      Boolean(
+        map?.getSource(LAYERS.EDGES_SOURCE) &&
+          map.getLayer(LAYERS.EDGES_HALO_LAYER) &&
+          map.getLayer(LAYERS.EDGES_LAYER),
+      );
+    const rehydrateMapOverlays = () => {
+      styleRehydrateQueued = false;
+      if (destroyed || !map || hasCanonicalEdgeStyle()) return;
+      updateEdges(
+        map,
+        edgesData,
+        filteredMarkersData,
+        $view.showEdges,
+        edgeProjectionNow,
+      );
+      syncEdgeMotionProjection();
+    };
+    const handleMapStyleData = () => {
+      if (
+        destroyed ||
+        styleRehydrateQueued ||
+        !map ||
+        !map.isStyleLoaded() ||
+        hasCanonicalEdgeStyle()
+      ) {
+        return;
+      }
+      styleRehydrateQueued = true;
+      queueMicrotask(rehydrateMapOverlays);
+    };
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const markerBtn = target.closest(
@@ -689,10 +789,12 @@
     (async () => {
       // Public map rendering never waits for session verification. Auth loads
       // after map creation and may perform one guarded convergence later.
-      const [maplibregl, { NodesOverlay }] = await Promise.all([
-        import("maplibre-gl"),
-        import("$lib/map/overlay/nodes"),
-      ]);
+      const [maplibregl, { NodesOverlay }, edgeMotionModule] =
+        await Promise.all([
+          import("maplibre-gl"),
+          import("$lib/map/overlay/nodes"),
+          import("$lib/map/overlay/edgeMotion"),
+        ]);
       const initialAuth = { authenticated: false };
       if (destroyed) return;
       const container = mapContainer;
@@ -751,6 +853,9 @@
         transformRequest: transformRequestFn,
       });
       map.on("move", handleSearchMapMove);
+      map.on("styledata", handleMapStyleData);
+      resolveMotionInput = edgeMotionModule.resolveEdgeMotionInput;
+      edgeMotion = new edgeMotionModule.EdgeMotionController(map);
       updateGarnrolleMarkerScale();
       map.on("zoom", updateGarnrolleMarkerScale);
       void import("$lib/map/authCameraConvergence").then((module) => {
@@ -807,6 +912,17 @@
         (window as any).__TEST_SET_ACTIVE_FILTERS__ = (types: string[]) => {
           activeFilters.set(new Set(types));
         };
+        (window as any).__TEST_EDGE_MOTION__ = {
+          start: (edgeId: string, phase: "creating" | "releasing") =>
+            animateEdgeById(edgeId, phase),
+          startForNode: (nodeId: string, phase: "creating" | "releasing") =>
+            animateEdgesForNode(nodeId, phase),
+          inspect: () => edgeMotion?.inspect() ?? null,
+          syncCanonicalIds: (ids: string[]) =>
+            edgeMotion?.syncCanonicalEdges(
+              scene.edges.filter((edge) => ids.includes(edge.id)),
+            ),
+        };
       }
     })();
 
@@ -826,6 +942,7 @@
       if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
         delete (window as any).__TEST_SET_ACTIVE_FILTERS__;
+        delete (window as any).__TEST_EDGE_MOTION__;
       }
       cleanupKomposition?.();
       cleanupFocus?.();
@@ -839,10 +956,15 @@
       }
       searchDirectionIndicators = [];
       nodesOverlay?.destroy();
+      edgeMotion?.destroy();
+      edgeMotion = null;
+      resolveMotionInput = null;
       if (map) {
         map.off("zoom", updateGarnrolleMarkerScale);
         map.off("move", handleSearchMapMove);
         map.off("resize", handleSearchMapResize);
+        map.off("styledata", handleMapStyleData);
+        map.off("idle", rehydrateMapOverlays);
         if (typeof map.remove === "function") map.remove();
       }
       mapContainer?.removeEventListener("click", handleMarkerClick);
