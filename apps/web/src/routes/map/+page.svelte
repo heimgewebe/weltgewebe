@@ -554,8 +554,10 @@
     if (removesNode) {
       // Capture the existing canonical geometry before invalidation removes it.
       animateEdgesForNode(event.detail.id, "releasing");
-      leaveToNavigation();
     }
+    // Archived removals deliberately keep the panel alive so its archive
+    // receipt remains reachable; only a hard deletion closes the selection.
+    if (event.detail.action === "deleted") leaveToNavigation();
     await invalidate("weltgewebe:domain-data");
   }
 
