@@ -1190,13 +1190,14 @@ async fn postgres_node_create_allows_jsonl_account_write_source() -> Result<()> 
     Ok(())
 }
 
-/// J. Every real node edit projects one additional seven-day activity Faden.
-/// A semantically empty patch keeps the node version and must not inflate the
-/// hotspot. The initial create Faden is included in the asserted counts.
+/// J. Node creation and later edits share one stable seven-day Knüpffaden.
+/// Real patches and full replacements may change the node version, but they
+/// must neither replace nor multiply the account→node relation. Semantic
+/// no-ops keep both the node version and the single Faden unchanged.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
-async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() -> Result<()> {
+async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation() -> Result<()> {
     const ACTOR_ID: &str = "10000000-0000-4000-8000-000000000013";
 
     let pool = connect_pool().await;
@@ -1239,6 +1240,12 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     .fetch_one(&pool)
     .await?;
     assert_eq!(initial_edge_count, 1, "node creation projects one Faden");
+    let initial_edge_id: String =
+        sqlx::query_scalar("SELECT id FROM domain_edges WHERE source_id = $1 AND target_id = $2")
+            .bind(ACTOR_ID)
+            .bind(node_id)
+            .fetch_one(&pool)
+            .await?;
 
     let patched_response = app
         .clone()
@@ -1267,7 +1274,17 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     .bind(node_id)
     .fetch_one(&pool)
     .await?;
-    assert_eq!(after_patch_count, 2, "a real patch adds one activity Faden");
+    assert_eq!(
+        after_patch_count, 1,
+        "a real patch must reuse the stable Knüpffaden",
+    );
+    let after_patch_edge_id: String =
+        sqlx::query_scalar("SELECT id FROM domain_edges WHERE source_id = $1 AND target_id = $2")
+            .bind(ACTOR_ID)
+            .bind(node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(after_patch_edge_id, initial_edge_id);
 
     let lifetimes: Vec<f64> = sqlx::query_scalar(
         "SELECT EXTRACT(EPOCH FROM ((payload->>'expires_at')::timestamptz - created_at))::double precision
@@ -1277,7 +1294,7 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     .bind(node_id)
     .fetch_all(&pool)
     .await?;
-    assert_eq!(lifetimes.len(), 2);
+    assert_eq!(lifetimes.len(), 1);
     assert!(
         lifetimes
             .iter()
@@ -1301,8 +1318,8 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     .fetch_one(&pool)
     .await?;
     assert_eq!(
-        after_noop_count, 2,
-        "an empty patch must not inflate the activity hotspot",
+        after_noop_count, 1,
+        "an empty patch must not inflate the stable relation",
     );
 
     let identical_info_response = app
@@ -1342,8 +1359,8 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     .fetch_one(&pool)
     .await?;
     assert_eq!(
-        after_semantic_noops, 2,
-        "identical info and visibility patches must not inflate the activity hotspot",
+        after_semantic_noops, 1,
+        "identical info and visibility patches must not inflate the stable relation",
     );
 
     let replaced_response = app
@@ -1368,9 +1385,16 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     .fetch_one(&pool)
     .await?;
     assert_eq!(
-        after_replace_count, 3,
-        "a full replacement adds one activity Faden"
+        after_replace_count, 1,
+        "a full replacement must reuse the stable Knüpffaden",
     );
+    let after_replace_edge_id: String =
+        sqlx::query_scalar("SELECT id FROM domain_edges WHERE source_id = $1 AND target_id = $2")
+            .bind(ACTOR_ID)
+            .bind(node_id)
+            .fetch_one(&pool)
+            .await?;
+    assert_eq!(after_replace_edge_id, initial_edge_id);
 
     let replaced_etag = format!(
         "\"{}\"",
@@ -1400,8 +1424,8 @@ async fn postgres_node_edits_project_expiring_faeden_without_noop_inflation() ->
     .fetch_one(&pool)
     .await?;
     assert_eq!(
-        after_identical_replace, 3,
-        "an identical full replacement must not inflate the activity hotspot",
+        after_identical_replace, 1,
+        "an identical full replacement must not inflate the stable relation",
     );
 
     clean_all_nodes(&pool).await;
