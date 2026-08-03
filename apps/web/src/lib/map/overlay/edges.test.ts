@@ -33,6 +33,52 @@ describe("buildEdgeFeatures", () => {
     expect(features[0].properties?.opacity).toBe(0.5);
   });
 
+  it("resolves a Webgemeindezentrum through its strict Faden UUID alias", () => {
+    const centerEndpointId = "22222222-2222-5222-8222-222222222222";
+    const center = {
+      type: "webgemeindezentrum",
+      id: "webgemeindezentrum-hammer-park",
+      faden_endpoint_id: centerEndpointId,
+      conversation_id: "33333333-3333-5333-8333-333333333333",
+      title: "Webgemeindezentrum Hammer Park",
+      lat: 53.5585,
+      lon: 10.058,
+      summary: "Treffpunkt",
+      tags: [],
+      created_at: new Date(createdAt).toISOString(),
+      updated_at: new Date(createdAt).toISOString(),
+      location_state: "desired",
+      location_state_label: "Gewünschter Treffort",
+      location_label: "Hammer Park",
+      meeting_note: "Treffpunkt",
+      access_note: "Noch zu bestätigen",
+      ortsweberei: {
+        id: "ortsweberei-hamm",
+        slug: "hamm",
+        name: "Ortsweberei Hamm",
+        gewebezelle_id: "hamm.weltgewebe.net",
+      },
+    } as MapEntityViewModel;
+    const centerEdge = normalizeEdgeLifecycle({
+      ...rawEdge,
+      id: "edge-center",
+      target_id: centerEndpointId,
+    });
+
+    const features = buildEdgeFeatures(
+      [centerEdge],
+      [points[0], center],
+      true,
+      createdAt,
+    );
+
+    expect(features).toHaveLength(1);
+    expect(features[0].geometry.coordinates).toEqual([
+      [9.9, 53.5],
+      [10.058, 53.5585],
+    ]);
+  });
+
   it("omits expired, hidden, and unresolved edges", () => {
     expect(
       buildEdgeFeatures([edge], points, true, createdAt + FADEN_LIFETIME_MS),

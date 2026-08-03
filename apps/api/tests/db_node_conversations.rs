@@ -1432,10 +1432,10 @@ async fn governance_conversation_write_gate_blocks_legacy_and_allows_canonical_h
     seed_account(&pool, AUTHOR_ID, "Autorin", "weber").await;
     sqlx::query(
         "INSERT INTO governance_proposals (
-             id, kind, applicant_account_id, applicant_title, summary, status,
+             id, kind, webgemeindezentrum_id, applicant_account_id, applicant_title, summary, status,
              created_at, consent_until
          ) VALUES (
-             $1::uuid, 'weberantrag', $2, 'Autorin', 'HTTP Cutover Proof',
+             $1::uuid, 'weberantrag', 'webgemeindezentrum-hammer-park', $2, 'Autorin', 'HTTP Cutover Proof',
              'consent', NOW(), NOW() + INTERVAL '7 days'
          )",
     )

@@ -135,6 +135,8 @@ function makeCenter(
     updated_at: "2026-08-02T10:08:00.000Z",
     location_state: "desired",
     location_state_label: "Gewünschter Treffort",
+    faden_endpoint_id: "22222222-2222-5222-8222-222222222222",
+    conversation_id: "33333333-3333-5333-8333-333333333333",
     location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
     meeting_note: "Hier kann die Ortsweberei tatsächlich zusammenkommen.",
     access_note: "Nutzung und Barrierefreiheit sind noch nicht bestätigt.",
@@ -296,7 +298,12 @@ describe("NodesOverlay Webgemeindezentrum marker", () => {
     expect(element?.dataset.testid).toBe(
       "marker-webgemeindezentrum-webgemeindezentrum-hammer-park",
     );
-    expect(element?.children[0].children[0].textContent).toBe("⌂");
+    expect(element?.children[0].children[0].textContent).toBe("");
+    expect(
+      element?.children[0].children[0].classList.contains(
+        "marker-webgemeindezentrum__icon",
+      ),
+    ).toBe(true);
     expect(
       (element?.children[0] as HTMLElement | undefined)?.style.borderStyle,
     ).toBe("dashed");

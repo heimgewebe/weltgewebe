@@ -179,7 +179,6 @@ export class NodesOverlay {
         } else if (markerCategory === "webgemeindezentrum") {
           const icon = document.createElement("span");
           icon.className = "marker-webgemeindezentrum__icon";
-          icon.textContent = "⌂";
           icon.setAttribute("aria-hidden", "true");
           visual.append(icon);
         }

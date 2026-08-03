@@ -1,5 +1,7 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
+  import CenterGovernance from "$lib/components/governance/CenterGovernance.svelte";
+  import NodeConversation from "$lib/components/panels/NodeConversation.svelte";
   import { selection } from "$lib/stores/uiView";
   import {
     buildPanelEndpoint,
@@ -30,12 +32,20 @@
     ortsweberei: OrtswebereiReference;
     location_state: WebgemeindezentrumLocationState;
     location_state_label: string;
+    faden_endpoint_id: string;
+    conversation_id: string;
     location: { lat: number; lon: number };
     location_label: string;
     meeting_note: string;
     access_note: string;
     created_at: string;
     updated_at: string;
+    governance: {
+      proposal_count: number;
+      open_proposal_count: number;
+      voting_proposal_count: number;
+      conversation_message_count: number;
+    };
     location_history?: LocationHistoryEvent[];
   };
 
@@ -63,6 +73,14 @@
     details?.location ||
     (fallback ? { lat: fallback.lat, lon: fallback.lon } : undefined);
   $: history = details?.location_history || [];
+  $: centerId = details?.id || fallback?.id;
+  $: conversationId = details?.conversation_id || fallback?.conversation_id;
+  $: governance = details?.governance || {
+    proposal_count: 0,
+    open_proposal_count: 0,
+    voting_proposal_count: 0,
+    conversation_message_count: 0,
+  };
   $: truthHeading =
     locationState === "confirmed"
       ? "Bestätigter Treffort"
@@ -114,6 +132,24 @@
   {/if}
 
   <div class="full-content">
+    {#if centerId}
+      <CenterGovernance
+        {centerId}
+        proposalCount={governance.proposal_count}
+        openProposalCount={governance.open_proposal_count}
+        votingProposalCount={governance.voting_proposal_count}
+      />
+    {/if}
+
+    {#if conversationId}
+      <NodeConversation
+        {conversationId}
+        heading="Gespräch im Webgemeindezentrum"
+        emptyMessage="Noch keine Beiträge. Hier beginnt das gemeinsame Gespräch der Ortsweberei."
+        testId="webgemeindezentrum-conversation"
+      />
+    {/if}
+
     {#if meetingNote}
       <section aria-labelledby="meeting-purpose-heading">
         <h4 id="meeting-purpose-heading">Gemeinsam vor Ort</h4>

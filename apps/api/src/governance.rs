@@ -101,6 +101,7 @@ impl VoteChoice {
 pub struct ProposalWithCounts {
     pub id: String,
     pub kind: String,
+    pub webgemeindezentrum_id: String,
     pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     pub summary: Option<String>,
@@ -154,6 +155,8 @@ pub enum CreateProposalError {
     /// Nur eine aktive Gastidentität darf den Weberstatus beantragen.
     #[error("only an active guest account may create a Weber proposal")]
     NotGuest,
+    #[error("no unique active Webgemeindezentrum is available for this proposal")]
+    CenterUnavailable,
     #[error("failed to persist proposal: {0}")]
     Database(#[source] sqlx::Error),
 }
@@ -264,6 +267,28 @@ pub async fn create_weber_proposal(
     summary: Option<&str>,
     now: DateTime<Utc>,
 ) -> Result<ProposalWithCounts, CreateProposalError> {
+    create_weber_proposal_at_center(
+        pool,
+        applicant_account_id,
+        applicant_title,
+        summary,
+        None,
+        now,
+    )
+    .await
+}
+
+/// Variante für eine Governance-Oberfläche, die bereits an ein konkretes
+/// Webgemeindezentrum gebunden ist. Der angegebene Mittelpunkt muss der aktive
+/// Mittelpunkt einer aktiven Ortsweberei und Gewebezelle sein.
+pub async fn create_weber_proposal_at_center(
+    pool: &PgPool,
+    applicant_account_id: &str,
+    applicant_title: &str,
+    summary: Option<&str>,
+    requested_center_id: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<ProposalWithCounts, CreateProposalError> {
     let id = Uuid::new_v4().to_string();
     let consent_until = now + Duration::days(CONSENT_PHASE_DAYS);
 
@@ -280,13 +305,48 @@ pub async fn create_weber_proposal(
         return Err(CreateProposalError::NotGuest);
     }
 
+    let webgemeindezentrum_id: Option<String> =
+        if let Some(requested_center_id) = requested_center_id {
+            sqlx::query_scalar(
+                "SELECT c.id \
+             FROM ortswebereien o \
+             JOIN gewebezellen g ON g.id = o.gewebezelle_id \
+             JOIN webgemeindezentren c \
+               ON c.id = o.active_webgemeindezentrum_id \
+              AND c.ortsweberei_id = o.id \
+             WHERE o.lifecycle_state = 'active' \
+               AND g.lifecycle_state = 'active' \
+               AND c.id = $1",
+            )
+            .bind(requested_center_id)
+            .fetch_optional(&mut *tx)
+            .await
+            .map_err(CreateProposalError::Database)?
+        } else {
+            sqlx::query_scalar(
+                "SELECT CASE WHEN count(*) = 1 THEN min(c.id) END \
+             FROM ortswebereien o \
+             JOIN gewebezellen g ON g.id = o.gewebezelle_id \
+             JOIN webgemeindezentren c \
+               ON c.id = o.active_webgemeindezentrum_id \
+              AND c.ortsweberei_id = o.id \
+             WHERE o.lifecycle_state = 'active' AND g.lifecycle_state = 'active'",
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(CreateProposalError::Database)?
+        };
+    let webgemeindezentrum_id =
+        webgemeindezentrum_id.ok_or(CreateProposalError::CenterUnavailable)?;
+
     sqlx::query(
         "INSERT INTO governance_proposals \
-             (id, kind, applicant_account_id, applicant_title, summary, status, \
+             (id, kind, webgemeindezentrum_id, applicant_account_id, applicant_title, summary, status, \
               created_at, consent_until) \
-         VALUES ($1::uuid, 'weberantrag', $2, $3, $4, 'consent', $5, $6)",
+         VALUES ($1::uuid, 'weberantrag', $2, $3, $4, $5, 'consent', $6, $7)",
     )
     .bind(&id)
+    .bind(&webgemeindezentrum_id)
     .bind(applicant_account_id)
     .bind(applicant_title)
     .bind(summary)
@@ -306,6 +366,7 @@ pub async fn create_weber_proposal(
     Ok(ProposalWithCounts {
         id,
         kind: "weberantrag".to_string(),
+        webgemeindezentrum_id,
         applicant_account_id: Some(applicant_account_id.to_string()),
         applicant_title: applicant_title.to_string(),
         summary: summary.map(str::to_string),
@@ -673,7 +734,7 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
 // ---------------------------------------------------------------------------
 
 const PROPOSAL_WITH_COUNTS_SELECT: &str = "SELECT p.id::text AS id, p.kind, \
-        p.applicant_account_id, p.applicant_title, p.summary, p.status, \
+        p.webgemeindezentrum_id, p.applicant_account_id, p.applicant_title, p.summary, p.status, \
         p.created_at, p.consent_until, p.voting_until, p.finalized_at, \
         (SELECT count(*) FROM governance_vetoes v \
             WHERE v.proposal_id = p.id) AS veto_count, \
@@ -691,6 +752,7 @@ fn proposal_from_row(row: &sqlx::postgres::PgRow) -> Result<ProposalWithCounts, 
     Ok(ProposalWithCounts {
         id: row.try_get("id")?,
         kind: row.try_get("kind")?,
+        webgemeindezentrum_id: row.try_get("webgemeindezentrum_id")?,
         applicant_account_id: row.try_get("applicant_account_id")?,
         applicant_title: row.try_get("applicant_title")?,
         summary: row.try_get("summary")?,

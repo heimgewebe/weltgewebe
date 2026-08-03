@@ -35,6 +35,28 @@ describe("governance API", () => {
     );
   });
 
+  it("binds an application opened in a center to that exact center", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "p2", kind: "weberantrag" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createWeberProposal(
+      "Ich möchte vor Ort mitweben.",
+      "webgemeindezentrum-hammer-park",
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      kind: "weberantrag",
+      summary: "Ich möchte vor Ort mitweben.",
+      webgemeindezentrum_id: "webgemeindezentrum-hammer-park",
+    });
+  });
+
   it("sends one current vote without any quorum field", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ choice: "ja" }), {

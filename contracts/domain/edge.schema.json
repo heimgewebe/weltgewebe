@@ -11,7 +11,7 @@
     },
     "source_type": {
       "type": "string",
-      "enum": ["role", "node", "account"]
+      "enum": ["role", "node", "account", "webgemeindezentrum"]
     },
     "source_id": {
       "type": "string",
@@ -19,7 +19,7 @@
     },
     "target_type": {
       "type": "string",
-      "enum": ["role", "node", "account"]
+      "enum": ["role", "node", "account", "webgemeindezentrum"]
     },
     "target_id": {
       "type": "string",
@@ -45,7 +45,15 @@
       "maxLength": 1000
     }
   },
-  "required": ["id", "source_type", "source_id", "target_type", "target_id", "edge_kind", "created_at"],
+  "required": [
+    "id",
+    "source_type",
+    "source_id",
+    "target_type",
+    "target_id",
+    "edge_kind",
+    "created_at"
+  ],
   "additionalProperties": false,
   "allOf": [
     {

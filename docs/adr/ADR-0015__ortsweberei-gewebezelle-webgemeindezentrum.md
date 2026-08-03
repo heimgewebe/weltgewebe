@@ -25,10 +25,11 @@ Status: accepted
 Weltgewebe braucht einen verständlichen lokalen Mittelpunkt, an dem digitale
 Selbstverwaltung, gemeinschaftliche Vorhaben und reale Begegnung zusammenfinden.
 Die bisherige Antragsoberfläche versuchte Governance-Aktivitäten als eigenes
-abgeleitetes Fadendiagramm darzustellen. Antragstellung, Vetos, Stimmen und
-Gesprächsbeiträge sind jedoch Verfahrensdaten und keine räumlichen Beziehungen.
-Die Darstellung wiederholte Zähler, ohne Zuständigkeit, Frist und nächsten
-Verfahrensschritt klar zu machen.
+abgeleitetes Fadendiagramm darzustellen. Verfahrenskategorien und Zähler sind
+keine räumlichen Beziehungen. Konkrete Beteiligung eines Accounts an seinem
+örtlichen Zentrum kann dagegen als zeitlich begrenzter, typisierter Faden
+sichtbar werden. Die Darstellung darf deshalb weder Zähler verdrahten noch die
+Zuständigkeit, Frist und nächsten Verfahrensschritte verdecken.
 
 Gleichzeitig entscheidet ADR-0011 autonome Gewebezellen als langfristiges
 Skalierungsmodell. Es fehlte die fachliche Zuordnung zwischen lokaler
@@ -65,15 +66,32 @@ Das Webgemeindezentrum ist ein dauerhafter Strukturknoten der Karte. Webrat,
 Gewebekonto, örtlicher Gesprächsraum und lokale Vorhaben werden von dort aus
 zugänglich, erhalten aber nicht automatisch konkurrierende Mittelpunktmarker.
 
-Anträge bleiben eigenständige Entscheidungsobjekte. Ihre Informationsseite
-zeigt Verfahrensart, Phase, Frist, nächsten möglichen Ausgang, Vetos,
-Gesprächsbeiträge und erst in einer Abstimmungsphase die Stimmen. Kategorien und
-Zähler werden nicht als Fäden gezeichnet.
+Anträge bleiben eigenständige Entscheidungsobjekte und werden ausdrücklich dem
+aktiven Webgemeindezentrum ihrer Ortsweberei zugeordnet. Die Zentrumoberfläche
+zeigt den örtlichen Governance-Überblick, offene Anträge und den Zugang zur
+vollständigen Verfahrensansicht. Diese zeigt Verfahrensart, Phase, Frist,
+nächsten möglichen Ausgang, Vetos, Gesprächsbeiträge und erst in einer
+Abstimmungsphase die Stimmen. Kategorien und Zähler werden nicht als Fäden
+gezeichnet.
 
-Ein Faden darf Governance nur dann darstellen, wenn eine ausdrücklich
-spezifizierte fachliche Handlung zwei echte, typisierte Endpunkte verbindet.
-Eine bloße Antragstellung, ein Zähler oder eine Verfahrensphase erzeugt keine
-Kartenbeziehung durch Interpretation der Benutzeroberfläche.
+Jedes Webgemeindezentrum besitzt genau einen öffentlichen örtlichen
+Gesprächsraum. Antragstellung, Antragsgespräch, Veto, Stimme und Beiträge im
+örtlichen Gespräch sind ausdrücklich spezifizierte Beteiligungshandlungen. Sie
+verbinden den handelnden Account mit dem typisierten Zentrum-Endpunkt und dürfen
+als zeitlich begrenzte Fäden projiziert werden. Ihre Operationen sind
+idempotent: Wiederholungen derselben Handlung erzeugen keinen zweiten Faden.
+Der Faden ist eine abgeleitete Sicht; die bereits gespeicherte Governance- oder
+Gesprächshandlung bleibt auch dann gültig, wenn ihre Kartenprojektion ausfällt.
+
+Die lesbare Zentrum-ID bleibt die stabile öffentliche URL. Für den strengen
+UUID-Vertrag der Faden-Endpunkte erhält jedes Zentrum zusätzlich einen
+deterministischen UUID-Alias. Zähler, Phasen und bloße UI-Interpretationen
+bleiben ausdrücklich ohne Kartenbeziehung.
+
+Das Kartensymbol zeigt das Zentrum aus der Draufsicht als runden
+Versammlungsplatz mit gewebtem Mittelpunkt. Es unterscheidet sich damit von
+Garnrolle, Knoten und Wohnhaus, ohne einen zweiten institutionellen Mittelpunkt
+vorzutäuschen.
 
 ### Veränderung
 
@@ -128,13 +146,12 @@ eine dekorative zweite Semantik neben den echten Fäden.
 - Der Kartenmittelpunkt dient Orientierung und Begegnung, nicht Hierarchie.
 - Die Antragsoberfläche wird prozessorientiert statt graphisch-abstrakt.
 - Für die Runtime werden ein eigenes Ortsweberei-/Zentrum-Modell,
-  Eindeutigkeitsregeln, Standortstatus, Governance-Zuordnung und Migrationen
-  benötigt.
+  Eindeutigkeitsregeln, Standortstatus, Governance-Zuordnung, ein kanonischer
+  Zentrum-Gesprächsraum und idempotente Fadenprojektionen benötigt.
 - Bestehende Gewebezellen-Verträge bleiben gültig; dieses ADR konkretisiert ihre
   lokale Produktgestalt.
 
 ## Nicht entschieden
 
-- das endgültige Kartensymbol;
 - Neben- oder temporäre Trefforte zusätzlich zum einen aktiven Zentrum;
 - die technische Betreiberzuordnung einer später selbst gehosteten Zelle.

@@ -27,7 +27,13 @@ export function buildEdgeFeatures(
   if (!showEdges || edges.length === 0) return [];
 
   const features: GeoJSON.Feature<GeoJSON.LineString>[] = [];
-  const pointMap = new Map(points.map((point) => [point.id, point]));
+  const pointMap = new Map<string, MapEntityViewModel>();
+  for (const point of points) {
+    pointMap.set(point.id, point);
+    if (point.type === "webgemeindezentrum") {
+      pointMap.set(point.faden_endpoint_id, point);
+    }
+  }
 
   for (const edge of edges) {
     const opacity = edgeOpacityAt(edge, nowMs);

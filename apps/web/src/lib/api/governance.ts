@@ -4,6 +4,7 @@ export type VoteChoice = "ja" | "nein" | "enthaltung";
 export interface Proposal {
   id: string;
   kind: "weberantrag";
+  webgemeindezentrum_id: string;
   applicant_account_id: string | null;
   applicant_title: string;
   summary?: string;
@@ -74,12 +75,18 @@ export function getProposal(id: string): Promise<ProposalDetail> {
   return request<ProposalDetail>(`/api/proposals/${encodeURIComponent(id)}`);
 }
 
-export function createWeberProposal(summary?: string): Promise<Proposal> {
+export function createWeberProposal(
+  summary?: string,
+  webgemeindezentrumId?: string,
+): Promise<Proposal> {
   return request<Proposal>("/api/proposals", {
     method: "POST",
     body: JSON.stringify({
       kind: "weberantrag",
       ...(summary?.trim() ? { summary: summary.trim() } : {}),
+      ...(webgemeindezentrumId
+        ? { webgemeindezentrum_id: webgemeindezentrumId }
+        : {}),
     }),
   });
 }
