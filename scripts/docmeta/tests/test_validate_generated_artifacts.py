@@ -153,9 +153,24 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         self._write_manifest(data)
         self.assertIn("CONSUMER_MISSING", self._codes())
 
+    def test_consumer_must_be_a_regular_file(self):
+        (self.root / "consumer-directory").mkdir()
+        data = self._manifest()
+        data["artifacts"][0]["consumers"][0]["path"] = "consumer-directory"
+        self._write_manifest(data)
+        self.assertIn("CONSUMER_MISSING", self._codes())
+
     def test_claim_has_single_authoritative_surface(self):
         data = self._manifest()
         data["artifacts"][1]["claims"] = list(data["artifacts"][0]["claims"])
+        self._write_manifest(data)
+        self.assertIn("CLAIM_AUTHORITY_DUPLICATE", self._codes())
+
+    def test_claim_authority_is_case_insensitive(self):
+        data = self._manifest()
+        data["artifacts"][1]["claims"] = [
+            data["artifacts"][0]["claims"][0].swapcase()
+        ]
         self._write_manifest(data)
         self.assertIn("CLAIM_AUTHORITY_DUPLICATE", self._codes())
 

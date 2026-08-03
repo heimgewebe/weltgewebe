@@ -113,6 +113,7 @@ def _validate_string_list(
             )
         ]
     normalized: list[str] = []
+    normalized_keys: set[str] = set()
     findings: list[Finding] = []
     for index, item in enumerate(value):
         if not isinstance(item, str) or not item.strip() or item != item.strip():
@@ -121,13 +122,15 @@ def _validate_string_list(
                 f"{field}[{index}] must be a trimmed non-empty string",
             ))
             continue
-        if item in normalized:
+        item_key = item.casefold()
+        if item_key in normalized_keys:
             findings.append(_finding(
                 f"{field.upper()}_DUPLICATE", path,
-                f"duplicate {field} entry: {item}",
+                f"duplicate {field} entry after case normalization: {item}",
             ))
             continue
         normalized.append(item)
+        normalized_keys.add(item_key)
     return normalized, findings
 
 
@@ -154,8 +157,16 @@ def _validate_consumers(
             findings.append(_finding("CONSUMER_DUPLICATE", path, f"duplicate consumer path: {consumer_path}"))
         else:
             consumer_paths.append(consumer_path)
-            if not (root / consumer_path).exists() or _has_symlink_component(root, consumer_path):
-                findings.append(_finding("CONSUMER_MISSING", path, f"consumer missing or symlinked: {consumer_path}"))
+            consumer_target = root / consumer_path
+            if (
+                not consumer_target.is_file()
+                or _has_symlink_component(root, consumer_path)
+            ):
+                findings.append(_finding(
+                    "CONSUMER_MISSING",
+                    path,
+                    f"consumer must be an existing symlink-free file: {consumer_path}",
+                ))
         if not isinstance(purpose, str) or not purpose.strip() or purpose != purpose.strip():
             findings.append(_finding("CONSUMER_PURPOSE_INVALID", path, f"{label}.purpose must be a trimmed non-empty string"))
     return consumer_paths, findings
@@ -422,7 +433,7 @@ def validate_manifest(
         claims, claim_findings = _validate_string_list(artifact.get("claims"), path=path, field="claims")
         findings.extend(claim_findings)
         for claim in claims:
-            claims_by_text[claim].append(path)
+            claims_by_text[claim.casefold()].append(path)
         _, nonclaim_findings = _validate_string_list(
             artifact.get("does_not_establish"), path=path, field="does_not_establish"
         )
