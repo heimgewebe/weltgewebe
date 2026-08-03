@@ -494,7 +494,7 @@ def source_revision_metadata(
         return ("0" * 40, "1970-01-01T00:00:00Z", False)
     try:
         revision = subprocess.run(
-            ["git", "rev-parse", "HEAD"],
+            ["git", "log", "-1", "--format=%H", "--", *relative_paths],
             cwd=root,
             text=True,
             capture_output=True,
@@ -505,14 +505,26 @@ def source_revision_metadata(
         generated_at = _git_commit_timestamp(root, revision)
         if generated_at is None:
             raise ValueError("source revision timestamp missing")
-        fresh = (
-            subprocess.run(
-                ["git", "diff", "--quiet", revision, "--", *relative_paths],
-                cwd=root,
-                check=False,
-            ).returncode
-            == 0
-        )
+        differs_from_revision = subprocess.run(
+            ["git", "diff", "--quiet", revision, "--", *relative_paths],
+            cwd=root,
+            check=False,
+        ).returncode
+        working_tree_changes = subprocess.run(
+            [
+                "git",
+                "status",
+                "--porcelain=v1",
+                "--untracked-files=all",
+                "--",
+                *relative_paths,
+            ],
+            cwd=root,
+            text=True,
+            capture_output=True,
+            check=True,
+        ).stdout.strip()
+        fresh = differs_from_revision == 0 and not working_tree_changes
         return revision, generated_at, fresh
     except (OSError, subprocess.CalledProcessError, ValueError):
         return ("0" * 40, "1970-01-01T00:00:00Z", False)

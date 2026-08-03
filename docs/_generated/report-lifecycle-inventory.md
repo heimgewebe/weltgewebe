@@ -799,12 +799,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "The correctness of claims inside individual reports or repo-wide generated-report completeness."
   ],
-  "generated_at": "2026-08-03T05:50:23+02:00",
+  "generated_at": "2026-08-02T00:55:46+02:00",
   "limitations": [
     "The inventory evaluates repository metadata and exact path references, not runtime behaviour."
   ],
   "schema_version": 1,
-  "source_revision": "36e800e93443b6c1bd44f667fd841e90e684ffb3",
+  "source_revision": "e7d2afe4172562098713a53e694947bc091e9751",
   "sources": [
     {
       "path": "docs/reports/agent-readiness-audit.md",

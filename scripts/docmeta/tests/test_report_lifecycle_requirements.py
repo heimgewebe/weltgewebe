@@ -2,6 +2,9 @@
 from __future__ import annotations
 
 import datetime
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 from scripts.docmeta.report_lifecycle_requirements import (
@@ -10,6 +13,7 @@ from scripts.docmeta.report_lifecycle_requirements import (
     missing_required_report_fields,
     report_truth_migration_state,
     required_report_field_rules,
+    source_revision_metadata,
     string_value,
     validate_truth_contract,
 )
@@ -318,6 +322,52 @@ class TestAuditReportTruthContract(unittest.TestCase):
             report_truth_migration_state({"lifecycle_state": "active", "status": "active"}),
             "not_decision_relevant",
         )
+
+
+class TestSourceRevisionMetadata(unittest.TestCase):
+    def test_revision_tracks_latest_source_commit_not_generator_head(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "test@example.invalid"],
+                cwd=root,
+                check=True,
+            )
+            source = root / "source.md"
+            source.write_text("source v1\n", encoding="utf-8")
+            subprocess.run(["git", "add", "source.md"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "source"],
+                cwd=root,
+                check=True,
+            )
+            source_revision = subprocess.run(
+                ["git", "rev-parse", "HEAD"],
+                cwd=root,
+                text=True,
+                capture_output=True,
+                check=True,
+            ).stdout.strip()
+
+            (root / "generator.py").write_text("# generator\n", encoding="utf-8")
+            subprocess.run(["git", "add", "generator.py"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "commit", "-q", "-m", "generator"],
+                cwd=root,
+                check=True,
+            )
+
+            revision, generated_at, fresh = source_revision_metadata(root, [source])
+            self.assertEqual(revision, source_revision)
+            self.assertTrue(generated_at)
+            self.assertTrue(fresh)
+
+            source.write_text("source v2\n", encoding="utf-8")
+            revision, _, fresh = source_revision_metadata(root, [source])
+            self.assertEqual(revision, source_revision)
+            self.assertFalse(fresh)
 
 
 if __name__ == "__main__":
