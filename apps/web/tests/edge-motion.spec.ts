@@ -1,0 +1,318 @@
+import { devices, expect, test, type Page } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
+
+const EDGE_ID = "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc";
+const NODE_ID = "b52be17c-4ab7-4434-98ce-520f86290cf0";
+const IPAD_PRO_11_LANDSCAPE = {
+  userAgent: devices["iPad Pro 11 landscape"].userAgent,
+  viewport: devices["iPad Pro 11 landscape"].viewport,
+  deviceScaleFactor: devices["iPad Pro 11 landscape"].deviceScaleFactor,
+  isMobile: devices["iPad Pro 11 landscape"].isMobile,
+  hasTouch: devices["iPad Pro 11 landscape"].hasTouch,
+};
+
+type MotionSnapshot = {
+  activeCount: number;
+  framePending: boolean;
+  frameRequests: number;
+  frameCallbacks: number;
+  styleRefreshes: number;
+  suppressedIds: string[];
+  active: Array<{
+    id: string;
+    phase: "creating" | "releasing";
+    progress: number;
+  }>;
+};
+
+type EdgeMotionHook = {
+  start(edgeId: string, phase: "creating" | "releasing"): boolean;
+  startForNode(nodeId: string, phase: "creating" | "releasing"): void;
+  inspect(): MotionSnapshot | null;
+  syncCanonicalIds(ids: string[]): void;
+};
+
+type TestMap = {
+  getLayer(id: string): unknown;
+  getSource(
+    id: string,
+  ):
+    | { serialize(): { data?: GeoJSON.FeatureCollection<GeoJSON.LineString> } }
+    | undefined;
+  getFilter(id: string): unknown;
+  getCenter(): { lng: number; lat: number };
+  getZoom(): number;
+  jumpTo(options: { center?: [number, number]; zoom?: number }): void;
+  setStyle(style: {
+    version: 8;
+    sources: Record<string, never>;
+    layers: never[];
+  }): void;
+  isStyleLoaded(): boolean;
+};
+
+declare global {
+  interface Window {
+    __TEST_MAP__?: TestMap;
+    __TEST_EDGE_MOTION__?: EdgeMotionHook;
+    __TEST_SET_ACTIVE_FILTERS__?: (types: string[]) => void;
+  }
+}
+
+async function openMap(page: Page) {
+  const pageErrors: string[] = [];
+  const consoleErrors: string[] = [];
+  page.on("pageerror", (error) =>
+    pageErrors.push(error.stack ?? error.message),
+  );
+  page.on("console", (message) => {
+    if (message.type() === "error" || message.type() === "warning") {
+      consoleErrors.push(`[${message.type()}] ${message.text()}`);
+    }
+  });
+  await mockApiResponses(page);
+  await page.goto("/map");
+  try {
+    await page.waitForFunction(
+      () => {
+        const map = window.__TEST_MAP__;
+        return Boolean(
+          map?.isStyleLoaded() &&
+          window.__TEST_EDGE_MOTION__ &&
+          map.getLayer("edges-layer"),
+        );
+      },
+      undefined,
+      { timeout: 5_000 },
+    );
+  } catch (error) {
+    const state = await page.evaluate(() => ({
+      href: location.href,
+      readyState: document.readyState,
+      hasMap: Boolean(window.__TEST_MAP__),
+      hasHook: Boolean(window.__TEST_EDGE_MOTION__),
+      mapStyleLoaded: window.__TEST_MAP__?.isStyleLoaded() ?? null,
+      hasEdgesLayer: Boolean(window.__TEST_MAP__?.getLayer("edges-layer")),
+      body: document.body.innerText.slice(0, 500),
+    }));
+    throw new Error(
+      `map bootstrap failed: ${JSON.stringify({ state, pageErrors, consoleErrors })}`,
+      { cause: error },
+    );
+  }
+}
+
+async function snapshot(page: Page) {
+  return page.evaluate(() => window.__TEST_EDGE_MOTION__?.inspect() ?? null);
+}
+
+async function motionFeatures(page: Page) {
+  return page.evaluate(() => {
+    const source = window.__TEST_MAP__?.getSource("edge-motion-source");
+    return source?.serialize().data?.features ?? [];
+  });
+}
+
+test.describe("event-bound Faden motion", () => {
+  test.beforeEach(async ({ page }) => {
+    await openMap(page);
+  });
+
+  test("grows from the canonical node-create event path and stops every frame loop", async ({
+    page,
+  }) => {
+    await page.evaluate((nodeId) => {
+      window.__TEST_EDGE_MOTION__?.startForNode(nodeId, "creating");
+    }, NODE_ID);
+
+    await expect.poll(async () => (await snapshot(page))?.activeCount).toBe(1);
+    await expect.poll(async () => (await motionFeatures(page)).length).toBe(1);
+
+    const during = await page.evaluate(() => {
+      const map = window.__TEST_MAP__!;
+      const center = map.getCenter();
+      map.jumpTo({
+        center: [center.lng + 0.015, center.lat + 0.008],
+        zoom: map.getZoom() + 0.5,
+      });
+      const feature = map.getSource("edge-motion-source")?.serialize().data
+        ?.features[0];
+      return {
+        phase: feature?.properties?.phase,
+        coordinateCount: feature?.geometry.coordinates.length,
+        filter: map.getFilter("edges-layer"),
+      };
+    });
+    expect(during.phase).toBe("creating");
+    expect(during.coordinateCount).toBe(2);
+    expect(during.filter).not.toBeNull();
+
+    await expect
+      .poll(async () => (await snapshot(page))?.activeCount, { timeout: 3000 })
+      .toBe(0);
+    const finished = await snapshot(page);
+    expect(finished?.framePending).toBe(false);
+    expect(finished?.frameCallbacks).toBeLessThan(100);
+    expect(await motionFeatures(page)).toEqual([]);
+    expect(
+      await page.evaluate(() => window.__TEST_MAP__?.getFilter("edges-layer")),
+    ).toBeFalsy();
+  });
+
+  test("retracts, survives style reload and remains hidden until canonical removal", async ({
+    page,
+  }) => {
+    expect(
+      await page.evaluate(
+        (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "releasing"),
+        EDGE_ID,
+      ),
+    ).toBe(true);
+
+    await expect.poll(async () => (await motionFeatures(page)).length).toBe(1);
+    await page.evaluate(() => {
+      window.__TEST_MAP__?.setStyle({ version: 8, sources: {}, layers: [] });
+    });
+    await page.waitForFunction(() => {
+      const map = window.__TEST_MAP__;
+      return Boolean(
+        map?.getLayer("edges-layer") && map.getLayer("edge-motion-layer"),
+      );
+    });
+
+    await expect
+      .poll(async () => (await snapshot(page))?.activeCount, { timeout: 3000 })
+      .toBe(0);
+    expect((await snapshot(page))?.suppressedIds).toContain(EDGE_ID);
+    expect(
+      await page.evaluate(() => window.__TEST_MAP__?.getFilter("edges-layer")),
+    ).not.toBeNull();
+
+    await page.evaluate(() =>
+      window.__TEST_EDGE_MOTION__?.syncCanonicalIds([]),
+    );
+    expect((await snapshot(page))?.suppressedIds).toEqual([]);
+    expect(
+      await page.evaluate(() => window.__TEST_MAP__?.getFilter("edges-layer")),
+    ).toBeFalsy();
+  });
+
+  test("filter changes never create motion and only control transition visibility", async ({
+    page,
+  }) => {
+    const before = await snapshot(page);
+    await page.evaluate(() =>
+      window.__TEST_SET_ACTIVE_FILTERS__?.(["Garnrolle"]),
+    );
+    await page.waitForTimeout(50);
+    const afterFilter = await snapshot(page);
+    expect(afterFilter?.activeCount).toBe(0);
+    expect(afterFilter?.frameRequests).toBe(before?.frameRequests);
+
+    await page.evaluate(
+      (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "creating"),
+      EDGE_ID,
+    );
+    await page.waitForTimeout(80);
+    expect(await motionFeatures(page)).toEqual([]);
+
+    await page.evaluate(() => window.__TEST_SET_ACTIVE_FILTERS__?.([]));
+    await expect.poll(async () => (await motionFeatures(page)).length).toBe(1);
+    await expect
+      .poll(async () => (await snapshot(page))?.activeCount, { timeout: 3000 })
+      .toBe(0);
+  });
+
+  test("rapid opposing events reverse without spawning multiple frame loops", async ({
+    page,
+  }) => {
+    await page.evaluate(
+      (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "creating"),
+      EDGE_ID,
+    );
+    await page.waitForTimeout(250);
+    const before = await snapshot(page);
+    await page.evaluate(
+      (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "releasing"),
+      EDGE_ID,
+    );
+    const after = await snapshot(page);
+
+    expect(after?.activeCount).toBe(1);
+    expect(after?.active[0].phase).toBe("releasing");
+    expect(after?.active[0].progress).toBeCloseTo(
+      before?.active[0].progress ?? 0,
+      1,
+    );
+    await expect
+      .poll(async () => (await snapshot(page))?.activeCount, { timeout: 3000 })
+      .toBe(0);
+    expect((await snapshot(page))?.framePending).toBe(false);
+  });
+});
+
+test.describe("reduced motion", () => {
+  test("uses the canonical end state immediately and requests no RAF", async ({
+    page,
+  }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    await openMap(page);
+
+    await page.evaluate(
+      (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "creating"),
+      EDGE_ID,
+    );
+    expect(await snapshot(page)).toMatchObject({
+      activeCount: 0,
+      framePending: false,
+      frameRequests: 0,
+    });
+
+    await page.evaluate(
+      (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "releasing"),
+      EDGE_ID,
+    );
+    expect(await snapshot(page)).toMatchObject({
+      activeCount: 0,
+      framePending: false,
+      frameRequests: 0,
+      suppressedIds: [EDGE_ID],
+    });
+  });
+});
+
+test.describe("iPad-like touch profile", () => {
+  test.use(IPAD_PRO_11_LANDSCAPE);
+
+  test("keeps map interaction responsive and leaves no persistent activity", async ({
+    page,
+  }) => {
+    await openMap(page);
+    await page.evaluate(
+      (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "creating"),
+      EDGE_ID,
+    );
+    await page.evaluate(() => {
+      const map = window.__TEST_MAP__!;
+      const center = map.getCenter();
+      map.jumpTo({
+        center: [center.lng - 0.01, center.lat + 0.01],
+        zoom: map.getZoom() + 0.25,
+      });
+    });
+
+    await expect
+      .poll(async () => (await snapshot(page))?.activeCount, { timeout: 3000 })
+      .toBe(0);
+    const result = await snapshot(page);
+    expect(result?.framePending).toBe(false);
+    expect(result?.frameCallbacks).toBeLessThan(100);
+    expect(
+      await page.evaluate(
+        () =>
+          document.documentElement.scrollWidth <=
+          document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+  });
+});
