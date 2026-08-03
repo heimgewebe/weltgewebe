@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+from collections import defaultdict
 import json
 import os
 import subprocess
@@ -23,8 +24,11 @@ ALLOWED_CANONICALITY = {"derived", "canonical"}
 ROOT_KEYS = {"schema_version", "artifacts"}
 ARTIFACT_KEYS = {
     "path", "kind", "role", "canonicality", "generator", "checks",
-    "sources", "commit_required", "blocking",
+    "sources", "scope", "consumers", "claims", "does_not_establish",
+    "overlaps", "commit_required", "blocking",
 }
+CONSUMER_KEYS = {"path", "purpose"}
+OVERLAP_KEYS = {"path", "distinction"}
 EXPECTED_CONTROLS: dict[str, dict[str, object]] = {
     "docs/_generated/agent-readiness.md": {
         "generator": ["python3", "-m", "scripts.docmeta.generate_agent_readiness"],
@@ -84,6 +88,107 @@ def _safe_repo_path(value: Any) -> str | None:
     if candidate.is_absolute() or ".." in candidate.parts or value != candidate.as_posix():
         return None
     return value
+
+
+def load_manifest_data(repo_root: str | Path | None = None) -> dict[str, Any]:
+    """Load the single generated-artifact authority without creating another registry."""
+    root = (Path(repo_root) if repo_root is not None else Path(REPO_ROOT)).resolve()
+    data, findings = _load_manifest(root / MANIFEST_REL)
+    if findings:
+        raise ValueError(findings[0]["detail"])
+    if not isinstance(data, dict):
+        raise ValueError("manifest root must be an object")
+    return data
+
+
+def _validate_string_list(
+    value: Any, *, path: str, field: str
+) -> tuple[list[str], list[Finding]]:
+    if not isinstance(value, list) or not value:
+        return [], [
+            _finding(
+                f"{field.upper()}_INVALID",
+                path,
+                f"{field} must be a non-empty array",
+            )
+        ]
+    normalized: list[str] = []
+    findings: list[Finding] = []
+    for index, item in enumerate(value):
+        if not isinstance(item, str) or not item.strip() or item != item.strip():
+            findings.append(_finding(
+                f"{field.upper()}_INVALID", path,
+                f"{field}[{index}] must be a trimmed non-empty string",
+            ))
+            continue
+        if item in normalized:
+            findings.append(_finding(
+                f"{field.upper()}_DUPLICATE", path,
+                f"duplicate {field} entry: {item}",
+            ))
+            continue
+        normalized.append(item)
+    return normalized, findings
+
+
+def _validate_consumers(
+    value: Any, *, root: Path, path: str
+) -> tuple[list[str], list[Finding]]:
+    if not isinstance(value, list) or not value:
+        return [], [_finding("CONSUMERS_INVALID", path, "consumers must be a non-empty array")]
+    consumer_paths: list[str] = []
+    findings: list[Finding] = []
+    for index, consumer in enumerate(value):
+        label = f"consumers[{index}]"
+        if not isinstance(consumer, dict):
+            findings.append(_finding("CONSUMER_INVALID", path, f"{label} must be an object"))
+            continue
+        unknown = sorted(set(consumer) - CONSUMER_KEYS)
+        if unknown:
+            findings.append(_finding("CONSUMER_UNKNOWN_FIELDS", path, f"{label}: {', '.join(unknown)}"))
+        consumer_path = _safe_repo_path(consumer.get("path"))
+        purpose = consumer.get("purpose")
+        if consumer_path is None:
+            findings.append(_finding("CONSUMER_PATH_INVALID", path, f"{label}.path must be repository-relative"))
+        elif consumer_path in consumer_paths:
+            findings.append(_finding("CONSUMER_DUPLICATE", path, f"duplicate consumer path: {consumer_path}"))
+        else:
+            consumer_paths.append(consumer_path)
+            if not (root / consumer_path).exists() or _has_symlink_component(root, consumer_path):
+                findings.append(_finding("CONSUMER_MISSING", path, f"consumer missing or symlinked: {consumer_path}"))
+        if not isinstance(purpose, str) or not purpose.strip() or purpose != purpose.strip():
+            findings.append(_finding("CONSUMER_PURPOSE_INVALID", path, f"{label}.purpose must be a trimmed non-empty string"))
+    return consumer_paths, findings
+
+
+def _validate_overlaps(
+    value: Any, *, path: str
+) -> tuple[dict[str, str], list[Finding]]:
+    if not isinstance(value, list):
+        return {}, [_finding("OVERLAPS_INVALID", path, "overlaps must be an array")]
+    overlaps: dict[str, str] = {}
+    findings: list[Finding] = []
+    for index, overlap in enumerate(value):
+        label = f"overlaps[{index}]"
+        if not isinstance(overlap, dict):
+            findings.append(_finding("OVERLAP_INVALID", path, f"{label} must be an object"))
+            continue
+        unknown = sorted(set(overlap) - OVERLAP_KEYS)
+        if unknown:
+            findings.append(_finding("OVERLAP_UNKNOWN_FIELDS", path, f"{label}: {', '.join(unknown)}"))
+        target = _safe_repo_path(overlap.get("path"))
+        distinction = overlap.get("distinction")
+        if target is None:
+            findings.append(_finding("OVERLAP_PATH_INVALID", path, f"{label}.path must be repository-relative"))
+        elif target == path:
+            findings.append(_finding("OVERLAP_SELF_REFERENCE", path, "an artifact cannot overlap itself"))
+        elif target in overlaps:
+            findings.append(_finding("OVERLAP_DUPLICATE", path, f"duplicate overlap path: {target}"))
+        else:
+            overlaps[target] = distinction if isinstance(distinction, str) else ""
+        if not isinstance(distinction, str) or not distinction.strip() or distinction != distinction.strip():
+            findings.append(_finding("OVERLAP_DISTINCTION_INVALID", path, f"{label}.distinction must be a trimmed non-empty string"))
+    return overlaps, findings
 
 
 def _actual_generated_artifacts(root: Path) -> tuple[set[str], list[Finding]]:
@@ -235,8 +340,8 @@ def validate_manifest(
     if unknown_root:
         findings.append(_finding("MANIFEST_ROOT_UNKNOWN_FIELDS", MANIFEST_REL, ", ".join(unknown_root)))
     version = data.get("schema_version")
-    if type(version) is not int or version != 1:
-        findings.append(_finding("MANIFEST_VERSION_INVALID", MANIFEST_REL, "schema_version must be integer 1"))
+    if type(version) is not int or version != 2:
+        findings.append(_finding("MANIFEST_VERSION_INVALID", MANIFEST_REL, "schema_version must be integer 2"))
     artifacts = data.get("artifacts")
     if not isinstance(artifacts, list):
         findings.append(_finding("ARTIFACTS_INVALID", MANIFEST_REL, "artifacts must be an array"))
@@ -251,6 +356,9 @@ def validate_manifest(
     seen: set[str] = set()
     generated_seen: set[str] = set()
     parsed: list[dict[str, Any]] = []
+    claims_by_text: defaultdict[str, list[str]] = defaultdict(list)
+    consumer_declarations: dict[str, set[str]] = {}
+    overlap_declarations: dict[str, dict[str, str]] = {}
     for index, artifact in enumerate(artifacts):
         label = f"{MANIFEST_REL}#artifacts[{index}]"
         if not isinstance(artifact, dict):
@@ -302,6 +410,27 @@ def validate_manifest(
                 if "Generated automatically." not in content:
                     findings.append(_finding("GENERATED_MARKER_MISSING", path, "generated marker missing"))
 
+        scope = artifact.get("scope")
+        if not isinstance(scope, str) or not scope.strip() or scope != scope.strip():
+            findings.append(_finding("SCOPE_INVALID", path, "scope must be a trimmed non-empty string"))
+
+        consumers, consumer_findings = _validate_consumers(
+            artifact.get("consumers"), root=root, path=path
+        )
+        findings.extend(consumer_findings)
+        consumer_declarations[path] = set(consumers)
+        claims, claim_findings = _validate_string_list(artifact.get("claims"), path=path, field="claims")
+        findings.extend(claim_findings)
+        for claim in claims:
+            claims_by_text[claim].append(path)
+        _, nonclaim_findings = _validate_string_list(
+            artifact.get("does_not_establish"), path=path, field="does_not_establish"
+        )
+        findings.extend(nonclaim_findings)
+        overlaps, overlap_findings = _validate_overlaps(artifact.get("overlaps"), path=path)
+        findings.extend(overlap_findings)
+        overlap_declarations[path] = overlaps
+
         sources = artifact.get("sources")
         if not isinstance(sources, list) or not sources:
             findings.append(_finding("SOURCES_INVALID", path, "sources must be a non-empty array"))
@@ -347,6 +476,38 @@ def validate_manifest(
         for flag in ("commit_required", "blocking"):
             if artifact.get(flag) is not True:
                 findings.append(_finding("CONTROL_FLAG_INVALID", path, f"{flag} must be true"))
+
+    for claim, owners in sorted(claims_by_text.items()):
+        if len(owners) > 1:
+            for owner in owners:
+                findings.append(_finding(
+                    "CLAIM_AUTHORITY_DUPLICATE", owner,
+                    f"claim must have one canonical surface; also declared by: {', '.join(path for path in owners if path != owner)}",
+                ))
+
+    for path, overlaps in sorted(overlap_declarations.items()):
+        for target in sorted(overlaps):
+            if target not in seen:
+                findings.append(_finding("OVERLAP_TARGET_MISSING", path, f"overlap target is not declared: {target}"))
+            elif path not in overlap_declarations.get(target, {}):
+                findings.append(_finding(
+                    "OVERLAP_NOT_RECIPROCAL",
+                    path,
+                    f"overlap target must reciprocally declare {path}: {target}",
+                ))
+            declared_consumers = (
+                consumer_declarations.get(path, set())
+                | consumer_declarations.get(target, set())
+            )
+            distinction = overlaps[target]
+            if declared_consumers and not any(
+                consumer in distinction for consumer in declared_consumers
+            ):
+                findings.append(_finding(
+                    "OVERLAP_CONSUMER_JUSTIFICATION_MISSING",
+                    path,
+                    "overlap distinction must name at least one declared consumer path",
+                ))
 
     for path in sorted(required_artifacts - seen):
         findings.append(_finding("REQUIRED_ARTIFACT_MISSING", path, "artifact absent from manifest"))

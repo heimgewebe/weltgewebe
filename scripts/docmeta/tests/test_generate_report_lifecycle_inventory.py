@@ -1,3 +1,4 @@
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -74,6 +75,157 @@ class TestGenerateReportLifecycleInventory(unittest.TestCase):
             primary_search_paths=(self.root / "docs",),
             derived_search_paths=(self.root / "docs" / "_generated",),
         )
+
+    def test_control_surface_projection_uses_existing_registry(self) -> None:
+        manifest = {
+            "schema_version": 2,
+            "artifacts": [
+                {
+                    "path": "docs/_generated/agent-readiness.md",
+                    "kind": "generated",
+                    "role": "diagnostic",
+                    "canonicality": "derived",
+                    "generator": [
+                        "python3",
+                        "-m",
+                        "scripts.docmeta.generate_agent_readiness",
+                    ],
+                    "checks": [[
+                        "python3",
+                        "-m",
+                        "scripts.docmeta.generate_agent_readiness",
+                        "--check",
+                    ]],
+                    "sources": ["agent-contract.json"],
+                    "scope": "Agent contract readiness.",
+                    "consumers": [
+                        {
+                            "path": "docs/policies/agent-reading-protocol.md",
+                            "purpose": "Uses readiness diagnostics before agent execution.",
+                        }
+                    ],
+                    "claims": ["Agent readiness diagnostic status."],
+                    "does_not_establish": ["Runtime execution authority."],
+                    "overlaps": [],
+                    "commit_required": True,
+                    "blocking": True,
+                },
+                {
+                    "path": "docs/tasks/index.json",
+                    "kind": "curated_index",
+                    "role": "task_control",
+                    "canonicality": "canonical",
+                    "checks": [
+                        [
+                            "python3",
+                            "-m",
+                            "scripts.docmeta.validate_task_index",
+                            "docs/tasks/index.json",
+                        ],
+                        [
+                            "python3",
+                            "-m",
+                            "scripts.docmeta.generate_task_index",
+                            "--check",
+                        ],
+                    ],
+                    "sources": ["docs/tasks/board.md"],
+                    "scope": "Repository task-control fixture.",
+                    "consumers": [
+                        {
+                            "path": "docs/policies/agent-reading-protocol.md",
+                            "purpose": "Uses task-control metadata during planning.",
+                        }
+                    ],
+                    "claims": ["Curated task fixture index."],
+                    "does_not_establish": ["Worker claim authority."],
+                    "overlaps": [],
+                    "commit_required": True,
+                    "blocking": True,
+                },
+            ],
+        }
+        self._write(
+            ".wgx/generated-artifacts.yml",
+            "---\n" + json.dumps(manifest, indent=2) + "\n",
+        )
+        self._write("agent-contract.json", "{}\n")
+        self._write("docs/policies/agent-reading-protocol.md", "# Policy\n")
+        self._write("docs/tasks/board.md", "# Board\n")
+        self._write("docs/tasks/index.json", "{}\n")
+        self._write(
+            "docs/_generated/agent-readiness.md",
+            "Generated automatically. Do not edit manually.\n",
+        )
+        self._write(
+            "repo.meta.yaml",
+            "generated_artifacts:\n"
+            "  - docs/_generated/agent-readiness.md\n"
+            "required_checks: []\n",
+        )
+        for module in (
+            "generate_agent_readiness",
+            "validate_task_index",
+            "generate_task_index",
+        ):
+            self._write(f"scripts/docmeta/{module}.py", "# fixture module\n")
+
+        surfaces = gen.collect_control_surfaces(self.root)
+        markdown = gen.render_inventory([], control_surfaces=surfaces)
+
+        self.assertEqual(len(surfaces), 2)
+        agent_surface = next(
+            surface
+            for surface in surfaces
+            if surface.path == "docs/_generated/agent-readiness.md"
+        )
+        self.assertEqual(
+            agent_surface.claims, ("Agent readiness diagnostic status.",)
+        )
+        self.assertIn("## Controlled Evidence Surfaces", markdown)
+        self.assertIn("the registry remains the only machine authority", markdown)
+        self.assertIn("Agent contract readiness.", markdown)
+        self.assertIn("Runtime execution authority.", markdown)
+
+    def test_control_surface_overlap_is_rendered_once(self) -> None:
+        first = gen.ControlSurfaceRecord(
+            path="docs/_generated/first.md",
+            kind="generated",
+            scope="First scope.",
+            producer="python3 -m scripts.docmeta.first",
+            checks=("python3 -m scripts.docmeta.first --check",),
+            sources=("docs",),
+            consumers=("docs/index.md",),
+            consumer_purposes=("Uses first.",),
+            claims=("First claim.",),
+            does_not_establish=("Second claim.",),
+            overlap_paths=("docs/_generated/second.md",),
+            overlap_distinctions=("`docs/index.md` uses first as the forward view.",),
+        )
+        second = gen.ControlSurfaceRecord(
+            path="docs/_generated/second.md",
+            kind="generated",
+            scope="Second scope.",
+            producer="python3 -m scripts.docmeta.second",
+            checks=("python3 -m scripts.docmeta.second --check",),
+            sources=("docs",),
+            consumers=("docs/index.md",),
+            consumer_purposes=("Uses second.",),
+            claims=("Second claim.",),
+            does_not_establish=("First claim.",),
+            overlap_paths=("docs/_generated/first.md",),
+            overlap_distinctions=("`docs/index.md` uses second as the reverse view.",),
+        )
+
+        markdown = gen.render_inventory([], control_surfaces=[first, second])
+
+        self.assertEqual(
+            markdown.count("`docs/index.md` uses first as the forward view."), 1
+        )
+        self.assertNotIn(
+            "`docs/index.md` uses second as the reverse view.", markdown
+        )
+        self.assertIn("| justified_overlap_pairs | 1 |", markdown)
 
     def test_collect_reports_parses_complete_frontmatter(self) -> None:
         report_path = self._write(

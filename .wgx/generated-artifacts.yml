@@ -1,6 +1,6 @@
 ---
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "artifacts": [
     {
       "path": "docs/_generated/agent-readiness.md",
@@ -25,6 +25,34 @@
         "scripts/agent",
         "scripts/docmeta/generate_agent_readiness.py",
         "docs/claims/registry.yml"
+      ],
+      "scope": "Repository agent contracts, claim fixtures, preflight and readiness inputs.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "docs/blueprints/blueprint-agent-safety-control-layer.md",
+          "purpose": "Uses the readiness diagnostics to explain the safety-control handoff boundary."
+        }
+      ],
+      "claims": [
+        "Readiness diagnostics derived from the declared agent contract and its evidence fixtures."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/claim-evidence-map.md",
+          "distinction": "`docs/claims/README.md` uses evidence links; readiness is a separate execution gate."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -51,6 +79,34 @@
         "docs",
         "scripts/docmeta/generate_architecture_drift.py"
       ],
+      "scope": "Canonical architecture documents and their declared implementation relations.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "docs/policies/architecture-critique.md",
+          "purpose": "Uses architecture drift as diagnostic input for structured critique."
+        }
+      ],
+      "claims": [
+        "Documentation-level architecture drift detected from canonical architecture sources."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/staleness-report.md",
+          "distinction": "`docs/policies/architecture-critique.md` uses structural drift, not review-age status."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -76,6 +132,38 @@
         "docs",
         "scripts/docmeta/generate_backlinks.py"
       ],
+      "scope": "Exact reverse references between indexed documentation paths.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "scripts/ci/fixtures/repoground_vertical_pilot.v1.json",
+          "purpose": "Uses backlink output as a retrieval and navigation fixture."
+        }
+      ],
+      "claims": [
+        "Reverse documentation references for every indexed target path."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/doc-index.md",
+          "distinction": "`scripts/ci/fixtures/repoground_vertical_pilot.v1.json` tests lookup direction."
+        },
+        {
+          "path": "docs/_generated/supersession-map.md",
+          "distinction": "`scripts/ci/fixtures/repoground_vertical_pilot.v1.json` tests backlink edge types."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -100,6 +188,30 @@
       "sources": [
         "docs",
         "scripts/docmeta/generate_change_resonance.py"
+      ],
+      "scope": "Declared documentation and implementation relations affected by a source change.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        }
+      ],
+      "claims": [
+        "Potential relation-based change impact across documented repository surfaces."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/implicit-dependencies.md",
+          "distinction": "`.github/workflows/docs-guard.yml` checks declared impact apart from inferred dependencies."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -128,6 +240,34 @@
         "scripts/docmeta/generate_claim_evidence_map.py",
         "scripts/docmeta/validate_doc_freshness_registry.py"
       ],
+      "scope": "Registered claims, freshness declarations and their linked evidence paths.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "docs/claims/README.md",
+          "purpose": "Explains how readers use the generated claim-to-evidence projection."
+        }
+      ],
+      "claims": [
+        "Exact declared links from registered claims to repository evidence."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/agent-readiness.md",
+          "distinction": "`docs/claims/README.md` uses evidence links; readiness is a separate execution gate."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -153,6 +293,34 @@
         "docs",
         "scripts/docmeta/generate_doc_coverage.py"
       ],
+      "scope": "Frontmatter and registration coverage of repository documentation.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "audit/impl-registry.yaml",
+          "purpose": "Uses coverage diagnostics when assessing mapped implementation evidence."
+        }
+      ],
+      "claims": [
+        "Documentation metadata and registration coverage for scanned documents."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/orphans.md",
+          "distinction": "`audit/impl-registry.yaml` uses metadata coverage; orphan checks stay relation-based."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -175,6 +343,34 @@
       "sources": [
         "docs",
         "scripts/docmeta/generate-doc-index.sh"
+      ],
+      "scope": "Forward navigation metadata for indexed documentation.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "docs/blueprints/doc-structure-task-control-examples.md",
+          "purpose": "Uses the document index as the navigation example surface."
+        }
+      ],
+      "claims": [
+        "Forward documentation index entries derived from document metadata."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/backlinks.md",
+          "distinction": "`scripts/ci/fixtures/repoground_vertical_pilot.v1.json` tests lookup direction."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -201,6 +397,34 @@
         "docs",
         "scripts/docmeta/generate_implicit_dependencies.py"
       ],
+      "scope": "Dependency-like relations inferred from repository documentation metadata.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        }
+      ],
+      "claims": [
+        "Potential undeclared documentation dependencies inferred from existing relations."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/change-resonance.md",
+          "distinction": "`.github/workflows/docs-guard.yml` checks declared impact apart from inferred dependencies."
+        },
+        {
+          "path": "docs/_generated/knowledge-gaps.md",
+          "distinction": "`.github/workflows/docs-guard.yml` checks inferred edges apart from missing knowledge."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -225,6 +449,34 @@
         "scripts",
         "contracts",
         "scripts/docmeta/generate-impl-index.sh"
+      ],
+      "scope": "Registered implementation paths under apps, scripts and contracts.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "audit/impl-registry.yaml",
+          "purpose": "Cross-checks registered implementation paths against the generated implementation index."
+        }
+      ],
+      "claims": [
+        "Forward index of implementation files and their repository registration context."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/system-map.md",
+          "distinction": "`architecture/blueprint.docmeta-engine.md` uses the map; the index remains a path list."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -251,6 +503,30 @@
         "docs",
         "scripts/docmeta/generate_knowledge_gaps.py"
       ],
+      "scope": "Missing or incomplete documentation knowledge indicated by metadata and relations.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        }
+      ],
+      "claims": [
+        "Diagnostic knowledge gaps in the documented repository model."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/implicit-dependencies.md",
+          "distinction": "`.github/workflows/docs-guard.yml` checks inferred edges apart from missing knowledge."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -275,6 +551,30 @@
       "sources": [
         "docs",
         "scripts/docmeta/generate_orphans.py"
+      ],
+      "scope": "Documentation files without qualifying inbound or structural relations.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        }
+      ],
+      "claims": [
+        "Potentially orphaned documentation paths under the repository relation rules."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/doc-coverage.md",
+          "distinction": "`audit/impl-registry.yaml` uses metadata coverage; orphan checks stay relation-based."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -301,6 +601,34 @@
         "docs",
         "scripts/docmeta/generate_relates_to_audit.py"
       ],
+      "scope": "The relates_to subset of declared documentation relations.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "scripts/ci/fixtures/repoground_vertical_pilot.v1.json",
+          "purpose": "Uses relates_to audit output as a bounded relation-retrieval fixture."
+        }
+      ],
+      "claims": [
+        "Audit of relates_to edges and their exact targets."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/relations-analysis.md",
+          "distinction": "`scripts/ci/fixtures/repoground_vertical_pilot.v1.json` tests relation scopes."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -326,6 +654,34 @@
         "docs",
         "scripts/docmeta/generate_relations_analysis.py"
       ],
+      "scope": "All supported declared documentation relation types and targets.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "scripts/ci/fixtures/repoground_vertical_pilot.v1.json",
+          "purpose": "Uses relation analysis as a broader graph-retrieval fixture."
+        }
+      ],
+      "claims": [
+        "Aggregate relation-graph diagnostics across supported relation types."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/relates-to-audit.md",
+          "distinction": "`scripts/ci/fixtures/repoground_vertical_pilot.v1.json` tests relation scopes."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -350,6 +706,34 @@
       "sources": [
         "docs/reports",
         "scripts/docmeta/generate_report_lifecycle_inventory.py"
+      ],
+      "scope": "All Markdown reports under docs/reports plus declared generated and curated control surfaces.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "docs/process/report-lifecycle.md",
+          "purpose": "Uses the inventory to explain lifecycle coverage and remaining migration work."
+        }
+      ],
+      "claims": [
+        "Descriptive lifecycle, reference and control-contract inventory for report and evidence surfaces."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/report-lifecycle.md",
+          "distinction": "`docs/process/report-lifecycle.md` uses inventory; alignment uses compliance findings."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -377,6 +761,34 @@
         "scripts/docmeta/generate_report_lifecycle.py",
         "docs/process/report-lifecycle.md"
       ],
+      "scope": "Policy compliance of report lifecycle metadata and truth contracts.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "docs/process/report-lifecycle-contract-alignment.md",
+          "purpose": "Uses compliance output to track truth-contract alignment."
+        }
+      ],
+      "claims": [
+        "Report-lifecycle compliance findings against the canonical lifecycle policy."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/report-lifecycle-inventory.md",
+          "distinction": "`docs/process/report-lifecycle.md` uses inventory; alignment uses compliance findings."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -401,6 +813,30 @@
       "sources": [
         "docs",
         "scripts/docmeta/generate_staleness_report.py"
+      ],
+      "scope": "Review dates and freshness metadata declared by documentation.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        }
+      ],
+      "claims": [
+        "Documentation review-age and declared freshness diagnostics."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/architecture-drift.md",
+          "distinction": "`docs/policies/architecture-critique.md` uses structural drift, not review-age status."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -427,6 +863,30 @@
         "docs",
         "scripts/docmeta/generate_supersession_map.py"
       ],
+      "scope": "Declared document supersession and replacement edges.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        }
+      ],
+      "claims": [
+        "Exact declared supersession paths between documentation surfaces."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/backlinks.md",
+          "distinction": "`scripts/ci/fixtures/repoground_vertical_pilot.v1.json` tests backlink edge types."
+        }
+      ],
       "commit_required": true,
       "blocking": true
     },
@@ -451,6 +911,34 @@
       "sources": [
         "docs",
         "scripts/docmeta/generate_system_map.py"
+      ],
+      "scope": "Repository documents, implementation registrations and declared structural relations.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "architecture/blueprint.docmeta-engine.md",
+          "purpose": "Uses the system map as the generated structural view of the docmeta engine."
+        }
+      ],
+      "claims": [
+        "Structural repository map connecting documented components and registered implementation surfaces."
+      ],
+      "does_not_establish": [
+        "Canonical policy, runtime state, or deployment truth.",
+        "Correctness of the underlying source claims beyond the declared generator method."
+      ],
+      "overlaps": [
+        {
+          "path": "docs/_generated/impl-index.md",
+          "distinction": "`architecture/blueprint.docmeta-engine.md` uses the map; the index remains a path list."
+        }
       ],
       "commit_required": true,
       "blocking": true
@@ -479,6 +967,29 @@
         "docs/tasks/schema.json",
         "docs/reports/optimierungsstatus.json"
       ],
+      "scope": "Curated repository task-control records derived from the task board and task schema.",
+      "consumers": [
+        {
+          "path": ".github/workflows/docs-guard.yml",
+          "purpose": "Executes the registry tests and documentation validation gates in CI."
+        },
+        {
+          "path": "scripts/docmeta/generated-files-guard.sh",
+          "purpose": "Fails closed when the committed controlled surface or its registry declaration drifts."
+        },
+        {
+          "path": "scripts/docmeta/check_planning_registration.py",
+          "purpose": "Uses the curated index to verify planning registration."
+        }
+      ],
+      "claims": [
+        "Canonical repository-local task index for documentation task-control consumers."
+      ],
+      "does_not_establish": [
+        "A Bureau claim, worker lease, dispatch decision, or execution authority.",
+        "Runtime completion of any indexed task."
+      ],
+      "overlaps": [],
       "commit_required": true,
       "blocking": true
     }

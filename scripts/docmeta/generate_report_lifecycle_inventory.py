@@ -12,6 +12,11 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.docmeta.generated_check import write_or_check
+from scripts.docmeta.validate_generated_artifacts import (
+    MANIFEST_REL,
+    load_manifest_data,
+    validate_manifest,
+)
 from scripts.docmeta.report_lifecycle_requirements import (
     build_truth_contract,
     parse_truth_contract_markdown,
@@ -109,6 +114,22 @@ class GeneratedReportTruthRecord:
     path: str
     inventory_status: str
     reason: str
+
+
+@dataclass(frozen=True)
+class ControlSurfaceRecord:
+    path: str
+    kind: str
+    scope: str
+    producer: str
+    checks: tuple[str, ...]
+    sources: tuple[str, ...]
+    consumers: tuple[str, ...]
+    consumer_purposes: tuple[str, ...]
+    claims: tuple[str, ...]
+    does_not_establish: tuple[str, ...]
+    overlap_paths: tuple[str, ...]
+    overlap_distinctions: tuple[str, ...]
 
 
 def default_inventory_config() -> InventoryConfig:
@@ -493,6 +514,75 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
     return records
 
 
+def _command_text(command: object) -> str:
+    if not isinstance(command, list):
+        return "curated / no generator"
+    return " ".join(str(part) for part in command)
+
+
+def collect_control_surfaces(root: Path) -> list[ControlSurfaceRecord]:
+    """Project the existing registry without creating a second authority."""
+    findings = validate_manifest(root)
+    if findings:
+        first = findings[0]
+        raise ValueError(
+            f"generated artifact registry invalid: {first['code']}: {first['detail']}"
+        )
+    data = load_manifest_data(root)
+    artifacts = data.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise ValueError("generated artifact manifest has no artifacts array")
+    records: list[ControlSurfaceRecord] = []
+    for artifact in artifacts:
+        if not isinstance(artifact, dict):
+            raise ValueError("generated artifact entry must be an object")
+        consumers = artifact.get("consumers", [])
+        overlaps = artifact.get("overlaps", [])
+        records.append(
+            ControlSurfaceRecord(
+                path=str(artifact.get("path", "")),
+                kind=str(artifact.get("kind", "")),
+                scope=str(artifact.get("scope", "")),
+                producer=_command_text(artifact.get("generator")),
+                checks=tuple(
+                    _command_text(command)
+                    for command in artifact.get("checks", [])
+                ),
+                sources=tuple(
+                    str(value) for value in artifact.get("sources", [])
+                ),
+                consumers=tuple(
+                    str(value.get("path", ""))
+                    for value in consumers
+                    if isinstance(value, dict)
+                ),
+                consumer_purposes=tuple(
+                    str(value.get("purpose", ""))
+                    for value in consumers
+                    if isinstance(value, dict)
+                ),
+                claims=tuple(
+                    str(value) for value in artifact.get("claims", [])
+                ),
+                does_not_establish=tuple(
+                    str(value)
+                    for value in artifact.get("does_not_establish", [])
+                ),
+                overlap_paths=tuple(
+                    str(value.get("path", ""))
+                    for value in overlaps
+                    if isinstance(value, dict)
+                ),
+                overlap_distinctions=tuple(
+                    str(value.get("distinction", ""))
+                    for value in overlaps
+                    if isinstance(value, dict)
+                ),
+            )
+        )
+    return sorted(records, key=lambda record: record.path)
+
+
 def collect_generated_report_truth_inventory(
     root: Path,
     *,
@@ -568,28 +658,32 @@ def build_doc_type_distribution(records: list[ReportRecord]) -> list[tuple[str, 
 def build_inventory_truth_contract(
     root: Path,
     records: list[ReportRecord],
+    control_surfaces: list[ControlSurfaceRecord] | None = None,
 ) -> dict[str, object]:
+    surfaces = control_surfaces or []
     source_paths = [root / record.path for record in records]
+    if surfaces:
+        source_paths.append(root / MANIFEST_REL)
     revision, generated_at, fresh = source_revision_metadata(root, source_paths)
     failures = sum(1 for record in records if record.frontmatter_parse_warning)
     status = "no_material_drift" if fresh and failures == 0 else ("fail" if failures else "unknown")
     return build_truth_contract(
         status=status,
-        scope="all Markdown files discovered under docs/reports",
+        scope="all Markdown files under docs/reports and all generated/curated control surfaces declared in .wgx/generated-artifacts.yml",
         complete=True,
         fresh=fresh,
         method="exact",
-        checked_items=len(records),
-        total_items=len(records),
+        checked_items=len(records) + len(surfaces),
+        total_items=len(records) + len(surfaces),
         failures=failures,
         source_revision=revision,
         generated_at=generated_at,
         sources=source_manifest(root, source_paths),
         limitations=[
-            "The inventory evaluates repository metadata and exact path references, not runtime behaviour."
+            "The inventory evaluates repository metadata, exact path references and declared control contracts, not runtime behaviour."
         ],
         does_not_establish=[
-            "The correctness of claims inside individual reports or repo-wide generated-report completeness."
+            "The correctness of claims inside individual reports, runtime use of declared consumers, or deployment truth."
         ],
     )
 
@@ -598,10 +692,74 @@ def render_inventory(
     records: list[ReportRecord],
     truth_contract: dict[str, object] | None = None,
     migration_records: list[GeneratedReportTruthRecord] | None = None,
+    control_surfaces: list[ControlSurfaceRecord] | None = None,
 ) -> str:
     sections = [HEADER.rstrip(), "", "## Summary", "", "| Metric | Count |", "| --- | ---: |"]
     for metric, count in build_summary(records):
         sections.append(f"| {metric} | {count} |")
+
+    surfaces = control_surfaces or []
+    if surfaces:
+        overlap_edges = sum(len(record.overlap_paths) for record in surfaces) // 2
+        sections.extend(
+            [
+                "",
+                "## Controlled Evidence Surfaces",
+                "",
+                "This section is a readable projection of `.wgx/generated-artifacts.yml`; the registry remains the only machine authority.",
+                "",
+                "| Metric | Count |",
+                "| --- | ---: |",
+                f"| controlled_surfaces | {len(surfaces)} |",
+                f"| generated_surfaces | {sum(1 for record in surfaces if record.kind == 'generated')} |",
+                f"| curated_surfaces | {sum(1 for record in surfaces if record.kind == 'curated_index')} |",
+                f"| declared_consumer_edges | {sum(len(record.consumers) for record in surfaces)} |",
+                f"| exclusive_claims | {sum(len(record.claims) for record in surfaces)} |",
+                f"| justified_overlap_pairs | {overlap_edges} |",
+                "",
+                "| Path | Kind | Scope | Sources | Generator | Checks | Consumers | Exclusive claim | Does not establish |",
+                "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+            ]
+        )
+        for record in surfaces:
+            consumer_text = "; ".join(
+                f"{path}: {purpose}"
+                for path, purpose in zip(record.consumers, record.consumer_purposes)
+            )
+            sections.append(
+                "| {path} | {kind} | {scope} | {sources} | {producer} | {checks} | {consumers} | {claims} | {nonclaims} |".format(
+                    path=record.path,
+                    kind=_cell(record.kind),
+                    scope=_cell(record.scope),
+                    sources=_cell("; ".join(record.sources)),
+                    producer=_cell(record.producer),
+                    checks=_cell("; ".join(record.checks)),
+                    consumers=_cell(consumer_text),
+                    claims=_cell("; ".join(record.claims)),
+                    nonclaims=_cell("; ".join(record.does_not_establish)),
+                )
+            )
+        sections.extend(
+            [
+                "",
+                "### Overlap Justifications",
+                "",
+                "| Surface | Related surface | Distinction / consumer justification |",
+                "| --- | --- | --- |",
+            ]
+        )
+        emitted_pairs: set[tuple[str, str]] = set()
+        for record in surfaces:
+            for target, distinction in zip(record.overlap_paths, record.overlap_distinctions):
+                pair = tuple(sorted((record.path, target)))
+                if pair in emitted_pairs:
+                    continue
+                emitted_pairs.add(pair)
+                sections.append(
+                    f"| {record.path} | {target} | {_cell(distinction)} |"
+                )
+        if not emitted_pairs:
+            sections.append("| _None_ | _None_ | No overlapping control surfaces declared. |")
 
     sections.extend(
         [
@@ -768,7 +926,10 @@ def _cell(value: str) -> str:
 
 def _render_current_inventory(config: InventoryConfig) -> str:
     records = collect_reports(config)
-    truth_contract = build_inventory_truth_contract(config.repo_root, records)
+    control_surfaces = collect_control_surfaces(config.repo_root)
+    truth_contract = build_inventory_truth_contract(
+        config.repo_root, records, control_surfaces
+    )
     migrated_paths = (
         _as_rel(config.output_path, config.repo_root),
         "docs/_generated/report-lifecycle.md",
@@ -777,7 +938,9 @@ def _render_current_inventory(config: InventoryConfig) -> str:
         config.repo_root,
         migrated_paths=migrated_paths,
     )
-    return render_inventory(records, truth_contract, migration_records)
+    return render_inventory(
+        records, truth_contract, migration_records, control_surfaces
+    )
 
 
 def generate(config: InventoryConfig | None = None) -> Path:

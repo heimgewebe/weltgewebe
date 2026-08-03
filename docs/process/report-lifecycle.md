@@ -48,6 +48,41 @@ Er setzt die Policy weiterhin schrittweise technisch durch.
 Andere `doc_type`-Werte direkt unter `docs/reports/` erscheinen im Inventory,
 werden aber nicht als Reports validiert.
 
+## Kontrollierte Nachweisflächen
+
+Für generierte Diagnosen und den kuratierten Task-Index ist
+`.wgx/generated-artifacts.yml` die einzige kanonische maschinenlesbare
+Kontrollfläche. Das generierte Lifecycle-Inventar zeigt daraus nur eine
+menschenlesbare Projektion und darf keine abweichende Wahrheit einführen.
+
+Jeder Registry-Eintrag muss zusätzlich zu Quelle, Generator und Check folgende
+Grenzen ausdrücklich erklären:
+
+- `scope`: welche Daten und Aussagen tatsächlich erfasst werden;
+- `consumers`: existierende Repositorypfade und der konkrete Nutzungszweck;
+- `claims`: die exklusiven positiven Aussagen dieser Fläche;
+- `does_not_establish`: Aussagen, die aus der Fläche nicht abgeleitet werden dürfen;
+- `overlaps`: wechselseitige Verweise auf ähnliche Flächen mit fachlicher
+  Abgrenzung und Verbraucherbegründung.
+
+Dabei gelten folgende Regeln:
+
+1. Eine fachliche Aussage darf nur von einer Kontrollfläche als eigene
+   `claim` beansprucht werden. Doppelte Claims blockieren.
+2. Verbraucher müssen als vorhandene, symlinkfreie Repositorypfade belegt sein.
+   Ein bloß behauptetes Publikum oder ein freier Rollenname genügt nicht.
+3. Überschneidungen müssen von beiden Flächen erklärt werden. Einseitige oder
+   unbegründete Überlappungen blockieren.
+4. Ähnliche Flächen werden nicht allein wegen Namens- oder Themenähnlichkeit
+   gelöscht. Entfernen ist erst zulässig, wenn Verbraucher umgestellt,
+   Sicherheits- und Revisionsbelege reproduziert und negative Rückfalltests
+   vorhanden sind.
+5. `_generated` bleibt rein abgeleitet. Änderungen erfolgen an Registry,
+   Quellen oder Generatoren und werden anschließend reproduziert.
+
+Damit wird vorhandene Komplexität sichtbar und prüfbar, ohne eine zusätzliche
+Registry oder einen zweiten Wahrheitsvertrag einzuführen.
+
 ## Aktuelle Nicht-Ziele
 
 - kein Massen-Backfill bestehender Reports,
