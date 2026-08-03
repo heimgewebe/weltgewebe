@@ -125,6 +125,49 @@ where
     Deserialize::deserialize(deserializer).map(Some)
 }
 
+/// Semantic kind of a derived participation Faden. The machine values stay
+/// language-neutral; clients render the canonical German names
+/// Gesprächsfaden, Antragsfaden, Knüpffaden and Stimmfaden.
+#[derive(Debug, Serialize, Deserialize, Clone, Copy, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum FadenType {
+    Conversation,
+    Proposal,
+    Knotting,
+    Vote,
+}
+
+impl FadenType {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Conversation => "conversation",
+            Self::Proposal => "proposal",
+            Self::Knotting => "knotting",
+            Self::Vote => "vote",
+        }
+    }
+}
+
+/// An optional typed field may be omitted, but explicit JSON null would blur
+/// the contract distinction between a legacy projection and malformed data.
+fn deserialize_optional_non_null_faden_type<'de, D>(
+    deserializer: D,
+) -> Result<Option<FadenType>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    FadenType::deserialize(deserializer).map(Some)
+}
+
+fn deserialize_optional_non_null_string_value<'de, D>(
+    deserializer: D,
+) -> Result<Option<String>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    String::deserialize(deserializer).map(Some)
+}
+
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct Edge {
     pub id: String,
@@ -134,6 +177,21 @@ pub struct Edge {
     pub target_type: Option<String>,
     #[serde(alias = "kind", alias = "edgeKind")]
     pub edge_kind: String,
+    /// Absent only on legacy/imported projections that predate typed Fäden.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_non_null_faden_type",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub faden_type: Option<FadenType>,
+    /// Stable semantic target (for example one proposal or conversation), even
+    /// when the drawable endpoint is the enclosing Webgemeindezentrum.
+    #[serde(
+        default,
+        deserialize_with = "deserialize_optional_non_null_string_value",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub faden_subject_id: Option<String>,
     pub note: Option<String>,
     pub created_at: Option<LifecycleTimestamp>,
     /// `None` means the JSONL/PostgreSQL record omitted the key (legacy dated
@@ -158,6 +216,10 @@ pub struct PublicEdge {
     pub target_id: String,
     pub target_type: Option<String>,
     pub edge_kind: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub faden_type: Option<FadenType>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub faden_subject_id: Option<String>,
     pub created_at: Option<String>,
     pub expires_at: Option<String>,
 }
@@ -171,6 +233,8 @@ impl From<&Edge> for PublicEdge {
             target_id: edge.target_id.clone(),
             target_type: edge.target_type.clone(),
             edge_kind: edge.edge_kind.clone(),
+            faden_type: edge.faden_type,
+            faden_subject_id: edge.faden_subject_id.clone(),
             created_at: edge
                 .created_at
                 .as_ref()
@@ -326,6 +390,14 @@ pub(crate) fn edge_is_permanently_unreachable(edge: &Edge) -> bool {
     edge_lifecycle_window(edge).is_err()
 }
 
+fn edge_has_valid_faden_metadata(edge: &Edge) -> bool {
+    match (&edge.faden_type, &edge.faden_subject_id) {
+        (None, None) => true,
+        (Some(_), Some(subject_id)) => Uuid::parse_str(subject_id).is_ok(),
+        _ => false,
+    }
+}
+
 fn edge_matches_list_at(
     edge: &Edge,
     source_id: Option<&str>,
@@ -383,6 +455,14 @@ pub async fn load_edges() -> OrderedCache<Edge> {
                 continue;
             }
         };
+
+        if !edge_has_valid_faden_metadata(&edge) {
+            tracing::warn!(
+                edge_id = %edge.id,
+                "skipping domain edge with malformed typed Faden metadata"
+            );
+            continue;
+        }
 
         // Checked before the cache-limit gate, mirroring the PostgreSQL
         // loader: a record that can never be active for any `now` must not
@@ -769,6 +849,9 @@ fn edge_matches_create(edge: &Edge, expected: &edge_create::ValidatedCreateEdge)
         && edge.target_id == expected.target_id
         && edge.target_type.as_deref() == Some(expected.target_type.as_str())
         && edge.edge_kind == expected.edge_kind
+        && ((edge.faden_type.is_none() && edge.faden_subject_id.is_none())
+            || (edge.faden_type == expected.faden_type
+                && edge.faden_subject_id == expected.faden_subject_id))
         && edge.note == expected.note
 }
 
@@ -897,6 +980,8 @@ fn build_edge_record(
         target_id: validated.target_id,
         target_type: Some(validated.target_type),
         edge_kind: validated.edge_kind,
+        faden_type: validated.faden_type,
+        faden_subject_id: validated.faden_subject_id,
         note: validated.note,
         created_at: Some(LifecycleTimestamp::from_datetime(created_at)),
         expires_at: Some(Some(LifecycleTimestamp::from_datetime(expires_at))),
@@ -909,6 +994,12 @@ fn build_edge_record(
     record.insert("target_id".into(), json!(edge.target_id));
     record.insert("target_type".into(), json!(edge.target_type));
     record.insert("edge_kind".into(), json!(edge.edge_kind));
+    if let Some(faden_type) = edge.faden_type {
+        record.insert("faden_type".into(), json!(faden_type));
+    }
+    if let Some(faden_subject_id) = &edge.faden_subject_id {
+        record.insert("faden_subject_id".into(), json!(faden_subject_id));
+    }
     record.insert("created_at".into(), json!(edge.created_at));
     // `json!` serializes the bare `Option<Option<_>>` value directly rather
     // than through `Edge`'s field-level `skip_serializing_if`, so both the
@@ -937,6 +1028,8 @@ pub(crate) fn build_node_origin_faden(account_id: &str, node_id: &str) -> Edge {
         edge_kind: "reference".to_string(),
         source_type: "account".to_string(),
         target_type: "node".to_string(),
+        faden_type: Some(FadenType::Knotting),
+        faden_subject_id: Some(node_id.to_string()),
         note: None,
         operation_id: None,
     };
@@ -952,6 +1045,9 @@ fn edge_create_error_message(err: &edge_create::EdgeCreateValidationError) -> St
             format!("invalid enum value for {field}: {value}")
         }
         E::InvalidUuid { field, value } => format!("invalid UUID for {field}: {value}"),
+        E::IncompleteFadenMetadata => {
+            "faden_type and faden_subject_id must be supplied together".to_string()
+        }
         E::NoteTooLong => "note exceeds the maximum length of 1000 characters".to_string(),
     }
 }
@@ -1300,6 +1396,13 @@ mod edge_create {
         edge_kind: String,
         source_type: String,
         target_type: String,
+        #[serde(
+            default,
+            deserialize_with = "super::deserialize_optional_non_null_faden_type"
+        )]
+        faden_type: Option<super::FadenType>,
+        #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
+        faden_subject_id: Option<String>,
         #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
         note: Option<String>,
         #[serde(default, deserialize_with = "deserialize_optional_non_null_string")]
@@ -1320,6 +1423,8 @@ mod edge_create {
         pub(super) edge_kind: String,
         pub(super) source_type: String,
         pub(super) target_type: String,
+        pub(super) faden_type: Option<super::FadenType>,
+        pub(super) faden_subject_id: Option<String>,
         pub(super) note: Option<String>,
         pub(super) operation_id: Option<String>,
     }
@@ -1337,6 +1442,9 @@ mod edge_create {
         InvalidEnumValue { field: &'static str, value: String },
         /// An id-like field (`id`, `source_id`, `target_id`) was not a valid UUID.
         InvalidUuid { field: &'static str, value: String },
+        /// Typed participation metadata must contain both the semantic type
+        /// and its stable target id, or neither for a legacy projection.
+        IncompleteFadenMetadata,
         /// `note` exceeded the contract maximum of 1000 characters.
         NoteTooLong,
     }
@@ -1405,6 +1513,12 @@ mod edge_create {
             if let Some(id) = &self.id {
                 require_uuid("id", id)?;
             }
+            if let Some(subject_id) = &self.faden_subject_id {
+                require_uuid("faden_subject_id", subject_id)?;
+            }
+            if self.faden_type.is_some() != self.faden_subject_id.is_some() {
+                return Err(EdgeCreateValidationError::IncompleteFadenMetadata);
+            }
 
             // (3) enum-constrained fields (exact match, no case-folding).
             require_enum("edge_kind", &self.edge_kind, &EDGE_KIND_VALUES)?;
@@ -1448,6 +1562,8 @@ mod edge_create {
                 edge_kind: self.edge_kind,
                 source_type: self.source_type,
                 target_type: self.target_type,
+                faden_type: self.faden_type,
+                faden_subject_id: self.faden_subject_id,
                 note: self.note,
                 operation_id,
             })
@@ -1472,6 +1588,8 @@ mod edge_create {
                 edge_kind: "reference".to_string(),
                 source_type: "node".to_string(),
                 target_type: "account".to_string(),
+                faden_type: None,
+                faden_subject_id: None,
                 note: None,
                 operation_id: None,
             }
@@ -1496,9 +1614,50 @@ mod edge_create {
                     edge_kind: "reference".to_string(),
                     source_type: "node".to_string(),
                     target_type: "account".to_string(),
+                    faden_type: None,
+                    faden_subject_id: None,
                     note: None,
                     operation_id: None,
                 })
+            );
+        }
+
+        #[test]
+        fn edge_create_request_accepts_typed_faden_pair() {
+            let mut req = valid_request();
+            req.faden_type = Some(super::super::FadenType::Conversation);
+            req.faden_subject_id = Some(TARGET_ID.to_string());
+
+            let validated = req.validate().expect("typed Faden pair must validate");
+            assert_eq!(
+                validated.faden_type,
+                Some(super::super::FadenType::Conversation)
+            );
+            assert_eq!(validated.faden_subject_id.as_deref(), Some(TARGET_ID));
+        }
+
+        #[test]
+        fn edge_create_request_rejects_null_faden_type() {
+            let json = format!(
+                r#"{{"source_id":"{SOURCE_ID}","source_type":"node","target_id":"{TARGET_ID}","target_type":"account","edge_kind":"reference","faden_type":null}}"#
+            );
+            assert!(serde_json::from_str::<CreateEdgeRequest>(&json).is_err());
+        }
+
+        #[test]
+        fn edge_create_request_rejects_incomplete_typed_faden_pair() {
+            let mut missing_subject = valid_request();
+            missing_subject.faden_type = Some(super::super::FadenType::Vote);
+            assert_eq!(
+                missing_subject.validate(),
+                Err(EdgeCreateValidationError::IncompleteFadenMetadata)
+            );
+
+            let mut missing_type = valid_request();
+            missing_type.faden_subject_id = Some(TARGET_ID.to_string());
+            assert_eq!(
+                missing_type.validate(),
+                Err(EdgeCreateValidationError::IncompleteFadenMetadata)
             );
         }
 
@@ -1518,6 +1677,8 @@ mod edge_create {
                     edge_kind: "ownership".to_string(),
                     source_type: "node".to_string(),
                     target_type: "account".to_string(),
+                    faden_type: None,
+                    faden_subject_id: None,
                     note: Some("a note".to_string()),
                     operation_id: None,
                 })
@@ -1952,10 +2113,10 @@ mod edge_create {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_edge_record, edge_create::ValidatedCreateEdge, edge_is_active_at,
-        edge_is_permanently_unreachable, edge_matches_list_at, faden_expires_at,
-        max_edges_cache_limit, projected_faden_expires_at, Edge, LifecycleTimestamp, PublicEdge,
-        DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
+        build_edge_record, edge_create::ValidatedCreateEdge, edge_has_valid_faden_metadata,
+        edge_is_active_at, edge_is_permanently_unreachable, edge_matches_list_at, faden_expires_at,
+        max_edges_cache_limit, projected_faden_expires_at, Edge, FadenType, LifecycleTimestamp,
+        PublicEdge, DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
     };
     use crate::test_helpers::EnvGuard;
     use chrono::{DateTime, Duration, TimeZone, Utc};
@@ -1971,6 +2132,8 @@ mod tests {
             target_id: "00000000-0000-0000-0000-0000000000b1".to_string(),
             target_type: Some("account".to_string()),
             edge_kind: "reference".to_string(),
+            faden_type: None,
+            faden_subject_id: None,
             note: None,
             created_at: created_at.map(LifecycleTimestamp::from),
             expires_at: expires_at.map(|value| Some(LifecycleTimestamp::from(value))),
@@ -2018,6 +2181,8 @@ mod tests {
             edge_kind: "reference".to_string(),
             source_type: "node".to_string(),
             target_type: "account".to_string(),
+            faden_type: None,
+            faden_subject_id: None,
             note: None,
             operation_id: None,
         };
@@ -2066,6 +2231,21 @@ mod tests {
             projected_faden_expires_at(&precise).as_deref(),
             Some("2026-07-24T10:00:00.123456789Z")
         );
+    }
+
+    #[test]
+    fn typed_faden_metadata_is_atomic_and_uuid_bound() {
+        let mut edge = lifecycle_edge(Some("2026-07-01T00:00:00Z"), Some("2026-07-08T00:00:00Z"));
+        assert!(edge_has_valid_faden_metadata(&edge));
+
+        edge.faden_type = Some(FadenType::Conversation);
+        assert!(!edge_has_valid_faden_metadata(&edge));
+
+        edge.faden_subject_id = Some("not-a-uuid".to_string());
+        assert!(!edge_has_valid_faden_metadata(&edge));
+
+        edge.faden_subject_id = Some("11111111-1111-5111-8111-111111111111".to_string());
+        assert!(edge_has_valid_faden_metadata(&edge));
     }
 
     #[test]

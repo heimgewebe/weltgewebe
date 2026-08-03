@@ -3,6 +3,7 @@ import { mockApiResponses } from "./fixtures/mockApi";
 
 const EDGE_ID = "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc";
 const NODE_ID = "b52be17c-4ab7-4434-98ce-520f86290cf0";
+const LEGACY_EDGE_FILTER = ["==", ["get", "fadenType"], "legacy"];
 const IPAD_PRO_11_LANDSCAPE = {
   userAgent: devices["iPad Pro 11 landscape"].userAgent,
   viewport: devices["iPad Pro 11 landscape"].viewport,
@@ -156,7 +157,7 @@ test.describe("event-bound Faden motion", () => {
     expect(await motionFeatures(page)).toEqual([]);
     expect(
       await page.evaluate(() => window.__TEST_MAP__?.getFilter("edges-layer")),
-    ).toBeFalsy();
+    ).toEqual(LEGACY_EDGE_FILTER);
   });
 
   test("retracts, survives style reload and remains hidden until canonical removal", async ({
@@ -194,7 +195,7 @@ test.describe("event-bound Faden motion", () => {
     expect((await snapshot(page))?.suppressedIds).toEqual([]);
     expect(
       await page.evaluate(() => window.__TEST_MAP__?.getFilter("edges-layer")),
-    ).toBeFalsy();
+    ).toEqual(LEGACY_EDGE_FILTER);
   });
 
   test("filter changes never create motion and only control transition visibility", async ({

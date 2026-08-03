@@ -79,6 +79,20 @@ describe("buildEdgeFeatures", () => {
     ]);
   });
 
+  it("projects the canonical Faden type and subject without vote content", () => {
+    const typed = normalizeEdgeLifecycle({
+      ...rawEdge,
+      faden_type: "vote",
+      faden_subject_id: "11111111-1111-5111-8111-111111111111",
+    });
+    const features = buildEdgeFeatures([typed], points, true, createdAt);
+    expect(features[0].properties).toMatchObject({
+      fadenType: "vote",
+      fadenSubjectId: "11111111-1111-5111-8111-111111111111",
+    });
+    expect(features[0].properties).not.toHaveProperty("choice");
+  });
+
   it("omits expired, hidden, and unresolved edges", () => {
     expect(
       buildEdgeFeatures([edge], points, true, createdAt + FADEN_LIFETIME_MS),

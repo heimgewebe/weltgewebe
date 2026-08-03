@@ -2,7 +2,7 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "$id": "https://weltgewebe.org/schemas/domain/edge.schema.json",
   "title": "Edge",
-  "description": "A derived Faden projection between two entities. Dated, unverzwirnte Fäden expire exactly 168 hours after their server-owned creation timestamp; durable Webungsaktionen remain outside this projection. Fully undated legacy or non-authoritative preview projections explicitly carry a null lifecycle pair.",
+  "description": "A derived, typed Faden projection between two entities. New participation projections identify Gesprächsfaden, Antragsfaden, Knüpffaden or Stimmfaden through faden_type; legacy projections may omit it. Dated, unverzwirnte Fäden expire exactly 168 hours after their server-owned creation timestamp; durable Webungsaktionen remain outside this projection. Fully undated legacy or non-authoritative preview projections explicitly carry a null lifecycle pair.",
   "type": "object",
   "properties": {
     "id": {
@@ -28,6 +28,16 @@
     "edge_kind": {
       "type": "string",
       "enum": ["delegation", "membership", "ownership", "reference"]
+    },
+    "faden_type": {
+      "description": "Semantic participation type. conversation=Gesprächsfaden, proposal=Antragsfaden, knotting=Knüpffaden, vote=Stimmfaden. Omitted only for legacy/imported projections.",
+      "type": "string",
+      "enum": ["conversation", "proposal", "knotting", "vote"]
+    },
+    "faden_subject_id": {
+      "description": "Stable semantic target of the participation, such as the proposal, conversation or node id. This can differ from the drawable center endpoint.",
+      "type": "string",
+      "format": "uuid"
     },
     "created_at": {
       "description": "Server-owned creation timestamp of the derived projection. Null is permitted only for a fully undated legacy or non-authoritative preview projection and must be paired with expires_at null.",
@@ -56,6 +66,14 @@
   ],
   "additionalProperties": false,
   "allOf": [
+    {
+      "if": { "required": ["faden_type"] },
+      "then": { "required": ["faden_subject_id"] }
+    },
+    {
+      "if": { "required": ["faden_subject_id"] },
+      "then": { "required": ["faden_type"] }
+    },
     {
       "if": {
         "properties": {

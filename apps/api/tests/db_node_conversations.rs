@@ -953,8 +953,8 @@ async fn node_conversation_vertical_slice() {
             .expect("projection version after messages");
     assert_eq!(
         version_after_messages,
-        version_after_node + 4,
-        "four distinct contributions create four active map Fäden",
+        version_after_node + 2,
+        "guest and author each create one conversation Faden; later contributions reuse it",
     );
     let payloads: Vec<String> = sqlx::query_scalar(
         "SELECT payload::text FROM domain_outbox
@@ -1064,8 +1064,8 @@ async fn node_conversation_vertical_slice() {
     .await
     .expect("count all active participation Fäden");
     assert_eq!(
-        active_participation_faden_count, 11,
-        "each distinct accepted contribution adds one Faden; replays and rejected writes add none",
+        active_participation_faden_count, 2,
+        "each participating account keeps one conversation Faden; later contributions and replays add none",
     );
 
     // Binding check (account exit): a hard account delete must not be blocked by
@@ -1156,8 +1156,8 @@ async fn node_conversation_vertical_slice() {
         .expect("node deletion must archive a non-empty public conversation");
     assert_eq!(
         outcome.removed_edge_ids.len(),
-        11,
-        "node deletion removes every active participation Faden",
+        2,
+        "node deletion removes both stable account participation Fäden",
     );
     assert_eq!(
         outcome.conversation,

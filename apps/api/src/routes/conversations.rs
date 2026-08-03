@@ -345,12 +345,19 @@ async fn project_message_participation_faden(
     auth: &AuthContext,
     node_id: Option<&str>,
     webgemeindezentrum_id: Option<&str>,
+    conversation_id: &str,
     message_id: &str,
 ) {
     if let Some(node_id) = node_id {
-        if let Err((status, message)) =
-            ensure_node_activity_faden(state, auth, node_id, "conversation_message", message_id)
-                .await
+        if let Err((status, message)) = ensure_node_activity_faden(
+            state,
+            auth,
+            node_id,
+            super::edges::FadenType::Conversation,
+            conversation_id,
+            message_id,
+        )
+        .await
         {
             tracing::error!(
                 event = "conversation.message_faden_projection.failed",
@@ -369,8 +376,8 @@ async fn project_message_participation_faden(
             state,
             auth,
             center_id,
-            "center_conversation_message",
-            message_id,
+            super::edges::FadenType::Conversation,
+            conversation_id,
         )
         .await
         {
@@ -1192,6 +1199,7 @@ pub async fn create_message(
             &auth,
             node_id.as_deref(),
             webgemeindezentrum_id.as_deref(),
+            &conversation_id,
             &message_id,
         )
         .await;
@@ -1290,6 +1298,7 @@ pub async fn create_message(
         &auth,
         node_id.as_deref(),
         webgemeindezentrum_id.as_deref(),
+        &conversation_id,
         &message.id,
     )
     .await;

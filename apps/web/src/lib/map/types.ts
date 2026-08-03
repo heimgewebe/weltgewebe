@@ -89,6 +89,15 @@ export interface MapPoint {
   data: Node | Account | unknown;
 }
 
+export type FadenType = "conversation" | "proposal" | "knotting" | "vote";
+
+export const FADEN_TYPE_LABELS: Record<FadenType, string> = {
+  conversation: "Gesprächsfaden",
+  proposal: "Antragsfaden",
+  knotting: "Knüpffaden",
+  vote: "Stimmfaden",
+};
+
 export interface Edge {
   id: string;
   source_id: string;
@@ -96,6 +105,10 @@ export interface Edge {
   target_id: string;
   target_type?: string;
   edge_kind: string;
+  /** Missing only on Fäden created before the typed participation contract. */
+  faden_type?: FadenType;
+  /** Stable proposal, conversation or node target behind the drawable endpoint. */
+  faden_subject_id?: string;
   created_at?: string | null;
   expires_at?: string | null;
 }

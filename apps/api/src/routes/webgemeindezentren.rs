@@ -367,20 +367,20 @@ pub async fn get_ortsweberei(
 }
 
 fn center_activity_operation_id(
-    activity_kind: &str,
+    faden_type: super::edges::FadenType,
     account_id: &str,
     center_id: &str,
-    action_id: &str,
+    subject_id: &str,
 ) -> String {
     fn component(value: &str) -> String {
         format!("{}:{value}", value.len())
     }
     let name = format!(
-        "weltgewebe:webgemeindezentrum-activity-faden:v1|{}|{}|{}|{}",
-        component(activity_kind),
+        "weltgewebe:webgemeindezentrum-participation-faden:v2|{}|{}|{}|{}",
+        component(faden_type.as_str()),
         component(account_id),
         component(center_id),
-        component(action_id),
+        component(subject_id),
     );
     Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes()).to_string()
 }
@@ -393,8 +393,8 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
     state: &ApiState,
     auth: &AuthContext,
     center_id: &str,
-    activity_kind: &str,
-    action_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
 ) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
@@ -407,7 +407,8 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
             event = "webgemeindezentrum.faden_projection.skipped_legacy_identifier",
             center_id,
             account_id,
-            activity_kind,
+            faden_type = faden_type.as_str(),
+            subject_id,
             "Center participation cannot be represented by the UUID-only Faden contract"
         );
         return Ok(());
@@ -469,7 +470,7 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
     .fetch_optional(&mut *account_guard)
     .await
     .map_err(|error| {
-        tracing::error!(%error, center_id, activity_kind, "failed to resolve center Faden endpoint");
+        tracing::error!(%error, center_id, faden_type = faden_type.as_str(), subject_id, "failed to resolve center Faden endpoint");
         (
             StatusCode::INTERNAL_SERVER_ERROR,
             "failed to resolve Webgemeindezentrum Faden endpoint".to_string(),
@@ -481,14 +482,15 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
             "Webgemeindezentrum Faden endpoint not found".to_string(),
         )
     })?;
-    let operation_id =
-        center_activity_operation_id(activity_kind, account_id, center_id, action_id);
+    let operation_id = center_activity_operation_id(faden_type, account_id, center_id, subject_id);
     let payload = json!({
         "source_id": account_id,
         "source_type": "account",
         "target_id": endpoint_id,
         "target_type": "webgemeindezentrum",
         "edge_kind": "reference",
+        "faden_type": faden_type,
+        "faden_subject_id": subject_id,
         "operation_id": operation_id,
     });
 
@@ -501,7 +503,8 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
                     event = "webgemeindezentrum.faden_projection.failed",
                     center_id,
                     account_id,
-                    activity_kind,
+                    faden_type = faden_type.as_str(),
+                    subject_id,
                     %status,
                     error = %message,
                     "Durable action exists but its derived center Faden is missing"
@@ -555,26 +558,26 @@ mod tests {
     #[test]
     fn center_activity_faden_operation_is_stable_and_unambiguous() {
         let first = center_activity_operation_id(
-            "governance_proposal",
+            super::super::edges::FadenType::Proposal,
             "account-a",
             "webgemeindezentrum-hammer-park",
             "proposal-a",
         );
         let replay = center_activity_operation_id(
-            "governance_proposal",
+            super::super::edges::FadenType::Proposal,
             "account-a",
             "webgemeindezentrum-hammer-park",
             "proposal-a",
         );
-        let different_action = center_activity_operation_id(
-            "governance_proposal",
+        let different_subject = center_activity_operation_id(
+            super::super::edges::FadenType::Proposal,
             "account-a",
             "webgemeindezentrum-hammer-park",
             "proposal-b",
         );
 
         assert_eq!(first, replay);
-        assert_ne!(first, different_action);
+        assert_ne!(first, different_subject);
         assert!(uuid::Uuid::parse_str(&first).is_ok());
     }
 

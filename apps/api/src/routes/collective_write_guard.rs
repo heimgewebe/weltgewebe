@@ -438,7 +438,8 @@ pub async fn patch_node_serialized(
                 &mutation_state,
                 &projection_auth,
                 &node.id,
-                "node_edit",
+                super::edges::FadenType::Knotting,
+                &node.id,
                 &node.updated_at,
             )
             .await
@@ -513,7 +514,8 @@ pub async fn replace_node_serialized(
                 &mutation_state,
                 &projection_auth,
                 &node.id,
-                "node_edit",
+                super::edges::FadenType::Knotting,
+                &node.id,
                 &node.updated_at,
             )
             .await

@@ -20,7 +20,7 @@ use crate::routes::accounts::{
     MIN_RADIUS_M, RADIUS_PROJECTION_KEY,
 };
 use crate::routes::auth::MAX_EMAIL_LEN;
-use crate::routes::edges::{edge_is_permanently_unreachable, Edge, LifecycleTimestamp};
+use crate::routes::edges::{edge_is_permanently_unreachable, Edge, FadenType, LifecycleTimestamp};
 use crate::routes::nodes::{normalize_account_id, Location, Node, SearchVisibility};
 use crate::state::OrderedCache;
 
@@ -98,6 +98,20 @@ fn payload_string(payload: &Value, key: &str) -> Option<String> {
         .get(key)
         .and_then(|v| v.as_str())
         .map(|s| s.to_string())
+}
+
+/// Typed Faden metadata is atomic. Unknown types, malformed UUIDs and half
+/// pairs are rejected instead of being silently downgraded to a legacy Faden.
+fn payload_faden_metadata(payload: &Value) -> Result<(Option<FadenType>, Option<String>), ()> {
+    match (payload.get("faden_type"), payload.get("faden_subject_id")) {
+        (None, None) => Ok((None, None)),
+        (Some(Value::String(kind)), Some(Value::String(subject_id))) => {
+            let faden_type = serde_json::from_value(Value::String(kind.clone())).map_err(|_| ())?;
+            Uuid::parse_str(subject_id).map_err(|_| ())?;
+            Ok((Some(faden_type), Some(subject_id.clone())))
+        }
+        _ => Err(()),
+    }
 }
 
 /// Read a lifecycle timestamp field while preserving the distinction between
@@ -206,6 +220,12 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             continue;
         };
 
+        let Ok((faden_type, faden_subject_id)) = payload_faden_metadata(&payload) else {
+            tracing::warn!(edge_id = %id, "skipping domain edge with malformed typed Faden metadata");
+            skipped += 1;
+            continue;
+        };
+
         let edge = Edge {
             id: id.clone(),
             source_id,
@@ -213,6 +233,8 @@ pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge
             target_id,
             target_type: payload_string(&payload, "target_type"),
             edge_kind,
+            faden_type,
+            faden_subject_id,
             note: payload_string(&payload, "note"),
             created_at: created_at.map(LifecycleTimestamp::from_datetime),
             expires_at,
@@ -655,6 +677,8 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
     let payload = parse_payload(&payload_text);
     let expires_at = payload_lifecycle_field(&payload, "expires_at")
         .map_err(|()| anyhow::anyhow!("edge {id} has malformed expires_at payload value"))?;
+    let (faden_type, faden_subject_id) = payload_faden_metadata(&payload)
+        .map_err(|()| anyhow::anyhow!("edge {id} has malformed typed Faden metadata"))?;
     Ok(Edge {
         id,
         source_id,
@@ -662,6 +686,8 @@ fn edge_from_row(row: EdgeRow) -> Result<Edge, anyhow::Error> {
         target_id,
         target_type: payload_string(&payload, "target_type"),
         edge_kind,
+        faden_type,
+        faden_subject_id,
         note: payload_string(&payload, "note"),
         created_at: created_at.map(LifecycleTimestamp::from_datetime),
         expires_at,
@@ -1932,6 +1958,15 @@ impl NewDomainEdgeRow {
                 Value::String(target_type.clone()),
             );
         }
+        if let Some(faden_type) = edge.faden_type {
+            payload_map.insert("faden_type".to_string(), json!(faden_type));
+        }
+        if let Some(faden_subject_id) = &edge.faden_subject_id {
+            payload_map.insert(
+                "faden_subject_id".to_string(),
+                Value::String(faden_subject_id.clone()),
+            );
+        }
         if let Some(note) = &edge.note {
             payload_map.insert("note".to_string(), Value::String(note.clone()));
         }
@@ -2154,23 +2189,28 @@ fn edge_matches_projection(existing: &Edge, expected: &Edge) -> bool {
         && existing.target_id == expected.target_id
         && existing.target_type == expected.target_type
         && existing.edge_kind == expected.edge_kind
+        && ((existing.faden_type.is_none() && existing.faden_subject_id.is_none())
+            || (existing.faden_type == expected.faden_type
+                && existing.faden_subject_id == expected.faden_subject_id))
         && existing.note == expected.note
 }
 
 /// Atomically persist a PostgreSQL node and its mandatory account→node origin
 /// Faden. Operation replays repair an older missing Faden in the same guarded
 /// transaction after validating the original node semantics.
-pub async fn insert_domain_node_and_faden_with_creator_limit<F, G>(
+pub async fn insert_domain_node_and_faden_with_creator_limit<F, G, H>(
     pool: &PgPool,
     node: &Node,
     operation: &CreateOperationKey,
     creator_node_limit: Option<usize>,
     existing_matches: F,
     edge_for_node: G,
+    edge_operation_for_node: H,
 ) -> Result<NodeFadenCreateOutcome, NodeFadenCreateError>
 where
     F: Fn(&Node) -> bool,
     G: Fn(&str) -> Edge,
+    H: Fn(&str) -> CreateOperationKey,
 {
     let mut tx = pool
         .begin()
@@ -2220,8 +2260,10 @@ where
         }
 
         let expected_edge = edge_for_node(&actual_node.id);
+        let edge_operation = edge_operation_for_node(&actual_node.id);
         let edge_outcome =
-            insert_domain_edge_in_transaction(&mut tx, &expected_edge, Some(operation)).await?;
+            insert_domain_edge_in_transaction(&mut tx, &expected_edge, Some(&edge_operation))
+                .await?;
         let actual_edge = match edge_outcome {
             CreateWriteOutcome::Created => expected_edge,
             CreateWriteOutcome::Existing(existing) => {
@@ -2275,7 +2317,6 @@ impl NodeFadenCachePublicationGuard {
 pub async fn lock_node_faden_cache_publication(
     pool: &PgPool,
     node_id: &str,
-    operation: &CreateOperationKey,
     expected_edge: &Edge,
 ) -> Result<NodeFadenCachePublicationGuard, NodeFadenCreateError> {
     let mut transaction = pool
@@ -2305,11 +2346,9 @@ pub async fn lock_node_faden_cache_publication(
     let edge = if node.is_some() {
         let edge = sqlx::query_as::<_, EdgeRow>(
             "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
-             FROM domain_edges \
-             WHERE create_actor_id = $1 AND create_operation_id = $2",
+             FROM domain_edges WHERE id = $1",
         )
-        .bind(&operation.actor_id)
-        .bind(&operation.operation_id)
+        .bind(&expected_edge.id)
         .fetch_optional(&mut *transaction)
         .await
         .map_err(EdgeWriteError::Database)?
@@ -2334,6 +2373,41 @@ pub async fn lock_node_faden_cache_publication(
 }
 
 #[cfg(test)]
+mod faden_metadata_payload_tests {
+    use super::*;
+
+    #[test]
+    fn accepts_absent_or_complete_typed_faden_metadata() {
+        assert_eq!(payload_faden_metadata(&json!({})), Ok((None, None)));
+        assert_eq!(
+            payload_faden_metadata(&json!({
+                "faden_type": "conversation",
+                "faden_subject_id": "11111111-1111-5111-8111-111111111111"
+            })),
+            Ok((
+                Some(FadenType::Conversation),
+                Some("11111111-1111-5111-8111-111111111111".to_string())
+            ))
+        );
+    }
+
+    #[test]
+    fn rejects_unknown_half_or_malformed_typed_faden_metadata() {
+        assert!(payload_faden_metadata(&json!({"faden_type": "vote"})).is_err());
+        assert!(payload_faden_metadata(&json!({
+            "faden_type": "unknown",
+            "faden_subject_id": "11111111-1111-5111-8111-111111111111"
+        }))
+        .is_err());
+        assert!(payload_faden_metadata(&json!({
+            "faden_type": "vote",
+            "faden_subject_id": "not-a-uuid"
+        }))
+        .is_err());
+    }
+}
+
+#[cfg(test)]
 mod edge_write_path_tests {
     use super::*;
     use crate::routes::edges::Edge;
@@ -2346,6 +2420,8 @@ mod edge_write_path_tests {
             target_id: "00000000-0000-0000-0000-0000000000b1".to_string(),
             target_type: Some("account".to_string()),
             edge_kind: "reference".to_string(),
+            faden_type: None,
+            faden_subject_id: None,
             note: None,
             created_at: Some("2026-06-12T10:00:00+00:00".into()),
             expires_at: Some(Some("2026-06-19T10:00:00+00:00".into())),

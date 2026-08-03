@@ -16,7 +16,48 @@ export const EDGE_VISUAL_STYLE = {
   mainColor: "#76523d",
   mainWidth: 2.25,
   dashArray: [1.4, 0.7] as [number, number],
+  byType: {
+    conversation: { color: "#76523d", width: 2.15, dashArray: [1.4, 0.7] },
+    proposal: { color: "#68402f", width: 3.05, dashArray: [2.4, 0.28] },
+    knotting: { color: "#7b4f30", width: 2.75, dashArray: [3.2, 0.2] },
+    vote: { color: "#5f463d", width: 1.85, dashArray: [0.35, 0.82] },
+  },
 } as const;
+
+const EDGE_LAYER_VARIANTS = [
+  {
+    fadenType: "legacy",
+    layerId: LAYERS.EDGES_LAYER,
+    haloLayerId: LAYERS.EDGES_HALO_LAYER,
+    color: EDGE_VISUAL_STYLE.mainColor,
+    width: EDGE_VISUAL_STYLE.mainWidth,
+    dashArray: EDGE_VISUAL_STYLE.dashArray,
+  },
+  {
+    fadenType: "conversation",
+    layerId: LAYERS.EDGES_CONVERSATION_LAYER,
+    haloLayerId: LAYERS.EDGES_CONVERSATION_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.conversation,
+  },
+  {
+    fadenType: "proposal",
+    layerId: LAYERS.EDGES_PROPOSAL_LAYER,
+    haloLayerId: LAYERS.EDGES_PROPOSAL_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.proposal,
+  },
+  {
+    fadenType: "knotting",
+    layerId: LAYERS.EDGES_KNOTTING_LAYER,
+    haloLayerId: LAYERS.EDGES_KNOTTING_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.knotting,
+  },
+  {
+    fadenType: "vote",
+    layerId: LAYERS.EDGES_VOTE_LAYER,
+    haloLayerId: LAYERS.EDGES_VOTE_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.vote,
+  },
+] as const;
 
 export function buildEdgeFeatures(
   edges: MapEdge[],
@@ -55,6 +96,8 @@ export function buildEdgeFeatures(
       properties: {
         id: edge.id,
         kind: edge.edge_kind,
+        fadenType: edge.faden_type ?? "legacy",
+        fadenSubjectId: edge.faden_subject_id ?? null,
         opacity,
       },
     });
@@ -63,44 +106,9 @@ export function buildEdgeFeatures(
   return features;
 }
 
-export function updateEdges(
-  map: MapLibreMap,
-  edges: MapEdge[],
-  points: MapEntityViewModel[],
-  showEdges: boolean,
-  nowMs = Date.now(),
-) {
-  const sourceId = LAYERS.EDGES_SOURCE;
-  const layerId = LAYERS.EDGES_LAYER;
-  const haloLayerId = LAYERS.EDGES_HALO_LAYER;
-  const source = map.getSource(sourceId) as GeoJSONSource | undefined;
-  const features = buildEdgeFeatures(edges, points, showEdges, nowMs);
-  const geoJsonData: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
-    type: "FeatureCollection",
-    features,
-  };
-
-  if (source) {
-    source.setData(geoJsonData);
-    ensureEdgeLayers(map, sourceId, layerId, haloLayerId);
-  } else if (features.length > 0) {
-    map.addSource(sourceId, { type: "geojson", data: geoJsonData });
-    ensureEdgeLayers(map, sourceId, layerId, haloLayerId);
-  }
-}
-
-function ensureEdgeLayers(
-  map: MapLibreMap,
-  sourceId: string,
-  layerId: string,
-  haloLayerId: string,
-) {
-  const firstSymbolId = map
-    .getStyle()
-    ?.layers?.find((layer) => layer.type === "symbol")?.id;
-  const hasHalo = Boolean(map.getLayer(haloLayerId));
-  const hasMain = Boolean(map.getLayer(layerId));
-
+export function buildEdgeLayerSpecifications(
+  sourceId: string = LAYERS.EDGES_SOURCE,
+): LineLayerSpecification[] {
   const opacity: ExpressionSpecification = [
     "coalesce",
     ["to-number", ["get", "opacity"]],
@@ -115,38 +123,86 @@ function ensureEdgeLayers(
     "line-join": "round",
     "line-cap": "round",
   };
-  const haloLayer: LineLayerSpecification = {
-    id: haloLayerId,
-    type: "line",
-    source: sourceId,
-    layout: commonLayout,
-    paint: {
-      "line-color": EDGE_VISUAL_STYLE.haloColor,
-      "line-width": EDGE_VISUAL_STYLE.haloWidth,
-      "line-blur": EDGE_VISUAL_STYLE.haloBlur,
-      "line-opacity": haloOpacity,
-      "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
-    },
-  };
-  const mainLayer: LineLayerSpecification = {
-    id: layerId,
-    type: "line",
-    source: sourceId,
-    layout: commonLayout,
-    paint: {
-      "line-color": EDGE_VISUAL_STYLE.mainColor,
-      "line-width": EDGE_VISUAL_STYLE.mainWidth,
-      "line-opacity": opacity,
-      "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
-    },
+
+  return EDGE_LAYER_VARIANTS.flatMap((variant) => {
+    const filter = [
+      "==",
+      ["get", "fadenType"],
+      variant.fadenType,
+    ] as LineLayerSpecification["filter"];
+    const dashArray = [...variant.dashArray] as [number, number];
+    const haloLayer: LineLayerSpecification = {
+      id: variant.haloLayerId,
+      type: "line",
+      source: sourceId,
+      filter,
+      layout: commonLayout,
+      paint: {
+        "line-color": EDGE_VISUAL_STYLE.haloColor,
+        "line-width": variant.width + 2.75,
+        "line-blur": EDGE_VISUAL_STYLE.haloBlur,
+        "line-opacity": haloOpacity,
+        "line-dasharray": dashArray,
+      },
+    };
+    const mainLayer: LineLayerSpecification = {
+      id: variant.layerId,
+      type: "line",
+      source: sourceId,
+      filter,
+      layout: commonLayout,
+      paint: {
+        "line-color": variant.color,
+        "line-width": variant.width,
+        "line-opacity": opacity,
+        "line-dasharray": dashArray,
+      },
+    };
+    return [haloLayer, mainLayer];
+  });
+}
+
+export function updateEdges(
+  map: MapLibreMap,
+  edges: MapEdge[],
+  points: MapEntityViewModel[],
+  showEdges: boolean,
+  nowMs = Date.now(),
+) {
+  const sourceId = LAYERS.EDGES_SOURCE;
+  const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+  const features = buildEdgeFeatures(edges, points, showEdges, nowMs);
+  const geoJsonData: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
+    type: "FeatureCollection",
+    features,
   };
 
-  if (!hasHalo && !hasMain) {
-    map.addLayer(haloLayer, firstSymbolId);
-    map.addLayer(mainLayer, firstSymbolId);
-  } else if (!hasHalo && hasMain) {
-    map.addLayer(haloLayer, layerId);
-  } else if (hasHalo && !hasMain) {
-    map.addLayer(mainLayer, firstSymbolId);
+  if (source) {
+    source.setData(geoJsonData);
+    ensureEdgeLayers(map, sourceId);
+  } else if (features.length > 0) {
+    map.addSource(sourceId, { type: "geojson", data: geoJsonData });
+    ensureEdgeLayers(map, sourceId);
+  }
+}
+
+function ensureEdgeLayers(map: MapLibreMap, sourceId: string) {
+  const firstSymbolId = map
+    .getStyle()
+    ?.layers?.find((layer) => layer.type === "symbol")?.id;
+  const specifications = buildEdgeLayerSpecifications(sourceId);
+
+  for (let index = 0; index < specifications.length; index += 2) {
+    const haloLayer = specifications[index];
+    const mainLayer = specifications[index + 1];
+    const hasHalo = Boolean(map.getLayer(haloLayer.id));
+    const hasMain = Boolean(map.getLayer(mainLayer.id));
+
+    if (!hasHalo) {
+      map.addLayer(haloLayer, hasMain ? mainLayer.id : firstSymbolId);
+    }
+    if (!hasMain) {
+      map.addLayer(mainLayer, firstSymbolId);
+    }
   }
 }
