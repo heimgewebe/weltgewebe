@@ -849,12 +849,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "The correctness of claims inside individual reports, runtime use of declared consumers, or deployment truth."
   ],
-  "generated_at": "2026-08-03T08:57:01+02:00",
+  "generated_at": "2026-08-03T09:21:24+02:00",
   "limitations": [
     "The inventory evaluates repository metadata, exact path references and declared control contracts, not runtime behaviour."
   ],
   "schema_version": 1,
-  "source_revision": "9c0e65eaeadba112bbc37e7b75b63db6db499c28",
+  "source_revision": "cdb54f957da49d4ded34b568c72f6140acfb1f45",
   "sources": [
     {
       "path": ".wgx/generated-artifacts.yml",
