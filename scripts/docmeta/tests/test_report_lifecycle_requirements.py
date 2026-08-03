@@ -10,12 +10,15 @@ import unittest
 
 from scripts.docmeta.report_lifecycle_requirements import (
     build_truth_contract,
+    extract_truth_contract_markdown,
     missing_required_report_field_rules,
     missing_required_report_fields,
+    parse_truth_contract_markdown,
     report_truth_migration_state,
     required_report_field_rules,
     source_revision_metadata,
     string_value,
+    truth_contract_markdown,
     validate_truth_contract,
 )
 
@@ -257,10 +260,9 @@ class TestReportLifecycleRequirements(unittest.TestCase):
         self.assertEqual(string_value(None), "")
         self.assertEqual(string_value([]), "")
         self.assertEqual(string_value({}), "")
-        self.assertEqual(string_value(7), "7")
-        self.assertEqual(
-            string_value(datetime.date(2026, 7, 13)), "2026-07-13"
-        )
+        self.assertEqual(string_value(True), "")
+        self.assertEqual(string_value(7), "")
+        self.assertEqual(string_value(datetime.date(2026, 7, 13)), "")
 
 
 class TestAuditReportTruthContract(unittest.TestCase):
@@ -293,6 +295,52 @@ class TestAuditReportTruthContract(unittest.TestCase):
 
     def test_valid_positive_contract_passes(self) -> None:
         self.assertEqual(validate_truth_contract(self._contract()), ())
+
+    def test_truth_block_is_single_and_line_anchored(self) -> None:
+        contract = self._contract(status="partial")
+        markdown = truth_contract_markdown(contract)
+        self.assertEqual(extract_truth_contract_markdown(markdown), contract)
+
+        conflicting = {**contract, "status": "fail"}
+        with self.assertRaisesRegex(ValueError, "truth_contract_multiple"):
+            extract_truth_contract_markdown(
+                markdown + truth_contract_markdown(conflicting)
+            )
+        with self.assertRaisesRegex(ValueError, "truth_contract_inline_fence"):
+            extract_truth_contract_markdown(
+                "prefix ```json audit-report-truth.v1\n{}\n```\n"
+            )
+        with self.assertRaisesRegex(ValueError, "truth_contract_nested_fence"):
+            extract_truth_contract_markdown(
+                "```json audit-report-truth.v1\n```json nested\n{}\n```\n"
+            )
+        self.assertEqual(
+            validate_truth_contract(
+                parse_truth_contract_markdown(markdown + markdown)
+            ),
+            ("truth_contract_multiple",),
+        )
+
+    def test_unavailable_provenance_is_typed_and_never_zero_sha(self) -> None:
+        zero_contract = self._contract(status="partial")
+        zero_contract["source_revision"] = "0" * 40
+        zero_contract["generated_at"] = "1970-01-01T00:00:00Z"
+        self.assertIn(
+            "invalid_source_revision", validate_truth_contract(zero_contract)
+        )
+
+        unavailable = {"state": "unavailable", "reason": "local_history_missing"}
+        unknown_contract = self._contract(status="unknown", fresh=False)
+        unknown_contract["source_revision"] = unavailable
+        unknown_contract["generated_at"] = unavailable.copy()
+        self.assertEqual(validate_truth_contract(unknown_contract), ())
+
+        positive_contract = self._contract()
+        positive_contract["source_revision"] = unavailable
+        positive_contract["generated_at"] = unavailable.copy()
+        violations = validate_truth_contract(positive_contract)
+        self.assertIn("positive_status_source_revision_unavailable", violations)
+        self.assertIn("positive_status_generated_at_unavailable", violations)
 
     def test_positive_status_is_downgraded_for_unsafe_coverage(self) -> None:
         for changes in (
@@ -422,7 +470,7 @@ class TestSourceRevisionMetadata(unittest.TestCase):
             self.assertFalse(fresh)
 
 
-    def test_root_validation_materializes_bound_revision_in_shallow_checkout(self) -> None:
+    def test_shallow_history_stays_read_only_and_is_explicitly_unavailable(self) -> None:
         with tempfile.TemporaryDirectory() as temp_dir:
             temp_root = Path(temp_dir)
             source_repo = temp_root / "source-repo"
@@ -473,22 +521,16 @@ class TestSourceRevisionMetadata(unittest.TestCase):
                 ).stdout.strip(),
                 "true",
             )
-            self.assertNotEqual(
-                subprocess.run(
-                    ["git", "cat-file", "-e", f"{source_revision}^{{commit}}"],
-                    cwd=checkout,
-                    capture_output=True,
-                    check=False,
-                ).returncode,
-                0,
-            )
 
             resolved_revision, resolved_generated_at, resolved_fresh = source_revision_metadata(
                 checkout, [checkout / "source.md"]
             )
-            self.assertEqual(resolved_revision, source_revision)
-            self.assertEqual(resolved_generated_at, generated_at)
-            self.assertTrue(resolved_fresh)
+            self.assertEqual(
+                resolved_revision,
+                {"state": "unavailable", "reason": "git_history_unavailable"},
+            )
+            self.assertEqual(resolved_generated_at, resolved_revision)
+            self.assertFalse(resolved_fresh)
 
             contract = build_truth_contract(
                 status="pass",
@@ -505,7 +547,10 @@ class TestSourceRevisionMetadata(unittest.TestCase):
                 limitations=["repository-only"],
                 does_not_establish=["runtime_health"],
             )
-            self.assertEqual(validate_truth_contract(contract, root=checkout), ())
+            self.assertIn(
+                "source_history_unavailable",
+                validate_truth_contract(contract, root=checkout),
+            )
             self.assertEqual(
                 subprocess.run(
                     ["git", "rev-parse", "--is-shallow-repository"],
@@ -514,7 +559,7 @@ class TestSourceRevisionMetadata(unittest.TestCase):
                     capture_output=True,
                     check=True,
                 ).stdout.strip(),
-                "false",
+                "true",
             )
 
 

@@ -15,6 +15,7 @@ if __package__ in {None, ""}:
 
 from scripts.docmeta.docmeta import parse_frontmatter
 from scripts.docmeta.report_lifecycle_requirements import (
+    extract_truth_contract_markdown,
     missing_required_report_field_rules,
     string_value as _string_value,
     validate_truth_contract,
@@ -22,6 +23,7 @@ from scripts.docmeta.report_lifecycle_requirements import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 VALID_MODES = ("report", "warn", "strict")
+VALID_REPORT_STATUSES = frozenset(("active", "archived", "draft", "deprecated", "obsolete"))
 VALID_LIFECYCLE_STATES = frozenset(("active", "deferred", "superseded", "archived"))
 VALID_LIFECYCLES = frozenset(("audit", "decision", "decision-prep", "generated", "planning", "proof"))
 VALID_OWNER_STATUSES = frozenset(("blocked", "contradicted", "done", "obsolete", "open", "partial"))
@@ -58,12 +60,6 @@ def _iter_report_paths(root: Path) -> list[Path]:
     return sorted([p for p in reports_dir.rglob("*.md") if p.is_file()])
 
 
-TRUTH_CONTRACT_RE = re.compile(
-    r"```json audit-report-truth\.v1\n(?P<payload>\{.*?\})\n```",
-    re.DOTALL,
-)
-
-
 def _iter_truth_report_paths(root: Path) -> list[Path]:
     return [
         path
@@ -76,10 +72,7 @@ def _iter_truth_report_paths(root: Path) -> list[Path]:
 
 
 def extract_truth_contract(markdown: str) -> dict[str, object]:
-    match = TRUTH_CONTRACT_RE.search(markdown)
-    if match is None:
-        raise ValueError("truth_contract_missing")
-    value = json.loads(match.group("payload"))
+    value = extract_truth_contract_markdown(markdown)
     if not isinstance(value, dict):
         raise ValueError("truth_contract_not_object")
     return value
@@ -273,6 +266,16 @@ def _validate_report(path: Path, frontmatter: dict[str, object], root: Path) -> 
     if doc_type != "report":
         return findings
 
+    status = _string_value(frontmatter.get("status")).strip().lower()
+    if status and status not in VALID_REPORT_STATUSES:
+        findings.append(Finding(
+            path=rel_path,
+            code="invalid_status",
+            severity="warn",
+            field="status",
+            message="status must be one of: active, archived, deprecated, draft, obsolete",
+        ))
+
     lifecycle_state = _string_value(frontmatter.get("lifecycle_state")).strip().lower()
     if lifecycle_state and lifecycle_state not in VALID_LIFECYCLE_STATES:
         findings.append(Finding(
@@ -367,6 +370,7 @@ def _build_summary(
         "missing_superseded_by": 0,
         "missing_lifecycle_state": 0,
         "missing_frontmatter": 0,
+        "invalid_status": 0,
         "invalid_lifecycle": 0,
         "invalid_lifecycle_state": 0,
         "invalid_review_after": 0,
@@ -401,6 +405,7 @@ def _render_report(findings: list[Finding], summary: dict[str, int], mode: str) 
         f"| missing_superseded_by | {summary['missing_superseded_by']} |",
         f"| missing_lifecycle_state | {summary['missing_lifecycle_state']} |",
         f"| missing_frontmatter | {summary['missing_frontmatter']} |",
+        f"| invalid_status | {summary['invalid_status']} |",
         f"| invalid_lifecycle | {summary['invalid_lifecycle']} |",
         f"| invalid_lifecycle_state | {summary['invalid_lifecycle_state']} |",
         f"| invalid_review_after | {summary['invalid_review_after']} |",
