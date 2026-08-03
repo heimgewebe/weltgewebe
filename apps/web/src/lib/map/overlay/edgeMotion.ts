@@ -404,8 +404,8 @@ export class EdgeMotionController {
   private hasMotionStyle(): boolean {
     return Boolean(
       this.map.getSource(EDGE_MOTION_SOURCE) &&
-        this.map.getLayer(EDGE_MOTION_HALO_LAYER) &&
-        this.map.getLayer(EDGE_MOTION_LAYER),
+      this.map.getLayer(EDGE_MOTION_HALO_LAYER) &&
+      this.map.getLayer(EDGE_MOTION_LAYER),
     );
   }
 

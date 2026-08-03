@@ -759,12 +759,13 @@
         destroyed ||
         styleRehydrateQueued ||
         !map ||
+        !map.isStyleLoaded() ||
         hasCanonicalEdgeStyle()
       ) {
         return;
       }
       styleRehydrateQueued = true;
-      map.once("idle", rehydrateMapOverlays);
+      queueMicrotask(rehydrateMapOverlays);
     };
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
