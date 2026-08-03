@@ -22,15 +22,17 @@ use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgPool;
 
-use super::webgemeindezentren::ensure_webgemeindezentrum_activity_faden;
+use super::webgemeindezentren::{
+    ensure_webgemeindezentrum_activity_faden, repair_webgemeindezentrum_activity_faden,
+};
 use crate::auth::role::Role;
 use crate::config::{
     DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
 };
 use crate::governance::{
     self, CreateProposalError, GuestExitError, MessageError, ProposalMessage, ProposalStatus,
-    ProposalWithCounts, Veto, VetoError, VoteChoice, VoteError, MESSAGE_BODY_MAX_CHARS,
-    SUMMARY_MAX_CHARS, VETO_REASON_MAX_CHARS,
+    ProposalWithCounts, Veto, VetoError, VoteChoice, VoteError, VoteWriteOutcome,
+    MESSAGE_BODY_MAX_CHARS, SUMMARY_MAX_CHARS, VETO_REASON_MAX_CHARS,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
@@ -541,7 +543,7 @@ pub async fn vote_proposal(
         .map_err(internal_error("get_proposal_for_vote"))?
         .ok_or((StatusCode::NOT_FOUND, "proposal not found".to_string()))?;
 
-    governance::upsert_vote(pool, &id, &account_id, choice, Utc::now())
+    let vote_outcome = governance::upsert_vote(pool, &id, &account_id, choice, Utc::now())
         .await
         .map_err(|error| match error {
             VoteError::NotFound => (StatusCode::NOT_FOUND, "proposal not found".to_string()),
@@ -564,15 +566,29 @@ pub async fn vote_proposal(
             VoteError::Database(error) => internal_error("upsert_vote")(error),
         })?;
 
-    if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
-        &state,
-        &auth,
-        &proposal.webgemeindezentrum_id,
-        super::edges::FadenType::Vote,
-        &id,
-    )
-    .await
-    {
+    let projection = match vote_outcome {
+        VoteWriteOutcome::Created | VoteWriteOutcome::Changed => {
+            ensure_webgemeindezentrum_activity_faden(
+                &state,
+                &auth,
+                &proposal.webgemeindezentrum_id,
+                super::edges::FadenType::Vote,
+                &id,
+            )
+            .await
+        }
+        VoteWriteOutcome::Unchanged => {
+            repair_webgemeindezentrum_activity_faden(
+                &state,
+                &auth,
+                &proposal.webgemeindezentrum_id,
+                super::edges::FadenType::Vote,
+                &id,
+            )
+            .await
+        }
+    };
+    if let Err((status, error)) = projection {
         tracing::error!(
             event = "governance.vote_faden_projection.failed",
             proposal_id = %id,

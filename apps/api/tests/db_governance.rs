@@ -15,7 +15,7 @@ use tokio::time::{sleep, timeout, Duration as TokioDuration};
 use weltgewebe_api::governance::{
     add_message, add_veto, create_weber_proposal, delete_guest_account, finalize_due_proposals,
     get_proposal, list_proposals, upsert_vote, CreateProposalError, MessageError, ProposalStatus,
-    VetoError, VoteChoice, VoteError,
+    VetoError, VoteChoice, VoteError, VoteWriteOutcome,
 };
 
 const GUEST_A: &str = "gov-proof-guest-a";
@@ -262,7 +262,7 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
     .await;
     assert!(matches!(guest_vote, Err(VoteError::ActorNotEligible)));
 
-    upsert_vote(
+    let initial_vote = upsert_vote(
         &pool,
         &accepted.id,
         WEBER_B,
@@ -271,15 +271,39 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
     )
     .await
     .expect("initial Weber vote");
-    upsert_vote(
+    assert_eq!(initial_vote, VoteWriteOutcome::Created);
+
+    let repeated_vote = upsert_vote(
+        &pool,
+        &accepted.id,
+        WEBER_B,
+        VoteChoice::Nein,
+        t0 + Duration::days(9),
+    )
+    .await
+    .expect("identical Weber vote replay");
+    assert_eq!(repeated_vote, VoteWriteOutcome::Unchanged);
+    let unchanged_updated_at: chrono::DateTime<Utc> = sqlx::query_scalar(
+        "SELECT updated_at FROM governance_votes \
+         WHERE proposal_id = $1::uuid AND voter_account_id = $2",
+    )
+    .bind(&accepted.id)
+    .bind(WEBER_B)
+    .fetch_one(&pool)
+    .await
+    .expect("read unchanged vote timestamp");
+    assert_eq!(unchanged_updated_at, t0 + Duration::days(8));
+
+    let changed_vote = upsert_vote(
         &pool,
         &accepted.id,
         WEBER_B,
         VoteChoice::Ja,
-        t0 + Duration::days(9),
+        t0 + Duration::days(10),
     )
     .await
     .expect("changed Weber vote");
+    assert_eq!(changed_vote, VoteWriteOutcome::Changed);
     let result = finalize_due_proposals(&pool, t0 + Duration::days(14))
         .await
         .expect("final vote");
@@ -323,6 +347,86 @@ async fn veto_opens_exact_second_phase_and_yes_must_exceed_no() {
         .await
         .expect("finalize tied");
     assert_eq!(tied_result[0].status, ProposalStatus::Rejected);
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn concurrent_first_vote_for_same_account_is_serialized() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, GUEST_A, "gast").await;
+    seed_account(&pool, WEBER_A, "weber").await;
+    seed_account(&pool, WEBER_B, "weber").await;
+
+    let t0 = Utc.with_ymd_and_hms(2026, 7, 1, 12, 0, 0).unwrap();
+    let proposal = create_weber_proposal(&pool, GUEST_A, "Gast A", None, t0)
+        .await
+        .expect("create candidate");
+    add_veto(
+        &pool,
+        &proposal.id,
+        WEBER_A,
+        "Weber A",
+        "Abstimmung nötig",
+        t0 + Duration::days(1),
+    )
+    .await
+    .expect("open second phase");
+    finalize_due_proposals(&pool, t0 + Duration::days(7))
+        .await
+        .expect("open voting");
+
+    let first_pool = pool.clone();
+    let second_pool = pool.clone();
+    let first_proposal_id = proposal.id.clone();
+    let second_proposal_id = proposal.id.clone();
+    let first = upsert_vote(
+        &first_pool,
+        &first_proposal_id,
+        WEBER_B,
+        VoteChoice::Nein,
+        t0 + Duration::days(8),
+    );
+    let second = upsert_vote(
+        &second_pool,
+        &second_proposal_id,
+        WEBER_B,
+        VoteChoice::Nein,
+        t0 + Duration::days(9),
+    );
+    let (first, second) = tokio::join!(first, second);
+    let first = first.expect("first concurrent vote");
+    let second = second.expect("second concurrent vote");
+    assert!(matches!(
+        (first, second),
+        (VoteWriteOutcome::Created, VoteWriteOutcome::Unchanged)
+            | (VoteWriteOutcome::Unchanged, VoteWriteOutcome::Created)
+    ));
+
+    let row_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM governance_votes \
+         WHERE proposal_id = $1::uuid AND voter_account_id = $2",
+    )
+    .bind(&proposal.id)
+    .bind(WEBER_B)
+    .fetch_one(&pool)
+    .await
+    .expect("count concurrent vote rows");
+    assert_eq!(row_count, 1);
+
+    let stored_choice: String = sqlx::query_scalar(
+        "SELECT choice FROM governance_votes \
+         WHERE proposal_id = $1::uuid AND voter_account_id = $2",
+    )
+    .bind(&proposal.id)
+    .bind(WEBER_B)
+    .fetch_one(&pool)
+    .await
+    .expect("read concurrent vote");
+    assert_eq!(stored_choice, "nein");
 
     cleanup(&pool).await;
 }

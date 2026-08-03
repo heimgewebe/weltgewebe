@@ -2002,6 +2002,12 @@ pub enum EdgeWriteError {
     /// The validated edge could not be mapped to a row.
     #[error("failed to map edge record: {0}")]
     Mapping(#[source] anyhow::Error),
+    /// A reactivation operation no longer has a durable row to refresh.
+    #[error("edge operation result not found")]
+    OperationNotFound,
+    /// A stable operation key points at a semantically different edge.
+    #[error("edge operation id was already used for different data")]
+    OperationConflict,
     /// Any other database failure.
     #[error("failed to persist edge to domain_edges: {0}")]
     Database(#[source] sqlx::Error),
@@ -2160,6 +2166,57 @@ pub async fn insert_domain_edge(
             Err(error)
         }
     }
+}
+
+/// Refresh one existing operation-bound Faden without changing its identity.
+///
+/// A row lock makes lookup, semantic validation and lifecycle replacement one
+/// atomic database action without blocking unrelated Fäden. The durable domain
+/// action remains the historical source of truth; this row is only its current
+/// map projection.
+pub async fn reactivate_domain_edge(
+    pool: &PgPool,
+    expected: &Edge,
+    operation: &CreateOperationKey,
+) -> Result<Edge, EdgeWriteError> {
+    let row = NewDomainEdgeRow::from_edge(expected).map_err(EdgeWriteError::Mapping)?;
+    let mut tx = pool.begin().await.map_err(EdgeWriteError::Database)?;
+
+    let existing: Option<EdgeRow> = sqlx::query_as(
+        "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
+         FROM domain_edges \
+         WHERE create_actor_id = $1 AND create_operation_id = $2 \
+         FOR UPDATE",
+    )
+    .bind(&operation.actor_id)
+    .bind(&operation.operation_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(EdgeWriteError::Database)?;
+    let existing = existing.ok_or(EdgeWriteError::OperationNotFound)?;
+    let existing = edge_from_row(existing).map_err(EdgeWriteError::Mapping)?;
+    if existing.id != expected.id || !edge_matches_projection(&existing, expected) {
+        return Err(EdgeWriteError::OperationConflict);
+    }
+
+    let update = sqlx::query(
+        "UPDATE domain_edges SET created_at = $1, payload = $2::jsonb \
+         WHERE id = $3 AND create_actor_id = $4 AND create_operation_id = $5",
+    )
+    .bind(row.created_at)
+    .bind(&row.payload)
+    .bind(&row.id)
+    .bind(&operation.actor_id)
+    .bind(&operation.operation_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(EdgeWriteError::Database)?;
+    if update.rows_affected() != 1 {
+        return Err(EdgeWriteError::OperationNotFound);
+    }
+
+    tx.commit().await.map_err(EdgeWriteError::Database)?;
+    Ok(expected.clone())
 }
 
 #[derive(Debug, Clone)]
@@ -2453,6 +2510,39 @@ mod edge_write_path_tests {
             payload.get("expires_at").and_then(|v| v.as_str()),
             Some("2026-06-19T10:00:00+00:00")
         );
+    }
+
+    #[test]
+    fn reactivation_matching_ignores_lifecycle_but_rejects_semantic_drift() {
+        let mut existing = create_edge_value();
+        existing.faden_type = Some(FadenType::Conversation);
+        existing.faden_subject_id = Some("11111111-1111-5111-8111-111111111111".to_string());
+        let mut refreshed = existing.clone();
+        refreshed.created_at = Some("2026-06-15T12:00:00+00:00".into());
+        refreshed.expires_at = Some(Some("2026-06-22T12:00:00+00:00".into()));
+
+        assert!(edge_matches_projection(&existing, &refreshed));
+
+        let mut changed_target = refreshed.clone();
+        changed_target.target_id = "00000000-0000-0000-0000-0000000000c1".to_string();
+        assert!(!edge_matches_projection(&existing, &changed_target));
+
+        let mut changed_type = refreshed.clone();
+        changed_type.faden_type = Some(FadenType::Vote);
+        assert!(!edge_matches_projection(&existing, &changed_type));
+    }
+
+    #[test]
+    fn reactivation_can_upgrade_legacy_untyped_projection_without_new_identity() {
+        let legacy = create_edge_value();
+        let mut typed = legacy.clone();
+        typed.faden_type = Some(FadenType::Knotting);
+        typed.faden_subject_id = Some(typed.target_id.clone());
+        typed.created_at = Some("2026-06-15T12:00:00+00:00".into());
+        typed.expires_at = Some(Some("2026-06-22T12:00:00+00:00".into()));
+
+        assert!(edge_matches_projection(&legacy, &typed));
+        assert_eq!(legacy.id, typed.id);
     }
 
     #[test]

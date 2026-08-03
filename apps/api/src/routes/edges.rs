@@ -6,7 +6,8 @@ use super::query::{
 use crate::auth::role::Role;
 use crate::config::{DomainEdgeWriteSource, FIXED_FADEN_FADE_DAYS};
 use crate::domain_db::{
-    insert_domain_edge, CreateOperationKey, CreateWriteOutcome, EdgeWriteError,
+    insert_domain_edge, reactivate_domain_edge, CreateOperationKey, CreateWriteOutcome,
+    EdgeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::{ApiState, OrderedCache};
@@ -38,6 +39,14 @@ static EDGE_CREATE_PERSIST: OnceLock<Mutex<()>> = OnceLock::new();
 
 pub(crate) fn edge_create_persist_lock() -> &'static Mutex<()> {
     EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum FadenProjectionMode {
+    /// Create a missing projection, but leave an existing operation replay unchanged.
+    EnsureOnly,
+    /// Create a missing projection or restart the lifecycle of its existing row.
+    Reactivate,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -819,6 +828,105 @@ async fn append_edge_line(record: &Value) -> std::io::Result<()> {
     Ok(())
 }
 
+fn replace_edge_operation_record(
+    input: &[u8],
+    record: &Value,
+    operation: &CreateOperationKey,
+) -> std::io::Result<Vec<u8>> {
+    let replacement = serde_json::to_vec(record)
+        .map_err(|error| std::io::Error::new(std::io::ErrorKind::InvalidData, error))?;
+    let mut output = Vec::with_capacity(input.len().max(replacement.len() + 1));
+    let mut matches = 0usize;
+
+    for segment in input.split_inclusive(|byte| *byte == b'\n') {
+        let (body, delimiter): (&[u8], &[u8]) = if let Some(body) = segment.strip_suffix(b"\r\n") {
+            (body, b"\r\n")
+        } else if let Some(body) = segment.strip_suffix(b"\n") {
+            (body, b"\n")
+        } else {
+            (segment, b"")
+        };
+        let operation_matches = std::str::from_utf8(body)
+            .ok()
+            .and_then(|line| serde_json::from_str::<Value>(line).ok())
+            .is_some_and(|value| {
+                value.get(CREATE_ACTOR_KEY).and_then(Value::as_str)
+                    == Some(operation.actor_id.as_str())
+                    && value.get(CREATE_OPERATION_KEY).and_then(Value::as_str)
+                        == Some(operation.operation_id.as_str())
+            });
+        if operation_matches {
+            matches += 1;
+            if matches > 1 {
+                return Err(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "duplicate edge create operation metadata",
+                ));
+            }
+            output.extend_from_slice(&replacement);
+            output.extend_from_slice(delimiter);
+        } else {
+            output.extend_from_slice(segment);
+        }
+    }
+    if matches != 1 {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "edge create operation record not found",
+        ));
+    }
+    Ok(output)
+}
+
+/// Atomically replace exactly one operation-bound JSONL record.
+///
+/// Callers hold `edge_create_persist_lock`, so no create or reactivation can
+/// race the scan-and-rename sequence in this process. Unrelated bytes, including
+/// malformed legacy lines and their line endings, are preserved verbatim.
+async fn replace_edge_operation_line(
+    record: &Value,
+    operation: &CreateOperationKey,
+) -> std::io::Result<()> {
+    let path = edges_path();
+    let metadata = tokio::fs::metadata(&path).await?;
+    let input = tokio::fs::read(&path).await?;
+    let output = replace_edge_operation_record(&input, record, operation)?;
+
+    let parent = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "edges path has no parent")
+    })?;
+    tokio::fs::create_dir_all(parent).await?;
+    let file_name = path
+        .file_name()
+        .and_then(|value| value.to_str())
+        .ok_or_else(|| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "edges path has no UTF-8 filename",
+            )
+        })?;
+    let temporary = path.with_file_name(format!(".{file_name}.reactivate-{}.tmp", Uuid::new_v4()));
+    let result = async {
+        let mut file = OpenOptions::new()
+            .create_new(true)
+            .write(true)
+            .open(&temporary)
+            .await?;
+        tokio::fs::set_permissions(&temporary, metadata.permissions()).await?;
+        file.write_all(&output).await?;
+        file.flush().await?;
+        file.sync_all().await?;
+        tokio::fs::rename(&temporary, &path).await?;
+        File::open(parent).await?.sync_all().await?;
+        Ok::<(), std::io::Error>(())
+    }
+    .await;
+    if result.is_err() {
+        tokio::fs::remove_file(&temporary).await.ok();
+    }
+    result
+}
+
 const CREATE_ACTOR_KEY: &str = "_create_actor_id";
 const CREATE_OPERATION_KEY: &str = "_create_operation_id";
 
@@ -1075,6 +1183,23 @@ pub async fn create_edge(
     Extension(auth): Extension<AuthContext>,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
+    project_edge(state, auth, payload, FadenProjectionMode::EnsureOnly).await
+}
+
+pub(crate) async fn reactivate_edge(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+    Json(payload): Json<Value>,
+) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
+    project_edge(state, auth, payload, FadenProjectionMode::Reactivate).await
+}
+
+async fn project_edge(
+    state: ApiState,
+    auth: AuthContext,
+    payload: Value,
+    projection_mode: FadenProjectionMode,
+) -> Result<(StatusCode, Json<Edge>), (StatusCode, String)> {
     reject_edge_create_unless_writable(&state)?;
 
     // Manual deserialization keeps unknown fields, missing required fields and
@@ -1193,6 +1318,35 @@ pub async fn create_edge(
                         "edge operation id was already used for different data".to_string(),
                     ));
                 }
+                if projection_mode == FadenProjectionMode::Reactivate {
+                    let operation = operation
+                        .as_ref()
+                        .expect("an existing operation result always has an operation key");
+                    let (reactivated, mut reactivated_record) = build_edge_record(
+                        semantic_request.clone(),
+                        existing.id.clone(),
+                        Utc::now(),
+                    );
+                    add_create_operation_metadata(&mut reactivated_record, Some(operation));
+                    replace_edge_operation_line(&reactivated_record, operation)
+                        .await
+                        .map_err(|error| {
+                            tracing::error!(error = %error, edge_id = %existing.id, "failed to reactivate edge in JSONL");
+                            (
+                                StatusCode::INTERNAL_SERVER_ERROR,
+                                "failed to reactivate edge".to_string(),
+                            )
+                        })?;
+                    let mut edges = state.edges.write().await;
+                    edges.insert(reactivated.id.clone(), reactivated.clone());
+                    tracing::info!(
+                        event = "edge.reactivated",
+                        edge_id = %reactivated.id,
+                        write_source = ?state.config.domain_edge_write_source,
+                        "Existing Faden lifecycle restarted"
+                    );
+                    return Ok((StatusCode::OK, Json(reactivated)));
+                }
                 let mut edges = state.edges.write().await;
                 edges.insert(existing.id.clone(), existing.clone());
                 return Ok((StatusCode::OK, Json(existing)));
@@ -1250,6 +1404,40 @@ pub async fn create_edge(
                             StatusCode::CONFLICT,
                             "edge operation id was already used for different data".to_string(),
                         ));
+                    }
+                    if projection_mode == FadenProjectionMode::Reactivate {
+                        let operation = operation
+                            .as_ref()
+                            .expect("an existing operation result always has an operation key");
+                        let (reactivated, _) = build_edge_record(
+                            semantic_request.clone(),
+                            existing.id.clone(),
+                            Utc::now(),
+                        );
+                        let reactivated = reactivate_domain_edge(pool, &reactivated, operation)
+                            .await
+                            .map_err(|error| match error {
+                                EdgeWriteError::OperationConflict => (
+                                    StatusCode::CONFLICT,
+                                    "edge operation id was already used for different data".to_string(),
+                                ),
+                                other => {
+                                    tracing::error!(error = %other, edge_id = %existing.id, "failed to reactivate edge in domain_edges");
+                                    (
+                                        StatusCode::INTERNAL_SERVER_ERROR,
+                                        "failed to reactivate edge".to_string(),
+                                    )
+                                }
+                            })?;
+                        let mut edges = state.edges.write().await;
+                        edges.insert(reactivated.id.clone(), reactivated.clone());
+                        tracing::info!(
+                            event = "edge.reactivated",
+                            edge_id = %reactivated.id,
+                            write_source = ?state.config.domain_edge_write_source,
+                            "Existing Faden lifecycle restarted"
+                        );
+                        return Ok((StatusCode::OK, Json(reactivated)));
                     }
                     let mut edges = state.edges.write().await;
                     edges.insert(existing.id.clone(), existing.clone());
@@ -2115,11 +2303,12 @@ mod tests {
     use super::{
         build_edge_record, edge_create::ValidatedCreateEdge, edge_has_valid_faden_metadata,
         edge_is_active_at, edge_is_permanently_unreachable, edge_matches_list_at, faden_expires_at,
-        max_edges_cache_limit, projected_faden_expires_at, Edge, FadenType, LifecycleTimestamp,
-        PublicEdge, DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
+        max_edges_cache_limit, projected_faden_expires_at, replace_edge_operation_record, Edge,
+        FadenType, LifecycleTimestamp, PublicEdge, DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
     };
-    use crate::test_helpers::EnvGuard;
+    use crate::{domain_db::CreateOperationKey, test_helpers::EnvGuard};
     use chrono::{DateTime, Duration, TimeZone, Utc};
+    use serde_json::json;
     use serial_test::serial;
 
     /// `expires_at: None` models an omitted key (legacy dated Fäden); use
@@ -2209,6 +2398,116 @@ mod tests {
         );
         let round_trip: Edge = serde_json::from_value(record).expect("JSONL round trip");
         assert_eq!(round_trip.expires_at, edge.expires_at);
+    }
+
+    #[test]
+    fn reactivation_keeps_identity_and_semantics_but_restarts_exact_lifecycle() {
+        let validated = ValidatedCreateEdge {
+            id: None,
+            source_id: "00000000-0000-0000-0000-0000000000a1".to_string(),
+            target_id: "00000000-0000-0000-0000-0000000000b1".to_string(),
+            edge_kind: "reference".to_string(),
+            source_type: "account".to_string(),
+            target_type: "node".to_string(),
+            faden_type: Some(FadenType::Conversation),
+            faden_subject_id: Some("11111111-1111-5111-8111-111111111111".to_string()),
+            note: None,
+            operation_id: None,
+        };
+        let id = "00000000-0000-0000-0000-0000000000e1".to_string();
+        let first_at = Utc.with_ymd_and_hms(2026, 7, 17, 10, 0, 0).unwrap();
+        let second_at = Utc.with_ymd_and_hms(2026, 7, 20, 12, 30, 0).unwrap();
+        let (first, _) = build_edge_record(validated.clone(), id.clone(), first_at);
+        let (second, _) = build_edge_record(validated, id, second_at);
+
+        assert_eq!(second.id, first.id);
+        assert_eq!(second.source_id, first.source_id);
+        assert_eq!(second.target_id, first.target_id);
+        assert_eq!(second.faden_type, first.faden_type);
+        assert_eq!(second.faden_subject_id, first.faden_subject_id);
+        assert_ne!(second.created_at, first.created_at);
+        assert_eq!(
+            second.created_at.as_deref(),
+            Some("2026-07-20T12:30:00.000000Z")
+        );
+        assert_eq!(
+            second.expires_at.flatten().as_deref(),
+            Some("2026-07-27T12:30:00.000000Z")
+        );
+    }
+
+    fn operation_key() -> CreateOperationKey {
+        CreateOperationKey {
+            actor_id: "00000000-0000-0000-0000-0000000000a1".to_string(),
+            operation_id: "22222222-2222-4222-8222-222222222222".to_string(),
+        }
+    }
+
+    fn operation_record(id: &str, created_at: &str) -> serde_json::Value {
+        let operation = operation_key();
+        json!({
+            "id": id,
+            "source_id": operation.actor_id,
+            "source_type": "account",
+            "target_id": "00000000-0000-0000-0000-0000000000b1",
+            "target_type": "node",
+            "edge_kind": "reference",
+            "faden_type": "conversation",
+            "faden_subject_id": "11111111-1111-5111-8111-111111111111",
+            "created_at": created_at,
+            "expires_at": "2026-07-27T12:30:00Z",
+            "_create_actor_id": operation.actor_id,
+            "_create_operation_id": operation.operation_id,
+        })
+    }
+
+    #[test]
+    fn jsonl_reactivation_replaces_one_record_and_preserves_unrelated_bytes() {
+        let old = serde_json::to_vec(&operation_record(
+            "00000000-0000-0000-0000-0000000000e1",
+            "2026-07-17T10:00:00Z",
+        ))
+        .unwrap();
+        let replacement = operation_record(
+            "00000000-0000-0000-0000-0000000000e1",
+            "2026-07-20T12:30:00Z",
+        );
+        let mut input = b"{malformed legacy line}\n".to_vec();
+        input.extend_from_slice(&old);
+        input.extend_from_slice(b"\r\n{\"id\":\"untouched\"}");
+
+        let output = replace_edge_operation_record(&input, &replacement, &operation_key())
+            .expect("replace one operation record");
+        let encoded_replacement = serde_json::to_vec(&replacement).unwrap();
+        let mut expected = b"{malformed legacy line}\n".to_vec();
+        expected.extend_from_slice(&encoded_replacement);
+        expected.extend_from_slice(b"\r\n{\"id\":\"untouched\"}");
+
+        assert_eq!(output, expected);
+    }
+
+    #[test]
+    fn jsonl_reactivation_fails_closed_on_missing_or_duplicate_operation() {
+        let replacement = operation_record(
+            "00000000-0000-0000-0000-0000000000e1",
+            "2026-07-20T12:30:00Z",
+        );
+        let missing = replace_edge_operation_record(
+            b"{\"id\":\"unrelated\"}\n",
+            &replacement,
+            &operation_key(),
+        )
+        .unwrap_err();
+        assert_eq!(missing.kind(), std::io::ErrorKind::NotFound);
+
+        let existing = serde_json::to_vec(&replacement).unwrap();
+        let mut duplicate = existing.clone();
+        duplicate.push(b'\n');
+        duplicate.extend_from_slice(&existing);
+        duplicate.push(b'\n');
+        let duplicate_error =
+            replace_edge_operation_record(&duplicate, &replacement, &operation_key()).unwrap_err();
+        assert_eq!(duplicate_error.kind(), std::io::ErrorKind::InvalidData);
     }
 
     #[test]
