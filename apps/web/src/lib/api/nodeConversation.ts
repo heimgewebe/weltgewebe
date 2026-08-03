@@ -1,3 +1,17 @@
+export interface PublicConversation {
+  id: string;
+  conversation_type: "node" | "governance_proposal" | "webgemeindezentrum";
+  lifecycle_state: "active" | "archived";
+  node_id: string | null;
+  node_id_snapshot: string | null;
+  node_title_snapshot: string | null;
+  visibility: "public";
+  created_at: string;
+  updated_at: string;
+  archived_at: string | null;
+  deleted_at: string | null;
+}
+
 interface NodeConversationBase {
   id: string;
   conversation_type: "node";
@@ -115,8 +129,8 @@ export function getNodeConversation(
 export function getConversation(
   conversationId: string,
   signal?: AbortSignal,
-): Promise<NodeConversation> {
-  return request<NodeConversation>(
+): Promise<PublicConversation> {
+  return request<PublicConversation>(
     `/api/conversations/${encodeURIComponent(conversationId)}`,
     { signal },
   );

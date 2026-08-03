@@ -2,16 +2,35 @@ use super::query::{
     cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
     MAX_PAGE_SIZE,
 };
-use crate::{routes::nodes::Location, state::ApiState};
+use crate::{middleware::auth::AuthContext, routes::nodes::Location, state::ApiState};
 use axum::{
     extract::{Path, Query, State},
     http::StatusCode,
-    Json,
+    Extension, Json,
 };
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::Serialize;
+use serde_json::json;
 use sqlx::{PgPool, Row};
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::OnceLock};
+use tokio::sync::Semaphore;
+use uuid::Uuid;
+
+// A center activity projection temporarily owns one connection for the
+// account-lifecycle advisory lock and a second one in the edge writer. Bound
+// concurrent projections so waiters can never occupy the complete pool while
+// each waits for its second connection.
+const fn center_activity_slot_count(pool_max_connections: usize) -> usize {
+    pool_max_connections.saturating_sub(1) / 2
+}
+
+const LOCAL_CENTER_ACTIVITY_SLOTS: usize =
+    center_activity_slot_count(crate::DATABASE_POOL_MAX_CONNECTIONS as usize);
+static CENTER_ACTIVITY_SLOTS: OnceLock<Semaphore> = OnceLock::new();
+
+fn center_activity_slots() -> &'static Semaphore {
+    CENTER_ACTIVITY_SLOTS.get_or_init(|| Semaphore::new(LOCAL_CENTER_ACTIVITY_SLOTS))
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -65,6 +84,8 @@ pub struct Webgemeindezentrum {
     pub ortsweberei: OrtswebereiReference,
     pub location_state: WebgemeindezentrumLocationState,
     pub location_state_label: &'static str,
+    pub faden_endpoint_id: String,
+    pub conversation_id: String,
     pub location: Location,
     pub location_label: String,
     pub meeting_note: String,
@@ -98,10 +119,19 @@ pub struct WebgemeindezentrumLocationHistoryEvent {
     pub decided_at: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct WebgemeindezentrumGovernance {
+    pub proposal_count: i64,
+    pub open_proposal_count: i64,
+    pub voting_proposal_count: i64,
+    pub conversation_message_count: i64,
+}
+
 #[derive(Clone, Debug, PartialEq, Serialize)]
 pub struct WebgemeindezentrumDetails {
     #[serde(flatten)]
     pub center: Webgemeindezentrum,
+    pub governance: WebgemeindezentrumGovernance,
     pub location_history: Vec<WebgemeindezentrumLocationHistoryEvent>,
 }
 
@@ -124,6 +154,8 @@ async fn load_active_ortswebereien(pool: &PgPool) -> Result<Vec<Ortsweberei>, sq
              o.created_at AS ortsweberei_created_at, \
              o.updated_at AS ortsweberei_updated_at, \
              c.id AS center_id, c.name AS center_name, c.location_state, \
+             c.faden_endpoint_id::text AS faden_endpoint_id, \
+             center_conversation.id::text AS center_conversation_id, \
              c.lat, c.lon, c.location_label, c.meeting_note, c.access_note, \
              c.created_at AS center_created_at, c.updated_at AS center_updated_at \
          FROM ortswebereien o \
@@ -131,6 +163,10 @@ async fn load_active_ortswebereien(pool: &PgPool) -> Result<Vec<Ortsweberei>, sq
          JOIN webgemeindezentren c \
            ON c.id = o.active_webgemeindezentrum_id \
           AND c.ortsweberei_id = o.id \
+         JOIN domain_conversations center_conversation \
+           ON center_conversation.webgemeindezentrum_id = c.id \
+          AND center_conversation.conversation_type = 'webgemeindezentrum' \
+          AND center_conversation.deleted_at IS NULL \
          WHERE o.lifecycle_state = 'active' \
            AND g.lifecycle_state = 'active' \
          ORDER BY o.id",
@@ -155,6 +191,8 @@ async fn load_active_ortswebereien(pool: &PgPool) -> Result<Vec<Ortsweberei>, sq
                 ortsweberei: reference.clone(),
                 location_state,
                 location_state_label: location_state.label(),
+                faden_endpoint_id: row.try_get("faden_endpoint_id")?,
+                conversation_id: row.try_get("center_conversation_id")?,
                 location: Location {
                     lat: row.try_get("lat")?,
                     lon: row.try_get("lon")?,
@@ -240,6 +278,25 @@ pub async fn get_webgemeindezentrum(
         .find(|center| center.id == id)
         .ok_or(StatusCode::NOT_FOUND)?;
 
+    let governance_row: (i64, i64, i64, i64) = sqlx::query_as(
+        "SELECT \
+             (SELECT count(*)::bigint FROM governance_proposals WHERE webgemeindezentrum_id = $1), \
+             (SELECT count(*)::bigint FROM governance_proposals WHERE webgemeindezentrum_id = $1 AND status IN ('consent', 'voting')), \
+             (SELECT count(*)::bigint FROM governance_proposals WHERE webgemeindezentrum_id = $1 AND status = 'voting'), \
+             (SELECT count(*)::bigint FROM domain_messages WHERE conversation_id = $2::uuid AND deleted_at IS NULL)",
+    )
+    .bind(&id)
+    .bind(&center.conversation_id)
+    .fetch_one(pool)
+    .await
+    .map_err(|error| internal_error(error, "get_webgemeindezentrum_governance"))?;
+    let governance = WebgemeindezentrumGovernance {
+        proposal_count: governance_row.0,
+        open_proposal_count: governance_row.1,
+        voting_proposal_count: governance_row.2,
+        conversation_message_count: governance_row.3,
+    };
+
     let rows = sqlx::query(
         "SELECT event_id, event_type, location_state, lat, lon, \
                 location_label, reason, decided_at \
@@ -276,6 +333,7 @@ pub async fn get_webgemeindezentrum(
 
     Ok(Json(WebgemeindezentrumDetails {
         center,
+        governance,
         location_history,
     }))
 }
@@ -308,9 +366,166 @@ pub async fn get_ortsweberei(
         .ok_or(StatusCode::NOT_FOUND)
 }
 
+fn center_activity_operation_id(
+    activity_kind: &str,
+    account_id: &str,
+    center_id: &str,
+    action_id: &str,
+) -> String {
+    fn component(value: &str) -> String {
+        format!("{}:{value}", value.len())
+    }
+    let name = format!(
+        "weltgewebe:webgemeindezentrum-activity-faden:v1|{}|{}|{}|{}",
+        component(activity_kind),
+        component(account_id),
+        component(center_id),
+        component(action_id),
+    );
+    Uuid::new_v5(&Uuid::NAMESPACE_URL, name.as_bytes()).to_string()
+}
+
+/// Project one explicit governance or conversation action as a temporary
+/// account-to-center Faden. The readable center id remains the public URL id;
+/// the edge uses its deterministic UUID alias to preserve the strict endpoint
+/// contract used by every other Faden.
+pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    center_id: &str,
+    activity_kind: &str,
+    action_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    let account_id = auth.account_id.as_deref().ok_or_else(|| {
+        (
+            StatusCode::UNAUTHORIZED,
+            "authenticated account context missing".to_string(),
+        )
+    })?;
+    if Uuid::parse_str(account_id).is_err() {
+        tracing::warn!(
+            event = "webgemeindezentrum.faden_projection.skipped_legacy_identifier",
+            center_id,
+            account_id,
+            activity_kind,
+            "Center participation cannot be represented by the UUID-only Faden contract"
+        );
+        return Ok(());
+    }
+
+    let _slot = center_activity_slots().acquire().await.map_err(|error| {
+        tracing::error!(%error, center_id, "center activity projection limiter closed");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to reserve Webgemeindezentrum Faden capacity".to_string(),
+        )
+    })?;
+
+    let pool = database_pool(state).map_err(|status| {
+        (
+            status,
+            "Webgemeindezentrum store unavailable for Faden projection".to_string(),
+        )
+    })?;
+    let mut account_guard = pool.begin().await.map_err(|error| {
+        tracing::error!(%error, account_id, "failed to begin center Faden lifecycle guard");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to guard Webgemeindezentrum Faden projection".to_string(),
+        )
+    })?;
+    sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+        .bind(crate::advisory_lock::account_lifecycle_lock_key(account_id))
+        .execute(&mut *account_guard)
+        .await
+        .map_err(|error| {
+            tracing::error!(%error, account_id, "failed to lock account lifecycle for center Faden");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                "failed to guard Webgemeindezentrum Faden projection".to_string(),
+            )
+        })?;
+    let account_is_active: bool = sqlx::query_scalar(
+        "SELECT EXISTS(SELECT 1 FROM domain_accounts WHERE id = $1 AND disabled = FALSE)",
+    )
+    .bind(account_id)
+    .fetch_one(&mut *account_guard)
+    .await
+    .map_err(|error| {
+        tracing::error!(%error, account_id, "failed to verify center Faden actor");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to verify Webgemeindezentrum Faden actor".to_string(),
+        )
+    })?;
+    if !account_is_active {
+        return Ok(());
+    }
+
+    let endpoint_id: Option<String> = sqlx::query_scalar(
+        "SELECT faden_endpoint_id::text FROM webgemeindezentren WHERE id = $1",
+    )
+    .bind(center_id)
+    .fetch_optional(&mut *account_guard)
+    .await
+    .map_err(|error| {
+        tracing::error!(%error, center_id, activity_kind, "failed to resolve center Faden endpoint");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to resolve Webgemeindezentrum Faden endpoint".to_string(),
+        )
+    })?;
+    let endpoint_id = endpoint_id.ok_or_else(|| {
+        (
+            StatusCode::NOT_FOUND,
+            "Webgemeindezentrum Faden endpoint not found".to_string(),
+        )
+    })?;
+    let operation_id =
+        center_activity_operation_id(activity_kind, account_id, center_id, action_id);
+    let payload = json!({
+        "source_id": account_id,
+        "source_type": "account",
+        "target_id": endpoint_id,
+        "target_type": "webgemeindezentrum",
+        "edge_kind": "reference",
+        "operation_id": operation_id,
+    });
+
+    let projection =
+        super::edges::create_edge(State(state.clone()), Extension(auth.clone()), Json(payload))
+            .await
+            .map(|_| ())
+            .map_err(|(status, message)| {
+                tracing::error!(
+                    event = "webgemeindezentrum.faden_projection.failed",
+                    center_id,
+                    account_id,
+                    activity_kind,
+                    %status,
+                    error = %message,
+                    "Durable action exists but its derived center Faden is missing"
+                );
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "derived Webgemeindezentrum Faden could not be projected".to_string(),
+                )
+            });
+    account_guard.commit().await.map_err(|error| {
+        tracing::error!(%error, account_id, "failed to release center Faden lifecycle guard");
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to release Webgemeindezentrum Faden guard".to_string(),
+        )
+    })?;
+    projection
+}
+
 #[cfg(test)]
 mod tests {
-    use super::WebgemeindezentrumLocationState;
+    use super::{
+        center_activity_operation_id, center_activity_slot_count, WebgemeindezentrumLocationState,
+    };
 
     #[test]
     fn location_state_labels_do_not_claim_confirmation_for_intentions() {
@@ -326,6 +541,41 @@ mod tests {
             WebgemeindezentrumLocationState::Confirmed.label(),
             "Bestätigter Treffort"
         );
+    }
+
+    #[test]
+    fn center_activity_projection_reserves_pool_capacity() {
+        for pool_max_connections in [3, 4, 5, 32] {
+            let slots = center_activity_slot_count(pool_max_connections);
+            assert!(slots > 0);
+            assert!(slots * 2 < pool_max_connections);
+        }
+    }
+
+    #[test]
+    fn center_activity_faden_operation_is_stable_and_unambiguous() {
+        let first = center_activity_operation_id(
+            "governance_proposal",
+            "account-a",
+            "webgemeindezentrum-hammer-park",
+            "proposal-a",
+        );
+        let replay = center_activity_operation_id(
+            "governance_proposal",
+            "account-a",
+            "webgemeindezentrum-hammer-park",
+            "proposal-a",
+        );
+        let different_action = center_activity_operation_id(
+            "governance_proposal",
+            "account-a",
+            "webgemeindezentrum-hammer-park",
+            "proposal-b",
+        );
+
+        assert_eq!(first, replay);
+        assert_ne!(first, different_action);
+        assert!(uuid::Uuid::parse_str(&first).is_ok());
     }
 
     #[test]

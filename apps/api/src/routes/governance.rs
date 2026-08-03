@@ -22,6 +22,7 @@ use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgPool;
 
+use super::webgemeindezentren::ensure_webgemeindezentrum_activity_faden;
 use crate::auth::role::Role;
 use crate::config::{
     DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
@@ -143,6 +144,7 @@ async fn finalize_due(state: &ApiState, pool: &PgPool) -> Result<(), ApiError> {
 pub struct ProposalView {
     pub id: String,
     pub kind: String,
+    pub webgemeindezentrum_id: String,
     pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -176,6 +178,7 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
     ProposalView {
         id: proposal.id,
         kind: proposal.kind,
+        webgemeindezentrum_id: proposal.webgemeindezentrum_id,
         applicant_account_id: proposal.applicant_account_id,
         applicant_title: proposal.applicant_title,
         summary: proposal.summary,
@@ -355,7 +358,7 @@ pub async fn create_proposal(
         .as_object()
         .ok_or_else(|| bad_request("proposal request must be a JSON object"))?;
     for key in object.keys() {
-        if key != "kind" && key != "summary" {
+        if key != "kind" && key != "summary" && key != "webgemeindezentrum_id" {
             return Err(bad_request(&format!("unknown field: {key}")));
         }
     }
@@ -364,13 +367,19 @@ pub async fn create_proposal(
         _ => return Err(bad_request("kind must be \"weberantrag\"")),
     }
     let summary = optional_trimmed_text(object.get("summary"), "summary", SUMMARY_MAX_CHARS)?;
+    let webgemeindezentrum_id = optional_trimmed_text(
+        object.get("webgemeindezentrum_id"),
+        "webgemeindezentrum_id",
+        128,
+    )?;
 
     let title = account_title(&state, &account_id).await;
-    let proposal = governance::create_weber_proposal(
+    let proposal = governance::create_weber_proposal_at_center(
         pool,
         &account_id,
         &title,
         summary.as_deref(),
+        webgemeindezentrum_id.as_deref(),
         Utc::now(),
     )
     .await
@@ -383,12 +392,36 @@ pub async fn create_proposal(
             StatusCode::CONFLICT,
             "only an active guest account may apply for Weber status".to_string(),
         ),
+        CreateProposalError::CenterUnavailable => (
+            StatusCode::SERVICE_UNAVAILABLE,
+            "the requested Webgemeindezentrum is not an active governance center".to_string(),
+        ),
         CreateProposalError::Database(error) => internal_error("create_weber_proposal")(error),
     })?;
+
+    if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
+        &state,
+        &auth,
+        &proposal.webgemeindezentrum_id,
+        "governance_proposal",
+        &proposal.id,
+    )
+    .await
+    {
+        tracing::error!(
+            event = "governance.proposal_faden_projection.failed",
+            proposal_id = %proposal.id,
+            center_id = %proposal.webgemeindezentrum_id,
+            %status,
+            %error,
+            "Proposal remains durable; its derived center Faden is missing"
+        );
+    }
 
     tracing::info!(
         event = "governance.proposal.created",
         proposal_id = %proposal.id,
+        center_id = %proposal.webgemeindezentrum_id,
         "Weberantrag created"
     );
 
@@ -417,6 +450,10 @@ pub async fn veto_proposal(
     }
     let reason = required_trimmed_text(object.get("reason"), "reason", VETO_REASON_MAX_CHARS)?;
 
+    let proposal = governance::get_proposal(pool, &id)
+        .await
+        .map_err(internal_error("get_proposal_for_veto"))?
+        .ok_or((StatusCode::NOT_FOUND, "proposal not found".to_string()))?;
     let title = account_title(&state, &account_id).await;
     let veto = governance::add_veto(pool, &id, &account_id, &title, &reason, Utc::now())
         .await
@@ -445,9 +482,30 @@ pub async fn veto_proposal(
             VetoError::Database(error) => internal_error("add_veto")(error),
         })?;
 
+    let action_id = format!("{id}:{account_id}");
+    if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
+        &state,
+        &auth,
+        &proposal.webgemeindezentrum_id,
+        "governance_veto",
+        &action_id,
+    )
+    .await
+    {
+        tracing::error!(
+            event = "governance.veto_faden_projection.failed",
+            proposal_id = %id,
+            center_id = %proposal.webgemeindezentrum_id,
+            %status,
+            %error,
+            "Veto remains durable; its derived center Faden is missing"
+        );
+    }
+
     tracing::info!(
         event = "governance.veto.recorded",
         proposal_id = %id,
+        center_id = %proposal.webgemeindezentrum_id,
         "Veto recorded"
     );
 
@@ -479,6 +537,11 @@ pub async fn vote_proposal(
         .and_then(|value| serde_json::from_value(value).ok())
         .ok_or_else(|| bad_request("choice must be one of: ja, nein, enthaltung"))?;
 
+    let proposal = governance::get_proposal(pool, &id)
+        .await
+        .map_err(internal_error("get_proposal_for_vote"))?
+        .ok_or((StatusCode::NOT_FOUND, "proposal not found".to_string()))?;
+
     governance::upsert_vote(pool, &id, &account_id, choice, Utc::now())
         .await
         .map_err(|error| match error {
@@ -501,6 +564,26 @@ pub async fn vote_proposal(
             ),
             VoteError::Database(error) => internal_error("upsert_vote")(error),
         })?;
+
+    let action_id = format!("{id}:{account_id}");
+    if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
+        &state,
+        &auth,
+        &proposal.webgemeindezentrum_id,
+        "governance_vote",
+        &action_id,
+    )
+    .await
+    {
+        tracing::error!(
+            event = "governance.vote_faden_projection.failed",
+            proposal_id = %id,
+            center_id = %proposal.webgemeindezentrum_id,
+            %status,
+            %error,
+            "Vote remains durable; its derived center Faden is missing"
+        );
+    }
 
     Ok(Json(serde_json::json!({ "choice": choice.as_str() })))
 }
@@ -546,6 +629,10 @@ pub async fn post_proposal_message(
     }
     let body = required_trimmed_text(object.get("body"), "body", MESSAGE_BODY_MAX_CHARS)?;
 
+    let proposal = governance::get_proposal(pool, &id)
+        .await
+        .map_err(internal_error("get_proposal_for_message"))?
+        .ok_or((StatusCode::NOT_FOUND, "proposal not found".to_string()))?;
     let title = account_title(&state, &account_id).await;
     let message = governance::add_message(pool, &id, &account_id, &title, &body, Utc::now())
         .await
@@ -557,6 +644,26 @@ pub async fn post_proposal_message(
             ),
             MessageError::Database(error) => internal_error("add_message")(error),
         })?;
+
+    if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
+        &state,
+        &auth,
+        &proposal.webgemeindezentrum_id,
+        "governance_conversation_message",
+        &message.id,
+    )
+    .await
+    {
+        tracing::error!(
+            event = "governance.message_faden_projection.failed",
+            proposal_id = %id,
+            message_id = %message.id,
+            center_id = %proposal.webgemeindezentrum_id,
+            %status,
+            %error,
+            "Proposal message remains durable; its derived center Faden is missing"
+        );
+    }
 
     Ok((StatusCode::CREATED, Json(message)))
 }

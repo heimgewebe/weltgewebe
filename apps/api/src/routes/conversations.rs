@@ -33,6 +33,7 @@ use crate::{
 use super::{
     nodes::ensure_node_activity_faden,
     query::{decode_cursor, encode_cursor},
+    webgemeindezentren::ensure_webgemeindezentrum_activity_faden,
 };
 
 const DEFAULT_MESSAGE_PAGE_SIZE: usize = 20;
@@ -343,22 +344,45 @@ async fn project_message_participation_faden(
     state: &ApiState,
     auth: &AuthContext,
     node_id: Option<&str>,
+    webgemeindezentrum_id: Option<&str>,
     message_id: &str,
 ) {
-    let Some(node_id) = node_id else {
+    if let Some(node_id) = node_id {
+        if let Err((status, message)) =
+            ensure_node_activity_faden(state, auth, node_id, "conversation_message", message_id)
+                .await
+        {
+            tracing::error!(
+                event = "conversation.message_faden_projection.failed",
+                node_id,
+                message_id,
+                %status,
+                error = %message,
+                "Message remains durable; the derived node Faden is missing"
+            );
+        }
         return;
-    };
-    if let Err((status, message)) =
-        ensure_node_activity_faden(state, auth, node_id, "conversation_message", message_id).await
-    {
-        tracing::error!(
-            event = "conversation.message_faden_projection.failed",
-            node_id,
+    }
+
+    if let Some(center_id) = webgemeindezentrum_id {
+        if let Err((status, message)) = ensure_webgemeindezentrum_activity_faden(
+            state,
+            auth,
+            center_id,
+            "center_conversation_message",
             message_id,
-            %status,
-            error = %message,
-            "Message remains successful because it is already durable; the derived Faden is missing"
-        );
+        )
+        .await
+        {
+            tracing::error!(
+                event = "conversation.center_message_faden_projection.failed",
+                center_id,
+                message_id,
+                %status,
+                error = %message,
+                "Message remains durable; the derived center Faden is missing"
+            );
+        }
     }
 }
 
@@ -520,7 +544,7 @@ async fn require_conversation_read_access(
 
 fn conversation_is_writable(conversation_type: &str, governance_source: Option<&str>) -> bool {
     match conversation_type {
-        "node" | "direct" => true,
+        "node" | "direct" | "webgemeindezentrum" => true,
         "governance_proposal" => governance_source == Some("canonical"),
         _ => false,
     }
@@ -638,6 +662,37 @@ async fn require_conversation_writable(
                     "conversation_archived",
                     "the node conversation is archived and read-only",
                 ))
+            }
+            None => Err(ConversationApiError::new(
+                StatusCode::NOT_FOUND,
+                "conversation_not_found",
+                "the conversation does not exist",
+            )),
+            Some(_) => Err(ConversationApiError::new(
+                StatusCode::CONFLICT,
+                "conversation_write_target_changed",
+                "the conversation write target changed while the request was in flight",
+            )),
+        };
+    }
+
+    if observed_type == "webgemeindezentrum" {
+        let locked_target: Option<(String, Option<String>, Option<DateTime<Utc>>)> =
+            sqlx::query_as(
+                "SELECT conversation_type, webgemeindezentrum_id, archived_at \
+                 FROM domain_conversations \
+                 WHERE id = $1::uuid AND deleted_at IS NULL FOR SHARE",
+            )
+            .bind(conversation_id)
+            .fetch_optional(&mut **tx)
+            .await
+            .map_err(|error| database_error("lock center conversation write target", error))?;
+
+        return match locked_target {
+            Some((conversation_type, Some(_), None))
+                if conversation_type == "webgemeindezentrum" =>
+            {
+                Ok(())
             }
             None => Err(ConversationApiError::new(
                 StatusCode::NOT_FOUND,
@@ -1069,8 +1124,13 @@ pub async fn create_message(
         .await
         .map_err(|error| database_error("begin create message", error))?;
     require_conversation_writable(&mut tx, &conversation_id, &auth).await?;
-    let (node_id, conversation_type): (Option<String>, String) = sqlx::query_as(
-        "SELECT node_id, conversation_type FROM domain_conversations WHERE id = $1::uuid",
+    let (node_id, conversation_type, webgemeindezentrum_id): (
+        Option<String>,
+        String,
+        Option<String>,
+    ) = sqlx::query_as(
+        "SELECT node_id, conversation_type, webgemeindezentrum_id \
+         FROM domain_conversations WHERE id = $1::uuid",
     )
     .bind(&conversation_id)
     .fetch_one(&mut *tx)
@@ -1127,7 +1187,14 @@ pub async fn create_message(
         tx.commit()
             .await
             .map_err(|error| database_error("commit idempotent message replay", error))?;
-        project_message_participation_faden(&state, &auth, node_id.as_deref(), &message_id).await;
+        project_message_participation_faden(
+            &state,
+            &auth,
+            node_id.as_deref(),
+            webgemeindezentrum_id.as_deref(),
+            &message_id,
+        )
+        .await;
         return Ok((StatusCode::OK, Json(existing)));
     }
 
@@ -1218,7 +1285,14 @@ pub async fn create_message(
     tx.commit()
         .await
         .map_err(|error| database_error("commit message create", error))?;
-    project_message_participation_faden(&state, &auth, node_id.as_deref(), &message.id).await;
+    project_message_participation_faden(
+        &state,
+        &auth,
+        node_id.as_deref(),
+        webgemeindezentrum_id.as_deref(),
+        &message.id,
+    )
+    .await;
     Ok((StatusCode::CREATED, Json(message)))
 }
 

@@ -124,6 +124,8 @@ function mapWebgemeindezentrenToEntities(
     updated_at: center.updated_at,
     location_state: center.location_state,
     location_state_label: center.location_state_label,
+    faden_endpoint_id: center.faden_endpoint_id,
+    conversation_id: center.conversation_id,
     location_label: center.location_label,
     meeting_note: center.meeting_note,
     access_note: center.access_note,

@@ -5,6 +5,7 @@
   import {
     compareApiTimestamps,
     createConversationMessage,
+    getConversation,
     getNodeConversation,
     listConversationMessages,
     NodeConversationApiError,
@@ -12,13 +13,19 @@
     updateConversationMessage,
     type ConversationMessage,
     type NodeConversation,
+    type PublicConversation,
   } from "$lib/api/nodeConversation";
 
-  export let nodeId: string;
+  export let nodeId = "";
+  export let conversationId: string | null = null;
+  export let heading = "Öffentlicher Gesprächsraum";
+  export let emptyMessage =
+    "Noch keine Beiträge. Hier kann das Gespräch über diesen Knoten beginnen.";
+  export let testId = "node-conversation";
 
   const POLL_INTERVAL_MS = 5_000;
 
-  let conversation: NodeConversation | null = null;
+  let conversation: NodeConversation | PublicConversation | null = null;
   let messages: ConversationMessage[] = [];
   let olderCursor: string | null = null;
   let loading = true;
@@ -39,8 +46,19 @@
   let mutationGeneration = 0;
   let refreshController: AbortController | null = null;
   let destroyed = false;
+  let mounted = false;
+  let loadedTarget = "";
 
   $: canWrite = $authStore.authenticated;
+  $: requestedTarget = targetKey();
+  $: if (mounted && requestedTarget !== loadedTarget) {
+    loading = true;
+    syncPolling();
+  }
+
+  function targetKey(): string {
+    return conversationId ? `conversation:${conversationId}` : `node:${nodeId}`;
+  }
 
   function mergeMessages(incoming: ConversationMessage[]) {
     const merged = new Map(messages.map((message) => [message.id, message]));
@@ -93,17 +111,27 @@
     refreshController?.abort();
     const controller = new AbortController();
     refreshController = controller;
-    const requestedNodeId = nodeId;
+    const requestedTarget = targetKey();
     const startedMutationGeneration = mutationGeneration;
+    if (loadedTarget !== requestedTarget) {
+      conversation = null;
+      messages = [];
+      olderCursor = null;
+      loadedOlder = false;
+      loadError = "";
+      loadedTarget = requestedTarget;
+    }
     try {
       const currentConversation =
         conversation ??
-        (await getNodeConversation(requestedNodeId, controller.signal));
+        (conversationId
+          ? await getConversation(conversationId, controller.signal)
+          : await getNodeConversation(nodeId, controller.signal));
       if (
         destroyed ||
         controller.signal.aborted ||
         generation !== pollGeneration ||
-        nodeId !== requestedNodeId
+        targetKey() !== requestedTarget
       )
         return;
       conversation = currentConversation;
@@ -116,7 +144,7 @@
         destroyed ||
         controller.signal.aborted ||
         generation !== pollGeneration ||
-        nodeId !== requestedNodeId ||
+        targetKey() !== requestedTarget ||
         mutationGeneration !== startedMutationGeneration
       )
         return;
@@ -129,7 +157,7 @@
         !controller.signal.aborted &&
         refreshController === controller &&
         generation === pollGeneration &&
-        nodeId === requestedNodeId &&
+        targetKey() === requestedTarget &&
         (error as { name?: string } | null)?.name !== "AbortError"
       ) {
         loadError = "Das Gespräch kann gerade nicht geladen werden.";
@@ -139,7 +167,7 @@
       const isCurrent =
         refreshController === controller &&
         generation === pollGeneration &&
-        nodeId === requestedNodeId;
+        targetKey() === requestedTarget;
       if (refreshController === controller) refreshController = null;
       if (!destroyed && isCurrent) loading = false;
     }
@@ -279,24 +307,30 @@
   }
 
   onMount(() => {
+    mounted = true;
     document.addEventListener("visibilitychange", syncPolling);
     syncPolling();
   });
 
   onDestroy(() => {
+    mounted = false;
     destroyed = true;
     stopPolling();
     document.removeEventListener("visibilitychange", syncPolling);
   });
 </script>
 
-<section class="conversation" aria-labelledby="node-conversation-heading">
-  <h4 id="node-conversation-heading">Öffentlicher Gesprächsraum</h4>
+<section
+  class="conversation"
+  aria-labelledby="conversation-room-heading"
+  data-testid={testId}
+>
+  <h4 id="conversation-room-heading">{heading}</h4>
 
   {#if loadError}<p class="error" role="alert">{loadError}</p>{/if}
   {#if loading}<p class="muted">Lade Gespräch…</p>
   {:else if messages.length === 0}<p class="empty">
-      Noch keine Beiträge. Hier kann das Gespräch über diesen Knoten beginnen.
+      {emptyMessage}
     </p>
   {:else}
     {#if olderCursor}<button
@@ -374,9 +408,9 @@
 
   {#if canWrite}
     <form class="composer" on:submit|preventDefault={submitMessage}>
-      <label for="node-conversation-draft">Neuer Beitrag</label>
+      <label for="conversation-room-draft">Neuer Beitrag</label>
       <textarea
-        id="node-conversation-draft"
+        id="conversation-room-draft"
         bind:value={draft}
         maxlength="4000"
         rows="4"

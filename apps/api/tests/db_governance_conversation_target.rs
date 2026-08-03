@@ -16,6 +16,12 @@ const SECOND_ACCOUNT_ID: &str = "t018-governance-target-account-2";
 const NODE_ID: &str = "t018-governance-target-node";
 const PROPOSAL_ID: &str = "82000000-0000-4000-8000-000000000001";
 const SECOND_PROPOSAL_ID: &str = "82000000-0000-4000-8000-000000000002";
+const CENTER_HUB_UP_MIGRATION: &str =
+    include_str!("../migrations/20260802000002_webgemeindezentrum_governance_hub.up.sql");
+const CENTER_HUB_DOWN_MIGRATION: &str =
+    include_str!("../migrations/20260802000002_webgemeindezentrum_governance_hub.down.sql");
+const DIRECT_DOWN_MIGRATION: &str =
+    include_str!("../migrations/20260730000001_private_direct_conversations.down.sql");
 const DOWN_MIGRATION: &str =
     include_str!("../migrations/20260722000005_governance_conversation_target.down.sql");
 
@@ -100,10 +106,10 @@ async fn seed_account(pool: &sqlx::PgPool, account_id: &str, title: &str) {
 async fn insert_proposal(pool: &sqlx::PgPool, proposal_id: &str, account_id: &str) {
     sqlx::query(
         "INSERT INTO governance_proposals (
-             id, kind, applicant_account_id, applicant_title, summary, status,
+             id, kind, webgemeindezentrum_id, applicant_account_id, applicant_title, summary, status,
              created_at, consent_until
          ) VALUES (
-             $1::uuid, 'weberantrag', $2, 'T018 Antragsteller', 'Schema-Beweis',
+             $1::uuid, 'weberantrag', 'webgemeindezentrum-hammer-park', $2, 'T018 Antragsteller', 'Schema-Beweis',
              'consent', TIMESTAMPTZ '2026-07-20 12:00:00+00',
              TIMESTAMPTZ '2026-07-27 12:00:00+00'
          )",
@@ -113,6 +119,112 @@ async fn insert_proposal(pool: &sqlx::PgPool, proposal_id: &str, account_id: &st
     .execute(pool)
     .await
     .expect("insert proposal");
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn center_hub_migration_accepts_multiple_active_centers_without_legacy_proposals() {
+    let pool = pool().await;
+    let mut tx = pool
+        .begin()
+        .await
+        .expect("begin multi-center migration proof");
+
+    let legacy_proposals: i64 = sqlx::query_scalar("SELECT count(*) FROM governance_proposals")
+        .fetch_one(&mut *tx)
+        .await
+        .expect("count legacy proposals");
+    assert_eq!(
+        legacy_proposals, 0,
+        "multi-center migration proof requires an empty legacy proposal table"
+    );
+
+    tx.execute(CENTER_HUB_DOWN_MIGRATION)
+        .await
+        .expect("remove center hub before multi-center proof");
+    let baseline_centers: i64 =
+        sqlx::query_scalar("SELECT count(*)::bigint FROM webgemeindezentren")
+            .fetch_one(&mut *tx)
+            .await
+            .expect("count centers before multi-center proof");
+    assert!(
+        baseline_centers >= 1,
+        "the canonical first center must exist before adding a second one"
+    );
+
+    let suffix = uuid::Uuid::new_v4().simple().to_string();
+    let cell_id = format!("proof-{suffix}.weltgewebe.net");
+    let weaving_id = format!("ortsweberei-proof-{suffix}");
+    let center_id = format!("webgemeindezentrum-proof-{suffix}");
+    let slug = format!("proof-{suffix}");
+
+    sqlx::query(
+        "INSERT INTO gewebezellen (id, lifecycle_state, created_at, updated_at)
+         VALUES ($1, 'active', NOW(), NOW())",
+    )
+    .bind(&cell_id)
+    .execute(&mut *tx)
+    .await
+    .expect("insert second Gewebezelle");
+    sqlx::query(
+        "INSERT INTO ortswebereien (
+             id, slug, name, description, gewebezelle_id, lifecycle_state,
+             active_webgemeindezentrum_id, created_at, updated_at
+         ) VALUES (
+             $1, $2, 'Ortsweberei Proof',
+             'Zweite aktive Ortsweberei für den Migrationsbeweis.',
+             $3, 'active', $4, NOW(), NOW()
+         )",
+    )
+    .bind(&weaving_id)
+    .bind(&slug)
+    .bind(&cell_id)
+    .bind(&center_id)
+    .execute(&mut *tx)
+    .await
+    .expect("insert second Ortsweberei");
+    sqlx::query(
+        "INSERT INTO webgemeindezentren (
+             id, ortsweberei_id, name, location_state, lat, lon,
+             location_label, meeting_note, access_note, created_at, updated_at
+         ) VALUES (
+             $1, $2, 'Webgemeindezentrum Proof', 'desired', 53.55, 10.05,
+             'Migrationsbeweis', 'Gemeinsamer Treffpunkt für den Migrationsbeweis.',
+             'Nur Testdaten.', NOW(), NOW()
+         )",
+    )
+    .bind(&center_id)
+    .bind(&weaving_id)
+    .execute(&mut *tx)
+    .await
+    .expect("insert second Webgemeindezentrum");
+
+    tx.execute(CENTER_HUB_UP_MIGRATION).await.expect(
+        "center hub migration must accept multiple active centers without legacy proposals",
+    );
+    let center_contract: (i64, i64) = sqlx::query_as(
+        "SELECT count(*)::bigint, count(DISTINCT faden_endpoint_id)::bigint
+         FROM webgemeindezentren",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .expect("inspect multi-center Faden endpoints");
+    assert_eq!(
+        center_contract,
+        (baseline_centers + 1, baseline_centers + 1)
+    );
+    let center_conversations: i64 = sqlx::query_scalar(
+        "SELECT count(*)::bigint FROM domain_conversations
+         WHERE conversation_type = 'webgemeindezentrum'",
+    )
+    .fetch_one(&mut *tx)
+    .await
+    .expect("inspect multi-center conversations");
+    assert_eq!(center_conversations, baseline_centers + 1);
+
+    tx.rollback().await.expect("rollback multi-center proof");
+    pool.close().await;
 }
 
 #[tokio::test]
@@ -550,6 +662,14 @@ async fn governance_conversation_target_is_additive_deterministic_and_reversible
     .execute(&mut *canonical_tx)
     .await
     .expect("set canonical marker in transaction");
+    canonical_tx
+        .execute(CENTER_HUB_DOWN_MIGRATION)
+        .await
+        .expect("remove the later center hub before release-A rollback proof");
+    canonical_tx
+        .execute(DIRECT_DOWN_MIGRATION)
+        .await
+        .expect("remove the later direct-conversation migration before release-A rollback proof");
     let canonical_down = canonical_tx.execute(DOWN_MIGRATION).await;
     assert!(
         canonical_down.is_err(),
@@ -576,6 +696,14 @@ async fn governance_conversation_target_is_additive_deterministic_and_reversible
     .execute(&mut *message_tx)
     .await
     .expect("insert canonical message in transaction");
+    message_tx
+        .execute(CENTER_HUB_DOWN_MIGRATION)
+        .await
+        .expect("remove the later center hub before release-A message proof");
+    message_tx
+        .execute(DIRECT_DOWN_MIGRATION)
+        .await
+        .expect("remove the later direct-conversation migration before release-A message proof");
     let message_down = message_tx.execute(DOWN_MIGRATION).await;
     assert!(
         message_down.is_err(),
@@ -587,6 +715,14 @@ async fn governance_conversation_target_is_additive_deterministic_and_reversible
     // the node-only schema. Roll the proof transaction back afterwards so the
     // shared test database remains on the latest migration.
     let mut down_tx = pool.begin().await.expect("begin successful down proof");
+    down_tx
+        .execute(CENTER_HUB_DOWN_MIGRATION)
+        .await
+        .expect("remove the later center hub before release-A rollback");
+    down_tx
+        .execute(DIRECT_DOWN_MIGRATION)
+        .await
+        .expect("remove the later direct-conversation migration before release-A rollback");
     down_tx
         .execute(DOWN_MIGRATION)
         .await

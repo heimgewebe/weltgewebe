@@ -471,6 +471,7 @@ pub async fn get_edge(
     if !edge_is_active_at(&edge, Utc::now()) {
         return Err(StatusCode::NOT_FOUND);
     }
+    drop(cache);
 
     let mut source_details = None;
     let mut target_details = None;
@@ -515,6 +516,27 @@ pub async fn get_edge(
                     title: node.title.clone(),
                     r#type: Some(node.kind.clone()),
                 });
+            }
+        } else if tgt_type == "webgemeindezentrum" {
+            if let Some(pool) = state.db_pool.as_ref() {
+                let center: Option<(String, String)> = sqlx::query_as(
+                    "SELECT id, name FROM webgemeindezentren \
+                     WHERE faden_endpoint_id = $1::uuid",
+                )
+                .bind(&edge.target_id)
+                .fetch_optional(pool)
+                .await
+                .map_err(|error| {
+                    tracing::error!(%error, edge_id = %edge.id, "failed to resolve center edge endpoint");
+                    StatusCode::INTERNAL_SERVER_ERROR
+                })?;
+                if let Some((id, title)) = center {
+                    target_details = Some(EdgeParticipantDetails {
+                        id,
+                        title,
+                        r#type: Some("webgemeindezentrum".to_string()),
+                    });
+                }
             }
         }
     }
@@ -1202,7 +1224,8 @@ mod edge_create {
     const EDGE_KIND_VALUES: [&str; 4] = ["delegation", "membership", "ownership", "reference"];
 
     /// Allowed `source_type` / `target_type` values, mirroring the edge contract.
-    const EDGE_PARTICIPANT_TYPE_VALUES: [&str; 3] = ["role", "node", "account"];
+    const EDGE_PARTICIPANT_TYPE_VALUES: [&str; 4] =
+        ["role", "node", "account", "webgemeindezentrum"];
 
     /// Maximum `note` length in characters, mirroring the edge contract
     /// (`maxLength: 1000`). JSON Schema counts characters, not bytes.

@@ -58,6 +58,8 @@ const makeCenter = (
   },
   location_state: "desired",
   location_state_label: "Gewünschter Treffort",
+  faden_endpoint_id: "22222222-2222-5222-8222-222222222222",
+  conversation_id: "33333333-3333-5333-8333-333333333333",
   location: { lat: 53.5585, lon: 10.058 },
   location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
   meeting_note: "Gemeinsamer Treffpunkt der Ortsweberei.",

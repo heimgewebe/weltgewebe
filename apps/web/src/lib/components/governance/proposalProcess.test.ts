@@ -9,6 +9,7 @@ function proposal(
   return {
     id: "11111111-1111-4111-8111-111111111111",
     kind: "weberantrag",
+    webgemeindezentrum_id: "webgemeindezentrum-hammer-park",
     applicant_account_id: "guest-1",
     applicant_title: "Gast",
     status,

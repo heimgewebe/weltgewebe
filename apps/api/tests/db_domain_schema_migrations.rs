@@ -220,6 +220,47 @@ async fn domain_schema_tables_exist_after_migration() {
         "removed domain_accounts.mode column must not exist"
     );
 
+    // --- Webgemeindezentrum governance hub ---
+    assert!(
+        column_exists(&pool, "webgemeindezentren", "faden_endpoint_id").await,
+        "Webgemeindezentrum must expose a strict UUID Faden endpoint"
+    );
+    assert!(
+        column_exists(&pool, "governance_proposals", "webgemeindezentrum_id").await,
+        "every governance proposal must be anchored to a Webgemeindezentrum"
+    );
+    assert!(
+        column_exists(&pool, "domain_conversations", "webgemeindezentrum_id").await,
+        "center conversations must have an explicit subject"
+    );
+    assert!(
+        index_exists(&pool, "domain_conversations_one_per_webgemeindezentrum").await,
+        "each Webgemeindezentrum must have one canonical conversation"
+    );
+    let center_hub: (bool, bool, i64) = sqlx::query_as(
+        "SELECT \
+             c.faden_endpoint_id IS NOT NULL, \
+             center_conversation.id IS NOT NULL, \
+             count(proposal.id)::bigint \
+         FROM webgemeindezentren c \
+         LEFT JOIN domain_conversations center_conversation \
+           ON center_conversation.webgemeindezentrum_id = c.id \
+          AND center_conversation.conversation_type = 'webgemeindezentrum' \
+         LEFT JOIN governance_proposals proposal \
+           ON proposal.webgemeindezentrum_id = c.id \
+         WHERE c.id = 'webgemeindezentrum-hammer-park' \
+         GROUP BY c.faden_endpoint_id, center_conversation.id",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("failed to verify the first Webgemeindezentrum governance hub");
+    assert!(center_hub.0, "center Faden endpoint must be populated");
+    assert!(center_hub.1, "center conversation must be populated");
+    assert_eq!(
+        center_hub.2, 0,
+        "fresh schema must not invent governance proposals"
+    );
+
     // --- private collective node mutation audit ---
     assert!(
         table_exists(&pool, "domain_node_mutation_audit").await,

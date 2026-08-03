@@ -66,6 +66,8 @@ export interface Webgemeindezentrum {
   ortsweberei: OrtswebereiReference;
   location_state: WebgemeindezentrumLocationState;
   location_state_label: string;
+  faden_endpoint_id: string;
+  conversation_id: string;
   location: Location;
   location_label: string;
   meeting_note: string;
@@ -154,6 +156,8 @@ export interface MapEntityWebgemeindezentrum {
   updated_at: string;
   location_state: WebgemeindezentrumLocationState;
   location_state_label: string;
+  faden_endpoint_id: string;
+  conversation_id: string;
   location_label: string;
   meeting_note: string;
   access_note: string;

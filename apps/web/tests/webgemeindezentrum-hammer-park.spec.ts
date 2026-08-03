@@ -13,6 +13,8 @@ const CENTER = {
   },
   location_state: "desired" as const,
   location_state_label: "Gewünschter Treffort",
+  faden_endpoint_id: "22222222-2222-5222-8222-222222222222",
+  conversation_id: "33333333-3333-5333-8333-333333333333",
   location: { lat: 53.5585, lon: 10.058 },
   location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
   meeting_note:
@@ -25,6 +27,12 @@ const CENTER = {
 
 const DETAILS = {
   ...CENTER,
+  governance: {
+    proposal_count: 2,
+    open_proposal_count: 1,
+    voting_proposal_count: 1,
+    conversation_message_count: 0,
+  },
   location_history: [
     {
       event_id: 1,
@@ -56,6 +64,48 @@ async function mockCenter(page: Page) {
       body: JSON.stringify(mockListResponse(route.request().url(), [CENTER])),
     });
   });
+  await page.route("**/api/proposals", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify([]),
+    });
+  });
+  await page.route(
+    "**/api/conversations/33333333-3333-5333-8333-333333333333",
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "33333333-3333-5333-8333-333333333333",
+          conversation_type: "webgemeindezentrum",
+          lifecycle_state: "active",
+          node_id: null,
+          node_id_snapshot: null,
+          node_title_snapshot: null,
+          visibility: "public",
+          created_at: "2026-08-02T10:08:00.000Z",
+          updated_at: "2026-08-02T10:08:00.000Z",
+          archived_at: null,
+          deleted_at: null,
+        }),
+      });
+    },
+  );
+  await page.route(
+    "**/api/conversations/33333333-3333-5333-8333-333333333333/messages*",
+    async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [],
+          page: { limit: 50, next_cursor: null, has_more: false },
+        }),
+      });
+    },
+  );
   await page.route(
     "**/api/webgemeindezentren/webgemeindezentrum-hammer-park",
     async (route) => {
@@ -110,6 +160,16 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
     await expect(panel).toContainText("tatsächlich zusammenkommen");
     await expect(panel).not.toContainText("Bestätigter Treffort");
     await expect(panel).not.toContainText("reserviert");
+    await expect(page.getByTestId("center-governance")).toBeVisible();
+    await expect(page.getByTestId("center-governance")).toContainText(
+      "Governance der Ortsweberei",
+    );
+    await expect(
+      page.getByTestId("webgemeindezentrum-conversation"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Gespräch im Webgemeindezentrum" }),
+    ).toBeVisible();
 
     await page.waitForFunction(() => {
       const map = (window as any).__TEST_MAP__;
