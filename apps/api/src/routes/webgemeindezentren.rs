@@ -20,7 +20,12 @@ use uuid::Uuid;
 // account-lifecycle advisory lock and a second one in the edge writer. Bound
 // concurrent projections so waiters can never occupy the complete pool while
 // each waits for its second connection.
-const LOCAL_CENTER_ACTIVITY_SLOTS: usize = (crate::DATABASE_POOL_MAX_CONNECTIONS as usize - 1) / 2;
+const fn center_activity_slot_count(pool_max_connections: usize) -> usize {
+    pool_max_connections.saturating_sub(1) / 2
+}
+
+const LOCAL_CENTER_ACTIVITY_SLOTS: usize =
+    center_activity_slot_count(crate::DATABASE_POOL_MAX_CONNECTIONS as usize);
 static CENTER_ACTIVITY_SLOTS: OnceLock<Semaphore> = OnceLock::new();
 
 fn center_activity_slots() -> &'static Semaphore {
@@ -519,7 +524,7 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
 #[cfg(test)]
 mod tests {
     use super::{
-        center_activity_operation_id, WebgemeindezentrumLocationState, LOCAL_CENTER_ACTIVITY_SLOTS,
+        center_activity_operation_id, center_activity_slot_count, WebgemeindezentrumLocationState,
     };
 
     #[test]
@@ -540,10 +545,11 @@ mod tests {
 
     #[test]
     fn center_activity_projection_reserves_pool_capacity() {
-        assert!(LOCAL_CENTER_ACTIVITY_SLOTS > 0);
-        assert!(
-            LOCAL_CENTER_ACTIVITY_SLOTS * 2 + 1 <= crate::DATABASE_POOL_MAX_CONNECTIONS as usize
-        );
+        for pool_max_connections in [3, 4, 5, 32] {
+            let slots = center_activity_slot_count(pool_max_connections);
+            assert!(slots > 0);
+            assert!(slots * 2 < pool_max_connections);
+        }
     }
 
     #[test]
