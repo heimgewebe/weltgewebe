@@ -232,6 +232,8 @@ test.describe("event-bound Faden motion", () => {
     );
     await page.waitForTimeout(250);
     const before = await snapshot(page);
+    expect(before?.activeCount).toBe(1);
+    expect(before?.active[0].phase).toBe("creating");
     await page.evaluate(
       (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "releasing"),
       EDGE_ID,
