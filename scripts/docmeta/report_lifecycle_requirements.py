@@ -1,8 +1,14 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
+import hashlib
+import json
+from pathlib import Path
+import re
+import subprocess
 
 
 @dataclass(frozen=True)
@@ -175,14 +181,6 @@ def missing_required_report_fields(
 
 # --- Audit report truth contract v1 ------------------------------------------------------------------
 # Kept in this module so generators and validators share one fail-closed contract.
-from collections.abc import Sequence
-from datetime import datetime
-import hashlib
-import json
-from pathlib import Path
-import re
-import subprocess
-
 TRUTH_SCHEMA_VERSION = 1
 TRUTH_REQUIRED_FIELDS = (
     "schema_version",
