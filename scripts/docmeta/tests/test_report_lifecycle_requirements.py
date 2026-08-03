@@ -5,10 +5,13 @@ import datetime
 import unittest
 
 from scripts.docmeta.report_lifecycle_requirements import (
+    build_truth_contract,
     missing_required_report_field_rules,
     missing_required_report_fields,
+    report_truth_migration_state,
     required_report_field_rules,
     string_value,
+    validate_truth_contract,
 )
 
 
@@ -252,6 +255,68 @@ class TestReportLifecycleRequirements(unittest.TestCase):
         self.assertEqual(string_value(7), "7")
         self.assertEqual(
             string_value(datetime.date(2026, 7, 13)), "2026-07-13"
+        )
+
+
+class TestAuditReportTruthContract(unittest.TestCase):
+    def _contract(self, status: str = "pass", **changes: object) -> dict[str, object]:
+        coverage: dict[str, object] = {
+            "scope": "all contract sources",
+            "complete": True,
+            "fresh": True,
+            "method": "exact",
+            "checked_items": 2,
+            "total_items": 2,
+            "failures": 0,
+        }
+        coverage.update(changes)
+        return build_truth_contract(
+            status=status,
+            scope=str(coverage["scope"]),
+            complete=bool(coverage["complete"]),
+            fresh=bool(coverage["fresh"]),
+            method=str(coverage["method"]),
+            checked_items=int(coverage["checked_items"]),
+            total_items=int(coverage["total_items"]),
+            failures=int(coverage["failures"]),
+            source_revision="a" * 40,
+            generated_at="2026-08-03T00:00:00+00:00",
+            sources=[{"path": "docs/reports/a.md", "sha256": "b" * 64}],
+            limitations=["repository-only"],
+            does_not_establish=["runtime_health"],
+        )
+
+    def test_valid_positive_contract_passes(self) -> None:
+        self.assertEqual(validate_truth_contract(self._contract()), ())
+
+    def test_positive_status_is_downgraded_for_unsafe_coverage(self) -> None:
+        for changes in (
+            {"complete": False},
+            {"fresh": False},
+            {"method": "heuristic"},
+            {"failures": 1},
+            {"checked_items": 1},
+        ):
+            with self.subTest(changes=changes):
+                with self.assertRaisesRegex(ValueError, "positive_status"):
+                    self._contract(**changes)
+
+    def test_missing_and_unknown_fields_fail_closed(self) -> None:
+        contract = self._contract(status="partial")
+        contract.pop("sources")
+        contract["surprise"] = True
+        violations = validate_truth_contract(contract)
+        self.assertIn("missing_sources", violations)
+        self.assertIn("unknown_surprise", violations)
+
+    def test_migration_classification_is_explicit(self) -> None:
+        self.assertEqual(
+            report_truth_migration_state({"lifecycle_state": "archived", "status": "active"}),
+            "deprecated",
+        )
+        self.assertEqual(
+            report_truth_migration_state({"lifecycle_state": "active", "status": "active"}),
+            "not_decision_relevant",
         )
 
 

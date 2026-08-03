@@ -19,8 +19,12 @@ from scripts.docmeta.generate_report_lifecycle_inventory import (
 )
 from scripts.docmeta.validate_report_lifecycle import _validate_report, _load_frontmatter
 from scripts.docmeta.report_lifecycle_requirements import (
+    build_truth_contract,
     missing_required_report_fields,
+    source_manifest,
+    source_revision_metadata,
     string_value,
+    truth_contract_markdown,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -134,7 +138,11 @@ def build_summary(rows: list[LifecycleOverviewRow]) -> dict[str, int]:
         
     return summary
 
-def render_markdown(rows: list[LifecycleOverviewRow], summary: dict[str, int]) -> str:
+def render_markdown(
+    rows: list[LifecycleOverviewRow],
+    summary: dict[str, int],
+    truth_contract: dict[str, object] | None = None,
+) -> str:
     lines = [HEADER.rstrip(), ""]
     
     lines.extend([
@@ -264,8 +272,42 @@ def render_markdown(rows: list[LifecycleOverviewRow], summary: dict[str, int]) -
             lines.append(f"| {r.path} | {_cell(r.doc_type)} | {_cell(r.status)} |")
     else:
         lines.append("| _None_ | | |")
-        
+
+    if truth_contract is not None:
+        lines.extend(["", truth_contract_markdown(truth_contract).rstrip()])
+
     return "\n".join(lines).rstrip() + "\n"
+
+
+def build_overview_truth_contract(
+    root: Path,
+    records: list[ReportRecord],
+    summary: dict[str, int],
+) -> dict[str, object]:
+    source_paths = [root / record.path for record in records]
+    revision, generated_at, fresh = source_revision_metadata(root, source_paths)
+    failures = summary["findings_total"]
+    status = "pass" if fresh and failures == 0 else ("fail" if failures else "unknown")
+    return build_truth_contract(
+        status=status,
+        scope="all Markdown files discovered under docs/reports",
+        complete=True,
+        fresh=fresh,
+        method="exact",
+        checked_items=summary["files_scanned"],
+        total_items=summary["files_scanned"],
+        failures=failures,
+        source_revision=revision,
+        generated_at=generated_at,
+        sources=source_manifest(root, source_paths),
+        limitations=[
+            "The report reflects repository files only and does not execute product runtime checks."
+        ],
+        does_not_establish=[
+            "Runtime health, deployment health, or the correctness of claims inside individual reports."
+        ],
+     )
+
 
 def generate(root: Path = REPO_ROOT, output_path: Path | None = None) -> Path:
     out_path = output_path or (root / "docs" / "_generated" / "report-lifecycle.md")
@@ -281,7 +323,8 @@ def generate(root: Path = REPO_ROOT, output_path: Path | None = None) -> Path:
     records = collect_reports(config)
     rows = collect_lifecycle_rows(root, records)
     summary = build_summary(rows)
-    content = render_markdown(rows, summary)
+    truth_contract = build_overview_truth_contract(root, records, summary)
+    content = render_markdown(rows, summary, truth_contract)
     
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(content, encoding="utf-8")
@@ -309,7 +352,8 @@ def main(argv: list[str] | None = None) -> int:
         records = collect_reports(config)
         rows = collect_lifecycle_rows(root_path, records)
         summary = build_summary(rows)
-        content = render_markdown(rows, summary)
+        truth_contract = build_overview_truth_contract(root_path, records, summary)
+        content = render_markdown(rows, summary, truth_contract)
         return write_or_check(target, content, check=True, label=str(target.relative_to(root_path)))
 
     out = generate(root_path, output_path)

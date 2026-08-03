@@ -135,3 +135,237 @@ Fields required by the currently implemented validator rules that are absent, in
 | docs/reports/map-status-matrix.md | status-matrix | deprecated |
 | docs/reports/optimierungsstatus.md | status-matrix | active |
 | docs/reports/weltgewebe-os-foundation-status.md | status | active |
+
+## Machine-readable truth contract
+
+Schema: `contracts/audit-report-truth.schema.json`
+
+```json audit-report-truth.v1
+{
+  "coverage": {
+    "checked_items": 51,
+    "complete": true,
+    "failures": 0,
+    "fresh": true,
+    "method": "exact",
+    "scope": "all Markdown files discovered under docs/reports",
+    "total_items": 51
+  },
+  "does_not_establish": [
+    "Runtime health, deployment health, or the correctness of claims inside individual reports."
+  ],
+  "generated_at": "2026-08-02T23:31:16+02:00",
+  "limitations": [
+    "The report reflects repository files only and does not execute product runtime checks."
+  ],
+  "schema_version": 1,
+  "source_revision": "7ab8d7be452dd8559b61ffceb006b535a071ae2a",
+  "sources": [
+    {
+      "path": "docs/reports/agent-readiness-audit.md",
+      "sha256": "99c17ae61665c6ac4faef8eeee058d647c6258205565f1c391b92018b4a40a9b"
+    },
+    {
+      "path": "docs/reports/auth-persistence-direct-proof-diagnose-audit.md",
+      "sha256": "902506a78b6aa86553fd96b679478b574fc41f8caa41a303c7c0e4139ca5a8a5"
+    },
+    {
+      "path": "docs/reports/auth-persistence-next-step.md",
+      "sha256": "b0a13b6ca831871d931a01b42a34ee31d52e1cd164e2052e71fdeafced9463e1"
+    },
+    {
+      "path": "docs/reports/auth-persistence-readiness.md",
+      "sha256": "61d1fcca65a84897e931ea6477c337b8558548411a9fff1e9df64f9d3c15b9be"
+    },
+    {
+      "path": "docs/reports/auth-persistence-runtime-proof.md",
+      "sha256": "4a14e37f487df4557353f1b43b8420904edcbc15bc9cf4904b0739e1fc5baefe"
+    },
+    {
+      "path": "docs/reports/auth-persistence-runtime-target-reconciliation.md",
+      "sha256": "56073d3c8fe587b537b9da5cff005ea548b68f4c2acd10109e85924d03bc0c11"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-controlled-preflight.md",
+      "sha256": "8d7a8b8ce2e627e36b2f9cff90f491edd66cfd139b15f486aef569f1177b1de2"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-cutover-plan.md",
+      "sha256": "c3ddc2dd4ce75d8002055000734c3d0ac09d44e87b8b879885989a5472a0637c"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-passkey-db-store.md",
+      "sha256": "4b5a538008bc715a1bfffc89e088dc054458f652662a6ce482e58a30edd9b00b"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md",
+      "sha256": "f8395159704acfd5d2e99c813bef576c5e2362c90d4f5d428d2bcaf5f3befb53"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-passkey-runtime-audit-heimserver-2026-07-01.md",
+      "sha256": "ab2e43a161e5f4767d01f5e3c825499589281a2f81e33e5c5d2c2cc7168f29d7"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-passkey-runtime-audit-plan.md",
+      "sha256": "ad93a25cccd370ae6aa97c6177f1edabb6493f8ae7c5ec8f45715d3b67731fbb"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-passkey-runtime-facade.md",
+      "sha256": "b33db73904c3e5d3e6a8309bb219b8694e5a5a69008a9b1d69c039eb48c6aeb4"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-runtime-schema-readiness-heimserver-2026-07-01.md",
+      "sha256": "f624cab838c31e73daf6145d409a488824985497570c1191c6c093eb28c8e071"
+    },
+    {
+      "path": "docs/reports/auth-pg-002-schema-preflight-ci.md",
+      "sha256": "39300bf511336b1613c80cc96dce3ddfc361d9285604af573040d69d43d5c1d9"
+    },
+    {
+      "path": "docs/reports/auth-pg-003-backfill-readiness.md",
+      "sha256": "5a1c8cda64819229c8d1d302a42fad5f907b370bb44c8d7271f62825babf8c15"
+    },
+    {
+      "path": "docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md",
+      "sha256": "524949b350495befb87a1dca9dd8c4349b86aaf7e25ac5732c1a93d5548e9f8b"
+    },
+    {
+      "path": "docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md",
+      "sha256": "ecb5bb03ae690bedaade52b0656ae042180b06a6edca83bc7fa486af83b15c61"
+    },
+    {
+      "path": "docs/reports/auth-status-matrix.md",
+      "sha256": "d00a6f65591ec9a04c659de9a12278a60b47118a2c9c5ff97a801d0ae1ab97cc"
+    },
+    {
+      "path": "docs/reports/cost-report.md",
+      "sha256": "af871bbceb436e1380e43699e8b1800ebcb7b539d74087451fc7dff41bcdf882"
+    },
+    {
+      "path": "docs/reports/domain-account-email-uniqueness-audit.md",
+      "sha256": "66dc31a01c4e3ff4e2192eb52bdcdb4053bb91d07bfb07ca221fd881577b3218"
+    },
+    {
+      "path": "docs/reports/domain-account-write-path-proof.md",
+      "sha256": "2928b587a4dd1dc8bb7c1f13913af6a8a2ea4634243203d9ebdbfc49de0ce1f2"
+    },
+    {
+      "path": "docs/reports/domain-backfill-proof.md",
+      "sha256": "b8c17f05995a541d3332729bb0bc6f83ab429e791f28dd1bf6dfa724ad6221d1"
+    },
+    {
+      "path": "docs/reports/domain-edge-cache-limit-design.md",
+      "sha256": "2282d518631cfc82724604c2ed6390df21815c7533680aa4dd4796c17a495d88"
+    },
+    {
+      "path": "docs/reports/domain-edge-create-semantics-preflight.md",
+      "sha256": "80406c9107d3609c773a2263d393d3296ce330f27cb6a6fe131d3f8998d426c0"
+    },
+    {
+      "path": "docs/reports/domain-edge-faden-lifecycle-proof.md",
+      "sha256": "a2ae3a25b53c85d74caed62843651c59e856c80cd2eaf429c3ef35750fcee39a"
+    },
+    {
+      "path": "docs/reports/domain-edge-reference-audit.md",
+      "sha256": "bc59930e3029b97bcef0191480df4bdc5a8a89de6fc0423e587b0146a5dc4875"
+    },
+    {
+      "path": "docs/reports/domain-edge-write-path-proof.md",
+      "sha256": "d96e6873141dc6d48406b651b2396646f6ab8880ce97bad17e582b32a41a60bb"
+    },
+    {
+      "path": "docs/reports/domain-node-write-path-proof.md",
+      "sha256": "46acc9672c4a5fc38354c450e969f48a5853c61446d44ca736e035adba27b274"
+    },
+    {
+      "path": "docs/reports/domain-postgres-instance-coherence-decision.md",
+      "sha256": "fa0bd6a70398e9d5f9ed7a573032eae7d0ccbc40ebb3aaa6980a96f2eb5a3e0b"
+    },
+    {
+      "path": "docs/reports/domain-provider-role-finding.md",
+      "sha256": "5cd092da660ed4fd695d7d687916ea5a959682a302c6acade72751a31d245964"
+    },
+    {
+      "path": "docs/reports/domain-read-path-proof.md",
+      "sha256": "0d1f77fc8824cce5d8d31ca22e0168d99d7e903afefabfc97a5725bc9bc4e2fc"
+    },
+    {
+      "path": "docs/reports/domain-runtime-data-source-reconciliation.md",
+      "sha256": "4ab4f957fbe574c925058d81ea96ffd35bd0d991f4e09035c1a4775270d3b016"
+    },
+    {
+      "path": "docs/reports/garnrolle-identity-cutover-proof.md",
+      "sha256": "4a369b7e178aefc5c3ea0121f325da4de07d39cc209e1326716ebcbe2cc51ea3"
+    },
+    {
+      "path": "docs/reports/github-action-ref-pinning-audit.md",
+      "sha256": "ec0ee760ff9f924b1daeeb9c94b1d976ab945abe51f5046f4520ad2225b42f14"
+    },
+    {
+      "path": "docs/reports/github-actions-node24-readiness.md",
+      "sha256": "69ec3e0f8dfe168214fd1231b983cd3f22e72381a4aec56d75ecf8fcde0dc602"
+    },
+    {
+      "path": "docs/reports/inwx-zone-reconciliation-plan.md",
+      "sha256": "924e9d5e0eb451bfce1d46c89dd5019a10e3f0673c43bf7e42d6b48d38e489c7"
+    },
+    {
+      "path": "docs/reports/kubernetes-platform-foundation-status.md",
+      "sha256": "4377b5d352139c75a53668fc868c430af5ccd1224a610387bed730ace62fc722"
+    },
+    {
+      "path": "docs/reports/map-architekturkritik.md",
+      "sha256": "3608a68c30e1a93be8f69a92cb24146789755d877a64afd2e1462cb441ee44e3"
+    },
+    {
+      "path": "docs/reports/map-basemap-proof-gap-reconciliation.md",
+      "sha256": "a3e95aaaebc6879052b449340a3eae49f15a8619a0b485f4284802a9b63eb30c"
+    },
+    {
+      "path": "docs/reports/map-status-matrix.md",
+      "sha256": "d704493e09e76de5e5ae0663ab75672213dc9e1ed24adf270603815363d23848"
+    },
+    {
+      "path": "docs/reports/map-status.md",
+      "sha256": "d0539455d8aa508c008d4a25e55eb7dc71b6122fb3f08e112fff4401cc40939f"
+    },
+    {
+      "path": "docs/reports/optimierungsbericht.md",
+      "sha256": "2bdf8f7a2670f0b222d77fa98aab3fea4a0944baaa3fd9155d89cdbbfe00cd48"
+    },
+    {
+      "path": "docs/reports/optimierungsstatus.md",
+      "sha256": "736bc5e9fc180e6d8535e95ceb1b039f6fbf6e9f834df53206987d8beebe083e"
+    },
+    {
+      "path": "docs/reports/passkey-register-verify-prep.md",
+      "sha256": "c6ab2043919bbb18abf6bc49a5b5d134fd740ee8a849933f340a2fd8c0966dfe"
+    },
+    {
+      "path": "docs/reports/planning-registration-findings.md",
+      "sha256": "e16bbf8edd9ba1d35643bf3f1239dd7dc2897455b091e237455742acb2bac352"
+    },
+    {
+      "path": "docs/reports/proof-matrix-generalization-decision.md",
+      "sha256": "ec3c2ebfa1e4e5f7db5e315f27eeeda65b4df5c64ec483433a8db10d38fe5b49"
+    },
+    {
+      "path": "docs/reports/repo-audit-2026-07-02.md",
+      "sha256": "9f10f83c58269467b46548201f3bb2328343aa444706900143573daa88cadd67"
+    },
+    {
+      "path": "docs/reports/report-lifecycle-restbestand-triage.md",
+      "sha256": "b817a468d72bae2b73fb45f5bca749e1ea8088d4d7303db0ef1a420580a72b87"
+    },
+    {
+      "path": "docs/reports/weltgewebe-os-foundation-status.md",
+      "sha256": "f3b21dd0dead470dbb09cc5838534c2fc32d22a85fe9cfe258464e33bb308653"
+    },
+    {
+      "path": "docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md",
+      "sha256": "680a44fa3507f4191fbe32b0068b3bf8a77e6979739ea7d88d5c4b07d43870a9"
+    }
+  ],
+  "status": "pass"
+}
+```

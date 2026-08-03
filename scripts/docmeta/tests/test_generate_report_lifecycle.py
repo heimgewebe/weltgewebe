@@ -106,6 +106,9 @@ class TestGenerateReportLifecycle(unittest.TestCase):
         self.assertTrue(content.startswith("---"))
         self.assertIn("Generated automatically.", content)
         self.assertIn("# Report Lifecycle Overview", content)
+        self.assertIn("```json audit-report-truth.v1", content)
+        for field in ("status", "coverage", "source_revision", "generated_at", "sources", "limitations", "does_not_establish"):
+            self.assertIn(f'"{field}"', content)
 
     def test_generate_recurses_into_nested_report_paths(self):
         self._write_report("nested/2026/old.md", "---\ndoc_type: report\nstatus: active\nlifecycle_state: active\nlifecycle: audit\nowner_task: TASK-1\nreview_after: 2026-07-13\n---\n# Old\n")

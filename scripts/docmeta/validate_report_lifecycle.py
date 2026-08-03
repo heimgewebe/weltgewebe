@@ -16,7 +16,9 @@ if __package__ in {None, ""}:
 from scripts.docmeta.docmeta import parse_frontmatter
 from scripts.docmeta.report_lifecycle_requirements import (
     missing_required_report_field_rules,
+    source_revision_metadata,
     string_value as _string_value,
+    validate_truth_contract,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,6 +57,75 @@ def _iter_report_paths(root: Path) -> list[Path]:
     if not reports_dir.exists():
         return []
     return sorted([p for p in reports_dir.rglob("*.md") if p.is_file()])
+
+
+TRUTH_CONTRACT_RE = re.compile(
+    r"```json audit-report-truth\.v1\n(?P<payload>\{.*?\})\n```",
+    re.DOTALL,
+)
+
+
+def _iter_truth_report_paths(root: Path) -> list[Path]:
+    return [
+        path
+        for path in (
+            root / "docs" / "_generated" / "report-lifecycle.md",
+            root / "docs" / "_generated" / "report-lifecycle-inventory.md",
+        )
+        if path.is_file()
+    ]
+
+
+def extract_truth_contract(markdown: str) -> dict[str, object]:
+    match = TRUTH_CONTRACT_RE.search(markdown)
+    if match is None:
+        raise ValueError("truth_contract_missing")
+    value = json.loads(match.group("payload"))
+    if not isinstance(value, dict):
+        raise ValueError("truth_contract_not_object")
+    return value
+
+
+def validate_truth_report(path: Path, root: Path) -> tuple[str, ...]:
+    try:
+        contract = extract_truth_contract(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return (str(exc) or "truth_contract_invalid_json",)
+
+    violations = list(validate_truth_contract(contract))
+    sources = contract.get("sources")
+    source_paths: list[Path] = []
+    if isinstance(sources, list):
+        for index, source in enumerate(sources):
+            if not isinstance(source, dict):
+                continue
+            relative = source.get("path")
+            digest = source.get("sha256")
+            if not isinstance(relative, str):
+                continue
+            candidate = (root / relative).resolve()
+            try:
+                candidate.relative_to(root.resolve())
+            except ValueError:
+                violations.append(f"source_outside_repository_{index}")
+                continue
+            if not candidate.is_file():
+                violations.append(f"source_missing_{index}")
+                continue
+            source_paths.append(candidate)
+            actual = __import__("hashlib").sha256(candidate.read_bytes()).hexdigest()
+            if actual != digest:
+                violations.append(f"source_digest_mismatch_{index}")
+    if source_paths:
+        revision, generated_at, fresh = source_revision_metadata(root, source_paths)
+        if contract.get("source_revision") != revision:
+            violations.append("source_revision_mismatch")
+        if contract.get("generated_at") != generated_at:
+            violations.append("generated_at_revision_mismatch")
+        coverage = contract.get("coverage")
+        if isinstance(coverage, dict) and coverage.get("fresh") is True and not fresh:
+            violations.append("coverage_fresh_but_sources_dirty")
+    return tuple(dict.fromkeys(violations))
 
 
 def _changed_report_paths(root: Path, changed_from: str, changed_to: str) -> list[Path]:
@@ -447,6 +518,18 @@ def run(root: Path, mode: str, changed_from: str | None = None, changed_to: str 
             continue
         findings = _validate_report(p, fm, root)
         all_findings.extend(findings)
+
+    for truth_path in _iter_truth_report_paths(root):
+        for violation in validate_truth_report(truth_path, root):
+            all_findings.append(
+                Finding(
+                    path=truth_path.relative_to(root).as_posix(),
+                    code="invalid_truth_contract",
+                    severity="warn",
+                    message=violation,
+                    field=None,
+                )
+            )
 
     all_findings.sort(key=lambda f: (f.path, f.code))
 
