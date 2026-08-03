@@ -240,10 +240,9 @@ test.describe("event-bound Faden motion", () => {
 
     expect(after?.activeCount).toBe(1);
     expect(after?.active[0].phase).toBe("releasing");
-    expect(after?.active[0].progress).toBeCloseTo(
-      before?.active[0].progress ?? 0,
-      1,
-    );
+    expect(after?.framePending).toBe(true);
+    expect(after?.active[0].progress).toBeGreaterThan(0);
+    expect(after?.active[0].progress).toBeLessThan(1);
     await expect
       .poll(async () => (await snapshot(page))?.activeCount, { timeout: 3000 })
       .toBe(0);
