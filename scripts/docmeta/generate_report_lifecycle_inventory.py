@@ -12,6 +12,15 @@ if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
 from scripts.docmeta.generated_check import write_or_check
+from scripts.docmeta.report_lifecycle_requirements import (
+    build_truth_contract,
+    parse_truth_contract_markdown,
+    report_truth_migration_state,
+    source_manifest,
+    source_revision_metadata,
+    truth_contract_markdown,
+    validate_truth_contract,
+)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REPORTS_DIR = REPO_ROOT / "docs" / "reports"
@@ -83,6 +92,7 @@ class ReportRecord:
     absent_core_lifecycle_fields: tuple[str, ...]
     missing_supersession_target: bool
     frontmatter_parse_warning: str
+    truth_migration_state: str
 
     @property
     def referenced_by_paths(self) -> tuple[str, ...]:
@@ -92,6 +102,13 @@ class ReportRecord:
     def referenced_by_count(self) -> int:
         # Primary references only; derived/generated references are reported separately.
         return len(self.primary_referenced_by_paths)
+
+
+@dataclass(frozen=True)
+class GeneratedReportTruthRecord:
+    path: str
+    inventory_status: str
+    reason: str
 
 
 def default_inventory_config() -> InventoryConfig:
@@ -469,9 +486,48 @@ def collect_reports(config: InventoryConfig | None = None) -> list[ReportRecord]
                     and not superseded_by
                 ),
                 frontmatter_parse_warning=warning,
+                truth_migration_state=report_truth_migration_state(frontmatter),
             )
         )
 
+    return records
+
+
+def collect_generated_report_truth_inventory(
+    root: Path,
+    *,
+    migrated_paths: tuple[str, ...] = (),
+) -> list[GeneratedReportTruthRecord]:
+    generated_dir = root / "docs" / "_generated"
+    records: list[GeneratedReportTruthRecord] = []
+    if not generated_dir.is_dir():
+        return records
+    forced_migrated = set(migrated_paths)
+    for path in sorted(candidate for candidate in generated_dir.glob("*.md") if candidate.is_file()):
+        rel_path = _as_rel(path, root)
+        content = _read_text(path)
+        _, frontmatter, _ = _parse_frontmatter(content)
+        contract = parse_truth_contract_markdown(content)
+        valid_contract = rel_path in forced_migrated or (
+            contract is not None and not validate_truth_contract(contract, root=root)
+        )
+        state = report_truth_migration_state(
+            frontmatter,
+            truth_contract_present=valid_contract,
+        )
+        if state == "migrated":
+            reason = "valid audit-report truth contract"
+        elif state == "deprecated":
+            reason = "frontmatter marks the generated report deprecated or superseded"
+        else:
+            reason = "generated output is descriptive and not used as a decision gate"
+        records.append(
+            GeneratedReportTruthRecord(
+                path=rel_path,
+                inventory_status=state,
+                reason=reason,
+            )
+        )
     return records
 
 
@@ -494,6 +550,9 @@ def build_summary(records: list[ReportRecord]) -> list[tuple[str, int]]:
         ("files_primary_unreferenced", sum(1 for record in records if record.referenced_by_count == 0)),
         ("files_with_derived_references", sum(1 for record in records if record.derived_referenced_by_paths)),
         ("files_with_relations", sum(1 for record in records if record.relations_count > 0)),
+        ("truth_contract_migrated", sum(1 for record in records if record.truth_migration_state == "migrated")),
+        ("truth_contract_deprecated", sum(1 for record in records if record.truth_migration_state == "deprecated")),
+        ("truth_contract_not_decision_relevant", sum(1 for record in records if record.truth_migration_state == "not_decision_relevant")),
         (
             "files_with_missing_supersession_target",
             sum(1 for record in records if record.missing_supersession_target),
@@ -506,7 +565,40 @@ def build_doc_type_distribution(records: list[ReportRecord]) -> list[tuple[str, 
     return sorted(counts.items())
 
 
-def render_inventory(records: list[ReportRecord]) -> str:
+def build_inventory_truth_contract(
+    root: Path,
+    records: list[ReportRecord],
+) -> dict[str, object]:
+    source_paths = [root / record.path for record in records]
+    revision, generated_at, fresh = source_revision_metadata(root, source_paths)
+    failures = sum(1 for record in records if record.frontmatter_parse_warning)
+    status = "no_material_drift" if fresh and failures == 0 else ("fail" if failures else "unknown")
+    return build_truth_contract(
+        status=status,
+        scope="all Markdown files discovered under docs/reports",
+        complete=True,
+        fresh=fresh,
+        method="exact",
+        checked_items=len(records),
+        total_items=len(records),
+        failures=failures,
+        source_revision=revision,
+        generated_at=generated_at,
+        sources=source_manifest(root, source_paths),
+        limitations=[
+            "The inventory evaluates repository metadata and exact path references, not runtime behaviour."
+        ],
+        does_not_establish=[
+            "The correctness of claims inside individual reports or repo-wide generated-report completeness."
+        ],
+    )
+
+
+def render_inventory(
+    records: list[ReportRecord],
+    truth_contract: dict[str, object] | None = None,
+    migration_records: list[GeneratedReportTruthRecord] | None = None,
+) -> str:
     sections = [HEADER.rstrip(), "", "## Summary", "", "| Metric | Count |", "| --- | ---: |"]
     for metric, count in build_summary(records):
         sections.append(f"| {metric} | {count} |")
@@ -528,14 +620,14 @@ def render_inventory(records: list[ReportRecord]) -> str:
             "",
             "## Reports",
             "",
-            "| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | primary refs | derived refs | relations | absent core lifecycle fields | supersession target diagnostic |",
-            "| --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |",
+            "| Path | doc_type | status | lifecycle_state | lifecycle | owner_task | review_after | superseded_by | truth migration | primary refs | derived refs | relations | absent core lifecycle fields | supersession target diagnostic |",
+            "| --- | --- | --- | --- | --- | --- | --- | --- | --- | ---: | ---: | ---: | --- | --- |",
         ]
     )
     for record in records:
         sections.append(
             "| {path} | {doc_type} | {status} | {lifecycle_state} | {lifecycle} | {owner_task} | {review_after} | "
-            "{superseded_by} | {primary_refs} | {derived_refs} | {relations} | {absent} | {supersession_target_diagnostic} |".format(
+            "{superseded_by} | {truth_migration} | {primary_refs} | {derived_refs} | {relations} | {absent} | {supersession_target_diagnostic} |".format(
                 path=record.path,
                 doc_type=_cell(record.doc_type),
                 status=_cell(record.status),
@@ -544,6 +636,7 @@ def render_inventory(records: list[ReportRecord]) -> str:
                 owner_task=_cell(record.owner_task),
                 review_after=_cell(record.review_after),
                 superseded_by=_cell(record.superseded_by),
+                truth_migration=record.truth_migration_state,
                 primary_refs=record.referenced_by_count,
                 derived_refs=len(record.derived_referenced_by_paths),
                 relations=record.relations_count,
@@ -650,6 +743,20 @@ def render_inventory(records: list[ReportRecord]) -> str:
         sections.append("None.")
         sections.append("")
 
+    sections.extend(["", "## Truth Contract Migration", "", "| State | Count |", "| --- | ---: |"] )
+    for state in ("migrated", "deprecated", "not_decision_relevant"):
+        sections.append(f"| {state} | {sum(1 for record in records if record.truth_migration_state == state)} |")
+    if truth_contract is not None:
+        sections.extend(["", truth_contract_markdown(truth_contract).rstrip()])
+    sections.extend([
+        "", "## Generated Report Truth Contract Migration", "",
+        "| File | inventory_status | reason |", "| --- | --- | --- |",
+    ])
+    for record in migration_records or []:
+        sections.append(f"| {record.path} | {record.inventory_status} | {_cell(record.reason)} |")
+    if not migration_records:
+        sections.append("| _None_ | not_decision_relevant | no generated reports found |")
+
     return "\n".join(sections).rstrip() + "\n"
 
 
@@ -659,10 +766,23 @@ def _cell(value: str) -> str:
     return re.sub(r"\s+", " ", value.replace("|", "&#124;")).strip()
 
 
+def _render_current_inventory(config: InventoryConfig) -> str:
+    records = collect_reports(config)
+    truth_contract = build_inventory_truth_contract(config.repo_root, records)
+    migrated_paths = (
+        _as_rel(config.output_path, config.repo_root),
+        "docs/_generated/report-lifecycle.md",
+    )
+    migration_records = collect_generated_report_truth_inventory(
+        config.repo_root,
+        migrated_paths=migrated_paths,
+    )
+    return render_inventory(records, truth_contract, migration_records)
+
+
 def generate(config: InventoryConfig | None = None) -> Path:
     inventory_config = config or default_inventory_config()
-    records = collect_reports(inventory_config)
-    content = render_inventory(records)
+    content = _render_current_inventory(inventory_config)
     inventory_config.output_path.parent.mkdir(parents=True, exist_ok=True)
     inventory_config.output_path.write_text(content, encoding="utf-8")
     return inventory_config.output_path
@@ -674,7 +794,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     if args.check:
         base = default_inventory_config()
-        content = render_inventory(collect_reports(base))
+        content = _render_current_inventory(base)
         return write_or_check(
             base.output_path,
             content,

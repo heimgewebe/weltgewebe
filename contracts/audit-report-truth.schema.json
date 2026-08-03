@@ -1,0 +1,167 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://heimgewebe.org/contracts/audit-report-truth.schema.json",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "pass",
+              "healthy",
+              "no_material_drift"
+            ]
+          }
+        },
+        "required": [
+          "status"
+        ]
+      },
+      "then": {
+        "properties": {
+          "coverage": {
+            "properties": {
+              "complete": {
+                "const": true
+              },
+              "failures": {
+                "const": 0
+              },
+              "fresh": {
+                "const": true
+              },
+              "method": {
+                "enum": [
+                  "exact",
+                  "bounded"
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": false,
+  "description": "Versioned fail-closed truth metadata for generated audit reports.",
+  "properties": {
+    "coverage": {
+      "additionalProperties": false,
+      "properties": {
+        "checked_items": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "complete": {
+          "type": "boolean"
+        },
+        "failures": {
+          "minimum": 0,
+          "type": "integer"
+        },
+        "fresh": {
+          "type": "boolean"
+        },
+        "method": {
+          "enum": [
+            "exact",
+            "bounded",
+            "heuristic"
+          ]
+        },
+        "scope": {
+          "minLength": 1,
+          "type": "string"
+        },
+        "total_items": {
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "scope",
+        "complete",
+        "fresh",
+        "method",
+        "checked_items",
+        "total_items",
+        "failures"
+      ],
+      "type": "object"
+    },
+    "does_not_establish": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "generated_at": {
+      "format": "date-time",
+      "type": "string"
+    },
+    "limitations": {
+      "items": {
+        "minLength": 1,
+        "type": "string"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "source_revision": {
+      "pattern": "^[0-9a-f]{40}$",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "minLength": 1,
+            "type": "string"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          }
+        },
+        "required": [
+          "path",
+          "sha256"
+        ],
+        "type": "object"
+      },
+      "minItems": 1,
+      "type": "array",
+      "uniqueItems": true
+    },
+    "status": {
+      "enum": [
+        "pass",
+        "healthy",
+        "no_material_drift",
+        "partial",
+        "fail",
+        "unknown",
+        "not_decision_relevant",
+        "deprecated"
+      ]
+    }
+  },
+  "required": [
+    "schema_version",
+    "status",
+    "coverage",
+    "source_revision",
+    "generated_at",
+    "sources",
+    "limitations",
+    "does_not_establish"
+  ],
+  "title": "Audit report truth contract",
+  "type": "object"
+}

@@ -17,6 +17,7 @@ from scripts.docmeta.docmeta import parse_frontmatter
 from scripts.docmeta.report_lifecycle_requirements import (
     missing_required_report_field_rules,
     string_value as _string_value,
+    validate_truth_contract,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -55,6 +56,41 @@ def _iter_report_paths(root: Path) -> list[Path]:
     if not reports_dir.exists():
         return []
     return sorted([p for p in reports_dir.rglob("*.md") if p.is_file()])
+
+
+TRUTH_CONTRACT_RE = re.compile(
+    r"```json audit-report-truth\.v1\n(?P<payload>\{.*?\})\n```",
+    re.DOTALL,
+)
+
+
+def _iter_truth_report_paths(root: Path) -> list[Path]:
+    return [
+        path
+        for path in (
+            root / "docs" / "_generated" / "report-lifecycle.md",
+            root / "docs" / "_generated" / "report-lifecycle-inventory.md",
+        )
+        if path.is_file()
+    ]
+
+
+def extract_truth_contract(markdown: str) -> dict[str, object]:
+    match = TRUTH_CONTRACT_RE.search(markdown)
+    if match is None:
+        raise ValueError("truth_contract_missing")
+    value = json.loads(match.group("payload"))
+    if not isinstance(value, dict):
+        raise ValueError("truth_contract_not_object")
+    return value
+
+
+def validate_truth_report(path: Path, root: Path) -> tuple[str, ...]:
+    try:
+        contract = extract_truth_contract(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, json.JSONDecodeError) as exc:
+        return (str(exc) or "truth_contract_invalid_json",)
+    return validate_truth_contract(contract, root=root)
 
 
 def _changed_report_paths(root: Path, changed_from: str, changed_to: str) -> list[Path]:
@@ -447,6 +483,18 @@ def run(root: Path, mode: str, changed_from: str | None = None, changed_to: str 
             continue
         findings = _validate_report(p, fm, root)
         all_findings.extend(findings)
+
+    for truth_path in _iter_truth_report_paths(root):
+        for violation in validate_truth_report(truth_path, root):
+            all_findings.append(
+                Finding(
+                    path=truth_path.relative_to(root).as_posix(),
+                    code="invalid_truth_contract",
+                    severity="warn",
+                    message=violation,
+                    field=None,
+                )
+            )
 
     all_findings.sort(key=lambda f: (f.path, f.code))
 

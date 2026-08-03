@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 import io
+import json
 from pathlib import Path
 import subprocess
 import tempfile
@@ -11,8 +12,10 @@ from unittest.mock import patch
 
 from scripts.docmeta.validate_report_lifecycle import (
     Finding,
+    extract_truth_contract,
     main,
     run,
+    validate_truth_report,
     _validate_report,
     _gha_escape_data,
     _gha_escape_property,
@@ -898,6 +901,48 @@ review_after: 2026-07-13
         findings = _validate_report(path, fm, self.tmp_root)
         codes = [f.code for f in findings]
         self.assertIn("missing_lifecycle", codes)
+
+
+class TestGeneratedTruthContractValidation(unittest.TestCase):
+    def _contract(self, digest: str) -> dict[str, object]:
+        return {
+            "schema_version": 1,
+            "status": "partial",
+            "coverage": {
+                "scope": "one source",
+                "complete": False,
+                "fresh": True,
+                "method": "exact",
+                "checked_items": 1,
+                "total_items": 1,
+                "failures": 0,
+            },
+            "source_revision": "a" * 40,
+            "generated_at": "2026-08-03T00:00:00+00:00",
+            "sources": [{"path": "docs/reports/source.md", "sha256": digest}],
+            "limitations": ["repository-only"],
+            "does_not_establish": ["runtime-health"],
+        }
+
+    def test_extract_truth_contract_requires_exact_fence(self) -> None:
+        with self.assertRaisesRegex(ValueError, "truth_contract_missing"):
+            extract_truth_contract("# no contract\n")
+
+    def test_source_digest_mismatch_fails_closed(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            source = root / "docs" / "reports" / "source.md"
+            source.parent.mkdir(parents=True)
+            source.write_text("actual\n", encoding="utf-8")
+            report = root / "docs" / "_generated" / "report-lifecycle.md"
+            report.parent.mkdir(parents=True)
+            payload = json.dumps(self._contract("b" * 64), indent=2, sort_keys=True)
+            report.write_text(
+                "```json audit-report-truth.v1\n" + payload + "\n```\n",
+                encoding="utf-8",
+            )
+            violations = validate_truth_report(report, root)
+            self.assertIn("source_digest_mismatch_0", violations)
 
 
 if __name__ == "__main__":

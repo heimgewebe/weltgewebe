@@ -170,6 +170,8 @@ status: active
             ("lifecycle", "owner_task", "review_after", "lifecycle_state"),
         )
         self.assertIn("descriptive only", markdown)
+        self.assertIn("## Truth Contract Migration", markdown)
+        self.assertIn("not_decision_relevant", markdown)
         self.assertNotIn("invalid", markdown.lower())
         self.assertNotIn("must fix", markdown.lower())
         self.assertNotIn("violation", markdown.lower())
