@@ -22,11 +22,28 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(content, encoding="utf-8")
 
+    @staticmethod
+    def _surface_contract(claim: str) -> dict:
+        return {
+            "scope": "fixture repository metadata",
+            "consumers": [
+                {
+                    "path": "repo.meta.yaml",
+                    "purpose": "Projects the controlled surface path for repository discovery.",
+                }
+            ],
+            "claims": [claim],
+            "does_not_establish": [
+                "Runtime behaviour or authority outside this fixture repository."
+            ],
+            "overlaps": [],
+        }
+
     def _manifest(self) -> dict:
         command_a = ["python3", "-m", "scripts.docmeta.generate_agent_readiness"]
         command_b = ["python3", "-m", "scripts.docmeta.generate_claim_evidence_map"]
         return {
-            "schema_version": 1,
+            "schema_version": 2,
             "artifacts": [
                 {
                     "path": "docs/_generated/agent-readiness.md",
@@ -36,6 +53,7 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
                     "generator": command_a,
                     "checks": [command_a + ["--check"]],
                     "sources": ["scripts/agent", "docs/claims/registry.yml"],
+                    **self._surface_contract("Agent readiness fixture status."),
                     "commit_required": True,
                     "blocking": True,
                 },
@@ -47,6 +65,7 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
                     "generator": command_b,
                     "checks": [command_b + ["--check"]],
                     "sources": ["docs/doc-freshness-registry.yml"],
+                    **self._surface_contract("Claim-to-evidence fixture linkage."),
                     "commit_required": True,
                     "blocking": True,
                 },
@@ -70,6 +89,7 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
                         ],
                     ],
                     "sources": ["docs/tasks/board.md"],
+                    **self._surface_contract("Curated task fixture index."),
                     "commit_required": True,
                     "blocking": True,
                 },
@@ -112,6 +132,82 @@ class TestValidateGeneratedArtifacts(unittest.TestCase):
 
     def test_valid_manifest_passes(self):
         self.assertEqual(validator.validate_manifest(self.root), [])
+
+    def test_surface_contract_is_required(self):
+        for field, code in (
+            ("scope", "SCOPE_INVALID"),
+            ("consumers", "CONSUMERS_INVALID"),
+            ("claims", "CLAIMS_INVALID"),
+            ("does_not_establish", "DOES_NOT_ESTABLISH_INVALID"),
+            ("overlaps", "OVERLAPS_INVALID"),
+        ):
+            with self.subTest(field=field):
+                data = self._manifest()
+                data["artifacts"][0].pop(field)
+                self._write_manifest(data)
+                self.assertIn(code, self._codes())
+
+    def test_consumer_must_exist(self):
+        data = self._manifest()
+        data["artifacts"][0]["consumers"][0]["path"] = "missing-consumer.md"
+        self._write_manifest(data)
+        self.assertIn("CONSUMER_MISSING", self._codes())
+
+    def test_consumer_must_be_a_regular_file(self):
+        (self.root / "consumer-directory").mkdir()
+        data = self._manifest()
+        data["artifacts"][0]["consumers"][0]["path"] = "consumer-directory"
+        self._write_manifest(data)
+        self.assertIn("CONSUMER_MISSING", self._codes())
+
+    def test_claim_has_single_authoritative_surface(self):
+        data = self._manifest()
+        data["artifacts"][1]["claims"] = list(data["artifacts"][0]["claims"])
+        self._write_manifest(data)
+        self.assertIn("CLAIM_AUTHORITY_DUPLICATE", self._codes())
+
+    def test_claim_authority_is_case_insensitive(self):
+        data = self._manifest()
+        data["artifacts"][1]["claims"] = [
+            data["artifacts"][0]["claims"][0].swapcase()
+        ]
+        self._write_manifest(data)
+        self.assertIn("CLAIM_AUTHORITY_DUPLICATE", self._codes())
+
+    def test_overlap_requires_reciprocal_distinction(self):
+        data = self._manifest()
+        first = data["artifacts"][0]
+        second = data["artifacts"][1]
+        first["overlaps"] = [
+            {
+                "path": second["path"],
+                "distinction": "repo.meta.yaml consumes readiness separately from evidence mapping.",
+            }
+        ]
+        self._write_manifest(data)
+        self.assertIn("OVERLAP_NOT_RECIPROCAL", self._codes())
+
+        second["overlaps"] = [
+            {
+                "path": first["path"],
+                "distinction": "repo.meta.yaml consumes evidence mapping separately from readiness.",
+            }
+        ]
+        self._write_manifest(data)
+        self.assertNotIn("OVERLAP_NOT_RECIPROCAL", self._codes())
+        self.assertNotIn(
+            "OVERLAP_CONSUMER_JUSTIFICATION_MISSING", self._codes()
+        )
+
+        data = self._manifest()
+        first = data["artifacts"][0]
+        second = data["artifacts"][1]
+        first["overlaps"] = [{"path": second["path"], "distinction": "Different."}]
+        second["overlaps"] = [{"path": first["path"], "distinction": "Different."}]
+        self._write_manifest(data)
+        self.assertIn(
+            "OVERLAP_CONSUMER_JUSTIFICATION_MISSING", self._codes()
+        )
 
     def test_generated_role_must_be_diagnostic(self):
         data = self._manifest()
