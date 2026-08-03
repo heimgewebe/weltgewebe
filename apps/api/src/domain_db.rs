@@ -2198,17 +2198,19 @@ fn edge_matches_projection(existing: &Edge, expected: &Edge) -> bool {
 /// Atomically persist a PostgreSQL node and its mandatory account→node origin
 /// Faden. Operation replays repair an older missing Faden in the same guarded
 /// transaction after validating the original node semantics.
-pub async fn insert_domain_node_and_faden_with_creator_limit<F, G>(
+pub async fn insert_domain_node_and_faden_with_creator_limit<F, G, H>(
     pool: &PgPool,
     node: &Node,
     operation: &CreateOperationKey,
     creator_node_limit: Option<usize>,
     existing_matches: F,
     edge_for_node: G,
+    edge_operation_for_node: H,
 ) -> Result<NodeFadenCreateOutcome, NodeFadenCreateError>
 where
     F: Fn(&Node) -> bool,
     G: Fn(&str) -> Edge,
+    H: Fn(&str) -> CreateOperationKey,
 {
     let mut tx = pool
         .begin()
@@ -2258,8 +2260,10 @@ where
         }
 
         let expected_edge = edge_for_node(&actual_node.id);
+        let edge_operation = edge_operation_for_node(&actual_node.id);
         let edge_outcome =
-            insert_domain_edge_in_transaction(&mut tx, &expected_edge, Some(operation)).await?;
+            insert_domain_edge_in_transaction(&mut tx, &expected_edge, Some(&edge_operation))
+                .await?;
         let actual_edge = match edge_outcome {
             CreateWriteOutcome::Created => expected_edge,
             CreateWriteOutcome::Existing(existing) => {
@@ -2313,7 +2317,6 @@ impl NodeFadenCachePublicationGuard {
 pub async fn lock_node_faden_cache_publication(
     pool: &PgPool,
     node_id: &str,
-    operation: &CreateOperationKey,
     expected_edge: &Edge,
 ) -> Result<NodeFadenCachePublicationGuard, NodeFadenCreateError> {
     let mut transaction = pool
@@ -2343,11 +2346,9 @@ pub async fn lock_node_faden_cache_publication(
     let edge = if node.is_some() {
         let edge = sqlx::query_as::<_, EdgeRow>(
             "SELECT id, source_id, target_id, edge_kind, created_at, payload::text \
-             FROM domain_edges \
-             WHERE create_actor_id = $1 AND create_operation_id = $2",
+             FROM domain_edges WHERE id = $1",
         )
-        .bind(&operation.actor_id)
-        .bind(&operation.operation_id)
+        .bind(&expected_edge.id)
         .fetch_optional(&mut *transaction)
         .await
         .map_err(EdgeWriteError::Database)?

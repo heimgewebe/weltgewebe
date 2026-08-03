@@ -44,8 +44,8 @@ use weltgewebe_api::{
     domain_db::{
         delete_node_with_edges_in_postgres, delete_node_with_edges_in_postgres_audited,
         insert_domain_node, load_nodes_from_postgres, lock_node_faden_cache_publication,
-        patch_node_in_postgres, replace_node_in_postgres_audited, CreateOperationKey,
-        NodeConversationDeleteEffect, NodeCreateError, NodePatchInput, NodeWriteError,
+        patch_node_in_postgres, replace_node_in_postgres_audited, NodeConversationDeleteEffect,
+        NodeCreateError, NodePatchInput, NodeWriteError,
     },
     governance::delete_guest_account,
     middleware::{
@@ -2393,18 +2393,12 @@ async fn node_faden_cache_publication_is_delete_race_safe() -> Result<()> {
         .find(|edge| edge.source_id == ACTOR_ID && edge.target_id == first_node_id)
         .cloned()
         .context("first origin Faden")?;
-    let first_operation = CreateOperationKey {
-        actor_id: ACTOR_ID.to_string(),
-        operation_id: OPERATION_ONE.to_string(),
-    };
-
     delete_node_with_edges_in_postgres(&pool, &first_node_id)
         .await
         .context("delete before cache publication readback")?;
-    let deleted_snapshot =
-        lock_node_faden_cache_publication(&pool, &first_node_id, &first_operation, &first_edge)
-            .await
-            .context("lock deleted publication snapshot")?;
+    let deleted_snapshot = lock_node_faden_cache_publication(&pool, &first_node_id, &first_edge)
+        .await
+        .context("lock deleted publication snapshot")?;
     assert!(deleted_snapshot.node.is_none());
     assert!(deleted_snapshot.edge.is_none());
     deleted_snapshot.release().await?;
@@ -2428,15 +2422,9 @@ async fn node_faden_cache_publication_is_delete_race_safe() -> Result<()> {
         .find(|edge| edge.source_id == ACTOR_ID && edge.target_id == second_node_id)
         .cloned()
         .context("second origin Faden")?;
-    let second_operation = CreateOperationKey {
-        actor_id: ACTOR_ID.to_string(),
-        operation_id: OPERATION_TWO.to_string(),
-    };
-
-    let publication =
-        lock_node_faden_cache_publication(&pool, &second_node_id, &second_operation, &second_edge)
-            .await
-            .context("lock live publication snapshot")?;
+    let publication = lock_node_faden_cache_publication(&pool, &second_node_id, &second_edge)
+        .await
+        .context("lock live publication snapshot")?;
     assert!(publication.node.is_some());
     assert!(publication.edge.is_some());
 

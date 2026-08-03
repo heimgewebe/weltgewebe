@@ -24,6 +24,41 @@ export const EDGE_VISUAL_STYLE = {
   },
 } as const;
 
+const EDGE_LAYER_VARIANTS = [
+  {
+    fadenType: "legacy",
+    layerId: LAYERS.EDGES_LAYER,
+    haloLayerId: LAYERS.EDGES_HALO_LAYER,
+    color: EDGE_VISUAL_STYLE.mainColor,
+    width: EDGE_VISUAL_STYLE.mainWidth,
+    dashArray: EDGE_VISUAL_STYLE.dashArray,
+  },
+  {
+    fadenType: "conversation",
+    layerId: LAYERS.EDGES_CONVERSATION_LAYER,
+    haloLayerId: LAYERS.EDGES_CONVERSATION_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.conversation,
+  },
+  {
+    fadenType: "proposal",
+    layerId: LAYERS.EDGES_PROPOSAL_LAYER,
+    haloLayerId: LAYERS.EDGES_PROPOSAL_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.proposal,
+  },
+  {
+    fadenType: "knotting",
+    layerId: LAYERS.EDGES_KNOTTING_LAYER,
+    haloLayerId: LAYERS.EDGES_KNOTTING_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.knotting,
+  },
+  {
+    fadenType: "vote",
+    layerId: LAYERS.EDGES_VOTE_LAYER,
+    haloLayerId: LAYERS.EDGES_VOTE_HALO_LAYER,
+    ...EDGE_VISUAL_STYLE.byType.vote,
+  },
+] as const;
+
 export function buildEdgeFeatures(
   edges: MapEdge[],
   points: MapEntityViewModel[],
@@ -71,44 +106,9 @@ export function buildEdgeFeatures(
   return features;
 }
 
-export function updateEdges(
-  map: MapLibreMap,
-  edges: MapEdge[],
-  points: MapEntityViewModel[],
-  showEdges: boolean,
-  nowMs = Date.now(),
-) {
-  const sourceId = LAYERS.EDGES_SOURCE;
-  const layerId = LAYERS.EDGES_LAYER;
-  const haloLayerId = LAYERS.EDGES_HALO_LAYER;
-  const source = map.getSource(sourceId) as GeoJSONSource | undefined;
-  const features = buildEdgeFeatures(edges, points, showEdges, nowMs);
-  const geoJsonData: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
-    type: "FeatureCollection",
-    features,
-  };
-
-  if (source) {
-    source.setData(geoJsonData);
-    ensureEdgeLayers(map, sourceId, layerId, haloLayerId);
-  } else if (features.length > 0) {
-    map.addSource(sourceId, { type: "geojson", data: geoJsonData });
-    ensureEdgeLayers(map, sourceId, layerId, haloLayerId);
-  }
-}
-
-function ensureEdgeLayers(
-  map: MapLibreMap,
-  sourceId: string,
-  layerId: string,
-  haloLayerId: string,
-) {
-  const firstSymbolId = map
-    .getStyle()
-    ?.layers?.find((layer) => layer.type === "symbol")?.id;
-  const hasHalo = Boolean(map.getLayer(haloLayerId));
-  const hasMain = Boolean(map.getLayer(layerId));
-
+export function buildEdgeLayerSpecifications(
+  sourceId: string = LAYERS.EDGES_SOURCE,
+): LineLayerSpecification[] {
   const opacity: ExpressionSpecification = [
     "coalesce",
     ["to-number", ["get", "opacity"]],
@@ -119,87 +119,90 @@ function ensureEdgeLayers(
     opacity,
     EDGE_VISUAL_STYLE.haloOpacityFactor,
   ];
-  const fadenType: ExpressionSpecification = [
-    "coalesce",
-    ["get", "fadenType"],
-    "legacy",
-  ];
-  const mainColor: ExpressionSpecification = [
-    "match",
-    fadenType,
-    "conversation",
-    EDGE_VISUAL_STYLE.byType.conversation.color,
-    "proposal",
-    EDGE_VISUAL_STYLE.byType.proposal.color,
-    "knotting",
-    EDGE_VISUAL_STYLE.byType.knotting.color,
-    "vote",
-    EDGE_VISUAL_STYLE.byType.vote.color,
-    EDGE_VISUAL_STYLE.mainColor,
-  ];
-  const mainWidth: ExpressionSpecification = [
-    "match",
-    fadenType,
-    "conversation",
-    EDGE_VISUAL_STYLE.byType.conversation.width,
-    "proposal",
-    EDGE_VISUAL_STYLE.byType.proposal.width,
-    "knotting",
-    EDGE_VISUAL_STYLE.byType.knotting.width,
-    "vote",
-    EDGE_VISUAL_STYLE.byType.vote.width,
-    EDGE_VISUAL_STYLE.mainWidth,
-  ];
-  const dashArray: ExpressionSpecification = [
-    "match",
-    fadenType,
-    "conversation",
-    ["literal", EDGE_VISUAL_STYLE.byType.conversation.dashArray],
-    "proposal",
-    ["literal", EDGE_VISUAL_STYLE.byType.proposal.dashArray],
-    "knotting",
-    ["literal", EDGE_VISUAL_STYLE.byType.knotting.dashArray],
-    "vote",
-    ["literal", EDGE_VISUAL_STYLE.byType.vote.dashArray],
-    ["literal", EDGE_VISUAL_STYLE.dashArray],
-  ];
-  const haloWidth: ExpressionSpecification = ["+", mainWidth, 2.75];
   const commonLayout: LineLayerSpecification["layout"] = {
     "line-join": "round",
     "line-cap": "round",
   };
-  const haloLayer: LineLayerSpecification = {
-    id: haloLayerId,
-    type: "line",
-    source: sourceId,
-    layout: commonLayout,
-    paint: {
-      "line-color": EDGE_VISUAL_STYLE.haloColor,
-      "line-width": haloWidth,
-      "line-blur": EDGE_VISUAL_STYLE.haloBlur,
-      "line-opacity": haloOpacity,
-      "line-dasharray": dashArray,
-    },
-  };
-  const mainLayer: LineLayerSpecification = {
-    id: layerId,
-    type: "line",
-    source: sourceId,
-    layout: commonLayout,
-    paint: {
-      "line-color": mainColor,
-      "line-width": mainWidth,
-      "line-opacity": opacity,
-      "line-dasharray": dashArray,
-    },
+
+  return EDGE_LAYER_VARIANTS.flatMap((variant) => {
+    const filter = [
+      "==",
+      ["get", "fadenType"],
+      variant.fadenType,
+    ] as LineLayerSpecification["filter"];
+    const dashArray = [...variant.dashArray] as [number, number];
+    const haloLayer: LineLayerSpecification = {
+      id: variant.haloLayerId,
+      type: "line",
+      source: sourceId,
+      filter,
+      layout: commonLayout,
+      paint: {
+        "line-color": EDGE_VISUAL_STYLE.haloColor,
+        "line-width": variant.width + 2.75,
+        "line-blur": EDGE_VISUAL_STYLE.haloBlur,
+        "line-opacity": haloOpacity,
+        "line-dasharray": dashArray,
+      },
+    };
+    const mainLayer: LineLayerSpecification = {
+      id: variant.layerId,
+      type: "line",
+      source: sourceId,
+      filter,
+      layout: commonLayout,
+      paint: {
+        "line-color": variant.color,
+        "line-width": variant.width,
+        "line-opacity": opacity,
+        "line-dasharray": dashArray,
+      },
+    };
+    return [haloLayer, mainLayer];
+  });
+}
+
+export function updateEdges(
+  map: MapLibreMap,
+  edges: MapEdge[],
+  points: MapEntityViewModel[],
+  showEdges: boolean,
+  nowMs = Date.now(),
+) {
+  const sourceId = LAYERS.EDGES_SOURCE;
+  const source = map.getSource(sourceId) as GeoJSONSource | undefined;
+  const features = buildEdgeFeatures(edges, points, showEdges, nowMs);
+  const geoJsonData: GeoJSON.FeatureCollection<GeoJSON.LineString> = {
+    type: "FeatureCollection",
+    features,
   };
 
-  if (!hasHalo && !hasMain) {
-    map.addLayer(haloLayer, firstSymbolId);
-    map.addLayer(mainLayer, firstSymbolId);
-  } else if (!hasHalo && hasMain) {
-    map.addLayer(haloLayer, layerId);
-  } else if (hasHalo && !hasMain) {
-    map.addLayer(mainLayer, firstSymbolId);
+  if (source) {
+    source.setData(geoJsonData);
+    ensureEdgeLayers(map, sourceId);
+  } else if (features.length > 0) {
+    map.addSource(sourceId, { type: "geojson", data: geoJsonData });
+    ensureEdgeLayers(map, sourceId);
+  }
+}
+
+function ensureEdgeLayers(map: MapLibreMap, sourceId: string) {
+  const firstSymbolId = map
+    .getStyle()
+    ?.layers?.find((layer) => layer.type === "symbol")?.id;
+  const specifications = buildEdgeLayerSpecifications(sourceId);
+
+  for (let index = 0; index < specifications.length; index += 2) {
+    const haloLayer = specifications[index];
+    const mainLayer = specifications[index + 1];
+    const hasHalo = Boolean(map.getLayer(haloLayer.id));
+    const hasMain = Boolean(map.getLayer(mainLayer.id));
+
+    if (!hasHalo) {
+      map.addLayer(haloLayer, hasMain ? mainLayer.id : firstSymbolId);
+    }
+    if (!hasMain) {
+      map.addLayer(mainLayer, firstSymbolId);
+    }
   }
 }

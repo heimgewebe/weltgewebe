@@ -992,31 +992,19 @@ pub(crate) async fn ensure_node_activity_faden_guarded(
         return Ok(());
     }
 
-    let operation_id =
-        node_activity_faden_operation_id(faden_type, account_id, node_id, subject_id);
-    ensure_node_faden_with_operation_id(
-        state,
-        auth,
-        node_id,
-        Some(&operation_id),
-        false,
-        faden_type,
-        subject_id,
-    )
-    .await
+    ensure_node_faden_with_operation_id(state, auth, node_id, false, faden_type, subject_id).await
 }
 
 /// Ensure the Faden that visualizes one successful Webungsaktion.
 ///
 /// The edge writer remains an internal projection primitive. Its HTTP route is
-/// intentionally absent. Reusing the node operation id (or, if absent, the
-/// server-owned node id) makes projection retries idempotent across process
-/// failures and response loss.
+/// intentionally absent. The deterministic relation id — account, Fadenart,
+/// drawable node and semantic subject — makes retries idempotent across process
+/// failures and prevents create/edit from drawing parallel Knüpffäden.
 async fn ensure_node_faden_with_operation_id(
     state: &ApiState,
     auth: &AuthContext,
     node_id: &str,
-    node_operation_id: Option<&str>,
     account_lifecycle_guarded: bool,
     faden_type: super::edges::FadenType,
     faden_subject_id: &str,
@@ -1078,7 +1066,8 @@ async fn ensure_node_faden_with_operation_id(
         None
     };
 
-    let projection_operation_id = node_operation_id.unwrap_or(node_id);
+    let projection_operation_id =
+        node_activity_faden_operation_id(faden_type, account_id, node_id, faden_subject_id);
     let payload = json!({
         "source_id": account_id,
         "source_type": "account",
@@ -1294,6 +1283,15 @@ pub async fn create_node(
             |actual_node_id| {
                 super::edges::build_node_origin_faden(&creator_account_id, actual_node_id)
             },
+            |actual_node_id| CreateOperationKey {
+                actor_id: creator_account_id.clone(),
+                operation_id: node_activity_faden_operation_id(
+                    super::edges::FadenType::Knotting,
+                    &creator_account_id,
+                    actual_node_id,
+                    actual_node_id,
+                ),
+            },
         )
         .await;
 
@@ -1347,12 +1345,8 @@ pub async fn create_node(
         // narrow gap, their state is preserved instead of being overwritten by
         // the stale create outcome. The guard remains held through both cache
         // writes, matching edit/delete serialization across API instances.
-        let publication = lock_node_faden_cache_publication(
-            pool,
-            &outcome.node.id,
-            operation_key,
-            &outcome.edge,
-        )
+        let publication =
+            lock_node_faden_cache_publication(pool, &outcome.node.id, &outcome.edge)
         .await
         .map_err(|error| {
             tracing::error!(%error, node_id = %outcome.node.id, "failed to lock canonical node/Faden cache publication");
@@ -1448,7 +1442,6 @@ pub async fn create_node(
                         &state,
                         &auth,
                         &existing.id,
-                        semantic_request.operation_id.as_deref(),
                         false,
                         super::edges::FadenType::Knotting,
                         &existing.id,
@@ -1516,7 +1509,6 @@ pub async fn create_node(
         &state,
         &auth,
         &node.id,
-        semantic_request.operation_id.as_deref(),
         false,
         super::edges::FadenType::Knotting,
         &node.id,
