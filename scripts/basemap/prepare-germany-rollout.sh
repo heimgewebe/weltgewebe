@@ -32,6 +32,7 @@ else
 fi
 ARTIFACT_NAME="basemap-germany-v${BASEMAP_VERSION}.pmtiles"
 META_NAME="basemap-germany-v${BASEMAP_VERSION}.meta.json"
+BUILD_RECEIPT_NAME="basemap-germany-v${BASEMAP_VERSION}.build.json"
 PROOF_NAME="basemap-germany-v${BASEMAP_VERSION}.validation.json"
 RAW_PROOF_NAME="basemap-germany-v${BASEMAP_VERSION}.validation.raw.json"
 ALIAS_ARTIFACT_NAME="basemap-germany.pmtiles"
@@ -83,15 +84,17 @@ TARGET_DIR="$(cd "$TARGET_DIR" > /dev/null 2>&1 && pwd)"
 
 ARTIFACT="$BUILD_DIR/$ARTIFACT_NAME"
 META="$BUILD_DIR/$META_NAME"
+BUILD_RECEIPT="$BUILD_DIR/$BUILD_RECEIPT_NAME"
 RAW_PROOF="$BUILD_DIR/$RAW_PROOF_NAME"
 PROOF_OUTPUT="${GERMANY_BASEMAP_PROOF_OUTPUT:-$BUILD_DIR/$PROOF_NAME}"
 TARGET_ARTIFACT="$TARGET_DIR/$ARTIFACT_NAME"
 TARGET_META="$TARGET_DIR/$META_NAME"
+TARGET_BUILD_RECEIPT="$TARGET_DIR/$BUILD_RECEIPT_NAME"
 TARGET_PROOF="$TARGET_DIR/$PROOF_NAME"
 ALIAS_ARTIFACT="$TARGET_DIR/$ALIAS_ARTIFACT_NAME"
 ALIAS_META="$TARGET_DIR/$ALIAS_META_NAME"
 
-for published_path in "$TARGET_ARTIFACT" "$TARGET_META" "$TARGET_PROOF"; do
+for published_path in "$TARGET_ARTIFACT" "$TARGET_PROOF" "$TARGET_BUILD_RECEIPT" "$TARGET_META"; do
   if [[ -e "$published_path" || -L "$published_path" ]]; then
     fail "published Germany version already exists: $published_path; choose a new BASEMAP_VERSION"
   fi
@@ -106,6 +109,7 @@ fi
 
 [[ -s "$ARTIFACT" ]] || fail "Germany artifact missing: $ARTIFACT"
 [[ -s "$META" ]] || fail "Germany metadata missing: $META"
+[[ -s "$BUILD_RECEIPT" ]] || fail "Germany measured build receipt missing: $BUILD_RECEIPT"
 
 ARTIFACT_SHA256="$(sha256sum "$ARTIFACT" | awk '{print $1}')"
 ARTIFACT_SIZE="$(wc -c < "$ARTIFACT" | tr -d '[:space:]')"
@@ -135,6 +139,29 @@ if meta.get("size_bytes") != int(os.environ["EXPECTED_SIZE"]):
     raise SystemExit("Germany sentinel size mismatch")
 if meta.get("sha256") != os.environ["EXPECTED_SHA256"]:
     raise SystemExit("Germany sentinel SHA256 mismatch")
+PY
+
+BUILD_RECEIPT_PATH="$BUILD_RECEIPT" \
+  EXPECTED_VERSION="$BASEMAP_VERSION" \
+  EXPECTED_ARTIFACT_NAME="$ARTIFACT_NAME" \
+  EXPECTED_SHA256="$ARTIFACT_SHA256" \
+  EXPECTED_SIZE="$ARTIFACT_SIZE" \
+  python3 << 'PY'
+import json, os
+from pathlib import Path
+r=json.loads(Path(os.environ["BUILD_RECEIPT_PATH"]).read_text())
+if r.get("schema_version")!=1 or r.get("verdict")!="PROVEN": raise SystemExit("Germany measured build receipt is not PROVEN")
+if r.get("contract")!="germany-pmtiles-measured-build-v1": raise SystemExit("Germany measured build receipt contract mismatch")
+if r.get("version")!=os.environ["EXPECTED_VERSION"]: raise SystemExit("Germany measured build receipt version mismatch")
+if r.get("artifact")!={"name":os.environ["EXPECTED_ARTIFACT_NAME"],"sha256":os.environ["EXPECTED_SHA256"],"size_bytes":int(os.environ["EXPECTED_SIZE"])}: raise SystemExit("Germany measured build receipt artifact mismatch")
+x=r.get("execution");p=r.get("peaks")
+if not isinstance(x,dict) or not isinstance(p,dict): raise SystemExit("Germany measured build receipt lacks execution or peaks")
+for f in ("duration_seconds","sample_count"):
+ v=x.get(f)
+ if not isinstance(v,(int,float)) or v<=0: raise SystemExit(f"Germany measured build execution {f} must be positive")
+for f in ("cpu_percent","memory_bytes","workspace_growth_bytes","filesystem_consumed_bytes"):
+ v=p.get(f)
+ if not isinstance(v,(int,float)) or v<=0: raise SystemExit(f"Germany measured build peak {f} must be positive")
 PY
 
 if [[ ! -d "$REPO_ROOT/apps/web/node_modules" ]]; then
@@ -196,16 +223,19 @@ PY
 
 ARTIFACT_TMP="$TARGET_DIR/.${ARTIFACT_NAME}.tmp.$$"
 PROOF_TMP="$TARGET_DIR/.${PROOF_NAME}.tmp.$$"
+BUILD_RECEIPT_TMP="$TARGET_DIR/.${BUILD_RECEIPT_NAME}.tmp.$$"
 META_TMP="$TARGET_DIR/.${META_NAME}.tmp.$$"
 ARTIFACT_CREATED=0
 PROOF_CREATED=0
+BUILD_RECEIPT_CREATED=0
 META_CREATED=0
 PUBLISH_COMPLETE=0
 
 cleanup_publish() {
-  rm -f "$ARTIFACT_TMP" "$PROOF_TMP" "$META_TMP"
+  rm -f "$ARTIFACT_TMP" "$PROOF_TMP" "$BUILD_RECEIPT_TMP" "$META_TMP"
   if [[ "$PUBLISH_COMPLETE" != "1" ]]; then
     [[ "$META_CREATED" == "1" ]] && rm -f "$TARGET_META"
+    [[ "$BUILD_RECEIPT_CREATED" == "1" ]] && rm -f "$TARGET_BUILD_RECEIPT"
     [[ "$PROOF_CREATED" == "1" ]] && rm -f "$TARGET_PROOF"
     [[ "$ARTIFACT_CREATED" == "1" ]] && rm -f "$TARGET_ARTIFACT"
   fi
@@ -236,6 +266,15 @@ publish_immutable_set() {
   fi
 
   if [[ "$failed" == "0" ]]; then
+    if ! ln "$BUILD_RECEIPT_TMP" "$TARGET_BUILD_RECEIPT"; then
+      echo "ERROR: could not publish immutable Germany build receipt: $TARGET_BUILD_RECEIPT" >&2
+      failed=1
+    else
+      BUILD_RECEIPT_CREATED=1
+    fi
+  fi
+
+  if [[ "$failed" == "0" ]]; then
     if ! ln "$META_TMP" "$TARGET_META"; then
       echo "ERROR: could not publish immutable Germany sentinel: $TARGET_META" >&2
       failed=1
@@ -255,15 +294,17 @@ trap on_terminate TERM
 
 install -m 0644 "$ARTIFACT" "$ARTIFACT_TMP"
 install -m 0644 "$PROOF_OUTPUT" "$PROOF_TMP"
+install -m 0644 "$BUILD_RECEIPT" "$BUILD_RECEIPT_TMP"
 install -m 0644 "$META" "$META_TMP"
 
 publish_immutable_set || fail "could not publish the immutable Germany version set"
 
-for published_path in "$TARGET_ARTIFACT" "$TARGET_PROOF" "$TARGET_META"; do
+for published_path in "$TARGET_ARTIFACT" "$TARGET_PROOF" "$TARGET_BUILD_RECEIPT" "$TARGET_META"; do
   [[ -s "$published_path" ]] || fail "published Germany version file missing: $published_path"
 done
 cmp -s "$ARTIFACT" "$TARGET_ARTIFACT" || fail "published Germany artifact differs from staging"
 cmp -s "$PROOF_OUTPUT" "$TARGET_PROOF" || fail "published Germany validation differs from staging"
+cmp -s "$BUILD_RECEIPT" "$TARGET_BUILD_RECEIPT" || fail "published Germany build receipt differs from staging"
 cmp -s "$META" "$TARGET_META" || fail "published Germany sentinel differs from staging"
 
 ALIAS_ARTIFACT_STATE_AFTER="$(path_state "$ALIAS_ARTIFACT")"
@@ -282,6 +323,7 @@ echo "Isolated build: $BUILD_DIR"
 echo "Published immutable version files:"
 echo "  $TARGET_ARTIFACT"
 echo "  $TARGET_META"
+echo "  $TARGET_BUILD_RECEIPT"
 echo "  $TARGET_PROOF"
 echo "Stable aliases were NOT changed:"
 echo "  $ALIAS_ARTIFACT"

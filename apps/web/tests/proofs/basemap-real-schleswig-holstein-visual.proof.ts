@@ -150,7 +150,9 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
           pathname === "/api/accounts" ||
           pathname.startsWith("/api/accounts/") ||
           pathname === "/api/edges" ||
-          pathname.startsWith("/api/edges/")
+          pathname.startsWith("/api/edges/") ||
+          pathname === "/api/webgemeindezentren" ||
+          pathname.startsWith("/api/webgemeindezentren/")
         ) {
           return route.fulfill({
             status: 200,
