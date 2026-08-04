@@ -396,6 +396,45 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
     faden_type: super::edges::FadenType,
     subject_id: &str,
 ) -> Result<(), (StatusCode, String)> {
+    project_webgemeindezentrum_activity_faden(
+        state,
+        auth,
+        center_id,
+        faden_type,
+        subject_id,
+        super::edges::FadenProjectionMode::Reactivate,
+    )
+    .await
+}
+
+/// Repair an absent center projection for an exact durable-action replay
+/// without extending the already-recorded participation lifecycle.
+pub(crate) async fn repair_webgemeindezentrum_activity_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    center_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    project_webgemeindezentrum_activity_faden(
+        state,
+        auth,
+        center_id,
+        faden_type,
+        subject_id,
+        super::edges::FadenProjectionMode::EnsureOnly,
+    )
+    .await
+}
+
+async fn project_webgemeindezentrum_activity_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    center_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
+    projection_mode: super::edges::FadenProjectionMode,
+) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
             StatusCode::UNAUTHORIZED,
@@ -494,26 +533,37 @@ pub(crate) async fn ensure_webgemeindezentrum_activity_faden(
         "operation_id": operation_id,
     });
 
-    let projection =
-        super::edges::create_edge(State(state.clone()), Extension(auth.clone()), Json(payload))
+    let projection = match projection_mode {
+        super::edges::FadenProjectionMode::EnsureOnly => {
+            super::edges::create_edge(State(state.clone()), Extension(auth.clone()), Json(payload))
+                .await
+        }
+        super::edges::FadenProjectionMode::Reactivate => {
+            super::edges::reactivate_edge(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(payload),
+            )
             .await
-            .map(|_| ())
-            .map_err(|(status, message)| {
-                tracing::error!(
-                    event = "webgemeindezentrum.faden_projection.failed",
-                    center_id,
-                    account_id,
-                    faden_type = faden_type.as_str(),
-                    subject_id,
-                    %status,
-                    error = %message,
-                    "Durable action exists but its derived center Faden is missing"
-                );
-                (
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "derived Webgemeindezentrum Faden could not be projected".to_string(),
-                )
-            });
+        }
+    }
+    .map(|_| ())
+    .map_err(|(status, message)| {
+        tracing::error!(
+            event = "webgemeindezentrum.faden_projection.failed",
+            center_id,
+            account_id,
+            faden_type = faden_type.as_str(),
+            subject_id,
+            %status,
+            error = %message,
+            "Durable action exists but its derived center Faden is missing"
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "derived Webgemeindezentrum Faden could not be projected".to_string(),
+        )
+    });
     account_guard.commit().await.map_err(|error| {
         tracing::error!(%error, account_id, "failed to release center Faden lifecycle guard");
         (

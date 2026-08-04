@@ -947,16 +947,60 @@ pub(crate) async fn ensure_node_activity_faden(
     subject_id: &str,
     activity_id: &str,
 ) -> Result<(), (StatusCode, String)> {
+    project_node_activity_faden(
+        state,
+        auth,
+        node_id,
+        faden_type,
+        subject_id,
+        activity_id,
+        super::edges::FadenProjectionMode::Reactivate,
+    )
+    .await
+}
+
+/// Repair an absent projection for an exact durable-action replay without
+/// pretending that the replay itself was new participation.
+pub(crate) async fn repair_node_activity_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    node_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
+    activity_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    project_node_activity_faden(
+        state,
+        auth,
+        node_id,
+        faden_type,
+        subject_id,
+        activity_id,
+        super::edges::FadenProjectionMode::EnsureOnly,
+    )
+    .await
+}
+
+async fn project_node_activity_faden(
+    state: &ApiState,
+    auth: &AuthContext,
+    node_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
+    activity_id: &str,
+    projection_mode: super::edges::FadenProjectionMode,
+) -> Result<(), (StatusCode, String)> {
     super::collective_write_guard::run_node_activity_projection(
         state,
         node_id,
-        ensure_node_activity_faden_guarded(
+        ensure_node_activity_faden_guarded_with_mode(
             state,
             auth,
             node_id,
             faden_type,
             subject_id,
             activity_id,
+            projection_mode,
         ),
     )
     .await
@@ -969,6 +1013,27 @@ pub(crate) async fn ensure_node_activity_faden_guarded(
     faden_type: super::edges::FadenType,
     subject_id: &str,
     activity_id: &str,
+) -> Result<(), (StatusCode, String)> {
+    ensure_node_activity_faden_guarded_with_mode(
+        state,
+        auth,
+        node_id,
+        faden_type,
+        subject_id,
+        activity_id,
+        super::edges::FadenProjectionMode::Reactivate,
+    )
+    .await
+}
+
+async fn ensure_node_activity_faden_guarded_with_mode(
+    state: &ApiState,
+    auth: &AuthContext,
+    node_id: &str,
+    faden_type: super::edges::FadenType,
+    subject_id: &str,
+    activity_id: &str,
+    projection_mode: super::edges::FadenProjectionMode,
 ) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
@@ -992,22 +1057,40 @@ pub(crate) async fn ensure_node_activity_faden_guarded(
         return Ok(());
     }
 
-    ensure_node_faden_with_operation_id(state, auth, node_id, false, faden_type, subject_id).await
+    ensure_node_faden_with_operation_id(
+        state,
+        auth,
+        node_id,
+        false,
+        NodeFadenProjection {
+            faden_type,
+            subject_id,
+            mode: projection_mode,
+        },
+    )
+    .await
 }
 
 /// Ensure the Faden that visualizes one successful Webungsaktion.
 ///
 /// The edge writer remains an internal projection primitive. Its HTTP route is
 /// intentionally absent. The deterministic relation id — account, Fadenart,
-/// drawable node and semantic subject — makes retries idempotent across process
-/// failures and prevents create/edit from drawing parallel Knüpffäden.
+/// drawable node and semantic subject — keeps retries idempotent and prevents
+/// create/edit from drawing parallel Knüpffäden. The projection mode controls
+/// whether an existing lifecycle remains unchanged or is restarted after
+/// genuine new participation.
+struct NodeFadenProjection<'a> {
+    faden_type: super::edges::FadenType,
+    subject_id: &'a str,
+    mode: super::edges::FadenProjectionMode,
+}
+
 async fn ensure_node_faden_with_operation_id(
     state: &ApiState,
     auth: &AuthContext,
     node_id: &str,
     account_lifecycle_guarded: bool,
-    faden_type: super::edges::FadenType,
-    faden_subject_id: &str,
+    projection: NodeFadenProjection<'_>,
 ) -> Result<(), (StatusCode, String)> {
     let account_id = auth.account_id.as_deref().ok_or_else(|| {
         (
@@ -1036,7 +1119,7 @@ async fn ensure_node_faden_with_operation_id(
             )
         })?;
         let mut tx = pool.begin().await.map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, node_id, faden_type = faden_type.as_str(), "failed to begin node Faden account guard");
+            tracing::error!(%error, account_id = %account_id, node_id, faden_type = projection.faden_type.as_str(), "failed to begin node Faden account guard");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to guard creator account for derived Faden".to_string(),
@@ -1049,7 +1132,7 @@ async fn ensure_node_faden_with_operation_id(
         .fetch_optional(&mut *tx)
         .await
         .map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, node_id, faden_type = faden_type.as_str(), "failed to lock creator account for node Faden");
+            tracing::error!(%error, account_id = %account_id, node_id, faden_type = projection.faden_type.as_str(), "failed to lock creator account for node Faden");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to guard creator account for derived Faden".to_string(),
@@ -1066,42 +1149,58 @@ async fn ensure_node_faden_with_operation_id(
         None
     };
 
-    let projection_operation_id =
-        node_activity_faden_operation_id(faden_type, account_id, node_id, faden_subject_id);
+    let projection_operation_id = node_activity_faden_operation_id(
+        projection.faden_type,
+        account_id,
+        node_id,
+        projection.subject_id,
+    );
     let payload = json!({
         "source_id": account_id,
         "source_type": "account",
         "target_id": node_id,
         "target_type": "node",
         "edge_kind": "reference",
-        "faden_type": faden_type,
-        "faden_subject_id": faden_subject_id,
+        "faden_type": projection.faden_type,
+        "faden_subject_id": projection.subject_id,
         "operation_id": projection_operation_id,
     });
 
-    super::edges::create_edge(State(state.clone()), Extension(auth.clone()), Json(payload))
-        .await
-        .map(|_| ())
-        .map_err(|(status, message)| {
-            tracing::error!(
-                event = "node.faden_projection.failed",
-                node_id,
-                account_id = %account_id,
-                faden_type = faden_type.as_str(),
-                faden_subject_id,
-                %status,
-                error = %message,
-                "Node is durable but its derived Faden projection failed"
-            );
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "derived Faden could not be projected; retry the same node operation".to_string(),
+    match projection.mode {
+        super::edges::FadenProjectionMode::EnsureOnly => {
+            super::edges::create_edge(State(state.clone()), Extension(auth.clone()), Json(payload))
+                .await
+        }
+        super::edges::FadenProjectionMode::Reactivate => {
+            super::edges::reactivate_edge(
+                State(state.clone()),
+                Extension(auth.clone()),
+                Json(payload),
             )
-        })?;
+            .await
+        }
+    }
+    .map(|_| ())
+    .map_err(|(status, message)| {
+        tracing::error!(
+            event = "node.faden_projection.failed",
+            node_id,
+            account_id = %account_id,
+            faden_type = projection.faden_type.as_str(),
+            faden_subject_id = projection.subject_id,
+            %status,
+            error = %message,
+            "Node is durable but its derived Faden projection failed"
+        );
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "derived Faden could not be projected; retry the same node operation".to_string(),
+        )
+    })?;
 
     if let Some(tx) = account_guard.take() {
         tx.commit().await.map_err(|error| {
-            tracing::error!(%error, account_id = %account_id, node_id, faden_type = faden_type.as_str(), "failed to commit node Faden account guard");
+            tracing::error!(%error, account_id = %account_id, node_id, faden_type = projection.faden_type.as_str(), "failed to commit node Faden account guard");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,
                 "failed to finalize derived Faden account guard".to_string(),
@@ -1443,8 +1542,11 @@ pub async fn create_node(
                         &auth,
                         &existing.id,
                         false,
-                        super::edges::FadenType::Knotting,
-                        &existing.id,
+                        NodeFadenProjection {
+                            faden_type: super::edges::FadenType::Knotting,
+                            subject_id: &existing.id,
+                            mode: super::edges::FadenProjectionMode::EnsureOnly,
+                        },
                     )
                     .await?;
                     return Ok((StatusCode::OK, Json(existing)));
@@ -1510,8 +1612,11 @@ pub async fn create_node(
         &auth,
         &node.id,
         false,
-        super::edges::FadenType::Knotting,
-        &node.id,
+        NodeFadenProjection {
+            faden_type: super::edges::FadenType::Knotting,
+            subject_id: &node.id,
+            mode: super::edges::FadenProjectionMode::EnsureOnly,
+        },
     )
     .await
     {

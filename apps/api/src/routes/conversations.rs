@@ -31,9 +31,11 @@ use crate::{
 };
 
 use super::{
-    nodes::ensure_node_activity_faden,
+    nodes::{ensure_node_activity_faden, repair_node_activity_faden},
     query::{decode_cursor, encode_cursor},
-    webgemeindezentren::ensure_webgemeindezentrum_activity_faden,
+    webgemeindezentren::{
+        ensure_webgemeindezentrum_activity_faden, repair_webgemeindezentrum_activity_faden,
+    },
 };
 
 const DEFAULT_MESSAGE_PAGE_SIZE: usize = 20;
@@ -347,18 +349,34 @@ async fn project_message_participation_faden(
     webgemeindezentrum_id: Option<&str>,
     conversation_id: &str,
     message_id: &str,
+    projection_mode: super::edges::FadenProjectionMode,
 ) {
     if let Some(node_id) = node_id {
-        if let Err((status, message)) = ensure_node_activity_faden(
-            state,
-            auth,
-            node_id,
-            super::edges::FadenType::Conversation,
-            conversation_id,
-            message_id,
-        )
-        .await
-        {
+        let projection = match projection_mode {
+            super::edges::FadenProjectionMode::Reactivate => {
+                ensure_node_activity_faden(
+                    state,
+                    auth,
+                    node_id,
+                    super::edges::FadenType::Conversation,
+                    conversation_id,
+                    message_id,
+                )
+                .await
+            }
+            super::edges::FadenProjectionMode::EnsureOnly => {
+                repair_node_activity_faden(
+                    state,
+                    auth,
+                    node_id,
+                    super::edges::FadenType::Conversation,
+                    conversation_id,
+                    message_id,
+                )
+                .await
+            }
+        };
+        if let Err((status, message)) = projection {
             tracing::error!(
                 event = "conversation.message_faden_projection.failed",
                 node_id,
@@ -372,15 +390,29 @@ async fn project_message_participation_faden(
     }
 
     if let Some(center_id) = webgemeindezentrum_id {
-        if let Err((status, message)) = ensure_webgemeindezentrum_activity_faden(
-            state,
-            auth,
-            center_id,
-            super::edges::FadenType::Conversation,
-            conversation_id,
-        )
-        .await
-        {
+        let projection = match projection_mode {
+            super::edges::FadenProjectionMode::Reactivate => {
+                ensure_webgemeindezentrum_activity_faden(
+                    state,
+                    auth,
+                    center_id,
+                    super::edges::FadenType::Conversation,
+                    conversation_id,
+                )
+                .await
+            }
+            super::edges::FadenProjectionMode::EnsureOnly => {
+                repair_webgemeindezentrum_activity_faden(
+                    state,
+                    auth,
+                    center_id,
+                    super::edges::FadenType::Conversation,
+                    conversation_id,
+                )
+                .await
+            }
+        };
+        if let Err((status, message)) = projection {
             tracing::error!(
                 event = "conversation.center_message_faden_projection.failed",
                 center_id,
@@ -1201,6 +1233,7 @@ pub async fn create_message(
             webgemeindezentrum_id.as_deref(),
             &conversation_id,
             &message_id,
+            super::edges::FadenProjectionMode::EnsureOnly,
         )
         .await;
         return Ok((StatusCode::OK, Json(existing)));
@@ -1300,6 +1333,7 @@ pub async fn create_message(
         webgemeindezentrum_id.as_deref(),
         &conversation_id,
         &message.id,
+        super::edges::FadenProjectionMode::Reactivate,
     )
     .await;
     Ok((StatusCode::CREATED, Json(message)))

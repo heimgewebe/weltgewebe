@@ -614,9 +614,12 @@ async fn node_conversation_vertical_slice() {
         "SELECT count(*) FROM domain_edges
          WHERE target_id = $1
            AND payload ->> 'target_type' = 'node'
-           AND payload ->> 'source_type' = 'account'",
+           AND payload ->> 'source_type' = 'account'
+           AND payload ->> 'faden_type' = 'conversation'
+           AND payload ->> 'faden_subject_id' = $2",
     )
     .bind(NODE_ID)
+    .bind(&conversation_id)
     .fetch_one(&pool)
     .await
     .expect("count message participation Fäden after replay");
@@ -953,8 +956,8 @@ async fn node_conversation_vertical_slice() {
             .expect("projection version after messages");
     assert_eq!(
         version_after_messages,
-        version_after_node + 2,
-        "guest and author each create one conversation Faden; later contributions reuse it",
+        version_after_node + 4,
+        "four genuine contributions project activity: two create stable account Fäden and two reactivate the author's existing Faden; the exact replay projects nothing",
     );
     let payloads: Vec<String> = sqlx::query_scalar(
         "SELECT payload::text FROM domain_outbox
@@ -1057,15 +1060,18 @@ async fn node_conversation_vertical_slice() {
         "SELECT count(*) FROM domain_edges
          WHERE target_id = $1
            AND payload ->> 'target_type' = 'node'
-           AND payload ->> 'source_type' = 'account'",
+           AND payload ->> 'source_type' = 'account'
+           AND payload ->> 'faden_type' = 'conversation'
+           AND payload ->> 'faden_subject_id' = $2",
     )
     .bind(NODE_ID)
+    .bind(&conversation_id)
     .fetch_one(&pool)
     .await
-    .expect("count all active participation Fäden");
+    .expect("count active conversation participation Fäden");
     assert_eq!(
         active_participation_faden_count, 2,
-        "each participating account keeps one conversation Faden; later contributions and replays add none",
+        "each participating account keeps one conversation Faden; accepted contributions reactivate it, while replays and rejected writes add none",
     );
 
     // Binding check (account exit): a hard account delete must not be blocked by

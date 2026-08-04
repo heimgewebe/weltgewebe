@@ -96,6 +96,15 @@ impl VoteChoice {
     }
 }
 
+/// Ob eine Stimmabgabe tatsächlich neue Beteiligung darstellt.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VoteWriteOutcome {
+    Created,
+    Changed,
+    /// Identische Wiederholung, etwa nach einer verlorenen HTTP-Antwort.
+    Unchanged,
+}
+
 /// Antrag inklusive öffentlicher Zählstände (Vetos und Stimmen).
 #[derive(Clone, Debug)]
 pub struct ProposalWithCounts {
@@ -493,7 +502,7 @@ pub async fn upsert_vote(
     voter_account_id: &str,
     choice: VoteChoice,
     now: DateTime<Utc>,
-) -> Result<(), VoteError> {
+) -> Result<VoteWriteOutcome, VoteError> {
     let mut tx = pool.begin().await.map_err(VoteError::Database)?;
 
     let actor_role: Option<String> = sqlx::query_scalar(
@@ -522,21 +531,54 @@ pub async fn upsert_vote(
         return Err(VoteError::WrongPhase);
     }
 
-    sqlx::query(
-        "INSERT INTO governance_votes (proposal_id, voter_account_id, choice, updated_at) \
-         VALUES ($1::uuid, $2, $3, $4) \
-         ON CONFLICT (proposal_id, voter_account_id) \
-         DO UPDATE SET choice = EXCLUDED.choice, updated_at = EXCLUDED.updated_at",
+    // The active account row is already locked above. Calls for the same
+    // voter therefore serialize even while no governance_votes row exists yet:
+    // exactly one call can insert the first vote, and the next observes it.
+    let existing_choice: Option<String> = sqlx::query_scalar(
+        "SELECT choice FROM governance_votes \
+         WHERE proposal_id = $1::uuid AND voter_account_id = $2 FOR UPDATE",
     )
     .bind(proposal_id)
     .bind(voter_account_id)
-    .bind(choice.as_str())
-    .bind(now)
-    .execute(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(VoteError::Database)?;
 
-    tx.commit().await.map_err(VoteError::Database)
+    let outcome = match existing_choice.as_deref() {
+        Some(existing) if existing == choice.as_str() => VoteWriteOutcome::Unchanged,
+        Some(_) => {
+            sqlx::query(
+                "UPDATE governance_votes SET choice = $3, updated_at = $4 \
+                 WHERE proposal_id = $1::uuid AND voter_account_id = $2",
+            )
+            .bind(proposal_id)
+            .bind(voter_account_id)
+            .bind(choice.as_str())
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(VoteError::Database)?;
+            VoteWriteOutcome::Changed
+        }
+        None => {
+            sqlx::query(
+                "INSERT INTO governance_votes \
+                     (proposal_id, voter_account_id, choice, updated_at) \
+                 VALUES ($1::uuid, $2, $3, $4)",
+            )
+            .bind(proposal_id)
+            .bind(voter_account_id)
+            .bind(choice.as_str())
+            .bind(now)
+            .execute(&mut *tx)
+            .await
+            .map_err(VoteError::Database)?;
+            VoteWriteOutcome::Created
+        }
+    };
+
+    tx.commit().await.map_err(VoteError::Database)?;
+    Ok(outcome)
 }
 
 /// Ergänze einen Gesprächsraum-Beitrag. Zulässig, solange der Antrag offen ist.

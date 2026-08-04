@@ -40,7 +40,7 @@
       "format": "uuid"
     },
     "created_at": {
-      "description": "Server-owned creation timestamp of the derived projection. Null is permitted only for a fully undated legacy or non-authoritative preview projection and must be paired with expires_at null.",
+      "description": "Server-owned start timestamp of the current derived projection lifecycle. Initial creation sets it; genuine repeated participation may reactivate the same typed Faden while durable action history remains in its source domain. Null is permitted only for a fully undated legacy or non-authoritative preview projection and must be paired with expires_at null.",
       "type": ["string", "null"],
       "format": "date-time"
     },
