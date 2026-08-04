@@ -142,6 +142,7 @@ fn build_state() -> Result<ApiState> {
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     })
 }
 
@@ -250,6 +251,9 @@ async fn csrf_blocks_all_mutating_endpoints_without_origin() -> Result<()> {
         (Method::POST, "/auth/step-up/magic-link/request"),
         (Method::POST, "/auth/step-up/magic-link/consume"),
         (Method::POST, "/auth/passkeys/register/options"),
+        (Method::PUT, "/notifications/preferences"),
+        (Method::POST, "/push/subscriptions"),
+        (Method::DELETE, "/push/subscriptions"),
         // Cross-cutting (non-auth) mutating route to prove the guard is global.
         (Method::PATCH, "/nodes/any-node-id"),
     ];
@@ -395,6 +399,9 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("POST", "/nodes"),
     ("POST", "/conversations/{id}/messages"),
     ("POST", "/direct-conversations"),
+    ("PUT", "/notifications/preferences"),
+    ("POST", "/push/subscriptions"),
+    ("DELETE", "/push/subscriptions"),
     ("POST", "/direct-conversations/{id}/read"),
     ("PUT", "/direct-conversations/{id}/block"),
     ("DELETE", "/direct-conversations/{id}/block"),

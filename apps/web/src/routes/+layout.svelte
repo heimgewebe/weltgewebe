@@ -4,8 +4,6 @@
   import { onMount } from 'svelte';
   import { ensureInertPolyfill } from '$lib/utils/inert-polyfill';
   import { setUAClasses } from '$lib/utils/ua-flags';
-  import { page } from '$app/stores';
-  import { get } from 'svelte/store';
   import type { LayoutData } from './$types';
   import { updateStore } from '$lib/stores/updateStore';
   import UpdateBanner from '$lib/components/UpdateBanner.svelte';
@@ -14,7 +12,7 @@
 
   onMount(() => {
     setUAClasses();
-    const q = new URLSearchParams(get(page).url.search);
+    const q = new URLSearchParams(window.location.search);
     const disable = q.get('noinert') === '1' || (window as any).__NO_INERT__ === true;
     if (!disable) ensureInertPolyfill();
     updateStore.init();

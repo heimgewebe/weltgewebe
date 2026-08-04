@@ -235,6 +235,7 @@ async fn app(pool: sqlx::PgPool) -> (Router, String, String, String, String) {
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     };
     let router = Router::new()
         .merge(api_router())
@@ -343,6 +344,160 @@ async fn set_account_disabled(pool: &sqlx::PgPool, id: &str, disabled: bool) {
         .execute(pool)
         .await
         .expect("switch account activation state");
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn private_message_push_preference_cancels_queued_delivery() {
+    let database = pool().await;
+    let pool = database.app_pool();
+    seed_account(&pool, AUTHOR_ID, "Autorin", "weber").await;
+    seed_account(&pool, OTHER_ID, "Anderer Weber", "weber").await;
+
+    let conversation_id = "62000000-0000-4000-8000-000000000001";
+    let message_id = "62000000-0000-4000-8000-000000000002";
+    let subscription_id = "62000000-0000-4000-8000-000000000003";
+    let mut tx = pool.begin().await.expect("begin direct conversation proof");
+    sqlx::query(
+        "INSERT INTO domain_conversations (
+             id, node_id, conversation_type, visibility, direct_pair_key,
+             direct_created_by_account_id
+         ) VALUES ($1::uuid, NULL, 'direct', 'participants', $2, $3)",
+    )
+    .bind(conversation_id)
+    .bind(format!("{AUTHOR_ID}:{OTHER_ID}"))
+    .bind(AUTHOR_ID)
+    .execute(&mut *tx)
+    .await
+    .expect("insert direct conversation");
+    for (slot, account_id, title) in [
+        (1_i16, AUTHOR_ID, "Autorin"),
+        (2_i16, OTHER_ID, "Anderer Weber"),
+    ] {
+        sqlx::query(
+            "INSERT INTO domain_direct_conversation_participants (
+                 conversation_id, slot, account_id, account_title_snapshot
+             ) VALUES ($1::uuid, $2, $3, $4)",
+        )
+        .bind(conversation_id)
+        .bind(slot)
+        .bind(account_id)
+        .bind(title)
+        .execute(&mut *tx)
+        .await
+        .expect("insert direct conversation participant");
+    }
+    sqlx::query(
+        "INSERT INTO domain_messages (
+             id, conversation_id, author_account_id, author_title, content,
+             idempotency_key
+         ) VALUES ($1::uuid, $2::uuid, $3, 'Autorin', 'Verbindliche Nachricht',
+                   '62000000-0000-4000-8000-000000000004'::uuid)",
+    )
+    .bind(message_id)
+    .bind(conversation_id)
+    .bind(AUTHOR_ID)
+    .execute(&mut *tx)
+    .await
+    .expect("insert private message");
+    tx.commit().await.expect("commit direct conversation proof");
+
+    let source_event_id: i64 = sqlx::query_scalar(
+        "SELECT id FROM domain_outbox
+         WHERE aggregate_type = 'message' AND aggregate_id = $1
+           AND event_type = 'domain.message.created'",
+    )
+    .bind(message_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read committed private-message event");
+    sqlx::query(
+        "INSERT INTO notification_preferences (account_id, direct_messages_push)
+         VALUES ($1, TRUE)",
+    )
+    .bind(OTHER_ID)
+    .execute(&pool)
+    .await
+    .expect("enable recipient push preference");
+    sqlx::query(
+        "INSERT INTO web_push_subscriptions (
+             id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+    )
+    .bind(subscription_id)
+    .bind(OTHER_ID)
+    .bind("https://push.example.invalid/subscription-proof")
+    .bind("a".repeat(64))
+    .bind("p".repeat(80))
+    .bind("a".repeat(16))
+    .execute(&pool)
+    .await
+    .expect("insert recipient browser subscription");
+    sqlx::query(
+        "INSERT INTO web_push_deliveries (
+             source_event_id, subscription_id, conversation_id
+         ) VALUES ($1, $2::uuid, $3::uuid)",
+    )
+    .bind(source_event_id)
+    .bind(subscription_id)
+    .bind(conversation_id)
+    .execute(&pool)
+    .await
+    .expect("queue private-message push delivery");
+
+    let (app, _author, other, _admin, _guest) = app(pool.clone()).await;
+    let (status, before) = json_response(
+        &app,
+        request(
+            "GET",
+            "/notifications/preferences",
+            Some(&other),
+            None,
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(before["direct_messages_push"], true);
+
+    let (status, after) = json_response(
+        &app,
+        request(
+            "PUT",
+            "/notifications/preferences",
+            Some(&other),
+            Some(r#"{"direct_messages_push":false}"#),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(after["direct_messages_push"], false);
+
+    let delivery: (String, Option<String>) = sqlx::query_as(
+        "SELECT status, last_error FROM web_push_deliveries
+         WHERE source_event_id = $1 AND subscription_id = $2::uuid",
+    )
+    .bind(source_event_id)
+    .bind(subscription_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read cancelled push delivery");
+    assert_eq!(delivery.0, "cancelled");
+    assert_eq!(delivery.1.as_deref(), Some("disabled by account"));
+
+    let message_content: String =
+        sqlx::query_scalar("SELECT content FROM domain_messages WHERE id = $1::uuid")
+            .bind(message_id)
+            .fetch_one(&pool)
+            .await
+            .expect("canonical message remains stored after push opt-out");
+    assert_eq!(message_content, "Verbindliche Nachricht");
+
+    database.cleanup().await;
 }
 
 #[tokio::test]

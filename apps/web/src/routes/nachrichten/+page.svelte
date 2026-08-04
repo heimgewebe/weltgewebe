@@ -5,6 +5,7 @@
   import { authStore } from "$lib/auth/store";
   import type { ConversationMessage } from "$lib/api/nodeConversation";
   import { NodeConversationApiError } from "$lib/api/nodeConversation";
+  import NotificationSettings from "$lib/components/NotificationSettings.svelte";
   import {
     DirectMessagesApiError,
     listDirectConversations,
@@ -433,6 +434,10 @@
         {/if}
       </section>
     </div>
+
+    <div class="notification-management">
+      <NotificationSettings />
+    </div>
   {/if}
 </main>
 
@@ -497,6 +502,10 @@
 
   .error {
     border-color: var(--danger, #b44343);
+  }
+
+  .notification-management {
+    margin-top: 1rem;
   }
 
   .messages-layout {

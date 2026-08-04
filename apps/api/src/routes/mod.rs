@@ -19,6 +19,10 @@ use axum::{
 };
 
 use crate::middleware::authz::{require_admin, require_authenticated, require_write};
+use crate::notifications::{
+    delete_push_subscription, get_notification_preferences, get_push_config,
+    register_push_subscription, update_notification_preferences,
+};
 use crate::state::ApiState;
 
 use self::{
@@ -80,6 +84,22 @@ pub fn api_router() -> Router<ApiState> {
             "/direct-conversations",
             get(list_direct_conversations)
                 .merge(post(create_direct_conversation))
+                .route_layer(from_fn(require_authenticated)),
+        )
+        .route(
+            "/notifications/preferences",
+            get(get_notification_preferences)
+                .put(update_notification_preferences)
+                .route_layer(from_fn(require_authenticated)),
+        )
+        .route(
+            "/push/config",
+            get(get_push_config).route_layer(from_fn(require_authenticated)),
+        )
+        .route(
+            "/push/subscriptions",
+            post(register_push_subscription)
+                .delete(delete_push_subscription)
                 .route_layer(from_fn(require_authenticated)),
         )
         .route(

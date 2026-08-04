@@ -2021,6 +2021,7 @@ async fn t006_search_api_against_postgres_projections() {
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     };
 
     let anonymous = AuthContext {

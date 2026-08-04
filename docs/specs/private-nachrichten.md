@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product
 owner: product
-last_reviewed: 2026-07-30
+last_reviewed: 2026-08-04
 review_after: 2026-10-22
 depends_on:
   - specs.garnrolle-knoten-faden
@@ -18,10 +18,17 @@ relations:
     target: docs/specs/privacy-api.md
   - type: relates_to
     target: docs/specs/objektlebenszyklen-und-loeschwirkungen.md
+  - type: relates_to
+    target: docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
 verifies_with:
   - apps/api/tests/db_node_conversations.rs
   - apps/api/src/routes/conversations.rs
+  - apps/api/src/notifications.rs
+  - apps/api/migrations/20260804000001_web_push_notifications.up.sql
   - apps/web/src/lib/api/directMessages.ts
+  - apps/web/src/lib/api/notifications.ts
+  - apps/web/src/lib/components/NotificationSettings.svelte
+  - apps/web/static/sw.js
   - apps/web/src/routes/nachrichten/+page.svelte
 ---
 
@@ -143,10 +150,50 @@ ersten Fassung noch keine automatische Löschfrist. Sie sind für Nutzer nicht
 mehr erreichbar; eine verbindliche Aufbewahrungs- und Löschregel wird separat
 festgelegt.
 
+## Freiwilliger Web Push
+
+Private Nachrichten können zusätzlich als Web-Push-Hinweis zugestellt werden.
+Das Postfach und der kanonische Nachrichtenspeicher bleiben dabei die
+verbindliche Wahrheit. Push ist weder Lesebestätigung noch garantierte
+Zustellung und darf den Zugriff auf `/nachrichten` nicht ersetzen.
+
+Die Freigabe besitzt zwei getrennte Ebenen:
+
+- Das Konto schaltet Push für private Nachrichten ausdrücklich an oder aus.
+- Jedes Gerät erhält zusätzlich eine eigene Browserfreigabe und ein eigenes
+  widerrufbares Push-Abonnement.
+- Pro Konto sind höchstens 20 gleichzeitig aktive Geräteabonnements zulässig,
+  damit ein einzelnes Konto die Zustellfächerung nicht unbegrenzt vergrößern kann.
+
+Die Browserberechtigung wird erst nach einer bewussten Aktion in der
+Benachrichtigungsverwaltung angefragt. Nicht unterstützte oder blockierte Browser verändern
+die Kontoeinstellung und das Postfach nicht.
+
+Der verschlüsselte Push-Inhalt ist absichtlich neutral. Er enthält weder
+Nachrichtentext noch Absendername oder Account-ID, sondern nur die Ereignisart,
+einen gleichursprünglichen Verweis auf die private Unterhaltung und eine
+Zusammenfassungskennung für das Betriebssystem.
+
+Zustellaufträge entstehen erst aus dem bereits bestätigten
+`domain.message.created`-Ereignis der transaktionalen Outbox. Pro Ereignis und
+Geräteabonnement existiert höchstens ein Zustellbeleg. Vorübergehende Fehler
+werden begrenzt wiederholt; dauerhaft abgelaufene Browserabonnements werden
+stillgelegt. Ein Push-Fehler verändert oder entfernt niemals die Nachricht.
+
+Beim Ausschalten werden noch nicht abgeschlossene Zustellaufträge abgebrochen.
+Ein Hinweis, den ein externer Push-Anbieter in diesem Moment bereits angenommen
+hat, kann technisch nicht zurückgerufen werden; die Kontoeinstellung verhindert
+aber jeden späteren Claim oder Wiederholungsversuch.
+
+Der Zustellkanal wird nur aktiv, wenn PostgreSQL, NATS JetStream und eine
+vollständige VAPID-Konfiguration verfügbar sind. Ausgehende Push-Endpunkte
+müssen zu einer ausdrücklich zugelassenen DNS-Endung gehören. Eine fehlende
+Konfiguration lässt Push geschlossen, während das Postfach normal weiterläuft.
+
 ## Nicht Teil der ersten Fassung
 
 - Ende-zu-Ende-Verschlüsselung und Schlüsselwiederherstellung;
-- Echtzeit-Push oder E-Mail-Benachrichtigungen;
+- E-Mail-Benachrichtigungen und Push für Erwähnungen, Anträge oder Fristen;
 - Gruppenunterhaltungen;
 - Anhänge;
 - Meldungs- und Moderationsworkflow über das Blockieren hinaus;

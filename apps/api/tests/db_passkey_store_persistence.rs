@@ -181,6 +181,7 @@ fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: PasskeyStore::new(),
+        web_push: None,
     }
 }
 

@@ -238,6 +238,7 @@ async fn edge_write_app(
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     };
 
     let session = state

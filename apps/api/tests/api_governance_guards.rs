@@ -146,6 +146,7 @@ async fn app_without_database() -> (Router, String, String) {
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     };
 
     let gast_session = state
