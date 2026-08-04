@@ -85,10 +85,31 @@ describe("buildEdgeFeatures", () => {
       faden_type: "vote",
       faden_subject_id: "11111111-1111-5111-8111-111111111111",
     });
-    const features = buildEdgeFeatures([typed], points, true, createdAt);
+    const themedPoints = [
+      points[0],
+      {
+        ...points[1],
+        weave: {
+          zoneOrder: ["knotting", "conversation", "proposal", "vote"],
+          themeSegments: [],
+          primaryThemeColor: "#5f7a55",
+          coreDensity: 0.5,
+          knottingThreadCount: 0,
+          conversationThreadCount: 0,
+          conversationOpacity: 0,
+          proposalArcs: [],
+          proposalCount: 0,
+          proposalOverflowCount: 0,
+          voteThreadCount: 0,
+          totalActiveThreadCount: 0,
+        },
+      },
+    ] as MapEntityViewModel[];
+    const features = buildEdgeFeatures([typed], themedPoints, true, createdAt);
     expect(features[0].properties).toMatchObject({
       fadenType: "vote",
       fadenSubjectId: "11111111-1111-5111-8111-111111111111",
+      themeColor: "#5f7a55",
     });
     expect(features[0].properties).not.toHaveProperty("choice");
   });

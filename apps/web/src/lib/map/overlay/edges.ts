@@ -17,10 +17,10 @@ export const EDGE_VISUAL_STYLE = {
   mainWidth: 2.25,
   dashArray: [1.4, 0.7] as [number, number],
   byType: {
-    conversation: { color: "#76523d", width: 2.15, dashArray: [1.4, 0.7] },
-    proposal: { color: "#68402f", width: 3.05, dashArray: [2.4, 0.28] },
-    knotting: { color: "#7b4f30", width: 2.75, dashArray: [3.2, 0.2] },
-    vote: { color: "#5f463d", width: 1.85, dashArray: [0.35, 0.82] },
+    conversation: { width: 2.15, dashArray: [1.4, 0.7] },
+    proposal: { width: 3.05, dashArray: [2.4, 0.28] },
+    knotting: { width: 2.75, dashArray: [3.2, 0.2] },
+    vote: { width: 1.85, dashArray: [0.35, 0.82] },
   },
 } as const;
 
@@ -29,7 +29,7 @@ const EDGE_LAYER_VARIANTS = [
     fadenType: "legacy",
     layerId: LAYERS.EDGES_LAYER,
     haloLayerId: LAYERS.EDGES_HALO_LAYER,
-    color: EDGE_VISUAL_STYLE.mainColor,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     width: EDGE_VISUAL_STYLE.mainWidth,
     dashArray: EDGE_VISUAL_STYLE.dashArray,
   },
@@ -37,24 +37,28 @@ const EDGE_LAYER_VARIANTS = [
     fadenType: "conversation",
     layerId: LAYERS.EDGES_CONVERSATION_LAYER,
     haloLayerId: LAYERS.EDGES_CONVERSATION_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.conversation,
   },
   {
     fadenType: "proposal",
     layerId: LAYERS.EDGES_PROPOSAL_LAYER,
     haloLayerId: LAYERS.EDGES_PROPOSAL_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.proposal,
   },
   {
     fadenType: "knotting",
     layerId: LAYERS.EDGES_KNOTTING_LAYER,
     haloLayerId: LAYERS.EDGES_KNOTTING_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.knotting,
   },
   {
     fadenType: "vote",
     layerId: LAYERS.EDGES_VOTE_LAYER,
     haloLayerId: LAYERS.EDGES_VOTE_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.vote,
   },
 ] as const;
@@ -98,6 +102,10 @@ export function buildEdgeFeatures(
         kind: edge.edge_kind,
         fadenType: edge.faden_type ?? "legacy",
         fadenSubjectId: edge.faden_subject_id ?? null,
+        themeColor:
+          target.type === "garnrolle"
+            ? null
+            : (target.weave?.primaryThemeColor ?? null),
         opacity,
       },
     });
@@ -152,7 +160,11 @@ export function buildEdgeLayerSpecifications(
       filter,
       layout: commonLayout,
       paint: {
-        "line-color": variant.color,
+        "line-color": [
+          "coalesce",
+          ["get", "themeColor"],
+          variant.fallbackColor,
+        ],
         "line-width": variant.width,
         "line-opacity": opacity,
         "line-dasharray": dashArray,

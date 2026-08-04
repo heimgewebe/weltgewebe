@@ -1,7 +1,18 @@
 import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
-import type { MapEntityViewModel } from "$lib/map/types";
+import type {
+  MapEdge,
+  MapEntityViewModel,
+  MapEntityWeave,
+  MapEntityNode,
+  MapEntityWebgemeindezentrum,
+} from "$lib/map/types";
 import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
+import {
+  projectEntityWeaves,
+  themeConicGradient,
+  voteStitchConicGradient,
+} from "$lib/map/weaveModel";
 
 function hasRenderablePosition(item: MapEntityViewModel): boolean {
   return (
@@ -33,6 +44,48 @@ export function diffSearchMatchIds(
 
 export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
 
+type WeaveEntity = MapEntityNode | MapEntityWebgemeindezentrum;
+
+function entityWeave(item: WeaveEntity): MapEntityWeave {
+  return item.weave as MapEntityWeave;
+}
+
+function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
+  Object.assign(root.dataset, {
+    zoneOrder: "knotting,conversation,proposal,vote",
+    knottingThreads: String(weave.knottingThreadCount),
+    conversationThreads: String(weave.conversationThreadCount),
+    proposalCount: String(weave.proposalCount),
+    voteThreads: String(weave.voteThreadCount),
+  });
+  root.style.cssText = `--weave-primary:${weave.primaryThemeColor};--weave-theme-gradient:${themeConicGradient(weave.themeSegments)};--weave-core-density:${weave.coreDensity};--weave-conversation-opacity:${weave.conversationOpacity}`;
+  const proposals = weave.proposalArcs
+    .map(
+      (arc) =>
+        `<span class="woven-node__proposal-arc" data-zone="proposal" data-vote-threads="${arc.voteThreadCount}" style="--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color};opacity:${arc.opacity}"><span class="woven-node__vote-stitches" data-zone="vote" style="background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span></span>`,
+    )
+    .join("");
+  root.innerHTML = `<span class="woven-node__core" data-zone="knotting"><span class="woven-node__cross"></span></span><span class="woven-node__conversation${weave.conversationThreadCount ? "" : " is-empty"}" data-zone="conversation"></span>${proposals}${weave.proposalOverflowCount ? `<span class="woven-node__overflow">+${weave.proposalOverflowCount}</span>` : ""}`;
+}
+
+function accessibleMarkerLabel(item: MapEntityViewModel): string {
+  if (item.type === "garnrolle") return item.title;
+  const weave = entityWeave(item);
+  return `${item.title}. Knüpfkern ${weave.knottingThreadCount}. Gesprächsring ${weave.conversationThreadCount}. Anträge ${weave.proposalCount}. Stimmen ${weave.voteThreadCount}.`;
+}
+
+function createWeaveRoot(
+  item: WeaveEntity,
+  markerCategory: "node" | "webgemeindezentrum",
+): { root: HTMLElement; signature: string } {
+  const weave = entityWeave(item);
+  const root = document.createElement("span");
+  root.className = `woven-node woven-node--${markerCategory}`;
+  root.setAttribute("aria-hidden", "true");
+  renderWeave(root, weave);
+  return { root, signature: JSON.stringify(weave) };
+}
+
 export class NodesOverlay {
   private activeMarkers = new Map<
     string,
@@ -40,6 +93,8 @@ export class NodesOverlay {
       marker: Marker;
       element: HTMLElement;
       item: MapEntityViewModel;
+      weaveRoot: HTMLElement | null;
+      weaveSignature: string | null;
       cleanup: () => void;
     }
   >();
@@ -70,19 +125,40 @@ export class NodesOverlay {
       item.location_state === "confirmed" ? "" : "dashed";
   }
 
-  public update(points: MapEntityViewModel[], showNodes: boolean) {
-    if (!this.map) return;
+  private syncWeaveAppearance(
+    entry: {
+      weaveRoot: HTMLElement | null;
+      weaveSignature: string | null;
+    },
+    item: MapEntityViewModel,
+  ) {
+    if (!entry.weaveRoot || item.type === "garnrolle") return;
+    const weave = entityWeave(item);
+    const signature = JSON.stringify(weave);
+    if (signature === entry.weaveSignature) return;
+    renderWeave(entry.weaveRoot, weave);
+    entry.weaveSignature = signature;
+  }
+
+  public update(
+    points: MapEntityViewModel[],
+    showNodes: boolean,
+    edges?: MapEdge[],
+    nowMs = Date.now(),
+  ): MapEntityViewModel[] {
+    const projectedPoints = edges
+      ? projectEntityWeaves(points, edges, nowMs)
+      : points;
 
     if (!showNodes) {
-      // If hidden, remove all
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
       this.activeMarkers.clear();
-      return;
+      return projectedPoints;
     }
 
     const currentIds = new Set<string>();
 
-    for (const item of points) {
+    for (const item of projectedPoints) {
       if (!hasRenderablePosition(item)) {
         const existing = this.activeMarkers.get(item.id);
         if (existing) {
@@ -96,8 +172,6 @@ export class NodesOverlay {
       const markerCategory = this.getMarkerCategory(item.type);
       let existing = this.activeMarkers.get(item.id);
 
-      // A stable id may only keep its DOM marker when the semantic category
-      // is unchanged. Otherwise stale styling/interaction would misdescribe it.
       if (
         existing &&
         existing.element.dataset.markerCategory !== markerCategory
@@ -107,12 +181,9 @@ export class NodesOverlay {
         existing = undefined;
       }
 
-      // Check if we need to update or create
       if (existing) {
-        // Update item data to prevent stale data in delegated events
         existing.item = item;
 
-        // Update position if changed
         const { marker, element } = existing;
         element.dataset.id = item.id;
         const lngLat = marker.getLngLat();
@@ -122,11 +193,8 @@ export class NodesOverlay {
         ) {
           marker.setLngLat([item.lon, item.lat]);
         }
-        // Update attributes
-        if (element.title !== item.title) {
-          element.title = item.title;
-          element.setAttribute("aria-label", item.title);
-        }
+        if (element.title !== item.title) element.title = item.title;
+        element.setAttribute("aria-label", accessibleMarkerLabel(item));
         element.dataset.testid = `marker-${item.type}-${item.id}`;
         element.dataset.markerCategory = markerCategory;
         if (item.type === "webgemeindezentrum") {
@@ -135,8 +203,8 @@ export class NodesOverlay {
           delete element.dataset.locationState;
         }
         this.syncWebgemeindezentrumAppearance(element, item);
+        this.syncWeaveAppearance(existing, item);
       } else {
-        // Create new
         const element = document.createElement("button");
         element.type = "button";
         element.className =
@@ -146,19 +214,13 @@ export class NodesOverlay {
               ? "map-marker marker-webgemeindezentrum"
               : "map-marker";
 
-        // Identifying data for event delegation
         element.dataset.id = item.id;
         element.dataset.markerCategory = markerCategory;
         if (item.type === "webgemeindezentrum") {
           element.dataset.locationState = item.location_state;
         }
-
-        // Robust testing selector based on domain semantics (and unique ID for stability)
         element.dataset.testid = `marker-${item.type}-${item.id}`;
 
-        // MapLibre owns the outer element's transform for geographic positioning.
-        // All Weltgewebe styling and interaction transforms therefore live on
-        // an inner visual element so map movement can never be CSS-interpolated.
         const visual = document.createElement("span");
         visual.className =
           markerCategory === "account"
@@ -168,7 +230,9 @@ export class NodesOverlay {
               : "map-marker__visual marker-node__visual";
         visual.setAttribute("aria-hidden", "true");
 
-        if (markerCategory === "account") {
+        let weaveRoot: HTMLElement | null = null;
+        let weaveSignature: string | null = null;
+        if (item.type === "garnrolle") {
           const icon = document.createElement("img");
           icon.className = "marker-account__icon";
           icon.src = garnrolleIcon;
@@ -176,11 +240,20 @@ export class NodesOverlay {
           icon.setAttribute("aria-hidden", "true");
           icon.draggable = false;
           visual.append(icon);
-        } else if (markerCategory === "webgemeindezentrum") {
+        } else if (item.type === "webgemeindezentrum") {
           const icon = document.createElement("span");
           icon.className = "marker-webgemeindezentrum__icon";
           icon.setAttribute("aria-hidden", "true");
+          const woven = createWeaveRoot(item, "webgemeindezentrum");
+          weaveRoot = woven.root;
+          weaveSignature = woven.signature;
+          icon.append(weaveRoot);
           visual.append(icon);
+        } else {
+          const woven = createWeaveRoot(item, "node");
+          weaveRoot = woven.root;
+          weaveSignature = woven.signature;
+          visual.append(weaveRoot);
         }
 
         const halo = document.createElement("span");
@@ -190,15 +263,14 @@ export class NodesOverlay {
         element.append(visual, halo);
         this.syncWebgemeindezentrumAppearance(element, item);
 
-        element.setAttribute("aria-label", item.title);
+        element.setAttribute("aria-label", accessibleMarkerLabel(item));
         element.title = item.title;
 
         const marker = new this.MarkerClass({ element, anchor: "bottom" })
           .setLngLat([item.lon, item.lat])
           .addTo(this.map);
 
-        // Re-apply accessibility attributes after addTo()
-        element.setAttribute("aria-label", item.title);
+        element.setAttribute("aria-label", accessibleMarkerLabel(item));
         element.title = item.title;
 
         if (this.searchMatchIds.has(item.id)) {
@@ -215,6 +287,8 @@ export class NodesOverlay {
           marker,
           element,
           item,
+          weaveRoot,
+          weaveSignature,
           cleanup: () => {
             marker.remove();
           },
@@ -222,13 +296,13 @@ export class NodesOverlay {
       }
     }
 
-    // Cleanup removed markers
     for (const [id, { cleanup }] of this.activeMarkers.entries()) {
       if (!currentIds.has(id)) {
         cleanup();
         this.activeMarkers.delete(id);
       }
     }
+    return projectedPoints;
   }
 
   private setSearchMatch(id: string, highlighted: boolean) {

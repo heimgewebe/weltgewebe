@@ -20,101 +20,287 @@
 
 .map-marker__visual {
   grid-area: 1 / 1;
-  width: 24px;
-  height: 24px;
   box-sizing: border-box;
-  border: 2px solid var(--panel-border);
-  border-radius: 50%;
-  background: var(--accent);
   display: grid;
   place-items: center;
   align-self: end;
   position: relative;
   z-index: 2;
   transform-origin: center bottom;
-  transition: transform 0.16s ease-out;
+  transition: transform 0.18s ease-out;
   pointer-events: none;
 }
 
 .marker-node__visual {
-  width: 30px;
-  height: 24px;
+  width: 46px;
+  height: 46px;
   border: 0;
-  background: radial-gradient(
-    circle at center,
-    var(--accent) 0 3px,
-    #6f4936 4px 6px,
-    transparent 7px
-  );
-  color: #6f4936;
-  filter: drop-shadow(0 1px 1px rgba(35, 22, 15, 0.35));
+  border-radius: 50%;
+  background: transparent;
+  filter: drop-shadow(0 2px 2px rgba(35, 22, 15, 0.4));
+  transition:
+    transform 0.18s ease-out,
+    filter 0.18s ease-out;
 }
 
-.marker-node__visual::before,
-.marker-node__visual::after {
+.woven-node {
+  --weave-primary: #76523d;
+  --weave-theme-gradient: conic-gradient(#76523d 0deg 360deg);
+  --weave-core-density: 0.5;
+  --weave-conversation-opacity: 0;
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  isolation: isolate;
+  background:
+    radial-gradient(
+      circle at 35% 30%,
+      rgba(255, 255, 255, 0.42),
+      transparent 19%
+    ),
+    radial-gradient(circle, #3d2b22 0 48%, transparent 50%);
+}
+
+.woven-node::after {
   content: "";
   position: absolute;
-  top: 6px;
-  width: 16px;
-  height: 10px;
-  box-sizing: border-box;
-  border: 3px solid currentColor;
+  inset: 2%;
+  border: 1px solid rgba(53, 35, 25, 0.58);
+  border-radius: 50%;
+  box-shadow:
+    inset 0 0 3px rgba(255, 248, 232, 0.45),
+    0 1px 1px rgba(38, 24, 16, 0.35);
+  pointer-events: none;
+}
+
+.woven-node__core,
+.woven-node__conversation,
+.woven-node__proposal-arc,
+.woven-node__vote-stitches {
+  position: absolute;
   border-radius: 50%;
 }
 
-.marker-node__visual::before {
-  left: 0;
-  transform: rotate(28deg);
+.woven-node__core {
+  inset: 27%;
+  z-index: 4;
+  overflow: hidden;
+  background-image:
+    radial-gradient(
+      circle at 38% 28%,
+      rgba(255, 255, 255, 0.38) 0 8%,
+      transparent 9%
+    ),
+    var(--weave-theme-gradient),
+    repeating-conic-gradient(
+      rgba(255, 255, 255, 0.13) 0deg 2deg,
+      rgba(45, 28, 19, 0.16) 2deg 4deg
+    );
+  box-shadow:
+    inset 0 0 calc(5px * var(--weave-core-density)) rgba(38, 24, 17, 0.68),
+    0 0 0 1px rgba(245, 225, 196, 0.52);
 }
 
-.marker-node__visual::after {
-  right: 0;
-  transform: rotate(-28deg);
+.woven-node__cross {
+  position: absolute;
+  inset: 17%;
+  filter: drop-shadow(0 1px 0 rgba(44, 28, 19, 0.45));
+}
+
+.woven-node__cross::before,
+.woven-node__cross::after {
+  content: "";
+  position: absolute;
+  border-radius: 3px;
+  background: repeating-linear-gradient(
+    90deg,
+    var(--weave-primary) 0 2px,
+    #f2dfc2 2px 3px,
+    var(--weave-primary) 3px 5px
+  );
+  box-shadow: inset 0 0 1px rgba(40, 25, 17, 0.5);
+}
+
+.woven-node__cross::before {
+  width: 34%;
+  height: 100%;
+  left: 33%;
+  top: 0;
+}
+
+.woven-node__cross::after {
+  width: 100%;
+  height: 34%;
+  left: 0;
+  top: 33%;
+  transform: rotate(90deg);
+}
+
+.woven-node__conversation {
+  inset: 15%;
+  z-index: 3;
+  opacity: var(--weave-conversation-opacity);
+  background-image:
+    repeating-conic-gradient(
+      rgba(247, 231, 208, 0.3) 0deg 2deg,
+      transparent 2deg 5deg
+    ),
+    var(--weave-theme-gradient);
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent 0 57%,
+    #000 59% 75%,
+    transparent 78%
+  );
+  mask: radial-gradient(
+    circle,
+    transparent 0 57%,
+    #000 59% 75%,
+    transparent 78%
+  );
+  filter: saturate(0.92) drop-shadow(0 0 1px rgba(48, 31, 22, 0.45));
+}
+
+.woven-node__conversation.is-empty {
+  opacity: 0.2;
+  filter: grayscale(0.8);
+}
+
+.woven-node__proposal-arc {
+  inset: 3%;
+  z-index: 2;
+  transform: rotate(var(--arc-start));
+  background: conic-gradient(
+    var(--arc-color) 0deg var(--arc-span),
+    transparent var(--arc-span) 360deg
+  );
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent 0 76%,
+    #000 78% 90%,
+    transparent 92%
+  );
+  mask: radial-gradient(
+    circle,
+    transparent 0 76%,
+    #000 78% 90%,
+    transparent 92%
+  );
+  filter: drop-shadow(0 0 1px rgba(42, 27, 19, 0.7));
+}
+
+.woven-node__proposal-arc::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: repeating-conic-gradient(
+    rgba(252, 239, 218, 0.24) 0deg 1deg,
+    transparent 1deg 3deg
+  );
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent 0 80%,
+    #000 82% 87%,
+    transparent 89%
+  );
+  mask: radial-gradient(
+    circle,
+    transparent 0 80%,
+    #000 82% 87%,
+    transparent 89%
+  );
+}
+
+.woven-node__vote-stitches {
+  inset: -3%;
+  z-index: 6;
+  -webkit-mask: radial-gradient(
+    circle,
+    transparent 0 88%,
+    #000 89% 96%,
+    transparent 97%
+  );
+  mask: radial-gradient(
+    circle,
+    transparent 0 88%,
+    #000 89% 96%,
+    transparent 97%
+  );
+  filter: drop-shadow(0 0 0.8px rgba(45, 28, 18, 0.8));
+}
+
+.woven-node__overflow {
+  position: absolute;
+  right: -3px;
+  bottom: -2px;
+  z-index: 8;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 3px;
+  border: 1px solid rgba(67, 43, 30, 0.62);
+  border-radius: 999px;
+  background: #f4e5cd;
+  color: #4e3527;
+  font:
+    700 8px/13px system-ui,
+    sans-serif;
+  text-align: center;
+  box-shadow: 0 1px 2px rgba(40, 25, 17, 0.35);
 }
 
 .map-marker__halo {
   position: absolute;
   left: 50%;
   bottom: -1px;
-  width: 34px;
+  width: 51px;
   aspect-ratio: 1;
   box-sizing: border-box;
   border: 2px solid var(--marker-halo-color);
   border-radius: 50%;
   opacity: 0;
-  transform: translateX(-50%) scale(0.8);
-  box-shadow: 0 0 9px var(--marker-halo-color);
+  transform: translateX(-50%) scale(0.82);
+  box-shadow: 0 0 10px var(--marker-halo-color);
   transition:
     opacity 0.14s ease,
-    transform 0.16s ease-out;
+    transform 0.18s ease-out;
   pointer-events: none;
   z-index: 1;
 }
 
 .marker-webgemeindezentrum__visual {
-  width: 38px;
-  height: 38px;
-  border-color: #5f4433;
+  width: 52px;
+  height: 52px;
+  box-sizing: border-box;
+  border: 2px solid #664835;
+  border-radius: 50%;
   background: #d7b684;
-  box-shadow: 0 2px 3px rgba(42, 28, 18, 0.34);
+  box-shadow:
+    0 2px 3px rgba(42, 28, 18, 0.34),
+    inset 0 0 0 3px rgba(240, 218, 184, 0.7);
 }
 
-/* Draufsicht: runder Versammlungsplatz mit gewebtem Mittelpunkt. */
 .marker-webgemeindezentrum__icon {
   position: relative;
-  width: 26px;
-  height: 26px;
-  border: 2px solid #7a5840;
+  width: 42px;
+  height: 42px;
+  border: 1px solid #7a5840;
   border-radius: 50%;
   background: #ead7b8;
 }
 
-.marker-webgemeindezentrum__icon::before {
+.marker-webgemeindezentrum__icon > .woven-node {
+  inset: 3px;
+}
+
+.marker-webgemeindezentrum__icon > .woven-node::before {
   content: "";
   position: absolute;
-  inset: 7px;
-  background: repeating-linear-gradient(0deg, #704c35 0 2px, #e6c99c 2px 4px);
-  transform: rotate(45deg);
+  inset: -2px;
+  z-index: 7;
+  border: 2px dotted rgba(100, 70, 48, 0.62);
+  border-radius: 50%;
+  pointer-events: none;
 }
 
 .marker-account__visual {
@@ -147,14 +333,22 @@
   z-index: 10;
 }
 
+.map-marker:hover .marker-node__visual,
+.map-marker.is-selected .marker-node__visual {
+  transform: scale(1.13);
+  filter: drop-shadow(0 3px 3px rgba(35, 22, 15, 0.48));
+}
+
 .map-marker:focus-visible {
   --marker-halo-color: var(--text);
   z-index: 10;
 }
+
 .map-marker.search-highlight {
   --marker-halo-color: var(--primary, #005fcc);
   z-index: 5;
 }
+
 .map-marker.is-selected {
   --marker-halo-color: var(--accent);
   z-index: 8;
@@ -167,10 +361,29 @@
   transform: translateX(-50%);
 }
 
+.map-marker.is-selected .woven-node__proposal-arc {
+  animation: woven-node-settle 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes woven-node-settle {
+  from {
+    filter: drop-shadow(0 0 1px rgba(42, 27, 19, 0.62));
+  }
+  to {
+    filter: drop-shadow(
+      0 0 2.5px color-mix(in srgb, var(--arc-color), white 28%)
+    );
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .map-marker__visual,
   .map-marker__halo,
   .marker-account__icon {
     transition: none;
+  }
+
+  .map-marker.is-selected .woven-node__proposal-arc {
+    animation: none;
   }
 }

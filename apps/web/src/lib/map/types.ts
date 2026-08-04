@@ -123,6 +123,49 @@ export interface MapEdge extends Edge {
   lifecycle: EdgeLifecycle;
 }
 
+export type WeaveZone = "knotting" | "conversation" | "proposal" | "vote";
+
+export interface WeaveThemeSegment {
+  id: string;
+  label: string;
+  color: string;
+  startDeg: number;
+  spanDeg: number;
+}
+
+export interface WeaveProposalArc {
+  subjectId: string;
+  proposalThreadCount: number;
+  conversationThreadCount: number;
+  voteThreadCount: number;
+  bundledSubjectCount: number;
+  latestActivityAtMs: number;
+  opacity: number;
+  color: string;
+  startDeg: number;
+  spanDeg: number;
+}
+
+/**
+ * Active map projection of one grown woven body.
+ * Counts describe stable Faden relations, not an invented durable history of
+ * every individual Webungsschlag.
+ */
+export interface MapEntityWeave {
+  zoneOrder: WeaveZone[];
+  themeSegments: WeaveThemeSegment[];
+  primaryThemeColor: string;
+  coreDensity: number;
+  knottingThreadCount: number;
+  conversationThreadCount: number;
+  conversationOpacity: number;
+  proposalArcs: WeaveProposalArc[];
+  proposalCount: number;
+  proposalOverflowCount: number;
+  voteThreadCount: number;
+  totalActiveThreadCount: number;
+}
+
 // Phase 3: Discriminated union for map entities – eliminates semantic guesswork
 
 /** A node entity rendered on the map. */
@@ -140,6 +183,7 @@ export interface MapEntityNode {
   created_at: string;
   updated_at?: string;
   weight?: number;
+  weave?: MapEntityWeave;
 }
 
 /** A Garnrolle entity rendered on the map when it has a public position. */
@@ -176,6 +220,7 @@ export interface MapEntityWebgemeindezentrum {
   access_note: string;
   ortsweberei: OrtswebereiReference;
   weight?: number;
+  weave?: MapEntityWeave;
 }
 
 /**

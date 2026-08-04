@@ -151,7 +151,13 @@ export function deriveVisibleEdges<T extends Edge>(
   filteredMarkers: MapEntityViewModel[],
 ): T[] {
   const validEdges = edges.filter(isEdge);
-  const visibleIds = new Set(filteredMarkers.map((p) => p.id));
+  const visibleIds = new Set<string>();
+  for (const marker of filteredMarkers) {
+    visibleIds.add(marker.id);
+    if (marker.type === "webgemeindezentrum") {
+      visibleIds.add(marker.faden_endpoint_id);
+    }
+  }
   return validEdges.filter(
     (e) => visibleIds.has(e.source_id) && visibleIds.has(e.target_id),
   );

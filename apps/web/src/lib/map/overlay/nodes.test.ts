@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type {
-  MapEntityViewModel,
+  MapEntityNode,
+  MapEntityWeave,
   MapEntityWebgemeindezentrum,
 } from "$lib/map/types";
 import {
@@ -37,18 +38,27 @@ class FakeClassList {
   }
 }
 
+class FakeStyle {
+  [key: string]: string | ((name: string, value: string) => void);
+
+  setProperty(name: string, value: string) {
+    this[name] = value;
+  }
+}
+
 class FakeElement {
   classList = new FakeClassList();
   dataset: Record<string, string> = {};
   title = "";
   textContent = "";
+  innerHTML = "";
   type = "";
   src = "";
   alt = "";
   draggable = false;
   children: FakeElement[] = [];
   attributes = new Map<string, string>();
-  style: Record<string, string> = {};
+  style = new FakeStyle();
   private _className = "";
 
   set className(value: string) {
@@ -107,7 +117,36 @@ class FakeMarker {
   }
 }
 
-function makeNode(id: string): MapEntityViewModel {
+function makeWeave(overrides: Partial<MapEntityWeave> = {}): MapEntityWeave {
+  return {
+    zoneOrder: ["knotting", "conversation", "proposal", "vote"],
+    themeSegments: [
+      {
+        id: "natur",
+        label: "Natur",
+        color: "#5f7a55",
+        startDeg: 0,
+        spanDeg: 360,
+      },
+    ],
+    primaryThemeColor: "#5f7a55",
+    coreDensity: 0.55,
+    knottingThreadCount: 1,
+    conversationThreadCount: 1,
+    conversationOpacity: 0.8,
+    proposalArcs: [],
+    proposalCount: 0,
+    proposalOverflowCount: 0,
+    voteThreadCount: 0,
+    totalActiveThreadCount: 2,
+    ...overrides,
+  };
+}
+
+function makeNode(
+  id: string,
+  overrides: Partial<MapEntityNode> = {},
+): MapEntityNode {
   return {
     type: "node",
     id,
@@ -117,6 +156,8 @@ function makeNode(id: string): MapEntityViewModel {
     created_at: "2025-01-01T00:00:00Z",
     lat: 53.5,
     lon: 10,
+    weave: makeWeave(),
+    ...overrides,
   };
 }
 
@@ -140,6 +181,7 @@ function makeCenter(
     location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
     meeting_note: "Hier kann die Ortsweberei tatsächlich zusammenkommen.",
     access_note: "Nutzung und Barrierefreiheit sind noch nicht bestätigt.",
+    weave: makeWeave(),
     ortsweberei: {
       id: "ortsweberei-hamm",
       slug: "hamm",
@@ -281,6 +323,102 @@ describe("NodesOverlay selection lifecycle", () => {
     overlay.update([], true);
     overlay.update([makeNode("a")], true);
     expect(overlay.getActiveMarker("a")?.element.dataset.selected).toBe("true");
+  });
+});
+
+describe("NodesOverlay woven node marker", () => {
+  it("renders the core, conversation ring and separate proposal-bound vote wreaths", () => {
+    const overlay = makeOverlay();
+    overlay.update(
+      [
+        makeNode("woven", {
+          weave: makeWeave({
+            proposalCount: 2,
+            voteThreadCount: 3,
+            proposalArcs: [
+              {
+                subjectId: "proposal-a",
+                proposalThreadCount: 1,
+                conversationThreadCount: 1,
+                voteThreadCount: 2,
+                bundledSubjectCount: 1,
+                latestActivityAtMs: 10,
+                opacity: 0.9,
+                color: "#5f7a55",
+                startDeg: 20,
+                spanDeg: 120,
+              },
+              {
+                subjectId: "proposal-b",
+                proposalThreadCount: 1,
+                conversationThreadCount: 0,
+                voteThreadCount: 1,
+                bundledSubjectCount: 1,
+                latestActivityAtMs: 9,
+                opacity: 0.8,
+                color: "#5f7a55",
+                startDeg: 190,
+                spanDeg: 120,
+              },
+            ],
+          }),
+        }),
+      ],
+      true,
+    );
+
+    const marker = overlay.getActiveMarker("woven");
+    const root = marker?.element.children[0].children[0] as
+      | HTMLElement
+      | undefined;
+    expect(root?.classList.contains("woven-node")).toBe(true);
+    expect(root?.dataset.zoneOrder).toBe("knotting,conversation,proposal,vote");
+    expect(root?.innerHTML).toContain('data-zone="knotting"');
+    expect(root?.innerHTML).toContain('data-zone="conversation"');
+    expect(root?.innerHTML.match(/data-zone="proposal"/g)).toHaveLength(2);
+    expect(root?.innerHTML.match(/data-zone="vote"/g)).toHaveLength(2);
+  });
+
+  it("updates the woven body without recreating the stable map marker", () => {
+    const overlay = makeOverlay();
+    overlay.update([makeNode("a")], true);
+    const before = overlay.getActiveMarker("a");
+    const rootBefore = before?.element.children[0].children[0] as
+      | HTMLElement
+      | undefined;
+
+    overlay.update(
+      [
+        makeNode("a", {
+          weave: makeWeave({
+            proposalCount: 1,
+            proposalArcs: [
+              {
+                subjectId: "proposal-a",
+                proposalThreadCount: 1,
+                conversationThreadCount: 0,
+                voteThreadCount: 0,
+                bundledSubjectCount: 1,
+                latestActivityAtMs: 10,
+                opacity: 1,
+                color: "#5f7a55",
+                startDeg: 55,
+                spanDeg: 250,
+              },
+            ],
+          }),
+        }),
+      ],
+      true,
+    );
+
+    const after = overlay.getActiveMarker("a");
+    expect(after?.marker).toBe(before?.marker);
+    expect(after?.element.children[0].children[0]).toBe(rootBefore);
+    expect(rootBefore?.dataset.proposalCount).toBe("1");
+    expect(rootBefore?.innerHTML.match(/data-zone="proposal"/g)).toHaveLength(
+      1,
+    );
   });
 });
 

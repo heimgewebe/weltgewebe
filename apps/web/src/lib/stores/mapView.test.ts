@@ -322,6 +322,24 @@ describe("mapView presentation helpers", () => {
     expect(deriveVisibleEdges(edges, onlyNodes)).toHaveLength(0);
   });
 
+  it("keeps governance Fäden visible through the center endpoint alias", () => {
+    const account = makeAccount();
+    const center = makeCenter();
+    const scene = sceneFrom([], [account], [], [center]);
+    const edges: Edge[] = [
+      {
+        id: "proposal-edge",
+        source_id: account.id,
+        target_id: center.faden_endpoint_id,
+        edge_kind: "reference",
+        faden_type: "proposal",
+        faden_subject_id: "proposal-a",
+      },
+    ];
+
+    expect(deriveVisibleEdges(edges, scene.entities)).toHaveLength(1);
+  });
+
   it("getFilterTypeKey distinguishes nodes, Garnrollen and Webgemeindezentren", () => {
     const nodeEntity: MapEntityViewModel = {
       type: "node",

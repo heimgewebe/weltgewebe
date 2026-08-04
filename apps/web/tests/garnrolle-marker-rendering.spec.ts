@@ -43,34 +43,35 @@ test.describe("Garnrolle marker rendering", () => {
     await expect(icon).toHaveCSS("object-fit", "contain");
   });
 
-  test("renders Knoten as interlaced textile loops instead of generic dots", async ({
+  test("renders Knoten as woven bodies instead of generic dots", async ({
     page,
   }) => {
     const marker = page.getByTestId(`marker-node-${KNOTEN_ID}`);
     const visual = marker.locator(".marker-node__visual");
+    const body = visual.locator(".woven-node");
     await expect(marker).toHaveCSS("outline-style", "none");
-    await expect(visual).toHaveCSS("width", "30px");
-    await expect(visual).toHaveCSS("height", "24px");
+    await expect(marker).toHaveCSS("width", "44px");
+    await expect(marker).toHaveCSS("height", "44px");
+    await expect(visual).toHaveCSS("width", "46px");
+    await expect(visual).toHaveCSS("height", "46px");
     await expect(visual).toHaveCSS("border-top-style", "none");
+    await expect(body).toHaveCount(1);
+    await expect(body).toHaveAttribute(
+      "data-zone-order",
+      "knotting,conversation,proposal,vote",
+    );
+    await expect(body).toHaveCSS("border-radius", "50%");
+    await expect(body.locator('[data-zone="knotting"]')).toHaveCount(1);
+    await expect(body.locator('[data-zone="conversation"]')).toHaveCount(1);
 
-    const loops = await visual.evaluate((element) => {
-      const before = getComputedStyle(element, "::before");
-      const after = getComputedStyle(element, "::after");
-      return {
-        beforeContent: before.content,
-        beforeRadius: before.borderRadius,
-        beforeTransform: before.transform,
-        afterContent: after.content,
-        afterRadius: after.borderRadius,
-        afterTransform: after.transform,
-      };
-    });
-    expect(loops.beforeContent).not.toBe("none");
-    expect(loops.afterContent).not.toBe("none");
-    expect(loops.beforeRadius).toBe("50%");
-    expect(loops.afterRadius).toBe("50%");
-    expect(loops.beforeTransform).not.toBe("none");
-    expect(loops.afterTransform).not.toBe("none");
+    const cross = await body
+      .locator(".woven-node__cross")
+      .evaluate((element) => ({
+        beforeContent: getComputedStyle(element, "::before").content,
+        afterContent: getComputedStyle(element, "::after").content,
+      }));
+    expect(cross.beforeContent).not.toBe("none");
+    expect(cross.afterContent).not.toBe("none");
   });
 
   test("uses round textile haloes instead of rectangular marker and title boxes", async ({
