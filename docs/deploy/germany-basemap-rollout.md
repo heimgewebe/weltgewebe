@@ -111,7 +111,13 @@ Die Belege werden als JSON-Datei an Artefakt, Frontend und Stil gebunden:
     "no-external-map-requests",
     "staging-caddy-full",
     "staging-caddy-range"
-  ]
+  ],
+  "evidence": {
+    "desktop_proof_path": "build/proofs/basemap-germany-desktop/proof.json",
+    "desktop_proof_sha256": "<64 hex>",
+    "caddy_proof_path": "build/proofs/basemap-germany-caddy/proof.json",
+    "caddy_proof_sha256": "<64 hex>"
+  }
 }
 ```
 
