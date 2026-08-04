@@ -369,7 +369,12 @@
   // scene changes may touch the full marker set; search changes only toggle the
   // small delta between the previous and next (maximum ten) search matches.
   $: if (nodesOverlay && filteredMarkersData) {
-    nodesOverlay.update(filteredMarkersData, showNodes);
+    nodesOverlay.update(
+      filteredMarkersData,
+      showNodes,
+      scene.edges,
+      edgeProjectionNow,
+    );
   }
 
   $: if (nodesOverlay) {

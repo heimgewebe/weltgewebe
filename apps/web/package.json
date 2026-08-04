@@ -38,7 +38,7 @@
     "prelint": "pnpm run generate:basemap-config",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
-    "build:e2e": "cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true pnpm run sync && rimraf build && vite build --mode test && node scripts/generate-version.js --server --artifact-tree",
+    "build:e2e": "pnpm run sync && rimraf build && cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true vite build --mode test && node scripts/generate-version.js --server --artifact-tree",
     "pretest": "pnpm run generate:basemap-config",
     "pretest:ci": "pnpm run generate:basemap-config",
     "pretest:proof:basemap-real": "pnpm run generate:basemap-config",

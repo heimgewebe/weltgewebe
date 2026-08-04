@@ -90,6 +90,7 @@ describe("buildEdgeFeatures", () => {
       points[0],
       {
         ...points[1],
+        type: "node",
         weave: {
           zoneOrder: ["knotting", "conversation", "proposal", "vote"],
           themeSegments: [],
