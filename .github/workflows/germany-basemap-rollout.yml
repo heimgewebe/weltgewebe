@@ -6,6 +6,11 @@ name: Germany Basemap Rollout
     branches: [main]
     paths:
       - "apps/web/.gitignore"
+      - "apps/web/package.json"
+      - "apps/web/vite.config.ts"
+      - "apps/web/playwright.germany.proof.config.ts"
+      - "apps/web/playwright.proof.config.ts"
+      - "apps/web/tests/proofs/basemap-real-germany-visual.proof.ts"
       - "apps/web/scripts/generate-basemap-config.js"
       - "apps/web/scripts/generate-basemap-config.test.mjs"
       - "apps/web/src/lib/map/basemap.ts"
@@ -17,13 +22,24 @@ name: Germany Basemap Rollout
       - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
       - "scripts/basemap/prepare-germany-rollout.sh"
       - "scripts/basemap/activate-germany-basemap.sh"
+      - "scripts/basemap/assemble-germany-release-proof.py"
+      - "scripts/basemap/prove-germany-staging-caddy.py"
+      - "scripts/basemap/run-measured-container.py"
       - "scripts/ci/tests/test_germany_basemap_rollout.py"
+      - "scripts/ci/tests/test_germany_release_proof_assembler.py"
+      - "scripts/ci/tests/test_germany_staging_caddy_proof.py"
+      - "scripts/ci/tests/test_germany_measured_container.py"
       - "scripts/ci/tests/test_schleswig_holstein_basemap_builder.py"
       - ".github/workflows/germany-basemap-rollout.yml"
   push:
     branches: [main]
     paths:
       - "apps/web/.gitignore"
+      - "apps/web/package.json"
+      - "apps/web/vite.config.ts"
+      - "apps/web/playwright.germany.proof.config.ts"
+      - "apps/web/playwright.proof.config.ts"
+      - "apps/web/tests/proofs/basemap-real-germany-visual.proof.ts"
       - "apps/web/scripts/generate-basemap-config.js"
       - "apps/web/scripts/generate-basemap-config.test.mjs"
       - "apps/web/src/lib/map/basemap.ts"
@@ -35,7 +51,13 @@ name: Germany Basemap Rollout
       - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
       - "scripts/basemap/prepare-germany-rollout.sh"
       - "scripts/basemap/activate-germany-basemap.sh"
+      - "scripts/basemap/assemble-germany-release-proof.py"
+      - "scripts/basemap/prove-germany-staging-caddy.py"
+      - "scripts/basemap/run-measured-container.py"
       - "scripts/ci/tests/test_germany_basemap_rollout.py"
+      - "scripts/ci/tests/test_germany_release_proof_assembler.py"
+      - "scripts/ci/tests/test_germany_staging_caddy_proof.py"
+      - "scripts/ci/tests/test_germany_measured_container.py"
       - "scripts/ci/tests/test_schleswig_holstein_basemap_builder.py"
       - ".github/workflows/germany-basemap-rollout.yml"
   workflow_dispatch: {}
@@ -63,16 +85,25 @@ jobs:
           bash -n scripts/basemap/build-schleswig-holstein-pmtiles.sh
           bash -n scripts/basemap/prepare-germany-rollout.sh
           bash -n scripts/basemap/activate-germany-basemap.sh
+          python3 -m py_compile scripts/basemap/assemble-germany-release-proof.py
+          python3 -m py_compile scripts/basemap/prove-germany-staging-caddy.py
+          python3 -m py_compile scripts/basemap/run-measured-container.py
           test -x scripts/basemap/build-germany-pmtiles.sh
           test -x scripts/basemap/build-hamburg-pmtiles.sh
           test -x scripts/basemap/build-schleswig-holstein-pmtiles.sh
           test -x scripts/basemap/prepare-germany-rollout.sh
           test -x scripts/basemap/activate-germany-basemap.sh
+          test -x scripts/basemap/assemble-germany-release-proof.py
+          test -x scripts/basemap/prove-germany-staging-caddy.py
+          test -x scripts/basemap/run-measured-container.py
 
       - name: Verify static basemap rollout contracts
         run: |
           set -euo pipefail
           python3 scripts/ci/tests/test_germany_basemap_rollout.py
+          python3 scripts/ci/tests/test_germany_release_proof_assembler.py
+          python3 scripts/ci/tests/test_germany_staging_caddy_proof.py
+          python3 scripts/ci/tests/test_germany_measured_container.py
           python3 scripts/ci/tests/test_schleswig_holstein_basemap_builder.py
 
       - name: Install pnpm

@@ -1,19 +1,20 @@
 import { expect, test } from "@playwright/test";
+import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { mockListResponse } from "../fixtures/mockApi";
 
 /**
- * Visual Runtime Proof: Real Hamburg PMTiles via MapLibre
+ * Visual Runtime Proof: Real Germany PMTiles via MapLibre
  *
  * Proves the full end-to-end pipeline:
  *   Browser → Weltgewebe App → MapLibre → pmtiles:// → /local-basemap/ →
- *   Vite dev-server middleware → build/basemap/basemap-hamburg.pmtiles
+ *   Vite dev-server middleware → private version override or stable alias
  *
  * Two-part proof strategy:
  *
  *   1. SERVER RANGE CONTRACT:
- *      - Explicit direct Range request to /local-basemap/basemap-hamburg.pmtiles
+ *      - Explicit direct Range request to /local-basemap/basemap-germany.pmtiles
  *      - Must return HTTP 206 Partial Content
  *      - Must include Accept-Ranges: bytes and Content-Range headers
  *      - Proves the Vite middleware correctly delivers Range-capable files
@@ -30,19 +31,19 @@ import { mockListResponse } from "../fixtures/mockApi";
  * configurePreviewServer hooks).
  * Run with: PLAYWRIGHT_SKIP_WEBSERVER=1 PORT=5173
  *
- * /local-basemap/style.json and /local-basemap/*.pmtiles are NOT mocked here.
+ * /local-basemap/style-germany.json and /local-basemap/*.pmtiles are NOT mocked here.
  * Only /api/** and /_app/version.json are mocked (no backend server needed).
  */
 
-const REAL_PMTILES_FILENAME = "basemap-hamburg.pmtiles";
-const SOURCE_ID = "basemap";
+const REAL_PMTILES_FILENAME = "basemap-germany.pmtiles";
+const SOURCE_ID = "basemap-germany";
 const REGION_LAYER_IDS = [
-  "landcover",
-  "landuse",
-  "water",
-  "roads",
-  "buildings",
-  "place-labels",
+  "landcover-germany",
+  "landuse-germany",
+  "water-germany",
+  "roads-germany",
+  "buildings-germany",
+  "place-labels-germany",
 ];
 const SOURCE_LAYER_IDS = [
   "landcover",
@@ -62,6 +63,41 @@ type TestMap = {
     sourceId: string,
     options?: { sourceLayer?: string },
   ) => Array<unknown>;
+  jumpTo?: (options: { center: [number, number]; zoom: number }) => void;
+  once?: (event: string, listener: () => void) => void;
+};
+
+const GERMANY_REGIONS = [
+  { id: "hamburg", center: [9.9937, 53.5511] as [number, number], zoom: 12 },
+  { id: "berlin", center: [13.405, 52.52] as [number, number], zoom: 12 },
+  { id: "cologne", center: [6.9603, 50.9375] as [number, number], zoom: 12 },
+  { id: "dresden", center: [13.7373, 51.0504] as [number, number], zoom: 12 },
+  { id: "munich", center: [11.582, 48.1351] as [number, number], zoom: 12 },
+] as const;
+
+async function sha256File(filePath: string): Promise<string> {
+  return await new Promise((resolve, reject) => {
+    const digest = crypto.createHash("sha256");
+    const stream = fs.createReadStream(filePath);
+    stream.on("data", (chunk) => digest.update(chunk));
+    stream.on("error", reject);
+    stream.on("end", () => resolve(digest.digest("hex")));
+  });
+}
+
+type GermanyArtifactMetadata = {
+  version?: unknown;
+  region?: unknown;
+  sha256?: unknown;
+  size_bytes?: unknown;
+};
+
+type BasemapBuildIdentity = {
+  schema_version?: unknown;
+  mode?: unknown;
+  variant?: unknown;
+  source_commit?: unknown;
+  style_sha256?: unknown;
 };
 
 const FORBIDDEN_REMOTE_PROVIDERS = [
@@ -75,20 +111,83 @@ const FORBIDDEN_REMOTE_PROVIDERS = [
   "maps.googleapis.com",
 ];
 
-test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
+test.describe("Basemap Real Germany Visual Runtime Proof", () => {
   test(
-    "loads real Hamburg PMTiles artifact via MapLibre with HTTP 206 Range delivery",
+    "loads real Germany PMTiles artifact via MapLibre with HTTP 206 Range delivery",
     { tag: "@proof" },
     async ({ page }, testInfo) => {
       const buildBasemapDir = path.resolve(
         process.cwd(),
         "../../build/basemap",
       );
-      const aliasPath = path.join(buildBasemapDir, REAL_PMTILES_FILENAME);
+      const defaultArtifactPath = path.join(
+        buildBasemapDir,
+        REAL_PMTILES_FILENAME,
+      );
+      const defaultMetadataPath = path.join(
+        buildBasemapDir,
+        "basemap-germany.meta.json",
+      );
+      const proofArtifactOverride = process.env.GERMANY_BASEMAP_PROOF_ARTIFACT;
+      const proofMetadataOverride = process.env.GERMANY_BASEMAP_PROOF_METADATA;
       expect(
-        fs.existsSync(aliasPath),
-        `NOT_PROVEN: missing required published PMTiles alias ${aliasPath}; run scripts/basemap/publish-basemap.sh first`,
+        Boolean(proofArtifactOverride),
+        "Germany proof artifact and metadata overrides must be set together",
+      ).toBe(Boolean(proofMetadataOverride));
+      const artifactInputPath = proofArtifactOverride ?? defaultArtifactPath;
+      const metadataInputPath = proofMetadataOverride ?? defaultMetadataPath;
+      const stylePath = path.resolve(
+        process.cwd(),
+        "../../map-style/style-germany.json",
+      );
+      const buildIdentityPath = path.resolve(
+        process.cwd(),
+        "static/_app/basemap-build.json",
+      );
+      for (const [label, requiredPath] of [
+        ["PMTiles proof artifact", artifactInputPath],
+        ["PMTiles proof metadata", metadataInputPath],
+        ["Germany style", stylePath],
+        ["basemap build identity", buildIdentityPath],
+      ] as const) {
+        expect(
+          fs.existsSync(requiredPath),
+          `NOT_PROVEN: missing required ${label}: ${requiredPath}`,
+        ).toBe(true);
+      }
+
+      const artifactPath = fs.realpathSync(artifactInputPath);
+      const metadataPath = fs.realpathSync(metadataInputPath);
+      const artifactStat = fs.statSync(artifactPath);
+      expect(
+        artifactStat.isFile(),
+        "PMTiles proof artifact must resolve to a file",
       ).toBe(true);
+      const artifactSha256 = await sha256File(artifactPath);
+      const artifactMetadata = JSON.parse(
+        fs.readFileSync(metadataPath, "utf8"),
+      ) as GermanyArtifactMetadata;
+      const buildIdentity = JSON.parse(
+        fs.readFileSync(buildIdentityPath, "utf8"),
+      ) as BasemapBuildIdentity;
+      const styleSha256 = await sha256File(stylePath);
+
+      expect(artifactMetadata.region).toBe("germany");
+      expect(artifactMetadata.sha256).toBe(artifactSha256);
+      expect(artifactMetadata.size_bytes).toBe(artifactStat.size);
+      expect(typeof artifactMetadata.version).toBe("string");
+      expect(artifactMetadata.version).not.toBe("");
+      expect(buildIdentity.schema_version).toBe(1);
+      expect(buildIdentity.mode).toBe("local-sovereign");
+      expect(buildIdentity.variant).toBe("germany");
+      expect(buildIdentity.style_sha256).toBe(styleSha256);
+      expect(buildIdentity.source_commit).toMatch(/^[0-9a-f]{40}$/);
+
+      const buildProofDir = path.resolve(
+        process.cwd(),
+        "../../build/proofs/basemap-germany-visual",
+      );
+      fs.mkdirSync(buildProofDir, { recursive: true });
 
       const pmtilesRequests: Array<{
         url: string;
@@ -220,29 +319,29 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         });
       });
 
-      // Navigate to map — /local-basemap/style.json and *.pmtiles are NOT mocked
+      // Navigate to map — /local-basemap/style-germany.json and *.pmtiles are NOT mocked
       await page.goto("/map?proof=1&t=" + Date.now());
 
-      // Preflight: style endpoint must exist and point to the local Hamburg PMTiles alias
+      // Preflight: style endpoint must exist and point to the local Germany PMTiles alias
       const styleResponse = await page.request.get(
-        "/local-basemap/style.json?v=0.3.1",
+        "/local-basemap/style-germany.json?v=0.3.1",
       );
       expect(
         styleResponse.status(),
-        "Expected /local-basemap/style.json to return HTTP 200",
+        "Expected /local-basemap/style-germany.json to return HTTP 200",
       ).toBe(200);
       const styleContentType = styleResponse.headers()["content-type"] ?? "";
       expect(
         styleContentType,
-        "Expected /local-basemap/style.json to be application/json",
+        "Expected /local-basemap/style-germany.json to be application/json",
       ).toContain("application/json");
       const styleJson = (await styleResponse.json()) as {
-        sources?: { basemap?: { url?: string } };
+        sources?: { "basemap-germany"?: { url?: string } };
       };
-      const styleBasemapUrl = styleJson.sources?.basemap?.url ?? "";
+      const styleBasemapUrl = styleJson.sources?.["basemap-germany"]?.url ?? "";
       expect(
         styleBasemapUrl,
-        "Expected local basemap style to reference the stable Hamburg PMTiles alias",
+        "Expected local basemap style to reference the stable Germany PMTiles alias",
       ).toBe(`pmtiles://${REAL_PMTILES_FILENAME}`);
       expect(
         styleBasemapUrl,
@@ -426,7 +525,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         .poll(
           async () => (await readFeatureEvidence()).renderedFromExpectedSource,
           {
-            message: "Expected rendered features from the Hamburg source",
+            message: "Expected rendered features from the Germany source",
             timeout: 30_000,
           },
         )
@@ -434,11 +533,63 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       await expect
         .poll(async () => (await readFeatureEvidence()).sourceFeatureCount, {
           message:
-            "Expected decoded vector features from Hamburg source-layers",
+            "Expected decoded vector features from Germany source-layers",
           timeout: 30_000,
         })
         .toBeGreaterThan(0);
       const featureEvidence = await readFeatureEvidence();
+
+      const regionEvidence = [];
+      for (const region of GERMANY_REGIONS) {
+        await page.evaluate(async ({ center, zoom }) => {
+          const map = (window as unknown as Record<string, unknown>)
+            .__TEST_MAP__ as TestMap | undefined;
+          if (!map?.jumpTo || !map.once) {
+            throw new Error("MapLibre test hook does not expose jumpTo/once");
+          }
+          await new Promise<void>((resolve) => {
+            map.once!("idle", resolve);
+            map.jumpTo!({ center, zoom });
+          });
+        }, region);
+        await expect
+          .poll(async () => (await readFeatureEvidence()).sourceFeatureCount, {
+            message: `Expected decoded Germany vector features in ${region.id}`,
+            timeout: 30_000,
+          })
+          .toBeGreaterThan(0);
+        await expect
+          .poll(
+            async () =>
+              (await readFeatureEvidence()).renderedFromExpectedSource,
+            {
+              message: `Expected rendered Germany features in ${region.id}`,
+              timeout: 30_000,
+            },
+          )
+          .toBeGreaterThan(0);
+        const evidence = await readFeatureEvidence();
+        const testScreenshot = testInfo.outputPath(`region-${region.id}.png`);
+        const stableScreenshot = path.join(
+          buildProofDir,
+          `region-${region.id}.png`,
+        );
+        await page.screenshot({ path: testScreenshot, fullPage: false });
+        fs.copyFileSync(testScreenshot, stableScreenshot);
+        const screenshotStat = fs.statSync(stableScreenshot);
+        const screenshotSha256 = await sha256File(stableScreenshot);
+        regionEvidence.push({
+          ...region,
+          screenshot: stableScreenshot,
+          screenshot_sha256: screenshotSha256,
+          screenshot_size_bytes: screenshotStat.size,
+          source_loaded: evidence.sourceLoaded,
+          rendered_from_expected_source: evidence.renderedFromExpectedSource,
+          decoded_source_feature_count: evidence.sourceFeatureCount,
+          decoded_source_feature_counts_by_layer: evidence.sourceFeatureCounts,
+          rendered_layer_ids: evidence.renderedLayerIds,
+        });
+      }
 
       await expect
         .poll(
@@ -446,7 +597,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
             pmtilesResponses.filter((response) => response.status === 206)
               .length,
           {
-            message: "Expected observed HTTP 206 responses for Hamburg PMTiles",
+            message: "Expected observed HTTP 206 responses for Germany PMTiles",
             timeout: 30_000,
           },
         )
@@ -454,7 +605,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
 
       expect(featureEvidence.sourceLoaded).toBe(true);
       expect(featureEvidence.renderedLayerIds).toEqual(
-        expect.arrayContaining(["landcover", "landuse"]),
+        expect.arrayContaining(["landcover-germany", "landuse-germany"]),
       );
       expect(
         featureEvidence.sourceFeatureCounts.transportation,
@@ -476,9 +627,15 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
       const proofSummary = {
         timestamp: new Date().toISOString(),
         verdict: "PROVEN",
-        region: "hamburg",
+        region: "germany",
         source_id: SOURCE_ID,
         pmtiles_filename: REAL_PMTILES_FILENAME,
+        basemap_version: artifactMetadata.version,
+        artifact_path: artifactPath,
+        artifact_sha256: artifactSha256,
+        artifact_size_bytes: artifactStat.size,
+        frontend_commit: buildIdentity.source_commit,
+        style_sha256: styleSha256,
 
         // SERVER RANGE CONTRACT
         direct_range_status: directRangeResponse.status(),
@@ -507,6 +664,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         decoded_source_feature_count: featureEvidence.sourceFeatureCount,
         decoded_source_feature_counts_by_layer:
           featureEvidence.sourceFeatureCounts,
+        five_region_evidence: regionEvidence,
         failed_responses: failedResponses,
         console_errors: consoleErrors,
         remote_violations: remoteViolations,
@@ -530,12 +688,7 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         JSON.stringify(proofSummary, null, 2),
       );
 
-      // Write to build/proofs/basemap-visual/ for guard script access
-      const buildProofDir = path.resolve(
-        process.cwd(),
-        "../../build/proofs/basemap-visual",
-      );
-      fs.mkdirSync(buildProofDir, { recursive: true });
+      // Write to build/proofs/basemap-germany-visual/ for the assembler.
       fs.writeFileSync(
         path.join(buildProofDir, "proof-summary.json"),
         JSON.stringify(proofSummary, null, 2),
@@ -589,13 +742,32 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
 
       expect(
         proofSummary.rendered_from_expected_source,
-        "Proof requires visibly rendered features from the Hamburg source",
+        "Proof requires visibly rendered features from the Germany source",
       ).toBeGreaterThan(0);
 
       expect(
         proofSummary.decoded_source_feature_count,
-        "Proof requires decoded vector features from Hamburg source-layers",
+        "Proof requires decoded vector features from Germany source-layers",
       ).toBeGreaterThan(0);
+
+      expect(
+        proofSummary.five_region_evidence,
+        "Proof requires all five named Germany regions",
+      ).toHaveLength(5);
+      for (const region of proofSummary.five_region_evidence) {
+        expect(
+          region.source_loaded,
+          `${region.id}: source must be loaded`,
+        ).toBe(true);
+        expect(
+          region.rendered_from_expected_source,
+          `${region.id}: expected rendered Germany features`,
+        ).toBeGreaterThan(0);
+        expect(
+          region.decoded_source_feature_count,
+          `${region.id}: expected decoded Germany vector features`,
+        ).toBeGreaterThan(0);
+      }
 
       // Hard assertion: No external providers
       expect(

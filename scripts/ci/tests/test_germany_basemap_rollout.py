@@ -9,9 +9,27 @@ REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style-germany.json"
 BASEMAP_MODULE = REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
 GENERATOR = REPO / "apps" / "web" / "scripts" / "generate-basemap-config.js"
+VITE_CONFIG = REPO / "apps" / "web" / "vite.config.ts"
 BUILD_SCRIPT = REPO / "scripts" / "basemap" / "build-germany-pmtiles.sh"
 PREPARE_SCRIPT = REPO / "scripts" / "basemap" / "prepare-germany-rollout.sh"
 ACTIVATE_SCRIPT = REPO / "scripts" / "basemap" / "activate-germany-basemap.sh"
+RELEASE_ASSEMBLER = (
+    REPO / "scripts" / "basemap" / "assemble-germany-release-proof.py"
+)
+STAGING_CADDY_PROOF = (
+    REPO / "scripts" / "basemap" / "prove-germany-staging-caddy.py"
+)
+MEASURED_CONTAINER = (
+    REPO / "scripts" / "basemap" / "run-measured-container.py"
+)
+GERMANY_VISUAL_PROOF = (
+    REPO
+    / "apps"
+    / "web"
+    / "tests"
+    / "proofs"
+    / "basemap-real-germany-visual.proof.ts"
+)
 HAMBURG_BUILD_SCRIPT = REPO / "scripts" / "basemap" / "build-hamburg-pmtiles.sh"
 SCHLESWIG_BUILD_SCRIPT = (
     REPO / "scripts" / "basemap" / "build-schleswig-holstein-pmtiles.sh"
@@ -75,6 +93,30 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("PUBLIC_SOURCE_COMMIT", generator)
         self.assertIn("basemap-build.json", generator)
 
+    def test_germany_proof_uses_versioned_files_without_switching_aliases(self) -> None:
+        vite = VITE_CONFIG.read_text(encoding="utf-8")
+        proof = GERMANY_VISUAL_PROOF.read_text(encoding="utf-8")
+        runbook = (REPO / "docs" / "deploy" / "germany-basemap-rollout.md").read_text(
+            encoding="utf-8"
+        )
+        for marker in (
+            "GERMANY_BASEMAP_PROOF_ARTIFACT",
+            "GERMANY_BASEMAP_PROOF_METADATA",
+        ):
+            self.assertIn(marker, vite)
+            self.assertIn(marker, proof)
+            self.assertIn(marker, runbook)
+        self.assertIn('safeRelPath === "basemap-germany.pmtiles"', vite)
+        self.assertIn('safeRelPath === "basemap-germany.meta.json"', vite)
+        self.assertIn("must be set together", vite)
+        self.assertIn("path.isAbsolute(raw)", vite)
+        self.assertIn("fs.lstatSync(absolute)", vite)
+        self.assertIn("fs.realpathSync(absolute) !== absolute", vite)
+        self.assertIn("proofTarget === null", vite)
+        self.assertIn("artifactInputPath", proof)
+        self.assertIn("metadataInputPath", proof)
+        self.assertIn("weder angelegt noch verändert", runbook)
+
     def test_builder_requires_complete_valid_snapshot_provenance(self) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
         for marker in (
@@ -89,7 +131,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("dt.datetime.now(dt.timezone.utc).date()", builder)
         self.assertIn("OSM_SNAPSHOT_DATE lies in the future", builder)
         self.assertLess(
-            builder.index("dt.date.fromisoformat"), builder.index("if ! docker")
+            builder.index("dt.date.fromisoformat"), builder.index('if ! python3 "$SCRIPT_DIR/run-measured-container.py"')
         )
 
     def test_builder_never_replaces_version_or_activates_alias(self) -> None:
@@ -100,11 +142,11 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertNotIn("ln -s", builder)
         self.assertNotIn("PUBLIC_BASEMAP_VARIANT=germany", builder)
 
-    def test_builder_publishes_artifact_and_metadata_as_signal_safe_pair(
+    def test_builder_publishes_artifact_metadata_and_measurement_as_signal_safe_triplet(
         self,
     ) -> None:
         builder = BUILD_SCRIPT.read_text(encoding="utf-8")
-        docker_at = builder.index('if ! docker "${DOCKER_ARGS[@]}"')
+        docker_at = builder.index('if ! python3 "$SCRIPT_DIR/run-measured-container.py"')
         publish_at = builder.index(
             'ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"'
         )
@@ -113,15 +155,22 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertNotIn('--output="/data/$OUTPUT_PMTILES"', build_region)
         self.assertNotIn('mv "$PARTIAL_PMTILES" "$OUTPUT_PMTILES"', builder)
 
-        function_start = builder.index("publish_immutable_pair() {")
+        function_start = builder.index("publish_immutable_triplet() {")
         ignore_signals = builder.index("trap '' INT TERM", function_start)
         artifact_link = builder.index(
             'ln "$PARTIAL_PMTILES_PATH" "$FINAL_PMTILES_PATH"',
             ignore_signals,
         )
         artifact_owned = builder.index("FINAL_ARTIFACT_CREATED=1", artifact_link)
+        receipt_link = builder.index(
+            'ln "$PARTIAL_BUILD_RECEIPT_PATH" "$FINAL_BUILD_RECEIPT_PATH"',
+            artifact_owned,
+        )
+        receipt_owned = builder.index(
+            "FINAL_BUILD_RECEIPT_CREATED=1", receipt_link
+        )
         metadata_link = builder.index(
-            'ln "$PARTIAL_META_PATH" "$FINAL_META_PATH"', artifact_owned
+            'ln "$PARTIAL_META_PATH" "$FINAL_META_PATH"', receipt_owned
         )
         metadata_owned = builder.index("FINAL_META_CREATED=1", metadata_link)
         publication_complete = builder.index("PUBLISH_COMPLETE=1", metadata_owned)
@@ -134,7 +183,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
 
         self.assertLess(ignore_signals, artifact_link)
         self.assertLess(artifact_link, artifact_owned)
-        self.assertLess(artifact_owned, metadata_link)
+        self.assertLess(artifact_owned, receipt_link)
+        self.assertLess(receipt_link, receipt_owned)
+        self.assertLess(receipt_owned, metadata_link)
         self.assertLess(metadata_link, metadata_owned)
         self.assertLess(metadata_owned, publication_complete)
         self.assertLess(publication_complete, restore_interrupt)
@@ -175,7 +226,11 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         artifact_owned = prepare.index("ARTIFACT_CREATED=1", artifact_link)
         proof_link = prepare.index('ln "$PROOF_TMP" "$TARGET_PROOF"', artifact_owned)
         proof_owned = prepare.index("PROOF_CREATED=1", proof_link)
-        meta_link = prepare.index('ln "$META_TMP" "$TARGET_META"', proof_owned)
+        receipt_link = prepare.index(
+            'ln "$BUILD_RECEIPT_TMP" "$TARGET_BUILD_RECEIPT"', proof_owned
+        )
+        receipt_owned = prepare.index("BUILD_RECEIPT_CREATED=1", receipt_link)
+        meta_link = prepare.index('ln "$META_TMP" "$TARGET_META"', receipt_owned)
         meta_owned = prepare.index("META_CREATED=1", meta_link)
         restore_interrupt = prepare.index("trap on_interrupt INT", meta_owned)
         restore_terminate = prepare.index("trap on_terminate TERM", restore_interrupt)
@@ -187,7 +242,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertLess(artifact_link, artifact_owned)
         self.assertLess(artifact_owned, proof_link)
         self.assertLess(proof_link, proof_owned)
-        self.assertLess(proof_owned, meta_link)
+        self.assertLess(proof_owned, receipt_link)
+        self.assertLess(receipt_link, receipt_owned)
+        self.assertLess(receipt_owned, meta_link)
         self.assertLess(meta_link, meta_owned)
         self.assertLess(meta_owned, restore_interrupt)
         self.assertLess(restore_interrupt, restore_terminate)
@@ -331,6 +388,68 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("python3 << 'PY'; then", receipt_function)
         self.assertIn("\nPY\n    rm -f", receipt_function)
         self.assertNotIn("python3 << 'PY' || {", receipt_function)
+
+    def test_germany_builder_pins_and_binds_auxiliary_sources(self) -> None:
+        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
+        for marker in (
+            "LAKE_CENTERLINES_URL",
+            "LAKE_CENTERLINES_SHA256",
+            "WATER_POLYGONS_URL",
+            "WATER_POLYGONS_SHA256",
+            "NATURAL_EARTH_URL",
+            "NATURAL_EARTH_SHA256",
+            "download_verified_auxiliary()",
+            '"auxiliary_sources": {',
+            '"wikidata": {"enabled": False}',
+        ):
+            self.assertIn(marker, builder)
+        self.assertIn('--lake-centerlines-path="/data/$AUXILIARY_REL_DIR/', builder)
+        self.assertIn('--water-polygons-path="/data/$AUXILIARY_REL_DIR/', builder)
+        self.assertIn('--natural-earth-path="/data/$AUXILIARY_REL_DIR/', builder)
+        self.assertIn("--use-wikidata=false", builder)
+        docker_at = builder.index('if ! python3 "$SCRIPT_DIR/run-measured-container.py"')
+        verification_at = builder.index(
+            'download_verified_auxiliary "Natural Earth" '
+            '"$NATURAL_EARTH_URL" "$NATURAL_EARTH_SHA256" '
+            '"$NATURAL_EARTH_PATH"'
+        )
+        self.assertLess(verification_at, docker_at)
+        self.assertNotIn("--download", builder[docker_at:])
+
+    def test_germany_builder_measures_and_binds_resource_peaks(self) -> None:
+        builder = BUILD_SCRIPT.read_text(encoding="utf-8")
+        prepare = PREPARE_SCRIPT.read_text(encoding="utf-8")
+        activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
+        runner = MEASURED_CONTAINER.read_text(encoding="utf-8")
+        for contract in (
+            "germany-pmtiles-measured-build-v1",
+            "cpu_percent",
+            "memory_bytes",
+            "workspace_growth_bytes",
+            "filesystem_consumed_bytes",
+        ):
+            self.assertIn(contract, builder)
+            self.assertIn(contract, prepare)
+            self.assertIn(contract, activate)
+        self.assertIn('["docker", "stats", "--no-stream"', runner)
+        self.assertIn("OUTPUT_BUILD_RECEIPT", builder)
+        self.assertIn("BUILD_RECEIPT_NAME", prepare)
+        self.assertIn("VERSIONED_BUILD_RECEIPT", activate)
+
+    def test_germany_visual_proof_hashes_large_artifacts_as_a_stream(self) -> None:
+        proof = GERMANY_VISUAL_PROOF.read_text(encoding="utf-8")
+        self.assertIn("fs.createReadStream(filePath)", proof)
+        self.assertNotIn("fs.readFileSync(filePath)", proof)
+        self.assertIn("await sha256File(artifactPath)", proof)
+
+    def test_release_assembler_requires_a_separate_caddy_receipt(self) -> None:
+        assembler = RELEASE_ASSEMBLER.read_text(encoding="utf-8")
+        caddy = STAGING_CADDY_PROOF.read_text(encoding="utf-8")
+        self.assertIn('--caddy-proof', assembler)
+        self.assertIn('germany-basemap-staging-caddy-v1', assembler)
+        self.assertIn('germany-basemap-staging-caddy-v1', caddy)
+        self.assertIn('application/octet-stream', caddy)
+        self.assertIn('bytes 0-126/', caddy)
 
     def test_hamburg_builder_never_overwrites_a_published_version(self) -> None:
         builder = HAMBURG_BUILD_SCRIPT.read_text(encoding="utf-8")
