@@ -8,6 +8,7 @@ pub mod governance;
 pub mod mailer;
 pub mod middleware;
 pub mod node_mutation;
+pub mod notifications;
 pub mod outbox;
 pub mod routes;
 pub mod search;
@@ -329,6 +330,15 @@ pub async fn run() -> anyhow::Result<()> {
         }
     };
 
+    let web_push = crate::notifications::WebPushService::from_env()
+        .context("failed to initialize Web Push configuration")?
+        .map(Arc::new);
+    if web_push.is_some() {
+        tracing::info!("Privacy-safe Web Push delivery configured");
+    } else {
+        tracing::info!("Web Push delivery disabled (no VAPID configuration)");
+    }
+
     let state = ApiState {
         db_pool,
         db_pool_configured,
@@ -354,6 +364,7 @@ pub async fn run() -> anyhow::Result<()> {
         passkey_registration_grants,
         passkey_authentications,
         passkeys,
+        web_push,
     };
 
     if let Some(pool) = state.db_pool.clone() {
@@ -361,6 +372,15 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     if let (Some(pool), Some(client)) = (state.db_pool.clone(), state.nats_client.clone()) {
+        if let Some(service) = state.web_push.clone() {
+            // Establish the durable consumer before the publisher starts. This
+            // closes the first-deployment window in which DeliverPolicy::New
+            // could otherwise miss a just-published message event.
+            notifications::start(pool.clone(), client.clone(), service)
+                .await
+                .context("failed to start Web Push event consumer")?;
+            tracing::info!("Web Push event consumer and retry worker started");
+        }
         outbox::start(pool, client)
             .await
             .context("failed to start transactional domain outbox")?;

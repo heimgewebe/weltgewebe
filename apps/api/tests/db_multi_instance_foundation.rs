@@ -189,6 +189,7 @@ async fn api_state(pool: PgPool, nats: async_nats::Client) -> Result<ApiState> {
         passkey_registration_grants: PasskeyRegistrationGrantStore::new_postgres(pool.clone()),
         passkey_authentications: PasskeyAuthenticationStore::new_postgres(pool),
         passkeys: PasskeyStore::new(),
+        web_push: None,
     })
 }
 

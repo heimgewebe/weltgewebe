@@ -285,6 +285,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/specs/federation-core.md
+- [relates_to] docs/specs/private-nachrichten.md
 
 ## docs/adr/ADR-0013__ha-referenzzelle-und-wiederherstellung.md
 

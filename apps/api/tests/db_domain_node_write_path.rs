@@ -328,6 +328,7 @@ async fn postgres_write_app_with_account_source(
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     };
 
     let session = state
@@ -651,6 +652,7 @@ async fn postgres_read_jsonl_node_write_is_blocked() -> Result<()> {
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     };
 
     let session = state
@@ -832,6 +834,7 @@ async fn jsonl_default_node_patch_compiles_and_routes_correctly() -> Result<()> 
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     };
 
     let session = state

@@ -142,6 +142,7 @@ fn provisioning_state_postgres(pool: PgPool, allow_emails: Vec<String>) -> ApiSt
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     }
 }
 

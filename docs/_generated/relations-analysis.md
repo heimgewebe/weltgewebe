@@ -17,10 +17,10 @@ Generated automatically. Do not edit.
 | Dokumente gesamt | 195 |
 | Dokumente mit ausgehenden Relationen | 194 |
 | Dokumente als Ziel referenziert | 148 |
-| Relationen gesamt | 703 |
+| Relationen gesamt | 704 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 648 |
+| — relates_to | 649 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | Isolierte Dokumente | 0 |
