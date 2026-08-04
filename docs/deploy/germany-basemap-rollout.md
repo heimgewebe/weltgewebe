@@ -9,6 +9,7 @@ relations:
   - type: implements
     target: docs/specs/map-experience.md
 ---
+
 # Deutschlandweite PMTiles-Basemap ausrollen
 
 ## Ziel und Sicherheitsgrenze
@@ -75,7 +76,7 @@ Artefakt ohne diesen Beleg zurück.
 Die Metadaten tragen bis zur getrennten Aktivierung
 `"activation": "opt-in"`.
 
-## Phase 2: Runtime- und Gerätebeweis
+## Phase 2: Runtime-, Browser- und Serverbeweis
 
 Vor der Aktivierung müssen mindestens belegt sein:
 
@@ -86,7 +87,7 @@ Vor der Aktivierung müssen mindestens belegt sein:
   `Content-Range`;
 - PMTiles-Signatur, Größe und SHA256 des geprüften Artefakts;
 - dekodierte und sichtbare Kacheln aus Nord, Süd, Ost, West und Mitte;
-- Browserabnahme mit MapLibre auf iPad und Desktop;
+- Browserabnahme mit MapLibre in fünf räumlich verteilten Deutschlandregionen;
 - keine Requests an externe Kartenanbieter;
 - exakter Frontend-Commit und SHA256 des Germany-Stils;
 - zeitlich begrenzter Beleg, standardmäßig höchstens 24 Stunden alt.
@@ -95,7 +96,8 @@ Die Belege werden als JSON-Datei an Artefakt, Frontend und Stil gebunden:
 
 ```json
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "kind": "weltgewebe_germany_release_proof",
   "verdict": "PROVEN",
   "proofed_at": "2026-08-01T14:00:00+00:00",
   "basemap_version": "1.0.0",
@@ -105,9 +107,9 @@ Die Belege werden als JSON-Datei an Artefakt, Frontend und Stil gebunden:
   "style_sha256": "<64 hex>",
   "proofs": [
     "desktop-maplibre",
-    "ipad-maplibre",
     "five-region-visual",
     "no-external-map-requests",
+    "staging-caddy-full",
     "staging-caddy-range"
   ]
 }
@@ -147,13 +149,13 @@ python3 scripts/basemap/prove-germany-staging-caddy.py \
   --output build/proofs/basemap-germany-caddy/proof.json
 ```
 
-Der physische iPad-Beleg muss aus einer nativen `WKWebView` stammen und dieselbe
-Artefakt-, Frontend- und Stilidentität tragen. Erst anschließend erzeugt
-`scripts/basemap/assemble-germany-release-proof.py` aus Desktop-, iPad- und
-Caddy-Rohbeleg den vom Aktivierer akzeptierten Umschlag. Der Assembler weist
-fehlende Regionen,
-Fremdanbieter-Anfragen, emulierte Geräte, veraltete Belege, Symlink-Artefakte
-und abweichende Hashbindungen fail-closed zurück.
+`scripts/basemap/assemble-germany-release-proof.py` erzeugt aus dem
+Fünf-Regionen-Browserbeleg und dem Caddy-Rohbeleg den vom Aktivierer akzeptierten
+Umschlag. Der Assembler weist fehlende Regionen, Fremdanbieter-Anfragen,
+veraltete Belege, Symlink-Artefakte, unvollständige Caddy-Voll- oder
+Bereichsantworten und abweichende Hashbindungen fail-closed zurück. Eine
+bestimmte Geräteklasse oder ein Juno-/WKWebView-Sonderpfad ist keine
+Freigabebedingung.
 
 Der Pfad wird über `GERMANY_BASEMAP_RELEASE_PROOF_PATH` übergeben. Das
 zulässige Belegalter kann über
@@ -174,7 +176,7 @@ bricht ab, bevor Aliase oder Receipt verändert werden:
 1. ausgewählte Versionsdateien, Sentinel, Buildmessung und beide Validierungsberichte werden
    gegen Name, Hash, Größe, Region und Version geprüft;
 2. die PMTiles-Tiefenvalidierung wird gegen die aktuellen Bytes wiederholt;
-3. Gerätebeleg, Frontend-Commit, Stilhash und Belegalter werden geprüft;
+3. Browser- und Caddy-Beleg, Frontend-Commit, Stilhash und Belegalter werden geprüft;
 4. unmittelbar vor der ersten sichtbaren Wirkung wird das OSM-Alter erneut
    gegen die aktuelle UTC-Zeit geprüft;
 5. der bisherige Zustand beider stabilen Aliase wird erfasst;
@@ -208,16 +210,16 @@ Das gilt auch für einen teilweise fehlgeschlagenen Aliaswechsel, einen
 nichtnulligen Deploy-Abschluss, einen hängenden oder zu langsamen öffentlichen
 Archivreadback und ein nicht beschreibbares State-Verzeichnis.
 
-## Noch nicht automatisch erfüllt
+## Vor jeder Aktivierung neu zu erfüllen
 
-- aktuellerer OSM-Snapshot als der eingebaute reproduzierbare Teststand vom
-  1. Januar 2026;
-- realer Deutschland-Buildbeleg auf dem Heim-PC;
-- staginggebundener Caddy-Readback mit dem großen Artefakt;
-- bundesweite visuelle Abnahme auf Desktop und iPad;
-- gemessene Artefaktgröße, Builddauer, Spitzenlast und Bandbreite;
-- physische iPad-Ausführung und Erzeugung des artefakt-, commit- und
-  stilgebundenen Gerätefreigabebelegs; der Assembler selbst ist automatisiert.
+- ausreichend frischer OSM-Snapshot;
+- unveränderlicher gemessener Deutschland-Buildbeleg;
+- staginggebundener Caddy-Voll- und Bereichsreadback des großen Artefakts;
+- fünf räumlich verteilte MapLibre-Browserregionen mit sichtbaren und
+  dekodierten Features;
+- exakte Bindung an Artefakt, Stil und den zu aktivierenden Frontend-Commit;
+- sauberer Checkout sowie erfolgreicher öffentlicher Hash- und Range-Readback.
 
-Diese Punkte sind Freigabebedingungen, keine stillschweigend als erfüllt
-geltenden Annahmen.
+Diese Punkte bleiben Freigabebedingungen und werden nicht stillschweigend als
+bestanden angenommen. Ein physischer iPad-, Juno- oder WKWebView-Beleg gehört
+nicht zu diesem Vertrag.
