@@ -29,6 +29,7 @@ DEPLOY_ARGS=("$@")
 
 VERSIONED_ARTIFACT="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.pmtiles"
 VERSIONED_META="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.meta.json"
+VERSIONED_BUILD_RECEIPT="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.build.json"
 VERSIONED_VALIDATION="$BASEMAP_DIR/basemap-germany-v${BASEMAP_VERSION}.validation.json"
 ALIAS_ARTIFACT="$BASEMAP_DIR/basemap-germany.pmtiles"
 ALIAS_META="$BASEMAP_DIR/basemap-germany.meta.json"
@@ -444,6 +445,7 @@ done
 for required_path in \
   "$VERSIONED_ARTIFACT" \
   "$VERSIONED_META" \
+  "$VERSIONED_BUILD_RECEIPT" \
   "$VERSIONED_VALIDATION" \
   "$RELEASE_PROOF_PATH" \
   "$STYLE_PATH"; do
@@ -478,6 +480,7 @@ pnpm -C "$REPO_ROOT/apps/web" validate:pmtiles -- \
 require_nonempty_path "$FRESH_VALIDATION_REPORT"
 
 META_PATH="$VERSIONED_META" \
+  BUILD_RECEIPT_PATH="$VERSIONED_BUILD_RECEIPT" \
   PREPARED_VALIDATION_PATH="$VERSIONED_VALIDATION" \
   FRESH_VALIDATION_PATH="$FRESH_VALIDATION_REPORT" \
   RELEASE_PROOF_PATH="$RELEASE_PROOF_PATH" \
@@ -519,6 +522,7 @@ def verify_raw_validation(validation: dict, size: int, label: str) -> None:
 
 
 meta = json.loads(Path(os.environ["META_PATH"]).read_text(encoding="utf-8"))
+build_receipt = json.loads(Path(os.environ["BUILD_RECEIPT_PATH"]).read_text(encoding="utf-8"))
 prepared = json.loads(Path(os.environ["PREPARED_VALIDATION_PATH"]).read_text(encoding="utf-8"))
 fresh = json.loads(Path(os.environ["FRESH_VALIDATION_PATH"]).read_text(encoding="utf-8"))
 release = json.loads(Path(os.environ["RELEASE_PROOF_PATH"]).read_text(encoding="utf-8"))
@@ -543,6 +547,31 @@ if meta.get("sha256") != expected_sha256:
     reject("Germany metadata SHA256 mismatch")
 if meta.get("size_bytes") != expected_size:
     reject("Germany metadata size mismatch")
+
+if build_receipt.get("schema_version") != 1 or build_receipt.get("verdict") != "PROVEN":
+    reject("Germany measured build receipt is not PROVEN")
+if build_receipt.get("contract") != "germany-pmtiles-measured-build-v1":
+    reject("Germany measured build receipt contract mismatch")
+if build_receipt.get("version") != expected_version:
+    reject("Germany measured build receipt version mismatch")
+if build_receipt.get("artifact") != {
+    "name": artifact.name,
+    "sha256": expected_sha256,
+    "size_bytes": expected_size,
+}:
+    reject("Germany measured build receipt artifact mismatch")
+execution = build_receipt.get("execution")
+peaks = build_receipt.get("peaks")
+if not isinstance(execution, dict) or not isinstance(peaks, dict):
+    reject("Germany measured build receipt lacks execution or peaks")
+for field in ("duration_seconds", "sample_count"):
+    value = execution.get(field)
+    if not isinstance(value, (int, float)) or value <= 0:
+        reject(f"Germany measured build execution {field} must be positive")
+for field in ("cpu_percent", "memory_bytes", "workspace_growth_bytes", "filesystem_consumed_bytes"):
+    value = peaks.get(field)
+    if not isinstance(value, (int, float)) or value <= 0:
+        reject(f"Germany measured build peak {field} must be positive")
 
 if prepared.get("schema_version") != 1 or prepared.get("verdict") != "PROVEN":
     reject("Germany prepared validation envelope is not PROVEN")

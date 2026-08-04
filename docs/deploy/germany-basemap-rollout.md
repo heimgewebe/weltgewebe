@@ -46,6 +46,13 @@ Versionierte Artefakte sind unveränderlich. Existiert eine Version bereits im
 Build- oder Zielverzeichnis, muss eine neue `BASEMAP_VERSION` verwendet werden.
 Ein Austausch unter demselben Versionsnamen ist nicht zulässig.
 
+Planetiler läuft unter einer eindeutigen Containeridentität. Während des Builds
+werden Container-CPU, Container-RAM, Arbeitsverzeichniswachstum und der maximale
+Verbrauch des zugrunde liegenden Dateisystems gemessen. Der resultierende
+`basemap-germany-v<version>.build.json`-Beleg bindet Quelle, Planetiler-Digest,
+Artefakthash, Dauer und Spitzenwerte. Vorbereitung und Aktivierung weisen ein
+Artefakt ohne diesen Beleg zurück.
+
 ## Phase 1: Version herstellen und veröffentlichen
 
 `scripts/basemap/prepare-germany-rollout.sh` führt in dieser Reihenfolge aus:
@@ -58,9 +65,10 @@ Ein Austausch unter demselben Versionsnamen ist nicht zulässig.
    `map-style/style-germany.json`;
 5. Erzeugung eines Validierungsumschlags, der den Validatorbericht an
    Artefaktname, SHA256 und Größe bindet, nicht an den früheren Staging-Pfad;
-6. unveränderliche Veröffentlichung genau dieser drei Versionsdateien:
+6. unveränderliche Veröffentlichung genau dieser vier Versionsdateien:
    - `basemap-germany-v<version>.pmtiles`
    - `basemap-germany-v<version>.meta.json`
+   - `basemap-germany-v<version>.build.json`
    - `basemap-germany-v<version>.validation.json`
 7. Readback, dass beide stabilen Germany-Aliase unverändert geblieben sind.
 
@@ -105,6 +113,48 @@ Die Belege werden als JSON-Datei an Artefakt, Frontend und Stil gebunden:
 }
 ```
 
+Der Desktop-Beleg wird mit dem bewusst getrennten Deutschland-Lauf erzeugt:
+
+```bash
+GERMANY_BASEMAP_PROOF_ARTIFACT="$PWD/build/basemap-staging/germany/basemap-germany-v1.0.1.pmtiles" \
+GERMANY_BASEMAP_PROOF_METADATA="$PWD/build/basemap-staging/germany/basemap-germany-v1.0.1.meta.json" \
+pnpm -C apps/web test:proof:basemap-germany
+```
+
+Dieser Lauf prüft Hamburg, Berlin, Köln, Dresden und München mit derselben
+versionierten Deutschland-PMTiles-Datei. Die beiden privaten Beweisvariablen
+werden nur vom lokalen Vite-Dateiserver ausgewertet: Die HTTP-Aliasnamen bleiben
+für MapLibre gleich, werden im Beweislauf aber direkt auf das benannte
+Versionspaar abgebildet. Die stabilen Dateien in `build/basemap` werden dadurch
+weder angelegt noch verändert. Beide Variablen müssen gemeinsam gesetzt sein,
+auf reguläre Dateien ohne Symlink-Komponenten zeigen und dasselbe Verzeichnis
+verwenden.
+
+Für jede Region müssen dekodierte und sichtbare Features, ein eigener Screenshot
+und eine lokale HTTP-206-Lieferung belegt sein. Die normale regionale Basemap-CI
+führt diesen großen Beweis nicht implizit aus. Der Artefakthash wird dabei
+gestreamt; die mehrere Gigabyte große Datei wird nicht vollständig in den
+Node-Arbeitsspeicher geladen.
+
+Der Caddy-Vertrag wird getrennt vom Entwicklungsserver bewiesen. Ein privater
+Staging-Caddy muss die stabile Alias-URL bereitstellen; anschließend erzeugt der
+Operator einen HTTP-200/206-, Header-, Signatur- und Vollhashbeleg:
+
+```bash
+python3 scripts/basemap/prove-germany-staging-caddy.py \
+  --origin http://127.0.0.1:8787 \
+  --artifact build/basemap-staging/germany/basemap-germany-v1.0.1.pmtiles \
+  --output build/proofs/basemap-germany-caddy/proof.json
+```
+
+Der physische iPad-Beleg muss aus einer nativen `WKWebView` stammen und dieselbe
+Artefakt-, Frontend- und Stilidentität tragen. Erst anschließend erzeugt
+`scripts/basemap/assemble-germany-release-proof.py` aus Desktop-, iPad- und
+Caddy-Rohbeleg den vom Aktivierer akzeptierten Umschlag. Der Assembler weist
+fehlende Regionen,
+Fremdanbieter-Anfragen, emulierte Geräte, veraltete Belege, Symlink-Artefakte
+und abweichende Hashbindungen fail-closed zurück.
+
 Der Pfad wird über `GERMANY_BASEMAP_RELEASE_PROOF_PATH` übergeben. Das
 zulässige Belegalter kann über
 `GERMANY_BASEMAP_RELEASE_PROOF_MAX_AGE_HOURS` enger gesetzt werden.
@@ -121,7 +171,7 @@ Standardpfad folgt dem Compose-Projekt und – sofern gesetzt – dem bestehende
 `GERMANY_BASEMAP_ACTIVATION_LOCK_FILE` gesetzt werden. Ein paralleler Lauf
 bricht ab, bevor Aliase oder Receipt verändert werden:
 
-1. ausgewählte Versionsdateien, Sentinel und beide Validierungsberichte werden
+1. ausgewählte Versionsdateien, Sentinel, Buildmessung und beide Validierungsberichte werden
    gegen Name, Hash, Größe, Region und Version geprüft;
 2. die PMTiles-Tiefenvalidierung wird gegen die aktuellen Bytes wiederholt;
 3. Gerätebeleg, Frontend-Commit, Stilhash und Belegalter werden geprüft;
@@ -166,7 +216,8 @@ Archivreadback und ein nicht beschreibbares State-Verzeichnis.
 - staginggebundener Caddy-Readback mit dem großen Artefakt;
 - bundesweite visuelle Abnahme auf Desktop und iPad;
 - gemessene Artefaktgröße, Builddauer, Spitzenlast und Bandbreite;
-- Erzeugung des artefakt-, commit- und stilgebundenen Gerätefreigabebelegs.
+- physische iPad-Ausführung und Erzeugung des artefakt-, commit- und
+  stilgebundenen Gerätefreigabebelegs; der Assembler selbst ist automatisiert.
 
 Diese Punkte sind Freigabebedingungen, keine stillschweigend als erfüllt
 geltenden Annahmen.

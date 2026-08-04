@@ -11,11 +11,71 @@ const __dirname = path.dirname(__filename);
 const LOCAL_BASEMAP_PREFIX = "/local-basemap/";
 const proofApiProxyTarget =
   process.env.AUTH_PASSKEY_PROOF_PROXY_TARGET ?? "http://127.0.0.1:8080";
+const GERMANY_PROOF_ARTIFACT_ENV = "GERMANY_BASEMAP_PROOF_ARTIFACT";
+const GERMANY_PROOF_METADATA_ENV = "GERMANY_BASEMAP_PROOF_METADATA";
+
+function resolveGermanyProofFile(
+  envName: string,
+  expectedSuffix: string,
+): string | null {
+  const raw = process.env[envName];
+  if (!raw) return null;
+  if (!path.isAbsolute(raw)) {
+    throw new Error(
+      `[local-basemap-serve] ${envName} must be an absolute path`,
+    );
+  }
+  const absolute = path.resolve(raw);
+  if (!fs.existsSync(absolute)) {
+    throw new Error(
+      `[local-basemap-serve] ${envName} does not exist: ${absolute}`,
+    );
+  }
+  const info = fs.lstatSync(absolute);
+  if (info.isSymbolicLink() || !info.isFile()) {
+    throw new Error(
+      `[local-basemap-serve] ${envName} must be a non-symlink regular file`,
+    );
+  }
+  if (fs.realpathSync(absolute) !== absolute) {
+    throw new Error(
+      `[local-basemap-serve] ${envName} must not traverse a symlink`,
+    );
+  }
+  if (!absolute.endsWith(expectedSuffix)) {
+    throw new Error(
+      `[local-basemap-serve] ${envName} must end with ${expectedSuffix}`,
+    );
+  }
+  return absolute;
+}
 
 function createLocalBasemapMiddleware() {
   const repoRoot = path.resolve(__dirname, "../../");
   const mapStyleDir = path.resolve(repoRoot, "map-style");
   const buildBasemapDir = path.resolve(repoRoot, "build", "basemap");
+  const germanyProofArtifact = resolveGermanyProofFile(
+    GERMANY_PROOF_ARTIFACT_ENV,
+    ".pmtiles",
+  );
+  const germanyProofMetadata = resolveGermanyProofFile(
+    GERMANY_PROOF_METADATA_ENV,
+    ".meta.json",
+  );
+  if ((germanyProofArtifact === null) !== (germanyProofMetadata === null)) {
+    throw new Error(
+      `[local-basemap-serve] ${GERMANY_PROOF_ARTIFACT_ENV} and ${GERMANY_PROOF_METADATA_ENV} must be set together`,
+    );
+  }
+  if (
+    germanyProofArtifact !== null &&
+    germanyProofMetadata !== null &&
+    path.dirname(germanyProofArtifact) !== path.dirname(germanyProofMetadata)
+  ) {
+    throw new Error(
+      "[local-basemap-serve] Germany proof artifact and metadata must share one directory",
+    );
+  }
 
   const pipeStreamSafe = (
     stream: fs.ReadStream,
@@ -59,8 +119,19 @@ function createLocalBasemapMiddleware() {
         ? buildBasemapDir
         : mapStyleDir;
 
-    const targetPath = path.resolve(path.join(baseDir, safeRelPath));
-    if (!targetPath.startsWith(baseDir + path.sep) && targetPath !== baseDir) {
+    const proofTarget =
+      safeRelPath === "basemap-germany.pmtiles"
+        ? germanyProofArtifact
+        : safeRelPath === "basemap-germany.meta.json"
+          ? germanyProofMetadata
+          : null;
+    const targetPath =
+      proofTarget ?? path.resolve(path.join(baseDir, safeRelPath));
+    if (
+      proofTarget === null &&
+      !targetPath.startsWith(baseDir + path.sep) &&
+      targetPath !== baseDir
+    ) {
       res.statusCode = 403;
       res.end("Forbidden");
       return;
