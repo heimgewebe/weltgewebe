@@ -3,17 +3,11 @@ import type {
   MapEdge,
   MapEntityViewModel,
   MapEntityWeave,
-  MapEntityNode,
-  MapEntityWebgemeindezentrum,
 } from "$lib/map/types";
+import type { WeaveEntity } from "$lib/map/weaveTheme";
 import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
-import {
-  deriveEntityWeave,
-  projectEntityWeaves,
-  themeConicGradient,
-  voteStitchConicGradient,
-} from "$lib/map/weaveModel";
+import type { WeaveRuntime } from "./weaveRuntime";
 
 function hasRenderablePosition(item: MapEntityViewModel): boolean {
   return (
@@ -61,14 +55,6 @@ export function filterVisibleWeaveEdges(
   });
 }
 
-export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
-
-type WeaveEntity = MapEntityNode | MapEntityWebgemeindezentrum;
-
-function entityWeave(item: WeaveEntity): MapEntityWeave {
-  return item.weave ?? deriveEntityWeave(item, [], 0);
-}
-
 export function weaveRenderSignature(weave: MapEntityWeave): string {
   let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.knottingThreadCount}|${weave.conversationThreadCount}|${weave.conversationOpacity}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}`;
   for (const { color, startDeg, spanDeg } of weave.themeSegments) {
@@ -86,52 +72,23 @@ export function weaveRenderSignature(weave: MapEntityWeave): string {
   return signature;
 }
 
-function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
-  Object.assign(root.dataset, {
-    zoneOrder: "knotting,conversation,proposal,vote",
-    knottingThreads: String(weave.knottingThreadCount),
-    conversationThreads: String(weave.conversationThreadCount),
-    proposalCount: String(weave.proposalCount),
-    voteThreads: String(weave.voteThreadCount),
-  });
-  root.style.setProperty("--weave-primary", weave.primaryThemeColor);
-  root.style.setProperty(
-    "--weave-theme-gradient",
-    themeConicGradient(weave.themeSegments),
-  );
-  root.style.setProperty("--weave-core-density", String(weave.coreDensity));
-  root.style.setProperty(
-    "--weave-conversation-opacity",
-    String(weave.conversationOpacity),
-  );
-  const proposals = weave.proposalArcs
-    .map((arc) => {
-      const votes = arc.voteThreadCount
-        ? `<span class="woven-node__vote-stitches" data-zone="vote" style="background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span>`
-        : "";
-      return `<span class="woven-node__proposal-arc" data-zone="proposal" data-vote-threads="${arc.voteThreadCount}" style="--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color};opacity:${arc.opacity}">${votes}</span>`;
-    })
-    .join("");
-  root.innerHTML = `<span class="woven-node__core" data-zone="knotting"><span class="woven-node__cross"></span></span><span class="woven-node__conversation${weave.conversationThreadCount ? "" : " is-empty"}" data-zone="conversation"></span>${proposals}${weave.proposalOverflowCount ? `<span class="woven-node__overflow">+${weave.proposalOverflowCount}</span>` : ""}`;
-}
-
-function accessibleMarkerLabel(item: MapEntityViewModel): string {
-  if (item.type === "garnrolle") return item.title;
-  const weave = entityWeave(item);
-  return `${item.title}. Knüpfkern ${weave.knottingThreadCount}. Gesprächsring ${weave.conversationThreadCount}. Anträge ${weave.proposalCount}. Stimmen ${weave.voteThreadCount}.`;
-}
-
-function createWeaveRoot(
-  item: WeaveEntity,
+function createWeavePlaceholder(
   markerCategory: "node" | "webgemeindezentrum",
-): { root: HTMLElement; signature: string } {
-  const weave = entityWeave(item);
+): HTMLElement {
   const root = document.createElement("span");
   root.className = `woven-node woven-node--${markerCategory}`;
   root.setAttribute("aria-hidden", "true");
-  renderWeave(root, weave);
-  return { root, signature: weaveRenderSignature(weave) };
+  return root;
 }
+
+export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
+
+type LatestUpdate = {
+  points: MapEntityViewModel[];
+  showNodes: boolean;
+  edges: MapEdge[] | undefined;
+  nowMs: number;
+};
 
 export class NodesOverlay {
   private activeMarkers = new Map<
@@ -147,6 +104,9 @@ export class NodesOverlay {
   private searchMatchIds = new Set<string>();
   private selectedMarkerId: string | null = null;
   private compactWeave = false;
+  private runtime: WeaveRuntime | null;
+  private latestUpdate: LatestUpdate | null = null;
+  private destroyed = false;
   private readonly handleZoom = () => {
     if (this.map) this.updateZoom(this.map.getZoom());
   };
@@ -154,7 +114,24 @@ export class NodesOverlay {
   constructor(
     private map: MapLibreMap | null,
     private MarkerClass: MarkerConstructor,
+    runtime: WeaveRuntime | null = null,
   ) {
+    this.runtime = runtime;
+    if (!runtime) {
+      void import("./weaveRuntime").then(({ weaveRuntime }) => {
+        if (this.destroyed) return;
+        this.runtime = weaveRuntime;
+        const latest = this.latestUpdate;
+        if (latest) {
+          this.update(
+            latest.points,
+            latest.showNodes,
+            latest.edges,
+            latest.nowMs,
+          );
+        }
+      });
+    }
     if (
       this.map &&
       typeof this.map.getZoom === "function" &&
@@ -200,30 +177,17 @@ export class NodesOverlay {
     }
   }
 
-  private syncWeaveAppearance(
-    entry: {
-      weaveRoot: HTMLElement | null;
-      weaveSignature: string | null;
-    },
-    item: MapEntityViewModel,
-  ) {
-    if (!entry.weaveRoot || item.type === "garnrolle") return;
-    const weave = entityWeave(item);
-    const signature = weaveRenderSignature(weave);
-    if (signature === entry.weaveSignature) return;
-    renderWeave(entry.weaveRoot, weave);
-    entry.weaveSignature = signature;
-  }
-
   public update(
     points: MapEntityViewModel[],
     showNodes: boolean,
     edges?: MapEdge[],
     nowMs = Date.now(),
   ): MapEntityViewModel[] {
+    this.latestUpdate = { points, showNodes, edges, nowMs };
+    const runtime = this.runtime;
     let projectedPoints = points;
-    if (edges !== undefined) {
-      projectedPoints = projectEntityWeaves(
+    if (runtime && edges !== undefined) {
+      projectedPoints = runtime.project(
         points,
         filterVisibleWeaveEdges(points, edges),
         nowMs,
@@ -274,7 +238,7 @@ export class NodesOverlay {
           marker.setLngLat([item.lon, item.lat]);
         }
         if (element.title !== item.title) element.title = item.title;
-        const ariaLabel = accessibleMarkerLabel(item);
+        const ariaLabel = runtime?.label(item) ?? item.title;
         if (element.getAttribute("aria-label") !== ariaLabel) {
           element.setAttribute("aria-label", ariaLabel);
         }
@@ -286,7 +250,13 @@ export class NodesOverlay {
           delete element.dataset.locationState;
         }
         this.syncWebgemeindezentrumAppearance(element, item);
-        this.syncWeaveAppearance(existing, item);
+        if (runtime && existing.weaveRoot && item.type !== "garnrolle") {
+          existing.weaveSignature = runtime.syncRoot(
+            existing.weaveRoot,
+            item,
+            existing.weaveSignature,
+          );
+        }
       } else {
         const element = document.createElement("button");
         element.type = "button";
@@ -323,22 +293,29 @@ export class NodesOverlay {
           icon.setAttribute("aria-hidden", "true");
           icon.draggable = false;
           visual.append(icon);
-        } else if (item.type === "webgemeindezentrum") {
-          const icon = document.createElement("span");
-          icon.className = "marker-webgemeindezentrum__icon";
-          icon.setAttribute("aria-hidden", "true");
-          const woven = createWeaveRoot(item, "webgemeindezentrum");
-          weaveRoot = woven.root;
-          weaveSignature = woven.signature;
-          this.syncWeaveDetail(weaveRoot);
-          icon.append(weaveRoot);
-          visual.append(icon);
         } else {
-          const woven = createWeaveRoot(item, "node");
+          const category =
+            item.type === "webgemeindezentrum"
+              ? "webgemeindezentrum"
+              : "node";
+          const woven = runtime
+            ? runtime.createRoot(item as WeaveEntity, category)
+            : {
+                root: createWeavePlaceholder(category),
+                signature: null,
+              };
           weaveRoot = woven.root;
           weaveSignature = woven.signature;
           this.syncWeaveDetail(weaveRoot);
-          visual.append(weaveRoot);
+          if (item.type === "webgemeindezentrum") {
+            const icon = document.createElement("span");
+            icon.className = "marker-webgemeindezentrum__icon";
+            icon.setAttribute("aria-hidden", "true");
+            icon.append(weaveRoot);
+            visual.append(icon);
+          } else {
+            visual.append(weaveRoot);
+          }
         }
 
         const halo = document.createElement("span");
@@ -348,7 +325,7 @@ export class NodesOverlay {
         element.append(visual, halo);
         this.syncWebgemeindezentrumAppearance(element, item);
 
-        element.setAttribute("aria-label", accessibleMarkerLabel(item));
+        element.setAttribute("aria-label", runtime?.label(item) ?? item.title);
         element.title = item.title;
 
         const marker = new this.MarkerClass({ element, anchor: "bottom" })
@@ -442,6 +419,8 @@ export class NodesOverlay {
   }
 
   public destroy() {
+    this.destroyed = true;
+    this.latestUpdate = null;
     if (this.map && typeof this.map.off === "function") {
       this.map.off("zoom", this.handleZoom);
     }

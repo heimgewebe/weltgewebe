@@ -11,6 +11,7 @@ import {
   weaveRenderSignature,
   type MarkerConstructor,
 } from "./nodes";
+import { weaveRuntime } from "./weaveRuntime";
 
 class FakeClassList {
   private values = new Set<string>();
@@ -199,6 +200,7 @@ function makeOverlay() {
   return new NodesOverlay(
     {} as MapLibreMap,
     FakeMarker as unknown as MarkerConstructor,
+    weaveRuntime,
   );
 }
 
@@ -234,6 +236,7 @@ describe("NodesOverlay runtime robustness", () => {
     const overlay = new NodesOverlay(
       null,
       FakeMarker as unknown as MarkerConstructor,
+      weaveRuntime,
     );
     expect(() => overlay.update([makeNode("a")], true)).not.toThrow();
     expect(overlay.getActiveMarker("a")).toBeUndefined();

@@ -6,7 +6,7 @@ import type {
 } from "maplibre-gl";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
-import { deriveWeaveThemeSegments } from "$lib/map/weaveModel";
+import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import { LAYERS } from "./layers";
 
 export const EDGE_VISUAL_STYLE = {
@@ -68,9 +68,7 @@ function primaryThemeColor(point: MapEntityViewModel): string | undefined {
   if (point.type !== "node" && point.type !== "webgemeindezentrum") {
     return undefined;
   }
-  return (
-    point.weave?.primaryThemeColor ?? deriveWeaveThemeSegments(point)[0]?.color
-  );
+  return point.weave?.primaryThemeColor ?? primaryWeaveColor(point);
 }
 
 export function buildEdgeFeatures(

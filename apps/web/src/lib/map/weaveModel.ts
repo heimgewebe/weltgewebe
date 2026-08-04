@@ -1,13 +1,17 @@
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type {
   MapEdge,
-  MapEntityNode,
   MapEntityViewModel,
   MapEntityWeave,
-  MapEntityWebgemeindezentrum,
   WeaveProposalArc,
   WeaveThemeSegment,
 } from "$lib/map/types";
+import {
+  WEAVE_FALLBACK_COLOR,
+  weaveTopicColor,
+  weaveTopics,
+  type WeaveEntity,
+} from "$lib/map/weaveTheme";
 
 export const WEAVE_ZONE_ORDER: MapEntityWeave["zoneOrder"] = [
   "knotting",
@@ -17,28 +21,6 @@ export const WEAVE_ZONE_ORDER: MapEntityWeave["zoneOrder"] = [
 ];
 export const MAX_VISIBLE_PROPOSAL_ARCS = 8;
 
-const COLORS = [
-  "#5f7a55",
-  "#4f6682",
-  "#765a91",
-  "#b37a3e",
-  "#9c5547",
-  "#397572",
-  "#af8d37",
-  "#78523f",
-  "#65705f",
-] as const;
-const IGNORED_THEMES = new Set([
-  "account",
-  "demo",
-  "garnrolle",
-  "knoten",
-  "node",
-  "webgemeindezentrum",
-]);
-const FALLBACK_COLOR = "#76523d";
-
-type WeaveEntity = MapEntityNode | MapEntityWebgemeindezentrum;
 type Group = {
   subjectId: string;
   proposals: number;
@@ -49,42 +31,15 @@ type Group = {
   opacity: number;
 };
 
-function hash(value: string): number {
-  let result = 2166136261;
-  for (const character of value) {
-    result = Math.imul(result ^ character.charCodeAt(0), 16777619);
-  }
-  return result >>> 0;
-}
-
-function topics(entity: WeaveEntity): string[] {
-  const raw: Array<string | null | undefined> =
-    entity.type === "webgemeindezentrum"
-      ? ["Gemeinschaft", "Mitentscheiden"]
-      : [...(entity.tags ?? []), entity.kind];
-  const seen = new Set<string>();
-  const result: string[] = [];
-  for (const value of raw) {
-    if (typeof value !== "string") continue;
-    const label = value.replace(/^[^:]{1,24}:/, "").trim();
-    const key = label.toLowerCase();
-    if (!label || IGNORED_THEMES.has(key) || seen.has(key)) continue;
-    seen.add(key);
-    result.push(label.length > 42 ? `${label.slice(0, 39).trimEnd()}…` : label);
-    if (result.length === 6) break;
-  }
-  return result.length ? result : ["Gemeingut"];
-}
-
 export function deriveWeaveThemeSegments(
   entity: WeaveEntity,
 ): WeaveThemeSegment[] {
-  const labels = topics(entity);
+  const labels = weaveTopics(entity);
   const spanDeg = 360 / labels.length;
   return labels.map((label, index) => ({
     id: label,
     label,
-    color: COLORS[hash(label.toLowerCase()) % COLORS.length],
+    color: weaveTopicColor(label),
     startDeg: index * spanDeg,
     spanDeg,
   }));
@@ -145,7 +100,8 @@ export function deriveEntityWeave(
   nowMs: number,
 ): MapEntityWeave {
   const themeSegments = deriveWeaveThemeSegments(entity);
-  const primaryThemeColor = themeSegments[0]?.color ?? FALLBACK_COLOR;
+  const primaryThemeColor =
+    themeSegments[0]?.color ?? WEAVE_FALLBACK_COLOR;
   const endpointId =
     entity.type === "webgemeindezentrum"
       ? entity.faden_endpoint_id
@@ -279,7 +235,7 @@ export function themeConicGradient(segments: WeaveThemeSegment[]): string {
             `${color} ${startDeg}deg ${startDeg + spanDeg}deg`,
         )
         .join(",")})`
-    : FALLBACK_COLOR;
+    : WEAVE_FALLBACK_COLOR;
 }
 
 export function voteStitchConicGradient(

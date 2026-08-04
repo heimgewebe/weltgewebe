@@ -6,6 +6,7 @@ import {
   filterVisibleWeaveEdges,
   type MarkerConstructor,
 } from "./nodes";
+import { weaveRuntime } from "./weaveRuntime";
 
 function relation(
   id: string,
@@ -52,7 +53,7 @@ describe("NodesOverlay visibility and zoom ownership", () => {
     } as unknown as MapLibreMap;
     const MarkerClass = class {} as unknown as MarkerConstructor;
 
-    const overlay = new NodesOverlay(map, MarkerClass);
+    const overlay = new NodesOverlay(map, MarkerClass, weaveRuntime);
     expect(on).toHaveBeenCalledWith("zoom", expect.any(Function));
 
     overlay.destroy();
