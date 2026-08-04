@@ -126,6 +126,7 @@ async fn state_for_role_with_mutation_limits(
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
+        web_push: None,
     })
 }
 

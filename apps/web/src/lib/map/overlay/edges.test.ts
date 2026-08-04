@@ -31,6 +31,7 @@ describe("buildEdgeFeatures", () => {
     );
     expect(features).toHaveLength(1);
     expect(features[0].properties?.opacity).toBe(0.5);
+    expect(features[0].properties).not.toHaveProperty("themeColor");
   });
 
   it("resolves a Webgemeindezentrum through its strict Faden UUID alias", () => {

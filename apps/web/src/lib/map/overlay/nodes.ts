@@ -9,6 +9,7 @@ import type {
 import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
 import {
+  deriveEntityWeave,
   projectEntityWeaves,
   themeConicGradient,
   voteStitchConicGradient,
@@ -42,12 +43,53 @@ export function diffSearchMatchIds(
   return { added, removed };
 }
 
+export function filterVisibleWeaveEdges(
+  points: MapEntityViewModel[],
+  edges: MapEdge[],
+): MapEdge[] {
+  const visibleIds = new Set<string>();
+  for (const point of points) {
+    visibleIds.add(point.id);
+    if (point.type === "webgemeindezentrum") {
+      visibleIds.add(point.faden_endpoint_id);
+    }
+  }
+  return edges.filter(
+    (edge) =>
+      visibleIds.has(edge.source_id) && visibleIds.has(edge.target_id),
+  );
+}
+
 export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
 
 type WeaveEntity = MapEntityNode | MapEntityWebgemeindezentrum;
 
 function entityWeave(item: WeaveEntity): MapEntityWeave {
-  return item.weave as MapEntityWeave;
+  return item.weave ?? deriveEntityWeave(item, [], 0);
+}
+
+export function weaveRenderSignature(weave: MapEntityWeave): string {
+  const themes = weave.themeSegments
+    .map(({ color, startDeg, spanDeg }) => `${color}:${startDeg}:${spanDeg}`)
+    .join(",");
+  const arcs = weave.proposalArcs
+    .map(
+      ({ color, startDeg, spanDeg, opacity, voteThreadCount }) =>
+        `${color}:${startDeg}:${spanDeg}:${opacity}:${voteThreadCount}`,
+    )
+    .join(",");
+  return [
+    weave.primaryThemeColor,
+    weave.coreDensity,
+    weave.knottingThreadCount,
+    weave.conversationThreadCount,
+    weave.conversationOpacity,
+    weave.proposalCount,
+    weave.proposalOverflowCount,
+    weave.voteThreadCount,
+    themes,
+    arcs,
+  ].join("|");
 }
 
 function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
@@ -58,12 +100,23 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     proposalCount: String(weave.proposalCount),
     voteThreads: String(weave.voteThreadCount),
   });
-  root.style.cssText = `--weave-primary:${weave.primaryThemeColor};--weave-theme-gradient:${themeConicGradient(weave.themeSegments)};--weave-core-density:${weave.coreDensity};--weave-conversation-opacity:${weave.conversationOpacity}`;
+  root.style.setProperty("--weave-primary", weave.primaryThemeColor);
+  root.style.setProperty(
+    "--weave-theme-gradient",
+    themeConicGradient(weave.themeSegments),
+  );
+  root.style.setProperty("--weave-core-density", String(weave.coreDensity));
+  root.style.setProperty(
+    "--weave-conversation-opacity",
+    String(weave.conversationOpacity),
+  );
   const proposals = weave.proposalArcs
-    .map(
-      (arc) =>
-        `<span class="woven-node__proposal-arc" data-zone="proposal" data-vote-threads="${arc.voteThreadCount}" style="--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color};opacity:${arc.opacity}"><span class="woven-node__vote-stitches" data-zone="vote" style="background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span></span>`,
-    )
+    .map((arc) => {
+      const votes = arc.voteThreadCount
+        ? `<span class="woven-node__vote-stitches" data-zone="vote" style="background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span>`
+        : "";
+      return `<span class="woven-node__proposal-arc" data-zone="proposal" data-vote-threads="${arc.voteThreadCount}" style="--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color};opacity:${arc.opacity}">${votes}</span>`;
+    })
     .join("");
   root.innerHTML = `<span class="woven-node__core" data-zone="knotting"><span class="woven-node__cross"></span></span><span class="woven-node__conversation${weave.conversationThreadCount ? "" : " is-empty"}" data-zone="conversation"></span>${proposals}${weave.proposalOverflowCount ? `<span class="woven-node__overflow">+${weave.proposalOverflowCount}</span>` : ""}`;
 }
@@ -83,7 +136,7 @@ function createWeaveRoot(
   root.className = `woven-node woven-node--${markerCategory}`;
   root.setAttribute("aria-hidden", "true");
   renderWeave(root, weave);
-  return { root, signature: JSON.stringify(weave) };
+  return { root, signature: weaveRenderSignature(weave) };
 }
 
 export class NodesOverlay {
@@ -100,11 +153,34 @@ export class NodesOverlay {
   >();
   private searchMatchIds = new Set<string>();
   private selectedMarkerId: string | null = null;
+  private compactWeave = false;
+  private readonly handleZoom = () => {
+    if (this.map) this.updateZoom(this.map.getZoom());
+  };
 
   constructor(
-    private map: MapLibreMap,
+    private map: MapLibreMap | null,
     private MarkerClass: MarkerConstructor,
-  ) {}
+  ) {
+    if (this.map) {
+      this.updateZoom(this.map.getZoom());
+      this.map.on("zoom", this.handleZoom);
+    }
+  }
+
+  private syncWeaveDetail(root: HTMLElement) {
+    root.classList.toggle("woven-node--compact", this.compactWeave);
+    root.dataset.weaveDetail = this.compactWeave ? "compact" : "detail";
+  }
+
+  public updateZoom(zoom: number) {
+    const compact = zoom < 13.5;
+    if (compact === this.compactWeave) return;
+    this.compactWeave = compact;
+    for (const { weaveRoot } of this.activeMarkers.values()) {
+      if (weaveRoot) this.syncWeaveDetail(weaveRoot);
+    }
+  }
 
   private getMarkerCategory(
     type: MapEntityViewModel["type"],
@@ -121,8 +197,10 @@ export class NodesOverlay {
     if (item.type !== "webgemeindezentrum") return;
     const visual = element.children[0] as HTMLElement | undefined;
     if (!visual) return;
-    visual.style.borderStyle =
-      item.location_state === "confirmed" ? "" : "dashed";
+    const borderStyle = item.location_state === "confirmed" ? "" : "dashed";
+    if (visual.style.borderStyle !== borderStyle) {
+      visual.style.borderStyle = borderStyle;
+    }
   }
 
   private syncWeaveAppearance(
@@ -134,7 +212,7 @@ export class NodesOverlay {
   ) {
     if (!entry.weaveRoot || item.type === "garnrolle") return;
     const weave = entityWeave(item);
-    const signature = JSON.stringify(weave);
+    const signature = weaveRenderSignature(weave);
     if (signature === entry.weaveSignature) return;
     renderWeave(entry.weaveRoot, weave);
     entry.weaveSignature = signature;
@@ -146,15 +224,23 @@ export class NodesOverlay {
     edges?: MapEdge[],
     nowMs = Date.now(),
   ): MapEntityViewModel[] {
-    const projectedPoints = edges
-      ? projectEntityWeaves(points, edges, nowMs)
-      : points;
+    const projectedPoints =
+      edges === undefined
+        ? points
+        : projectEntityWeaves(
+            points,
+            filterVisibleWeaveEdges(points, edges),
+            nowMs,
+          );
 
     if (!showNodes) {
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
       this.activeMarkers.clear();
       return projectedPoints;
     }
+
+    const map = this.map;
+    if (!map) return projectedPoints;
 
     const currentIds = new Set<string>();
 
@@ -185,7 +271,7 @@ export class NodesOverlay {
         existing.item = item;
 
         const { marker, element } = existing;
-        element.dataset.id = item.id;
+        if (element.dataset.id !== item.id) element.dataset.id = item.id;
         const lngLat = marker.getLngLat();
         if (
           Math.abs(lngLat.lng - item.lon) > 0.000001 ||
@@ -194,12 +280,20 @@ export class NodesOverlay {
           marker.setLngLat([item.lon, item.lat]);
         }
         if (element.title !== item.title) element.title = item.title;
-        element.setAttribute("aria-label", accessibleMarkerLabel(item));
-        element.dataset.testid = `marker-${item.type}-${item.id}`;
-        element.dataset.markerCategory = markerCategory;
+        const ariaLabel = accessibleMarkerLabel(item);
+        if (element.getAttribute("aria-label") !== ariaLabel) {
+          element.setAttribute("aria-label", ariaLabel);
+        }
+        const testId = `marker-${item.type}-${item.id}`;
+        if (element.dataset.testid !== testId) element.dataset.testid = testId;
+        if (element.dataset.markerCategory !== markerCategory) {
+          element.dataset.markerCategory = markerCategory;
+        }
         if (item.type === "webgemeindezentrum") {
-          element.dataset.locationState = item.location_state;
-        } else {
+          if (element.dataset.locationState !== item.location_state) {
+            element.dataset.locationState = item.location_state;
+          }
+        } else if ("locationState" in element.dataset) {
           delete element.dataset.locationState;
         }
         this.syncWebgemeindezentrumAppearance(element, item);
@@ -247,12 +341,14 @@ export class NodesOverlay {
           const woven = createWeaveRoot(item, "webgemeindezentrum");
           weaveRoot = woven.root;
           weaveSignature = woven.signature;
+          this.syncWeaveDetail(weaveRoot);
           icon.append(weaveRoot);
           visual.append(icon);
         } else {
           const woven = createWeaveRoot(item, "node");
           weaveRoot = woven.root;
           weaveSignature = woven.signature;
+          this.syncWeaveDetail(weaveRoot);
           visual.append(weaveRoot);
         }
 
@@ -268,10 +364,7 @@ export class NodesOverlay {
 
         const marker = new this.MarkerClass({ element, anchor: "bottom" })
           .setLngLat([item.lon, item.lat])
-          .addTo(this.map);
-
-        element.setAttribute("aria-label", accessibleMarkerLabel(item));
-        element.title = item.title;
+          .addTo(map);
 
         if (this.searchMatchIds.has(item.id)) {
           element.classList.add("search-highlight");
@@ -361,6 +454,7 @@ export class NodesOverlay {
   }
 
   public destroy() {
+    if (this.map) this.map.off("zoom", this.handleZoom);
     this.activeMarkers.forEach(({ cleanup }) => cleanup());
     this.activeMarkers.clear();
     this.searchMatchIds.clear();

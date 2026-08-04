@@ -53,6 +53,7 @@
   inset: 0;
   border-radius: 50%;
   isolation: isolate;
+  contain: layout;
   background:
     radial-gradient(
       circle at 35% 30%,
@@ -231,6 +232,15 @@
   filter: drop-shadow(0 0 0.8px rgba(45, 28, 18, 0.8));
 }
 
+.woven-node--compact .woven-node__vote-stitches,
+.woven-node--compact .woven-node__proposal-arc::before {
+  display: none;
+}
+
+.woven-node--compact .woven-node__proposal-arc {
+  filter: none;
+}
+
 .woven-node__overflow {
   position: absolute;
   right: -3px;
@@ -335,9 +345,12 @@
 }
 
 .map-marker:hover .marker-node__visual,
-.map-marker.is-selected .marker-node__visual {
+.map-marker:hover .marker-webgemeindezentrum__visual,
+.map-marker.is-selected .marker-node__visual,
+.map-marker.is-selected .marker-webgemeindezentrum__visual {
   transform: scale(1.13);
   filter: drop-shadow(0 3px 3px rgba(35, 22, 15, 0.48));
+  will-change: transform;
 }
 
 .map-marker:focus-visible {

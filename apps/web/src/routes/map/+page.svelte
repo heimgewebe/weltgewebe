@@ -210,8 +210,6 @@
   let map: MapLibreMap | null = null;
   let mapStyleReady = false;
   let isLoading = true;
-  // One shared projection clock drives both line fading and the woven marker
-  // bodies, so a relation cannot disappear from one representation first.
   let edgeProjectionNow = Date.now();
   let edgeExpiryTimeout: ReturnType<typeof setTimeout> | undefined;
   let lastFocusedElement: HTMLElement | null = null;
@@ -370,27 +368,15 @@
   // Marker data and search highlighting have separate update paths. Filtering or
   // scene changes may touch the full marker set; search changes only toggle the
   // small delta between the previous and next (maximum ten) search matches.
-  $: if (nodesOverlay && map) {
-    const projectedMarkers = nodesOverlay.update(
-      filteredMarkersData,
-      showNodes,
-      scene.edges,
-      edgeProjectionNow,
-    );
-    if (mapStyleReady) {
-      updateEdges(
-        map,
-        edgesData,
-        projectedMarkers,
-        $view.showEdges,
-        edgeProjectionNow,
-      );
-      syncEdgeMotionProjection();
-    }
+  $: if (nodesOverlay && filteredMarkersData) {
+    nodesOverlay.update(filteredMarkersData, showNodes);
   }
 
   $: if (nodesOverlay) {
     nodesOverlay.updateSearchMatches(searchMatchIds);
+  }
+
+  $: if (nodesOverlay) {
     nodesOverlay.updateSelection($selection?.id ?? null);
   }
 
@@ -420,6 +406,20 @@
     edgeMotion.setVisibleEdgeIds(
       $view.showEdges ? new Set(edgesData.map((edge) => edge.id)) : new Set(),
     );
+  }
+
+  // Reactive update for edges – only after map style is fully loaded. The
+  // transient motion controller receives visibility and canonical ids, but
+  // neither filtering nor a render-only difference starts a transition.
+  $: if (map && mapStyleReady && edgesData && $view) {
+    updateEdges(
+      map,
+      edgesData,
+      filteredMarkersData,
+      $view.showEdges,
+      edgeProjectionNow,
+    );
+    syncEdgeMotionProjection();
   }
 
   function scheduleNextEdgeExpiryRefresh(edges = edgesData) {
@@ -741,8 +741,8 @@
     const hasCanonicalEdgeStyle = () =>
       Boolean(
         map?.getSource(LAYERS.EDGES_SOURCE) &&
-        map.getLayer(LAYERS.EDGES_HALO_LAYER) &&
-        map.getLayer(LAYERS.EDGES_LAYER),
+          map.getLayer(LAYERS.EDGES_HALO_LAYER) &&
+          map.getLayer(LAYERS.EDGES_LAYER),
       );
     const rehydrateMapOverlays = () => {
       styleRehydrateQueued = false;
@@ -880,8 +880,6 @@
       );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
-      // NodesOverlay enriches the request-scoped view models before rendering;
-      // marker bodies and line colours therefore read one shared projection.
       nodesOverlay = new NodesOverlay(map, maplibregl.Marker);
       cleanupKomposition = setupKompositionInteraction(map);
       let sysStateStr = "";

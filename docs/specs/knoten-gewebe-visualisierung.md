@@ -29,6 +29,7 @@ verifies_with:
   - apps/web/tests/woven-node-visualization.spec.ts
   - apps/web/tests/garnrolle-marker-rendering.spec.ts
 ---
+
 # Knoten-Gewebevisualisierung
 
 Status: Produkt- und Renderingvertrag für die erste umsetzbare Stufe.
@@ -117,6 +118,11 @@ der Bogen ausschließlich belegte Aktivität.
   wird hervorgehoben. Zonenordnung und Relationszahlen stehen zusätzlich in der
   zugänglichen Markerbeschriftung; das Fachpanel zeichnet keine zweite
   Gewebedarstellung.
+
+Unter Zoomstufe 13,5 bleibt der Körper kompakt: Antragsabschnitte bleiben
+sichtbar, während Stimmstiche und rein dekorative Bogenfasern ausgeblendet
+werden. Ab Zoomstufe 13,5 erscheint die antragsgebundene Detaildarstellung.
+Diese Umschaltung verändert keine Relationszahlen und keine Domänenwahrheit.
 
 Die Marker bleiben stabile DOM-Objekte. Bei Fadenaktivität wird nur ihr innerer
 Gewebekörper neu aufgebaut; MapLibre-Positionierung, Fokus und Auswahl werden

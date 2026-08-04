@@ -6,6 +6,7 @@ import type {
 } from "maplibre-gl";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import { deriveWeaveThemeSegments } from "$lib/map/weaveModel";
 import { LAYERS } from "./layers";
 
 export const EDGE_VISUAL_STYLE = {
@@ -63,6 +64,15 @@ const EDGE_LAYER_VARIANTS = [
   },
 ] as const;
 
+function primaryThemeColor(point: MapEntityViewModel): string | undefined {
+  if (point.type !== "node" && point.type !== "webgemeindezentrum") {
+    return undefined;
+  }
+  return (
+    point.weave?.primaryThemeColor ?? deriveWeaveThemeSegments(point)[0]?.color
+  );
+}
+
 export function buildEdgeFeatures(
   edges: MapEdge[],
   points: MapEntityViewModel[],
@@ -88,6 +98,7 @@ export function buildEdgeFeatures(
     const target = pointMap.get(edge.target_id);
     if (!source || !target) continue;
 
+    const themeColor = primaryThemeColor(target);
     features.push({
       type: "Feature",
       geometry: {
@@ -102,10 +113,7 @@ export function buildEdgeFeatures(
         kind: edge.edge_kind,
         fadenType: edge.faden_type ?? "legacy",
         fadenSubjectId: edge.faden_subject_id ?? null,
-        themeColor:
-          target.type === "garnrolle"
-            ? null
-            : (target.weave?.primaryThemeColor ?? null),
+        ...(themeColor ? { themeColor } : {}),
         opacity,
       },
     });

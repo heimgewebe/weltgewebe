@@ -63,13 +63,14 @@ function hash(value: string): number {
 }
 
 function topics(entity: WeaveEntity): string[] {
-  const raw =
+  const raw: Array<string | null | undefined> =
     entity.type === "webgemeindezentrum"
       ? ["Gemeinschaft", "Mitentscheiden"]
-      : [...entity.tags, entity.kind];
+      : [...(entity.tags ?? []), entity.kind];
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of raw) {
+    if (typeof value !== "string") continue;
     const label = value.replace(/^[^:]{1,24}:/, "").trim();
     const key = label.toLocaleLowerCase("de-DE");
     if (!label || IGNORED_THEMES.has(key) || seen.has(key)) continue;
@@ -156,24 +157,24 @@ export function deriveEntityWeave(
   let knottingThreadCount = 0;
   let conversationThreadCount = 0;
   let conversationOpacity = 0;
-  let voteThreadCount = 0;
   let totalActiveThreadCount = 0;
 
   for (const edge of edges) {
     if (!edge.faden_type || !targets.has(edge.target_id)) continue;
     const opacity = edgeOpacityAt(edge, nowMs);
     if (opacity <= 0) continue;
-    totalActiveThreadCount += 1;
     const activityAtMs =
       edge.lifecycle.kind === "faden" ? edge.lifecycle.createdAtMs : 0;
 
     if (edge.faden_type === "knotting") {
       knottingThreadCount += 1;
+      totalActiveThreadCount += 1;
       continue;
     }
     if (edge.faden_type === "conversation") {
       conversationThreadCount += 1;
       conversationOpacity = Math.max(conversationOpacity, opacity);
+      totalActiveThreadCount += 1;
       if (edge.faden_subject_id) {
         const activity = conversations.get(edge.faden_subject_id) ?? {
           count: 0,
@@ -193,10 +194,13 @@ export function deriveEntityWeave(
     if (!edge.faden_subject_id) continue;
     const group =
       groups.get(edge.faden_subject_id) ?? newGroup(edge.faden_subject_id);
-    if (edge.faden_type === "proposal") group.proposalThreadCount += 1;
-    if (edge.faden_type === "vote") {
+    if (edge.faden_type === "proposal") {
+      group.proposalThreadCount += 1;
+      totalActiveThreadCount += 1;
+    } else if (edge.faden_type === "vote") {
       group.voteThreadCount += 1;
-      voteThreadCount += 1;
+    } else {
+      continue;
     }
     group.latestActivityAtMs = Math.max(group.latestActivityAtMs, activityAtMs);
     group.opacity = Math.max(group.opacity, opacity);
@@ -214,11 +218,18 @@ export function deriveEntityWeave(
     group.opacity = Math.max(group.opacity, activity.opacity);
   }
 
-  const sorted = [...groups.values()].sort(
-    (left, right) =>
-      right.latestActivityAtMs - left.latestActivityAtMs ||
-      left.subjectId.localeCompare(right.subjectId),
+  const sorted = [...groups.values()]
+    .filter((group) => group.proposalThreadCount > 0)
+    .sort(
+      (left, right) =>
+        right.latestActivityAtMs - left.latestActivityAtMs ||
+        left.subjectId.localeCompare(right.subjectId),
+    );
+  const voteThreadCount = sorted.reduce(
+    (count, group) => count + group.voteThreadCount,
+    0,
   );
+  totalActiveThreadCount += voteThreadCount;
   const proposalCount = sorted.length;
   const proposalOverflowCount = Math.max(
     0,
@@ -306,14 +317,18 @@ export function voteStitchConicGradient(
   const count = Math.min(14, voteCount);
   const step = spanDeg / (count + 1);
   const width = Math.max(0.8, Math.min(2.1, step * 0.34));
-  const stops = ["transparent 0deg"];
+  const stops: string[] = [];
+  let lastEnd = 0;
   for (let index = 1; index <= count; index += 1) {
     const center = step * index;
+    const start = center - width / 2;
+    const end = center + width / 2;
     stops.push(
-      `transparent ${center - width / 2}deg`,
-      `${color} ${center - width / 2}deg ${center + width / 2}deg`,
+      `transparent ${lastEnd}deg ${start}deg`,
+      `${color} ${start}deg ${end}deg`,
     );
+    lastEnd = end;
   }
-  stops.push(`transparent ${spanDeg}deg 360deg`);
+  stops.push(`transparent ${lastEnd}deg 360deg`);
   return `conic-gradient(${stops.join(",")})`;
 }

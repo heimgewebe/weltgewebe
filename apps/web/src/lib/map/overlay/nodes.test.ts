@@ -8,6 +8,7 @@ import type {
 import {
   NodesOverlay,
   diffSearchMatchIds,
+  weaveRenderSignature,
   type MarkerConstructor,
 } from "./nodes";
 
@@ -225,6 +226,29 @@ describe("diffSearchMatchIds", () => {
   });
 });
 
+describe("NodesOverlay runtime robustness", () => {
+  it("returns the projection without creating markers when the map is absent", () => {
+    vi.stubGlobal("document", {
+      createElement: () => new FakeElement(),
+    });
+    const overlay = new NodesOverlay(
+      null,
+      FakeMarker as unknown as MarkerConstructor,
+    );
+    expect(() => overlay.update([makeNode("a")], true)).not.toThrow();
+    expect(overlay.getActiveMarker("a")).toBeUndefined();
+  });
+
+  it("derives an empty weave instead of crashing when a caller omitted it", () => {
+    const overlay = makeOverlay();
+    overlay.update([makeNode("a", { weave: undefined })], true);
+    const root = overlay.getActiveMarker("a")?.element.children[0]
+      .children[0] as HTMLElement | undefined;
+    expect(root?.dataset.proposalCount).toBe("0");
+    expect(root?.dataset.voteThreads).toBe("0");
+  });
+});
+
 describe("NodesOverlay search-highlight lifecycle", () => {
   it("applies stored search state to a marker created later", () => {
     const overlay = makeOverlay();
@@ -377,6 +401,84 @@ describe("NodesOverlay woven node marker", () => {
     expect(root?.innerHTML).toContain('data-zone="conversation"');
     expect(root?.innerHTML.match(/data-zone="proposal"/g)).toHaveLength(2);
     expect(root?.innerHTML.match(/data-zone="vote"/g)).toHaveLength(2);
+  });
+
+  it("omits empty vote DOM nodes", () => {
+    const overlay = makeOverlay();
+    overlay.update(
+      [
+        makeNode("without-votes", {
+          weave: makeWeave({
+            proposalCount: 1,
+            proposalArcs: [
+              {
+                subjectId: "proposal-a",
+                proposalThreadCount: 1,
+                conversationThreadCount: 0,
+                voteThreadCount: 0,
+                bundledSubjectCount: 1,
+                latestActivityAtMs: 10,
+                opacity: 1,
+                color: "#5f7a55",
+                startDeg: 55,
+                spanDeg: 250,
+              },
+            ],
+          }),
+        }),
+      ],
+      true,
+    );
+    const root = overlay.getActiveMarker("without-votes")?.element.children[0]
+      .children[0] as HTMLElement | undefined;
+    expect(root?.innerHTML).toContain('data-zone="proposal"');
+    expect(root?.innerHTML).not.toContain('data-zone="vote"');
+  });
+
+  it("switches nodes and Webgemeindezentren between compact and detail zoom", () => {
+    const overlay = makeOverlay();
+    overlay.update([makeNode("node"), makeCenter("center")], true);
+
+    overlay.updateZoom(13.4);
+    const nodeRoot = overlay.getActiveMarker("node")?.element.children[0]
+      .children[0] as HTMLElement | undefined;
+    const centerRoot = overlay.getActiveMarker("center")?.element.children[0]
+      .children[0].children[0] as HTMLElement | undefined;
+    expect(nodeRoot?.classList.contains("woven-node--compact")).toBe(true);
+    expect(centerRoot?.classList.contains("woven-node--compact")).toBe(true);
+    expect(nodeRoot?.dataset.weaveDetail).toBe("compact");
+    expect(centerRoot?.dataset.weaveDetail).toBe("compact");
+
+    overlay.updateZoom(13.5);
+    expect(nodeRoot?.classList.contains("woven-node--compact")).toBe(false);
+    expect(centerRoot?.classList.contains("woven-node--compact")).toBe(false);
+    expect(nodeRoot?.dataset.weaveDetail).toBe("detail");
+    expect(centerRoot?.dataset.weaveDetail).toBe("detail");
+  });
+
+  it("uses a fixed render signature instead of serializing unrelated fields", () => {
+    const weave = makeWeave();
+    expect(weaveRenderSignature({ ...weave, totalActiveThreadCount: 99 })).toBe(
+      weaveRenderSignature(weave),
+    );
+    expect(
+      weaveRenderSignature({ ...weave, conversationOpacity: 0.4 }),
+    ).not.toBe(weaveRenderSignature(weave));
+  });
+
+  it("does not rewrite an unchanged accessible label", () => {
+    const overlay = makeOverlay();
+    overlay.update([makeNode("a")], true);
+    const element = overlay.getActiveMarker("a")
+      ?.element as unknown as FakeElement;
+    const setAttribute = vi.spyOn(element, "setAttribute");
+
+    overlay.update([makeNode("a")], true);
+
+    expect(setAttribute).not.toHaveBeenCalledWith(
+      "aria-label",
+      expect.any(String),
+    );
   });
 
   it("updates the woven body without recreating the stable map marker", () => {

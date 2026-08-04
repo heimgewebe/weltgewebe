@@ -1,0 +1,109 @@
+export interface NotificationPreferences {
+  direct_messages_push: boolean;
+}
+
+export interface PushConfig {
+  enabled: boolean;
+  application_server_key: string | null;
+}
+
+export interface StoredPushSubscription {
+  id: string;
+}
+
+interface ErrorPayload {
+  code?: unknown;
+  message?: unknown;
+}
+
+export class NotificationsApiError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly code: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = "NotificationsApiError";
+  }
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await fetch(path, {
+    credentials: "include",
+    ...init,
+    headers: {
+      ...(init?.body ? { "Content-Type": "application/json" } : {}),
+      ...init?.headers,
+    },
+  });
+  if (!response.ok) {
+    const payload = (await response.json().catch(() => ({}))) as ErrorPayload;
+    throw new NotificationsApiError(
+      response.status,
+      typeof payload.code === "string" ? payload.code : "request_failed",
+      typeof payload.message === "string"
+        ? payload.message
+        : `HTTP ${response.status}`,
+    );
+  }
+  if (response.status === 204) return undefined as T;
+  return response.json() as Promise<T>;
+}
+
+export function getNotificationPreferences(
+  signal?: AbortSignal,
+): Promise<NotificationPreferences> {
+  return request<NotificationPreferences>("/api/notifications/preferences", {
+    signal,
+  });
+}
+
+export function updateNotificationPreferences(
+  directMessagesPush: boolean,
+): Promise<NotificationPreferences> {
+  return request<NotificationPreferences>("/api/notifications/preferences", {
+    method: "PUT",
+    body: JSON.stringify({ direct_messages_push: directMessagesPush }),
+  });
+}
+
+export function getPushConfig(signal?: AbortSignal): Promise<PushConfig> {
+  return request<PushConfig>("/api/push/config", { signal });
+}
+
+export function registerPushSubscription(
+  subscription: PushSubscription,
+): Promise<StoredPushSubscription> {
+  const value = subscription.toJSON();
+  const endpoint = value.endpoint;
+  const p256dh = value.keys?.p256dh;
+  const auth = value.keys?.auth;
+  if (!endpoint || !p256dh || !auth) {
+    throw new Error(
+      "Der Browser hat eine unvollständige Push-Freigabe geliefert.",
+    );
+  }
+  return request<StoredPushSubscription>("/api/push/subscriptions", {
+    method: "POST",
+    body: JSON.stringify({ endpoint, p256dh, auth }),
+  });
+}
+
+export function deletePushSubscription(endpoint: string): Promise<void> {
+  return request<void>("/api/push/subscriptions", {
+    method: "DELETE",
+    body: JSON.stringify({ endpoint }),
+  });
+}
+
+/** Convert the VAPID public key into the BufferSource expected by PushManager. */
+export function applicationServerKey(value: string): ArrayBuffer {
+  const padding = "=".repeat((4 - (value.length % 4)) % 4);
+  const base64 = (value + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const decoded = atob(base64);
+  const bytes = new Uint8Array(decoded.length);
+  for (let index = 0; index < decoded.length; index += 1) {
+    bytes[index] = decoded.charCodeAt(index);
+  }
+  return bytes.buffer;
+}

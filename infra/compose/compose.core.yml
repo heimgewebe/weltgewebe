@@ -45,6 +45,9 @@ services:
       RUST_LOG: ${RUST_LOG:-info}
       AUTH_DEV_LOGIN: ${AUTH_DEV_LOGIN:-0}
       AUTH_COOKIE_SECURE: ${AUTH_COOKIE_SECURE:-1}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_VAPID_CONTACT: ${WEB_PUSH_VAPID_CONTACT:-}
+      WEB_PUSH_ALLOWED_HOST_SUFFIXES: ${WEB_PUSH_ALLOWED_HOST_SUFFIXES:-}
     depends_on:
       pgbouncer:
         condition: service_started

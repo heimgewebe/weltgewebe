@@ -13,6 +13,7 @@ import {
   WEAVE_ZONE_ORDER,
   deriveEntityWeave,
   projectEntityWeaves,
+  voteStitchConicGradient,
 } from "./weaveModel";
 
 const createdAt = Date.parse("2026-08-01T10:00:00Z");
@@ -135,6 +136,70 @@ describe("woven node projection", () => {
     });
     expect(weave.conversationThreadCount).toBe(2);
     expect(weave.voteThreadCount).toBe(1);
+  });
+
+  it("does not invent proposal arcs or visible vote counts for orphan votes", () => {
+    const weave = deriveEntityWeave(
+      node(),
+      [edge("vote-orphan", "vote", "proposal-missing")],
+      nowMs,
+    );
+    expect(weave.proposalCount).toBe(0);
+    expect(weave.proposalArcs).toEqual([]);
+    expect(weave.voteThreadCount).toBe(0);
+    expect(weave.totalActiveThreadCount).toBe(0);
+  });
+
+  it("binds votes independent of whether the vote or proposal edge arrives first", () => {
+    const weave = deriveEntityWeave(
+      node(),
+      [
+        edge("vote-first", "vote", "proposal-a"),
+        edge("proposal-second", "proposal", "proposal-a"),
+      ],
+      nowMs,
+    );
+    expect(weave.proposalCount).toBe(1);
+    expect(weave.voteThreadCount).toBe(1);
+    expect(weave.totalActiveThreadCount).toBe(2);
+    expect(weave.proposalArcs[0]).toMatchObject({
+      subjectId: "proposal-a",
+      proposalThreadCount: 1,
+      voteThreadCount: 1,
+    });
+  });
+
+  it("does not attach an active vote to an expired proposal", () => {
+    const weave = deriveEntityWeave(
+      node(),
+      [
+        edge(
+          "proposal-expired",
+          "proposal",
+          "proposal-a",
+          "node-1",
+          createdAt - FADEN_LIFETIME_MS,
+        ),
+        edge("vote-active", "vote", "proposal-a"),
+      ],
+      nowMs,
+    );
+    expect(weave.proposalCount).toBe(0);
+    expect(weave.voteThreadCount).toBe(0);
+    expect(weave.totalActiveThreadCount).toBe(0);
+  });
+
+  it("falls back safely when topic strings are empty", () => {
+    expect(
+      deriveEntityWeave(node({ kind: "", tags: [""] }), [], nowMs)
+        .themeSegments,
+    ).toMatchObject([{ label: "Gemeingut" }]);
+  });
+
+  it("emits hard transparent gaps around vote stitches", () => {
+    expect(voteStitchConicGradient(60, 1)).toBe(
+      "conic-gradient(transparent 0deg 28.95deg,#f6ead7 28.95deg 31.05deg,transparent 31.05deg 360deg)",
+    );
   });
 
   it("resolves Webgemeindezentrum activity through the drawable endpoint alias", () => {

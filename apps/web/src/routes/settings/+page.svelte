@@ -16,8 +16,8 @@
       <a class="back-link touch-target" href="/map">← Zur Karte</a>
       <h1>Einstellungen</h1>
       <p class="intro">
-        Verwalte deine Garnrolle, dein Konto und die Darstellung an einem
-        übersichtlichen Ort.
+        Verwalte deine Garnrolle, dein Konto, Benachrichtigungen und die
+        Darstellung an einem übersichtlichen Ort.
       </p>
     </header>
 
@@ -33,6 +33,10 @@
             <a href="#meine-garnrolle">
               <strong>Meine Garnrolle</strong>
               <span>Profil, Kartenanker und Sichtbarkeit</span>
+            </a>
+            <a href="/nachrichten#benachrichtigungen">
+              <strong>Benachrichtigungen</strong>
+              <span>Push-Hinweise und dieses Gerät</span>
             </a>
             <a href="#konto-und-sicherheit">
               <strong>Konto &amp; Sicherheit</strong>

@@ -16,6 +16,7 @@ use crate::{
     },
     config::AppConfig,
     mailer::Mailer,
+    notifications::WebPushService,
     routes::{edges::Edge, nodes::Node},
     telemetry::Metrics,
 };
@@ -108,6 +109,8 @@ pub struct ApiState {
     /// deployments share this TTL-bounded, single-use state across processes.
     pub passkey_authentications: PasskeyAuthenticationStore,
     pub passkeys: PasskeyStore,
+    /// Optional VAPID signer and allow-listed outbound Web Push client.
+    pub web_push: Option<Arc<WebPushService>>,
 }
 
 impl ApiState {

@@ -44,6 +44,9 @@ services:
       APP_BASE_URL: ${APP_BASE_URL:-}
       AUTH_TRUSTED_PROXIES: ${AUTH_TRUSTED_PROXIES:-}
       NATS_URL: ${NATS_URL:-nats://nats:4222}
+      WEB_PUSH_VAPID_PRIVATE_KEY: ${WEB_PUSH_VAPID_PRIVATE_KEY:-}
+      WEB_PUSH_VAPID_CONTACT: ${WEB_PUSH_VAPID_CONTACT:-}
+      WEB_PUSH_ALLOWED_HOST_SUFFIXES: ${WEB_PUSH_ALLOWED_HOST_SUFFIXES:-}
       # Search remains local to the API network namespace. The provider itself
       # accepts only literal loopback and revalidates runtime/model identity.
       WELTGEWEBE_SEARCH_OLLAMA_URL: ${WELTGEWEBE_SEARCH_OLLAMA_URL:-http://127.0.0.1:11434/}

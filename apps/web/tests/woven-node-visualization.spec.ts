@@ -112,5 +112,13 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       "aria-label",
       /Knüpfkern 1.*Gesprächsring 2.*Anträge 2.*Stimmen 2/,
     );
+
+    await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(13));
+    await expect(woven).toHaveAttribute("data-weave-detail", "compact");
+    await expect(woven.locator('[data-zone="vote"]').first()).toBeHidden();
+
+    await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(14));
+    await expect(woven).toHaveAttribute("data-weave-detail", "detail");
+    await expect(woven.locator('[data-zone="vote"]').first()).toBeVisible();
   });
 });
