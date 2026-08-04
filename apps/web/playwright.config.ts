@@ -5,7 +5,7 @@ const PORT = Number(process.env.PORT ?? (process.env.CI ? 5173 : 4173));
 const shouldStartWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
 const htmlReportDir = resolve(
   process.cwd(),
-  process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report/html",
+  process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report",
 );
 const htmlOpenSetting = (process.env.PLAYWRIGHT_HTML_REPORT_OPEN ?? "never") as
   | "never"
@@ -68,7 +68,7 @@ export default defineConfig({
   ...(shouldStartWebServer
     ? {
         webServer: {
-          command: `bash -o pipefail -c 'mkdir -p playwright-report && pnpm run build:e2e 2>&1 | tee playwright-report/webserver.log' && pnpm preview --host 0.0.0.0 --port ${PORT}`,
+          command: `bash -o pipefail -c 'pnpm run build:e2e 2>&1 | tee /tmp/pr1679-webserver.log' && pnpm preview --host 0.0.0.0 --port ${PORT}`,
           url: `http://127.0.0.1:${PORT}`,
           timeout: 90_000,
           reuseExistingServer: !process.env.CI,
