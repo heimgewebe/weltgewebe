@@ -52,7 +52,6 @@ class GermanyReleaseProofAssemblerTest(unittest.TestCase):
         self.artifact = self.root / "basemap-germany-v1.0.0.pmtiles"
         self.style = self.root / "style-germany.json"
         self.desktop_path = self.root / "desktop.json"
-        self.ipad_path = self.root / "ipad.json"
         self.caddy_path = self.root / "caddy.json"
         self.output = self.root / "release.json"
         self.artifact.write_bytes(b"PMTiles" + bytes(range(64)))
@@ -116,21 +115,6 @@ class GermanyReleaseProofAssemblerTest(unittest.TestCase):
                 "signature": "PMTiles",
             },
         }
-        self.ipad = {
-            "schema_version": 1,
-            "verdict": "PROVEN",
-            "proofed_at": "2026-08-02T04:25:00+00:00",
-            "device_class": "physical-ipad",
-            "native_webview": "WKWebView",
-            "basemap_version": VERSION,
-            "artifact_sha256": self.artifact_sha256,
-            "artifact_size_bytes": self.artifact.stat().st_size,
-            "frontend_commit": COMMIT,
-            "style_sha256": self.style_sha256,
-            "staging_range_status": 206,
-            "remote_violations": [],
-            "regions": region_rows(self.root, "ipad"),
-        }
         self.write_inputs()
 
     def tearDown(self) -> None:
@@ -140,7 +124,6 @@ class GermanyReleaseProofAssemblerTest(unittest.TestCase):
         self.desktop_path.write_text(
             json.dumps(self.desktop), encoding="utf-8"
         )
-        self.ipad_path.write_text(json.dumps(self.ipad), encoding="utf-8")
         self.caddy_path.write_text(json.dumps(self.caddy), encoding="utf-8")
 
     def args(self) -> argparse.Namespace:
@@ -148,7 +131,6 @@ class GermanyReleaseProofAssemblerTest(unittest.TestCase):
             artifact=str(self.artifact),
             style=str(self.style),
             desktop_proof=str(self.desktop_path),
-            ipad_proof=str(self.ipad_path),
             caddy_proof=str(self.caddy_path),
             version=VERSION,
             frontend_commit=COMMIT,
@@ -157,20 +139,31 @@ class GermanyReleaseProofAssemblerTest(unittest.TestCase):
 
     def test_assembles_activation_compatible_proof(self) -> None:
         payload = MODULE.assemble(self.args(), now=NOW)
-        self.assertEqual(payload["schema_version"], 1)
+        self.assertEqual(payload["schema_version"], 2)
+        self.assertEqual(payload["kind"], "weltgewebe_germany_release_proof")
         self.assertEqual(payload["verdict"], "PROVEN")
         self.assertEqual(payload["artifact_sha256"], self.artifact_sha256)
         self.assertEqual(payload["artifact_size_bytes"], self.artifact.stat().st_size)
         self.assertEqual(payload["frontend_commit"], COMMIT)
         self.assertEqual(payload["style_sha256"], self.style_sha256)
-        self.assertEqual(payload["proofed_at"], "2026-08-02T04:25:00Z")
+        self.assertEqual(payload["proofed_at"], "2026-08-02T04:23:00Z")
+        self.assertEqual(
+            set(payload["evidence"]),
+            {
+                "desktop_proof_path",
+                "desktop_proof_sha256",
+                "caddy_proof_path",
+                "caddy_proof_sha256",
+            },
+        )
+        self.assertNotIn("ipad_proof_path", payload["evidence"])
         self.assertEqual(
             set(payload["proofs"]),
             {
                 "desktop-maplibre",
-                "ipad-maplibre",
                 "five-region-visual",
                 "no-external-map-requests",
+                "staging-caddy-full",
                 "staging-caddy-range",
             },
         )
@@ -222,20 +215,14 @@ class GermanyReleaseProofAssemblerTest(unittest.TestCase):
         with self.assertRaisesRegex(MODULE.ProofError, "content_range mismatch"):
             MODULE.assemble(self.args(), now=NOW)
 
-    def test_rejects_ipad_artifact_binding_mismatch(self) -> None:
-        self.ipad["artifact_sha256"] = "0" * 64
+    def test_rejects_caddy_full_hash_mismatch(self) -> None:
+        self.caddy["full_get"]["sha256"] = "f" * 64
         self.write_inputs()
-        with self.assertRaisesRegex(MODULE.ProofError, "artifact_sha256 mismatch"):
-            MODULE.assemble(self.args(), now=NOW)
-
-    def test_rejects_non_physical_ipad(self) -> None:
-        self.ipad["device_class"] = "emulated-tablet"
-        self.write_inputs()
-        with self.assertRaisesRegex(MODULE.ProofError, "physical iPad"):
+        with self.assertRaisesRegex(MODULE.ProofError, "full_get.sha256 mismatch"):
             MODULE.assemble(self.args(), now=NOW)
 
     def test_rejects_stale_proof(self) -> None:
-        self.ipad["proofed_at"] = "2026-07-31T04:25:00Z"
+        self.caddy["proofed_at"] = "2026-07-31T04:23:00Z"
         self.write_inputs()
         with self.assertRaisesRegex(MODULE.ProofError, "older than 24 hours"):
             MODULE.assemble(self.args(), now=NOW)

@@ -25,6 +25,7 @@ relations:
   - type: verifies
     target: docs/specs/map-experience.md
 ---
+
 # Kartenstatus
 
 Stand: 13.07.2026. Dieses Dokument ist ein zeitgebundener Diagnosebericht. Der
@@ -33,19 +34,19 @@ dauerhafte Produktvertrag steht in
 
 ## Belegt im Repository
 
-| Bereich | Ist-Stand | Beleg |
-|---|---|---|
-| Datenladung | `ok`, `partial` und `failed` werden getrennt | `apps/web/src/routes/map/+page.ts`, `map-load-fallback.spec.ts` |
-| Szenenmodell | Rohdaten werden vor dem Rendering in eine explizite Szene übersetzt | `apps/web/src/lib/map/scene.ts`, `scene.test.ts` |
-| Entitäten | Knoten und Garnrollen besitzen typisierte Kartenmodelle | `apps/web/src/lib/map/types.ts` |
-| Interaktion | Auswahl öffnet das Fokuspanel; Schließen und Fokuswiederherstellung sind getestet | `map-interaction.spec.ts` |
-| Suche und Filter | getrennte, gegenseitig ausschließende Kartenlinsen | `overlayManager.ts`, `ui-filter.spec.ts` |
-| URL-Einstieg | `focus`, `lens` und `compose` werden typisiert ausgewertet | `urlState.ts`, `map-url-state.spec.ts` |
-| Garnrolle | `not_on_map`, `exact` und `radius` sind im Browserpfad vorhanden | `garnrolle-self-service.spec.ts` |
-| Knoten und Faden | Komposition erzeugt Knoten und den zugehörigen Faden | `KompositionPanel.svelte`, `komposition.spec.ts` |
-| Produktionsvertrag | PostgreSQL ist für Accounts/Garnrollen, Knoten und Fäden die Produktionswahrheit | `.env.prod.example`, `runtime/README.md`, Compose- und API-Verträge |
-| Regionale Basemap-Integrität | Hamburg und Schleswig-Holstein werden vor Veröffentlichung durch alle erreichbaren PMTiles-Verzeichnisse traversiert; bis zu 96 reale MVT-Kacheln werden deterministisch über Zoomstufen und Raum verteilt decodiert und gegen Metadaten sowie Style-Layer geprüft | `apps/web/scripts/validate-pmtiles.mjs`, `validate-pmtiles.test.mjs`, `basemap-runtime-proof.yml` |
-| PMTiles-HTTP-Vertrag | Stabile und versionierte Regionalpfade müssen bei HTTP 200 und 206 `application/octet-stream`, `Accept-Ranges: bytes`, korrektes `Content-Range` und die PMTiles-Signatur liefern | `infra/caddy/Caddyfile.vps`, `scripts/guard/basemap-runtime-proof.sh`, `scripts/ops/check_public_live_readiness.py` |
+| Bereich                      | Ist-Stand                                                                                                                                                                                                                                                          | Beleg                                                                                                               |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| Datenladung                  | `ok`, `partial` und `failed` werden getrennt                                                                                                                                                                                                                       | `apps/web/src/routes/map/+page.ts`, `map-load-fallback.spec.ts`                                                     |
+| Szenenmodell                 | Rohdaten werden vor dem Rendering in eine explizite Szene übersetzt                                                                                                                                                                                                | `apps/web/src/lib/map/scene.ts`, `scene.test.ts`                                                                    |
+| Entitäten                    | Knoten und Garnrollen besitzen typisierte Kartenmodelle                                                                                                                                                                                                            | `apps/web/src/lib/map/types.ts`                                                                                     |
+| Interaktion                  | Auswahl öffnet das Fokuspanel; Schließen und Fokuswiederherstellung sind getestet                                                                                                                                                                                  | `map-interaction.spec.ts`                                                                                           |
+| Suche und Filter             | getrennte, gegenseitig ausschließende Kartenlinsen                                                                                                                                                                                                                 | `overlayManager.ts`, `ui-filter.spec.ts`                                                                            |
+| URL-Einstieg                 | `focus`, `lens` und `compose` werden typisiert ausgewertet                                                                                                                                                                                                         | `urlState.ts`, `map-url-state.spec.ts`                                                                              |
+| Garnrolle                    | `not_on_map`, `exact` und `radius` sind im Browserpfad vorhanden                                                                                                                                                                                                   | `garnrolle-self-service.spec.ts`                                                                                    |
+| Knoten und Faden             | Komposition erzeugt Knoten und den zugehörigen Faden                                                                                                                                                                                                               | `KompositionPanel.svelte`, `komposition.spec.ts`                                                                    |
+| Produktionsvertrag           | PostgreSQL ist für Accounts/Garnrollen, Knoten und Fäden die Produktionswahrheit                                                                                                                                                                                   | `.env.prod.example`, `runtime/README.md`, Compose- und API-Verträge                                                 |
+| Regionale Basemap-Integrität | Hamburg und Schleswig-Holstein werden vor Veröffentlichung durch alle erreichbaren PMTiles-Verzeichnisse traversiert; bis zu 96 reale MVT-Kacheln werden deterministisch über Zoomstufen und Raum verteilt decodiert und gegen Metadaten sowie Style-Layer geprüft | `apps/web/scripts/validate-pmtiles.mjs`, `validate-pmtiles.test.mjs`, `basemap-runtime-proof.yml`                   |
+| PMTiles-HTTP-Vertrag         | Stabile und versionierte Regionalpfade müssen bei HTTP 200 und 206 `application/octet-stream`, `Accept-Ranges: bytes`, korrektes `Content-Range` und die PMTiles-Signatur liefern                                                                                  | `infra/caddy/Caddyfile.vps`, `scripts/guard/basemap-runtime-proof.sh`, `scripts/ops/check_public_live_readiness.py` |
 
 ## Datierter Livebeleg
 
@@ -81,7 +82,7 @@ Der erste vertikale Persistenzschnitt ist abgeschlossen. Die nächsten sinnvolle
 Beweise sind:
 
 1. Backup, Restore-Proof und Off-Host-Kopie nach dem Remediation-Deploy;
-2. wiederholte Geräteabnahme auf iPad und Desktop;
+2. wiederholte Browserabnahme über repräsentative Desktop- und Touch-Profile;
 3. Edge-Orphan-/Referenzaudit mit repräsentativen Daten;
 4. Last- und Darstellungsprüfung bei wachsendem Gewebe;
 5. Entfernung der Legacy-`mode`-Rollbackspalte erst nach eigenem Daten- und
