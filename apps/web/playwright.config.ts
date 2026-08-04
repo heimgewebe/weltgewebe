@@ -5,7 +5,7 @@ const PORT = Number(process.env.PORT ?? (process.env.CI ? 5173 : 4173));
 const shouldStartWebServer = process.env.PLAYWRIGHT_SKIP_WEBSERVER !== "1";
 const htmlReportDir = resolve(
   process.cwd(),
-  process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report",
+  process.env.PLAYWRIGHT_HTML_REPORT ?? "playwright-report/html",
 );
 const htmlOpenSetting = (process.env.PLAYWRIGHT_HTML_REPORT_OPEN ?? "never") as
   | "never"
@@ -13,7 +13,6 @@ const htmlOpenSetting = (process.env.PLAYWRIGHT_HTML_REPORT_OPEN ?? "never") as
   | "always";
 const junitOutputName =
   process.env.PLAYWRIGHT_JUNIT_OUTPUT_NAME ?? "results.xml";
-// Ensure CI uploads always find an HTML report directory.
 const htmlReporter: ReporterDescription = [
   "html",
   { open: htmlOpenSetting, outputFolder: htmlReportDir },
@@ -24,12 +23,6 @@ const junitReporter: ReporterDescription = [
   "junit",
   { outputFile: resolve(htmlReportDir, junitOutputName) },
 ];
-/**
- * Reporter aus ENV parsen:
- *   PW_TEST_REPORTER="dot,html,junit"
- *   PLAYWRIGHT_HTML_REPORT_OPEN="never|on-failure|always"
- *   PLAYWRIGHT_JUNIT_OUTPUT_NAME="results.xml"
- */
 function resolveEnvReporters(): ReporterDescription[] | undefined {
   const spec = process.env.PW_TEST_REPORTER?.split(",")
     .map((s) => s.trim())
@@ -50,8 +43,6 @@ function resolveEnvReporters(): ReporterDescription[] | undefined {
         "junit",
         { outputFile: resolve(htmlReportDir, junitOutputName) },
       ]);
-    } else {
-      // Fallback: Unbekannte Bezeichner ignorieren
     }
   }
   return mapped.length ? mapped : undefined;
