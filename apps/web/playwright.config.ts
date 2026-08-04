@@ -77,7 +77,7 @@ export default defineConfig({
   ...(shouldStartWebServer
     ? {
         webServer: {
-          command: `pnpm run build:e2e && pnpm preview --host 0.0.0.0 --port ${PORT}`,
+          command: `bash -o pipefail -c 'mkdir -p playwright-report && pnpm run build:e2e 2>&1 | tee playwright-report/webserver.log' && pnpm preview --host 0.0.0.0 --port ${PORT}`,
           url: `http://127.0.0.1:${PORT}`,
           timeout: 90_000,
           reuseExistingServer: !process.env.CI,
