@@ -956,8 +956,8 @@ async fn node_conversation_vertical_slice() {
             .expect("projection version after messages");
     assert_eq!(
         version_after_messages,
-        version_after_node + 2,
-        "guest and author each create one conversation Faden; later contributions reuse it",
+        version_after_node + 4,
+        "four genuine contributions project activity: two create stable account Fäden and two reactivate the author's existing Faden; the exact replay projects nothing",
     );
     let payloads: Vec<String> = sqlx::query_scalar(
         "SELECT payload::text FROM domain_outbox
