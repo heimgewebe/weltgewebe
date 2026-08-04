@@ -13,6 +13,7 @@ const htmlOpenSetting = (process.env.PLAYWRIGHT_HTML_REPORT_OPEN ?? "never") as
   | "always";
 const junitOutputName =
   process.env.PLAYWRIGHT_JUNIT_OUTPUT_NAME ?? "results.xml";
+// Ensure CI uploads always find an HTML report directory.
 const htmlReporter: ReporterDescription = [
   "html",
   { open: htmlOpenSetting, outputFolder: htmlReportDir },
@@ -23,6 +24,12 @@ const junitReporter: ReporterDescription = [
   "junit",
   { outputFile: resolve(htmlReportDir, junitOutputName) },
 ];
+/**
+ * Reporter aus ENV parsen:
+ *   PW_TEST_REPORTER="dot,html,junit"
+ *   PLAYWRIGHT_HTML_REPORT_OPEN="never|on-failure|always"
+ *   PLAYWRIGHT_JUNIT_OUTPUT_NAME="results.xml"
+ */
 function resolveEnvReporters(): ReporterDescription[] | undefined {
   const spec = process.env.PW_TEST_REPORTER?.split(",")
     .map((s) => s.trim())
@@ -43,6 +50,8 @@ function resolveEnvReporters(): ReporterDescription[] | undefined {
         "junit",
         { outputFile: resolve(htmlReportDir, junitOutputName) },
       ]);
+    } else {
+      // Fallback: Unbekannte Bezeichner ignorieren
     }
   }
   return mapped.length ? mapped : undefined;
@@ -68,7 +77,7 @@ export default defineConfig({
   ...(shouldStartWebServer
     ? {
         webServer: {
-          command: `bash -o pipefail -c 'pnpm run build:e2e 2>&1 | tee /tmp/pr1679-webserver.log' && pnpm preview --host 0.0.0.0 --port ${PORT}`,
+          command: `pnpm run build:e2e && pnpm preview --host 0.0.0.0 --port ${PORT}`,
           url: `http://127.0.0.1:${PORT}`,
           timeout: 90_000,
           reuseExistingServer: !process.env.CI,
