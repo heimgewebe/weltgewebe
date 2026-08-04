@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 704 |
+| Relationen gesamt | 706 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 649 |
+| — relates_to | 651 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | relates_to Anteil | 92% |
@@ -32,7 +32,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (273 Dokumente):
+**Cluster 1** (274 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -241,6 +241,7 @@ _Keine Lücken erkannt._
 - `docs/specs/federation-wire-v1.md`
 - `docs/specs/garnrolle-knoten-faden.md`
 - `docs/specs/governance-antraege.md`
+- `docs/specs/knoten-gewebe-visualisierung.md`
 - `docs/specs/list-pagination-api.md`
 - `docs/specs/map-experience.md`
 - `docs/specs/objektlebenszyklen-und-loeschwirkungen.md`
