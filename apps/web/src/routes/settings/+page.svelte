@@ -36,7 +36,7 @@
             </a>
             <a href="/nachrichten#benachrichtigungen">
               <strong>Benachrichtigungen</strong>
-              <span>Private Nachrichten und dieses Gerät</span>
+              <span>Push-Hinweise und dieses Gerät</span>
             </a>
             <a href="#konto-und-sicherheit">
               <strong>Konto &amp; Sicherheit</strong>
