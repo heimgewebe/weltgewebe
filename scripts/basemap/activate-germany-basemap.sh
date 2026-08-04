@@ -4,9 +4,9 @@ umask 077
 
 # Fail-closed activation wrapper for the nationwide Germany PMTiles variant.
 # Preparation publishes immutable versioned files only. Activation binds the
-# selected version to deep validation, device proof, frontend commit, style
-# hash, bounded public readback and an atomic receipt. Any failure restores the
-# previous aliases and rebuilds the regional frontend.
+# selected version to deep validation, browser and Caddy proofs, frontend
+# commit, style hash, bounded public readback and an atomic receipt. Any failure
+# restores the previous aliases and rebuilds the regional frontend.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" > /dev/null 2>&1 && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." > /dev/null 2>&1 && pwd)"
@@ -490,9 +490,11 @@ META_PATH="$VERSIONED_META" \
   EXPECTED_SIZE="$ARTIFACT_SIZE" \
   EXPECTED_SOURCE_COMMIT="$SOURCE_COMMIT" \
   EXPECTED_STYLE_SHA256="$STYLE_SHA256" \
+  EXPECTED_REPO_ROOT="$REPO_ROOT" \
   MAX_RELEASE_PROOF_AGE_HOURS="$MAX_RELEASE_PROOF_AGE_HOURS" \
   python3 << 'PY'
 import datetime as dt
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -500,6 +502,36 @@ from pathlib import Path
 
 def reject(message: str) -> None:
     raise SystemExit(message)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def evidence_file(raw_path: object, label: str, repo_root: Path) -> Path:
+    if not isinstance(raw_path, str) or not raw_path:
+        reject(f"Germany release evidence {label} path is invalid")
+    candidate = Path(raw_path)
+    if not candidate.is_absolute():
+        candidate = repo_root / candidate
+    absolute = Path(os.path.abspath(candidate))
+    current = Path(absolute.anchor)
+    for part in absolute.parts[1:]:
+        current /= part
+        if current.is_symlink():
+            reject(f"Germany release evidence {label} traverses a symlink")
+    if not absolute.is_file():
+        reject(f"Germany release evidence {label} is not a regular file")
+    proof_root = repo_root / "build" / "proofs"
+    try:
+        absolute.relative_to(proof_root)
+    except ValueError:
+        reject(f"Germany release evidence {label} is outside build/proofs")
+    return absolute
 
 
 def verify_raw_validation(validation: dict, size: int, label: str) -> None:
@@ -587,13 +619,17 @@ verify_raw_validation(fresh, expected_size, "fresh")
 
 required_release_proofs = {
     "desktop-maplibre",
-    "ipad-maplibre",
     "five-region-visual",
     "no-external-map-requests",
+    "staging-caddy-full",
     "staging-caddy-range",
 }
-if release.get("schema_version") != 1 or release.get("verdict") != "PROVEN":
-    reject("Germany release proof is not PROVEN")
+if (
+    release.get("schema_version") != 2
+    or release.get("kind") != "weltgewebe_germany_release_proof"
+    or release.get("verdict") != "PROVEN"
+):
+    reject("Germany release proof is not a schema-2 PROVEN browser/server proof")
 if release.get("basemap_version") != expected_version:
     reject("Germany release proof version mismatch")
 if release.get("artifact_sha256") != expected_sha256:
@@ -606,7 +642,27 @@ if release.get("style_sha256") != expected_style_sha256:
     reject("Germany release proof style hash mismatch")
 proofs = release.get("proofs")
 if not isinstance(proofs, list) or not required_release_proofs.issubset(proofs):
-    reject("Germany release proof is missing required browser/device evidence")
+    reject("Germany release proof is missing required browser/server evidence")
+
+evidence = release.get("evidence")
+expected_evidence_keys = {
+    "desktop_proof_path",
+    "desktop_proof_sha256",
+    "caddy_proof_path",
+    "caddy_proof_sha256",
+}
+if not isinstance(evidence, dict) or set(evidence) != expected_evidence_keys:
+    reject("Germany release proof evidence shape mismatch")
+repo_root = Path(os.environ["EXPECTED_REPO_ROOT"])
+for label in ("desktop", "caddy"):
+    proof_path = evidence_file(evidence.get(f"{label}_proof_path"), label, repo_root)
+    expected_proof_sha256 = evidence.get(f"{label}_proof_sha256")
+    if (
+        not isinstance(expected_proof_sha256, str)
+        or len(expected_proof_sha256) != 64
+        or sha256_file(proof_path) != expected_proof_sha256
+    ):
+        reject(f"Germany release evidence {label} SHA256 mismatch")
 
 proofed_at_raw = release.get("proofed_at")
 try:
@@ -623,7 +679,7 @@ if age > dt.timedelta(hours=int(os.environ["MAX_RELEASE_PROOF_AGE_HOURS"])):
     reject("Germany release proof is too old")
 PY
 
-echo "[✓] Germany version, validation and device release proof verified."
+echo "[✓] Germany version, validation, browser and Caddy release proof verified."
 
 # Re-evaluate checkout and freshness immediately before the first externally visible change.
 verify_checkout_clean

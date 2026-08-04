@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Assemble the fail-closed Germany basemap release-proof envelope."""
+"""Assemble the fail-closed Germany browser and server release proof."""
 
 from __future__ import annotations
 
@@ -20,9 +20,9 @@ from urllib.parse import urlsplit
 REGIONS = {"hamburg", "berlin", "cologne", "dresden", "munich"}
 REQUIRED_PROOFS = [
     "desktop-maplibre",
-    "ipad-maplibre",
     "five-region-visual",
     "no-external-map-requests",
+    "staging-caddy-full",
     "staging-caddy-range",
 ]
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
@@ -204,39 +204,6 @@ def validate_desktop(
     return parse_time(value.get("timestamp"), "desktop.timestamp", now)
 
 
-def validate_ipad(
-    value: dict[str, Any],
-    *,
-    proof_path: Path,
-    now: dt.datetime,
-    version: str,
-    artifact_sha256: str,
-    artifact_size: int,
-    frontend_commit: str,
-    style_sha256: str,
-) -> dt.datetime:
-    if value.get("schema_version") != 1 or value.get("verdict") != "PROVEN":
-        fail("iPad proof is not a schema-1 PROVEN proof")
-    if value.get("device_class") != "physical-ipad":
-        fail("iPad proof must come from a physical iPad")
-    if value.get("native_webview") != "WKWebView":
-        fail("iPad proof must use native WKWebView")
-    expected = {
-        "basemap_version": version,
-        "artifact_sha256": artifact_sha256,
-        "artifact_size_bytes": artifact_size,
-        "frontend_commit": frontend_commit,
-        "style_sha256": style_sha256,
-    }
-    for field, wanted in expected.items():
-        if value.get(field) != wanted:
-            fail(f"iPad proof {field} mismatch")
-    if value.get("staging_range_status") != 206:
-        fail("iPad proof does not establish staging HTTP 206")
-    require_empty_list(value.get("remote_violations"), "ipad.remote_violations")
-    validate_regions(value.get("regions"), "ipad.regions", proof_path.parent)
-    return parse_time(value.get("proofed_at"), "ipad.proofed_at", now)
-
 
 
 def private_staging_origin(value: Any, label: str) -> str:
@@ -348,10 +315,8 @@ def assemble(args: argparse.Namespace, now: dt.datetime | None = None) -> dict[s
     artifact = regular_file(Path(args.artifact), "artifact")
     style = regular_file(Path(args.style), "style")
     desktop_path = Path(args.desktop_proof)
-    ipad_path = Path(args.ipad_proof)
     caddy_path = Path(args.caddy_proof)
     desktop = load_json(desktop_path, "desktop proof")
-    ipad = load_json(ipad_path, "iPad proof")
     caddy = load_json(caddy_path, "Caddy proof")
 
     if not args.version or any(ch.isspace() for ch in args.version):
@@ -375,16 +340,6 @@ def assemble(args: argparse.Namespace, now: dt.datetime | None = None) -> dict[s
         frontend_commit=args.frontend_commit,
         style_sha256=style_sha256,
     )
-    ipad_time = validate_ipad(
-        ipad,
-        proof_path=ipad_path,
-        now=now,
-        version=args.version,
-        artifact_sha256=artifact_sha256,
-        artifact_size=artifact_size,
-        frontend_commit=args.frontend_commit,
-        style_sha256=style_sha256,
-    )
     caddy_time = validate_caddy(
         caddy,
         now=now,
@@ -392,12 +347,13 @@ def assemble(args: argparse.Namespace, now: dt.datetime | None = None) -> dict[s
         artifact_sha256=artifact_sha256,
         artifact_size=artifact_size,
     )
-    proofed_at = max(desktop_time, ipad_time, caddy_time).isoformat().replace(
+    proofed_at = max(desktop_time, caddy_time).isoformat().replace(
         "+00:00", "Z"
     )
 
     return {
-        "schema_version": 1,
+        "schema_version": 2,
+        "kind": "weltgewebe_germany_release_proof",
         "verdict": "PROVEN",
         "basemap_version": args.version,
         "artifact_sha256": artifact_sha256,
@@ -409,8 +365,6 @@ def assemble(args: argparse.Namespace, now: dt.datetime | None = None) -> dict[s
         "evidence": {
             "desktop_proof_path": desktop_path.as_posix(),
             "desktop_proof_sha256": sha256_file(desktop_path),
-            "ipad_proof_path": ipad_path.as_posix(),
-            "ipad_proof_sha256": sha256_file(ipad_path),
             "caddy_proof_path": caddy_path.as_posix(),
             "caddy_proof_sha256": sha256_file(caddy_path),
         },
@@ -422,7 +376,6 @@ def parser() -> argparse.ArgumentParser:
     result.add_argument("--artifact", required=True)
     result.add_argument("--style", required=True)
     result.add_argument("--desktop-proof", required=True)
-    result.add_argument("--ipad-proof", required=True)
     result.add_argument("--caddy-proof", required=True)
     result.add_argument("--version", required=True)
     result.add_argument("--frontend-commit", required=True)

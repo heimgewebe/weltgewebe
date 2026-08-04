@@ -297,7 +297,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn('"size_bytes": expected_size', activate)
         self.assertNotIn("prepared validation archive path mismatch", activate)
 
-    def test_activation_binds_device_proof_to_clean_frontend_style_and_time(
+    def test_activation_binds_browser_server_proof_to_clean_frontend_style_and_time(
         self,
     ) -> None:
         activate = ACTIVATE_SCRIPT.read_text(encoding="utf-8")
@@ -307,7 +307,7 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
             "proofed_at",
             "GERMANY_BASEMAP_RELEASE_PROOF_MAX_AGE_HOURS",
             "desktop-maplibre",
-            "ipad-maplibre",
+            "staging-caddy-full",
             "five-region-visual",
             "no-external-map-requests",
             "staging-caddy-range",
@@ -316,6 +316,12 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("Germany release proof frontend commit mismatch", activate)
         self.assertIn("Germany release proof style hash mismatch", activate)
         self.assertIn("Germany release proof is too old", activate)
+        self.assertIn("weltgewebe_germany_release_proof", activate)
+        self.assertIn("desktop_proof_sha256", activate)
+        self.assertIn("caddy_proof_sha256", activate)
+        self.assertIn("outside build/proofs", activate)
+        self.assertNotIn("ipad-maplibre", activate)
+        self.assertNotIn("WKWebView", activate)
         self.assertIn('git -C "$REPO_ROOT" diff --quiet', activate)
         self.assertIn('git -C "$REPO_ROOT" diff --cached --quiet', activate)
         self.assertIn("ls-files --others --exclude-standard", activate)

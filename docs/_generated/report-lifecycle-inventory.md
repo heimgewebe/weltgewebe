@@ -849,12 +849,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "The correctness of claims inside individual reports, runtime use of declared consumers, or deployment truth."
   ],
-  "generated_at": "2026-08-03T09:21:24+02:00",
+  "generated_at": "2026-08-04T18:28:10+02:00",
   "limitations": [
     "The inventory evaluates repository metadata, exact path references and declared control contracts, not runtime behaviour."
   ],
   "schema_version": 1,
-  "source_revision": "cdb54f957da49d4ded34b568c72f6140acfb1f45",
+  "source_revision": "aa0983511a8ce29ceb1803af178becc1d9564200",
   "sources": [
     {
       "path": ".wgx/generated-artifacts.yml",
@@ -1026,7 +1026,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/map-status.md",
-      "sha256": "d0539455d8aa508c008d4a25e55eb7dc71b6122fb3f08e112fff4401cc40939f"
+      "sha256": "745ed87d75b60c20da299cc4b1a982c24e49bef2c6ae4b650a3470c9c4862787"
     },
     {
       "path": "docs/reports/optimierungsbericht.md",
