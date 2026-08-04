@@ -35,10 +35,11 @@ describe("NodesOverlay visibility and zoom ownership", () => {
       relation("hidden-source", "missing", centerEndpoint),
       relation("hidden-target", "source", "missing"),
     ];
-
-    expect(filterVisibleWeaveEdges(points, edges).map((edge) => edge.id)).toEqual(
-      ["visible-alias"],
+    const visibleEdgeIds = filterVisibleWeaveEdges(points, edges).map(
+      (edge) => edge.id,
     );
+
+    expect(visibleEdgeIds).toEqual(["visible-alias"]);
   });
 
   it("owns and releases its MapLibre zoom listener", () => {

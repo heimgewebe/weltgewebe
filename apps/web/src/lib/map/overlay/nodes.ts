@@ -54,10 +54,11 @@ export function filterVisibleWeaveEdges(
       visibleIds.add(point.faden_endpoint_id);
     }
   }
-  return edges.filter(
-    (edge) =>
-      visibleIds.has(edge.source_id) && visibleIds.has(edge.target_id),
-  );
+  return edges.filter((edge) => {
+    return (
+      visibleIds.has(edge.source_id) && visibleIds.has(edge.target_id)
+    );
+  });
 }
 
 export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
@@ -69,27 +70,20 @@ function entityWeave(item: WeaveEntity): MapEntityWeave {
 }
 
 export function weaveRenderSignature(weave: MapEntityWeave): string {
-  const themes = weave.themeSegments
-    .map(({ color, startDeg, spanDeg }) => `${color}:${startDeg}:${spanDeg}`)
-    .join(",");
-  const arcs = weave.proposalArcs
-    .map(
-      ({ color, startDeg, spanDeg, opacity, voteThreadCount }) =>
-        `${color}:${startDeg}:${spanDeg}:${opacity}:${voteThreadCount}`,
-    )
-    .join(",");
-  return [
-    weave.primaryThemeColor,
-    weave.coreDensity,
-    weave.knottingThreadCount,
-    weave.conversationThreadCount,
-    weave.conversationOpacity,
-    weave.proposalCount,
-    weave.proposalOverflowCount,
-    weave.voteThreadCount,
-    themes,
-    arcs,
-  ].join("|");
+  let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.knottingThreadCount}|${weave.conversationThreadCount}|${weave.conversationOpacity}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}`;
+  for (const { color, startDeg, spanDeg } of weave.themeSegments) {
+    signature += `|${color}:${startDeg}:${spanDeg}`;
+  }
+  for (const {
+    color,
+    startDeg,
+    spanDeg,
+    opacity,
+    voteThreadCount,
+  } of weave.proposalArcs) {
+    signature += `|${color}:${startDeg}:${spanDeg}:${opacity}:${voteThreadCount}`;
+  }
+  return signature;
 }
 
 function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
@@ -145,7 +139,6 @@ export class NodesOverlay {
     {
       marker: Marker;
       element: HTMLElement;
-      item: MapEntityViewModel;
       weaveRoot: HTMLElement | null;
       weaveSignature: string | null;
       cleanup: () => void;
@@ -162,7 +155,11 @@ export class NodesOverlay {
     private map: MapLibreMap | null,
     private MarkerClass: MarkerConstructor,
   ) {
-    if (this.map) {
+    if (
+      this.map &&
+      typeof this.map.getZoom === "function" &&
+      typeof this.map.on === "function"
+    ) {
       this.updateZoom(this.map.getZoom());
       this.map.on("zoom", this.handleZoom);
     }
@@ -224,14 +221,14 @@ export class NodesOverlay {
     edges?: MapEdge[],
     nowMs = Date.now(),
   ): MapEntityViewModel[] {
-    const projectedPoints =
-      edges === undefined
-        ? points
-        : projectEntityWeaves(
-            points,
-            filterVisibleWeaveEdges(points, edges),
-            nowMs,
-          );
+    let projectedPoints = points;
+    if (edges !== undefined) {
+      projectedPoints = projectEntityWeaves(
+        points,
+        filterVisibleWeaveEdges(points, edges),
+        nowMs,
+      );
+    }
 
     if (!showNodes) {
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
@@ -268,10 +265,7 @@ export class NodesOverlay {
       }
 
       if (existing) {
-        existing.item = item;
-
         const { marker, element } = existing;
-        if (element.dataset.id !== item.id) element.dataset.id = item.id;
         const lngLat = marker.getLngLat();
         if (
           Math.abs(lngLat.lng - item.lon) > 0.000001 ||
@@ -283,11 +277,6 @@ export class NodesOverlay {
         const ariaLabel = accessibleMarkerLabel(item);
         if (element.getAttribute("aria-label") !== ariaLabel) {
           element.setAttribute("aria-label", ariaLabel);
-        }
-        const testId = `marker-${item.type}-${item.id}`;
-        if (element.dataset.testid !== testId) element.dataset.testid = testId;
-        if (element.dataset.markerCategory !== markerCategory) {
-          element.dataset.markerCategory = markerCategory;
         }
         if (item.type === "webgemeindezentrum") {
           if (element.dataset.locationState !== item.location_state) {
@@ -379,7 +368,6 @@ export class NodesOverlay {
         this.activeMarkers.set(item.id, {
           marker,
           element,
-          item,
           weaveRoot,
           weaveSignature,
           cleanup: () => {
@@ -454,7 +442,9 @@ export class NodesOverlay {
   }
 
   public destroy() {
-    if (this.map) this.map.off("zoom", this.handleZoom);
+    if (this.map && typeof this.map.off === "function") {
+      this.map.off("zoom", this.handleZoom);
+    }
     this.activeMarkers.forEach(({ cleanup }) => cleanup());
     this.activeMarkers.clear();
     this.searchMatchIds.clear();

@@ -9,12 +9,12 @@ import type {
   WeaveThemeSegment,
 } from "$lib/map/types";
 
-export const WEAVE_ZONE_ORDER = [
+export const WEAVE_ZONE_ORDER: MapEntityWeave["zoneOrder"] = [
   "knotting",
   "conversation",
   "proposal",
   "vote",
-] as const;
+];
 export const MAX_VISIBLE_PROPOSAL_ARCS = 8;
 
 const COLORS = [
@@ -41,16 +41,11 @@ const FALLBACK_COLOR = "#76523d";
 type WeaveEntity = MapEntityNode | MapEntityWebgemeindezentrum;
 type Group = {
   subjectId: string;
-  proposalThreadCount: number;
-  conversationThreadCount: number;
-  voteThreadCount: number;
-  bundledSubjectCount: number;
-  latestActivityAtMs: number;
-  opacity: number;
-};
-type ConversationActivity = {
-  count: number;
-  latestActivityAtMs: number;
+  proposals: number;
+  conversations: number;
+  votes: number;
+  bundled: number;
+  latestMs: number;
   opacity: number;
 };
 
@@ -72,7 +67,7 @@ function topics(entity: WeaveEntity): string[] {
   for (const value of raw) {
     if (typeof value !== "string") continue;
     const label = value.replace(/^[^:]{1,24}:/, "").trim();
-    const key = label.toLocaleLowerCase("de-DE");
+    const key = label.toLowerCase();
     if (!label || IGNORED_THEMES.has(key) || seen.has(key)) continue;
     seen.add(key);
     result.push(label.length > 42 ? `${label.slice(0, 39).trimEnd()}…` : label);
@@ -87,9 +82,9 @@ export function deriveWeaveThemeSegments(
   const labels = topics(entity);
   const spanDeg = 360 / labels.length;
   return labels.map((label, index) => ({
-    id: `${hash(label).toString(16)}-${index}`,
+    id: label,
     label,
-    color: COLORS[hash(label.toLocaleLowerCase("de-DE")) % COLORS.length],
+    color: COLORS[hash(label.toLowerCase()) % COLORS.length],
     startDeg: index * spanDeg,
     spanDeg,
   }));
@@ -98,11 +93,11 @@ export function deriveWeaveThemeSegments(
 function newGroup(subjectId: string): Group {
   return {
     subjectId,
-    proposalThreadCount: 0,
-    conversationThreadCount: 0,
-    voteThreadCount: 0,
-    bundledSubjectCount: 1,
-    latestActivityAtMs: 0,
+    proposals: 0,
+    conversations: 0,
+    votes: 0,
+    bundled: 1,
+    latestMs: 0,
     opacity: 0,
   };
 }
@@ -117,7 +112,13 @@ function proposalArcs(groups: Group[], color: string): WeaveProposalArc[] {
     (coverageDeg - gapDeg * Math.max(0, groups.length - 1)) / groups.length;
   const startDeg = (360 - coverageDeg) / 2;
   return groups.map((group, index) => ({
-    ...group,
+    subjectId: group.subjectId,
+    proposalThreadCount: group.proposals,
+    conversationThreadCount: group.conversations,
+    voteThreadCount: group.votes,
+    bundledSubjectCount: group.bundled,
+    latestActivityAtMs: group.latestMs,
+    opacity: group.opacity,
     color,
     startDeg: startDeg + index * (spanDeg + gapDeg),
     spanDeg,
@@ -126,16 +127,13 @@ function proposalArcs(groups: Group[], color: string): WeaveProposalArc[] {
 
 function mergeGroups(groups: Group[]): Group {
   const merged = newGroup("__proposal-overflow__");
-  merged.bundledSubjectCount = 0;
+  merged.bundled = 0;
   for (const group of groups) {
-    merged.proposalThreadCount += group.proposalThreadCount;
-    merged.conversationThreadCount += group.conversationThreadCount;
-    merged.voteThreadCount += group.voteThreadCount;
-    merged.bundledSubjectCount += group.bundledSubjectCount;
-    merged.latestActivityAtMs = Math.max(
-      merged.latestActivityAtMs,
-      group.latestActivityAtMs,
-    );
+    merged.proposals += group.proposals;
+    merged.conversations += group.conversations;
+    merged.votes += group.votes;
+    merged.bundled += group.bundled;
+    merged.latestMs = Math.max(merged.latestMs, group.latestMs);
     merged.opacity = Math.max(merged.opacity, group.opacity);
   }
   return merged;
@@ -148,85 +146,67 @@ export function deriveEntityWeave(
 ): MapEntityWeave {
   const themeSegments = deriveWeaveThemeSegments(entity);
   const primaryThemeColor = themeSegments[0]?.color ?? FALLBACK_COLOR;
-  const targets = new Set([entity.id]);
-  if (entity.type === "webgemeindezentrum")
-    targets.add(entity.faden_endpoint_id);
-
+  const endpointId =
+    entity.type === "webgemeindezentrum"
+      ? entity.faden_endpoint_id
+      : entity.id;
   const groups = new Map<string, Group>();
-  const conversations = new Map<string, ConversationActivity>();
   let knottingThreadCount = 0;
   let conversationThreadCount = 0;
   let conversationOpacity = 0;
   let totalActiveThreadCount = 0;
 
   for (const edge of edges) {
-    if (!edge.faden_type || !targets.has(edge.target_id)) continue;
+    if (
+      !edge.faden_type ||
+      (edge.target_id !== entity.id && edge.target_id !== endpointId)
+    ) {
+      continue;
+    }
     const opacity = edgeOpacityAt(edge, nowMs);
     if (opacity <= 0) continue;
-    const activityAtMs =
-      edge.lifecycle.kind === "faden" ? edge.lifecycle.createdAtMs : 0;
 
     if (edge.faden_type === "knotting") {
       knottingThreadCount += 1;
       totalActiveThreadCount += 1;
       continue;
     }
+
     if (edge.faden_type === "conversation") {
       conversationThreadCount += 1;
       conversationOpacity = Math.max(conversationOpacity, opacity);
       totalActiveThreadCount += 1;
-      if (edge.faden_subject_id) {
-        const activity = conversations.get(edge.faden_subject_id) ?? {
-          count: 0,
-          latestActivityAtMs: 0,
-          opacity: 0,
-        };
-        activity.count += 1;
-        activity.latestActivityAtMs = Math.max(
-          activity.latestActivityAtMs,
-          activityAtMs,
-        );
-        activity.opacity = Math.max(activity.opacity, opacity);
-        conversations.set(edge.faden_subject_id, activity);
-      }
-      continue;
     }
-    if (!edge.faden_subject_id) continue;
-    const group =
-      groups.get(edge.faden_subject_id) ?? newGroup(edge.faden_subject_id);
+
+    const subjectId = edge.faden_subject_id;
+    if (!subjectId) continue;
+    const group = groups.get(subjectId) ?? newGroup(subjectId);
     if (edge.faden_type === "proposal") {
-      group.proposalThreadCount += 1;
+      group.proposals += 1;
       totalActiveThreadCount += 1;
     } else if (edge.faden_type === "vote") {
-      group.voteThreadCount += 1;
+      group.votes += 1;
+    } else if (edge.faden_type === "conversation") {
+      group.conversations += 1;
     } else {
       continue;
     }
-    group.latestActivityAtMs = Math.max(group.latestActivityAtMs, activityAtMs);
+    const activityAtMs =
+      edge.lifecycle.kind === "faden" ? edge.lifecycle.createdAtMs : 0;
+    group.latestMs = Math.max(group.latestMs, activityAtMs);
     group.opacity = Math.max(group.opacity, opacity);
-    groups.set(edge.faden_subject_id, group);
-  }
-
-  for (const [subjectId, activity] of conversations) {
-    const group = groups.get(subjectId);
-    if (!group) continue;
-    group.conversationThreadCount = activity.count;
-    group.latestActivityAtMs = Math.max(
-      group.latestActivityAtMs,
-      activity.latestActivityAtMs,
-    );
-    group.opacity = Math.max(group.opacity, activity.opacity);
+    groups.set(subjectId, group);
   }
 
   const sorted = [...groups.values()]
-    .filter((group) => group.proposalThreadCount > 0)
+    .filter((group) => group.proposals > 0)
     .sort(
       (left, right) =>
-        right.latestActivityAtMs - left.latestActivityAtMs ||
+        right.latestMs - left.latestMs ||
         left.subjectId.localeCompare(right.subjectId),
     );
   const voteThreadCount = sorted.reduce(
-    (count, group) => count + group.voteThreadCount,
+    (count, group) => count + group.votes,
     0,
   );
   totalActiveThreadCount += voteThreadCount;
@@ -243,7 +223,7 @@ export function deriveEntityWeave(
     : sorted;
 
   return {
-    zoneOrder: [...WEAVE_ZONE_ORDER],
+    zoneOrder: WEAVE_ZONE_ORDER,
     themeSegments,
     primaryThemeColor,
     coreDensity: Math.min(
@@ -279,17 +259,11 @@ export function projectEntityWeaves(
   return entities.map((entity) => {
     if (entity.type === "garnrolle") return entity;
     const directEdges = edgesByTarget.get(entity.id) ?? [];
-    const endpointEdges =
+    const relatedEdges =
       entity.type === "webgemeindezentrum" &&
       entity.faden_endpoint_id !== entity.id
-        ? (edgesByTarget.get(entity.faden_endpoint_id) ?? [])
-        : [];
-    const relatedEdges =
-      directEdges.length && endpointEdges.length
-        ? [...directEdges, ...endpointEdges]
-        : directEdges.length
-          ? directEdges
-          : endpointEdges;
+        ? directEdges.concat(edgesByTarget.get(entity.faden_endpoint_id) ?? [])
+        : directEdges;
     return {
       ...entity,
       weave: deriveEntityWeave(entity, relatedEdges, nowMs),
