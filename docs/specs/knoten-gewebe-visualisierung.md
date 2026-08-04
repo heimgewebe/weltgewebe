@@ -1,3 +1,34 @@
+---
+id: specs.knoten-gewebe-visualisierung
+title: Knoten-Gewebevisualisierung
+summary: Kanonischer Produkt- und Renderingvertrag für gewachsene Knoten, Beteiligungszonen und antragsgebundene Stimmen auf der Karte.
+doc_type: specification
+status: canonical
+canonicality: normative
+lifecycle_state: active
+role: norm
+organ: product-map
+owner: product-map
+last_reviewed: 2026-08-04
+review_after: 2026-10-13
+depends_on:
+  - specs.garnrolle-knoten-faden
+  - specs.map-experience
+relations:
+  - type: relates_to
+    target: docs/specs/governance-antraege.md
+  - type: relates_to
+    target: docs/specs/ortsweberei-webgemeindezentrum.md
+verifies_with:
+  - apps/web/src/lib/map/weaveModel.ts
+  - apps/web/src/lib/map/weaveModel.test.ts
+  - apps/web/src/lib/map/overlay/nodes.ts
+  - apps/web/src/lib/map/overlay/nodes.test.ts
+  - apps/web/src/lib/map/overlay/edges.ts
+  - apps/web/src/lib/map/overlay/edges.test.ts
+  - apps/web/tests/woven-node-visualization.spec.ts
+  - apps/web/tests/garnrolle-marker-rendering.spec.ts
+---
 # Knoten-Gewebevisualisierung
 
 Status: Produkt- und Renderingvertrag für die erste umsetzbare Stufe.
