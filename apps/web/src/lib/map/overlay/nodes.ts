@@ -96,6 +96,7 @@ export class NodesOverlay {
     {
       marker: Marker;
       element: HTMLElement;
+      item: MapEntityViewModel;
       weaveRoot: HTMLElement | null;
       weaveSignature: string | null;
       cleanup: () => void;
@@ -229,6 +230,7 @@ export class NodesOverlay {
       }
 
       if (existing) {
+        existing.item = item;
         const { marker, element } = existing;
         const lngLat = marker.getLngLat();
         if (
@@ -345,6 +347,7 @@ export class NodesOverlay {
         this.activeMarkers.set(item.id, {
           marker,
           element,
+          item,
           weaveRoot,
           weaveSignature,
           cleanup: () => {
