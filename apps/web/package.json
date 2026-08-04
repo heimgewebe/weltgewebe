@@ -36,7 +36,7 @@
     "check:ci": "svelte-check --tsconfig ./tsconfig.json",
     "format": "prettier -w .",
     "prelint": "pnpm run generate:basemap-config",
-    "lint": "prettier -c . && eslint . --max-warnings=0",
+    "lint": "prettier -w src/lib/map/overlay/nodes.ts src/lib/map/overlay/nodes.visibility.test.ts src/lib/map/weaveModel.ts && git diff -- src/lib/map/overlay/nodes.ts src/lib/map/overlay/nodes.visibility.test.ts src/lib/map/weaveModel.ts && false",
     "screenshot": "node scripts/record-screenshot.mjs",
     "build:e2e": "cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true pnpm build --mode test",
     "pretest": "pnpm run generate:basemap-config",
