@@ -100,12 +100,9 @@ export function deriveEntityWeave(
   nowMs: number,
 ): MapEntityWeave {
   const themeSegments = deriveWeaveThemeSegments(entity);
-  const primaryThemeColor =
-    themeSegments[0]?.color ?? WEAVE_FALLBACK_COLOR;
+  const primaryThemeColor = themeSegments[0]?.color ?? WEAVE_FALLBACK_COLOR;
   const endpointId =
-    entity.type === "webgemeindezentrum"
-      ? entity.faden_endpoint_id
-      : entity.id;
+    entity.type === "webgemeindezentrum" ? entity.faden_endpoint_id : entity.id;
   const groups = new Map<string, Group>();
   let knottingThreadCount = 0;
   let conversationThreadCount = 0;

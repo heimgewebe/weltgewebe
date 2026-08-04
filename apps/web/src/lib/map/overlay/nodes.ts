@@ -49,9 +49,7 @@ export function filterVisibleWeaveEdges(
     }
   }
   return edges.filter((edge) => {
-    return (
-      visibleIds.has(edge.source_id) && visibleIds.has(edge.target_id)
-    );
+    return visibleIds.has(edge.source_id) && visibleIds.has(edge.target_id);
   });
 }
 
@@ -297,9 +295,7 @@ export class NodesOverlay {
           visual.append(icon);
         } else {
           const category =
-            item.type === "webgemeindezentrum"
-              ? "webgemeindezentrum"
-              : "node";
+            item.type === "webgemeindezentrum" ? "webgemeindezentrum" : "node";
           const woven = runtime
             ? runtime.createRoot(item as WeaveEntity, category)
             : {

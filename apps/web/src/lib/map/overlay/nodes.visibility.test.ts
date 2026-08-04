@@ -8,11 +8,7 @@ import {
 } from "./nodes";
 import { weaveRuntime } from "./weaveRuntime";
 
-function relation(
-  id: string,
-  sourceId: string,
-  targetId: string,
-): MapEdge {
+function relation(id: string, sourceId: string, targetId: string): MapEdge {
   return {
     id,
     source_id: sourceId,
