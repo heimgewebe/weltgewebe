@@ -282,9 +282,9 @@ download_verified_auxiliary() {
 LAKE_CENTERLINES_PATH="$AUXILIARY_DIR/$LAKE_CENTERLINES_FILE"
 WATER_POLYGONS_PATH="$AUXILIARY_DIR/$WATER_POLYGONS_FILE"
 NATURAL_EARTH_PATH="$AUXILIARY_DIR/$NATURAL_EARTH_FILE"
-download_verified_auxiliary   "lake centerlines"   "$LAKE_CENTERLINES_URL"   "$LAKE_CENTERLINES_SHA256"   "$LAKE_CENTERLINES_PATH"
-download_verified_auxiliary   "water polygons"   "$WATER_POLYGONS_URL"   "$WATER_POLYGONS_SHA256"   "$WATER_POLYGONS_PATH"
-download_verified_auxiliary   "Natural Earth"   "$NATURAL_EARTH_URL"   "$NATURAL_EARTH_SHA256"   "$NATURAL_EARTH_PATH"
+download_verified_auxiliary "lake centerlines" "$LAKE_CENTERLINES_URL" "$LAKE_CENTERLINES_SHA256" "$LAKE_CENTERLINES_PATH"
+download_verified_auxiliary "water polygons" "$WATER_POLYGONS_URL" "$WATER_POLYGONS_SHA256" "$WATER_POLYGONS_PATH"
+download_verified_auxiliary "Natural Earth" "$NATURAL_EARTH_URL" "$NATURAL_EARTH_SHA256" "$NATURAL_EARTH_PATH"
 
 BUILD_RUN_ID="${GERMANY_BASEMAP_BUILD_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 [[ "$BUILD_RUN_ID" =~ ^[A-Za-z0-9][A-Za-z0-9_.-]{0,80}$ ]] ||

@@ -284,6 +284,16 @@ test.describe("Basemap Real Germany Visual Runtime Proof", () => {
             body: JSON.stringify(mockListResponse(route.request().url(), [])),
           });
         }
+        if (
+          pathname === "/api/webgemeindezentren" ||
+          pathname.startsWith("/api/webgemeindezentren/")
+        ) {
+          return route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(mockListResponse(route.request().url(), [])),
+          });
+        }
         if (pathname === "/api/health" || pathname.startsWith("/api/health/")) {
           return route.fulfill({
             status: 200,

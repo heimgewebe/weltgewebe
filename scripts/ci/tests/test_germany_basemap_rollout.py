@@ -409,8 +409,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("--use-wikidata=false", builder)
         docker_at = builder.index('if ! python3 "$SCRIPT_DIR/run-measured-container.py"')
         verification_at = builder.index(
-            'download_verified_auxiliary \
-  "Natural Earth"'
+            'download_verified_auxiliary "Natural Earth" '
+            '"$NATURAL_EARTH_URL" "$NATURAL_EARTH_SHA256" '
+            '"$NATURAL_EARTH_PATH"'
         )
         self.assertLess(verification_at, docker_at)
         self.assertNotIn("--download", builder[docker_at:])
