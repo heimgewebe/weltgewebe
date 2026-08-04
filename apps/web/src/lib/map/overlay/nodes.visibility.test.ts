@@ -17,7 +17,7 @@ function relation(id: string, sourceId: string, targetId: string): MapEdge {
 }
 
 describe("NodesOverlay visibility and zoom ownership", () => {
-  it("projects only relations whose two drawable endpoints are visible", () => {
+  it("keeps relations for visible weave targets when source markers are filtered out", () => {
     const centerEndpoint = "22222222-2222-5222-8222-222222222222";
     const points = [
       { type: "node", id: "source" },
@@ -28,15 +28,15 @@ describe("NodesOverlay visibility and zoom ownership", () => {
       },
     ] as MapEntityViewModel[];
     const edges = [
-      relation("visible-alias", "source", centerEndpoint),
-      relation("hidden-source", "missing", centerEndpoint),
+      relation("visible-source", "source", centerEndpoint),
+      relation("filtered-source", "missing", centerEndpoint),
       relation("hidden-target", "source", "missing"),
     ];
     const visibleEdgeIds = filterVisibleWeaveEdges(points, edges).map(
       (edge) => edge.id,
     );
 
-    expect(visibleEdgeIds).toEqual(["visible-alias"]);
+    expect(visibleEdgeIds).toEqual(["visible-source", "filtered-source"]);
   });
 
   it("owns and releases its MapLibre zoom listener", () => {

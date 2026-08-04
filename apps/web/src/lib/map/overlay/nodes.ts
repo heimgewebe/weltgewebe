@@ -41,16 +41,14 @@ export function filterVisibleWeaveEdges(
   points: MapEntityViewModel[],
   edges: MapEdge[],
 ): MapEdge[] {
-  const visibleIds = new Set<string>();
+  const visibleTargetIds = new Set<string>();
   for (const point of points) {
-    visibleIds.add(point.id);
+    visibleTargetIds.add(point.id);
     if (point.type === "webgemeindezentrum") {
-      visibleIds.add(point.faden_endpoint_id);
+      visibleTargetIds.add(point.faden_endpoint_id);
     }
   }
-  return edges.filter((edge) => {
-    return visibleIds.has(edge.source_id) && visibleIds.has(edge.target_id);
-  });
+  return edges.filter((edge) => visibleTargetIds.has(edge.target_id));
 }
 
 export function weaveRenderSignature(weave: MapEntityWeave): string {

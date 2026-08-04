@@ -120,5 +120,18 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(14));
     await expect(woven).toHaveAttribute("data-weave-detail", "detail");
     await expect(woven.locator('[data-zone="vote"]').first()).toBeVisible();
+
+    await page.evaluate(
+      (nodeKind) => (window as any).__TEST_SET_ACTIVE_FILTERS__([nodeKind]),
+      demoNodes[0].kind || "Knoten",
+    );
+    await expect(
+      page.locator('[data-testid^="marker-garnrolle-"]'),
+    ).toHaveCount(0);
+    await expect(marker).toBeVisible();
+    await expect(woven).toHaveAttribute("data-knotting-threads", "1");
+    await expect(woven).toHaveAttribute("data-conversation-threads", "2");
+    await expect(woven).toHaveAttribute("data-proposal-count", "2");
+    await expect(woven).toHaveAttribute("data-vote-threads", "2");
   });
 });
