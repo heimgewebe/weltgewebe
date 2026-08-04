@@ -1190,15 +1190,30 @@ async fn postgres_node_create_allows_jsonl_account_write_source() -> Result<()> 
     Ok(())
 }
 
-/// J. Node creation and later edits share one stable seven-day Knüpffaden.
-/// Real patches and full replacements may change the node version, but they
-/// must neither replace nor multiply the account→node relation. Semantic
-/// no-ops keep both the node version and the single Faden unchanged.
+/// J. Node creation and later edits share one stable Knüpffaden.
+/// Real patches and full replacements restart its seven-day projection
+/// lifecycle without replacing or multiplying the account→node relation.
+/// Semantic no-ops keep both the node version and the Faden lifecycle unchanged.
 #[tokio::test]
 #[ignore = "requires DATABASE_URL pointing to direct PostgreSQL"]
 #[serial]
 async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation() -> Result<()> {
     const ACTOR_ID: &str = "10000000-0000-4000-8000-000000000013";
+
+    async fn faden_lifecycle(
+        pool: &PgPool,
+        actor_id: &str,
+        node_id: &str,
+    ) -> Result<(chrono::DateTime<chrono::Utc>, chrono::DateTime<chrono::Utc>)> {
+        Ok(sqlx::query_as(
+            "SELECT created_at, (payload->>'expires_at')::timestamptz
+             FROM domain_edges WHERE source_id = $1 AND target_id = $2",
+        )
+        .bind(actor_id)
+        .bind(node_id)
+        .fetch_one(pool)
+        .await?)
+    }
 
     let pool = connect_pool().await;
     run_migrations(&pool).await;
@@ -1246,7 +1261,13 @@ async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation(
             .bind(node_id)
             .fetch_one(&pool)
             .await?;
+    let initial_faden_lifecycle = faden_lifecycle(&pool, ACTOR_ID, node_id).await?;
+    assert_eq!(
+        initial_faden_lifecycle.1 - initial_faden_lifecycle.0,
+        chrono::Duration::days(7),
+    );
 
+    tokio::time::sleep(Duration::from_millis(2)).await;
     let patched_response = app
         .clone()
         .oneshot(patch_node_req(
@@ -1285,6 +1306,15 @@ async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation(
             .fetch_one(&pool)
             .await?;
     assert_eq!(after_patch_edge_id, initial_edge_id);
+    let after_patch_lifecycle = faden_lifecycle(&pool, ACTOR_ID, node_id).await?;
+    assert!(
+        after_patch_lifecycle.0 > initial_faden_lifecycle.0,
+        "a real patch must restart the existing Knüpffaden lifecycle",
+    );
+    assert_eq!(
+        after_patch_lifecycle.1 - after_patch_lifecycle.0,
+        chrono::Duration::days(7),
+    );
 
     let lifetimes: Vec<f64> = sqlx::query_scalar(
         "SELECT EXTRACT(EPOCH FROM ((payload->>'expires_at')::timestamptz - created_at))::double precision
@@ -1320,6 +1350,11 @@ async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation(
     assert_eq!(
         after_noop_count, 1,
         "an empty patch must not inflate the stable relation",
+    );
+    let after_noop_lifecycle = faden_lifecycle(&pool, ACTOR_ID, node_id).await?;
+    assert_eq!(
+        after_noop_lifecycle, after_patch_lifecycle,
+        "an empty patch must not extend the Faden lifecycle",
     );
 
     let identical_info_response = app
@@ -1362,7 +1397,13 @@ async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation(
         after_semantic_noops, 1,
         "identical info and visibility patches must not inflate the stable relation",
     );
+    let after_semantic_noops_lifecycle = faden_lifecycle(&pool, ACTOR_ID, node_id).await?;
+    assert_eq!(
+        after_semantic_noops_lifecycle, after_patch_lifecycle,
+        "identical patches must not extend the Faden lifecycle",
+    );
 
+    tokio::time::sleep(Duration::from_millis(2)).await;
     let replaced_response = app
         .clone()
         .oneshot(replace_node_req(
@@ -1395,6 +1436,15 @@ async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation(
             .fetch_one(&pool)
             .await?;
     assert_eq!(after_replace_edge_id, initial_edge_id);
+    let after_replace_lifecycle = faden_lifecycle(&pool, ACTOR_ID, node_id).await?;
+    assert!(
+        after_replace_lifecycle.0 > after_patch_lifecycle.0,
+        "a real replacement must restart the existing Knüpffaden lifecycle",
+    );
+    assert_eq!(
+        after_replace_lifecycle.1 - after_replace_lifecycle.0,
+        chrono::Duration::days(7),
+    );
 
     let replaced_etag = format!(
         "\"{}\"",
@@ -1426,6 +1476,11 @@ async fn postgres_node_edits_reuse_stable_expiring_faden_without_noop_inflation(
     assert_eq!(
         after_identical_replace, 1,
         "an identical full replacement must not inflate the stable relation",
+    );
+    let after_identical_replace_lifecycle = faden_lifecycle(&pool, ACTOR_ID, node_id).await?;
+    assert_eq!(
+        after_identical_replace_lifecycle, after_replace_lifecycle,
+        "an identical replacement must not extend the Faden lifecycle",
     );
 
     clean_all_nodes(&pool).await;
