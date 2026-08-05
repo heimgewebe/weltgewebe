@@ -139,6 +139,47 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
       "data-marker-category",
       "webgemeindezentrum",
     );
+    await expect(marker).toHaveClass(/is-selected/);
+    const anchorBeforeFocus = await marker.boundingBox();
+    if (!anchorBeforeFocus) throw new Error("center marker bounds missing");
+    const halo = marker.locator(".map-marker__halo");
+    await expect(halo).toHaveCSS("width", "68px");
+    await expect(halo).toHaveCSS("opacity", "1");
+    await marker.focus();
+    await expect(marker).toBeFocused();
+    const combinedFocusSelection = await marker.evaluate((element) => {
+      const markerBox = element.getBoundingClientRect();
+      const haloElement =
+        element.querySelector<HTMLElement>(".map-marker__halo")!;
+      return {
+        markerWidth: markerBox.width,
+        markerHeight: markerBox.height,
+        markerBottom: markerBox.bottom,
+        boxShadow: getComputedStyle(haloElement).boxShadow,
+      };
+    });
+    expect(combinedFocusSelection.markerWidth).toBe(44);
+    expect(combinedFocusSelection.markerHeight).toBe(44);
+    expect(combinedFocusSelection.boxShadow).toContain("0px 0px 0px 3px");
+    expect(combinedFocusSelection.boxShadow).toContain("0px 0px 10px");
+    expect(
+      Math.abs(
+        combinedFocusSelection.markerBottom -
+          (anchorBeforeFocus.y + anchorBeforeFocus.height),
+      ),
+    ).toBeLessThanOrEqual(0.1);
+    const haloExtendsBeyondCenter = await marker.evaluate((element) => {
+      const haloBox = element
+        .querySelector<HTMLElement>(".map-marker__halo")!
+        .getBoundingClientRect();
+      const visualBox = element
+        .querySelector<HTMLElement>(".marker-webgemeindezentrum__visual")!
+        .getBoundingClientRect();
+      return (
+        haloBox.width > visualBox.width && haloBox.height > visualBox.height
+      );
+    });
+    expect(haloExtendsBeyondCenter).toBe(true);
 
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
@@ -191,6 +232,7 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
     await expect(marker).toBeVisible();
     await marker.focus();
     await expect(marker).toBeFocused();
+    await expect(marker.locator(".map-marker__halo")).toHaveCSS("opacity", "1");
     await page.keyboard.press("Enter");
 
     await expect(page.getByTestId("context-panel")).toBeVisible();

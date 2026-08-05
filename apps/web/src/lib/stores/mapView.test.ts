@@ -14,7 +14,8 @@ import {
   deriveFilteredMarkers,
   deriveSearchResults,
   deriveSearchMatchIds,
-  deriveVisibleEdges,
+  deriveWeaveEdges,
+  deriveLineEdges,
   getFilterTypeKey,
   toMapSelection,
   selectMapEntity,
@@ -292,7 +293,7 @@ describe("mapView presentation helpers", () => {
     expect(results[0].type).toBe("garnrolle");
   });
 
-  it("keeps only edges whose endpoints are both visible", () => {
+  it("separates target-visible weave edges from two-endpoint line edges", () => {
     const scene = sceneFrom([makeNode()], [makeAccount()]);
     const edges: Edge[] = [
       {
@@ -303,6 +304,12 @@ describe("mapView presentation helpers", () => {
       },
       {
         id: "e2",
+        source_id: "outside-visible-markers",
+        target_id: "acc-1",
+        edge_kind: "reference",
+      },
+      {
+        id: "e3",
         source_id: "node-1",
         target_id: "missing",
         edge_kind: "reference",
@@ -310,16 +317,41 @@ describe("mapView presentation helpers", () => {
     ];
 
     const allVisible = deriveFilteredMarkers(scene.entities, new Set());
-    expect(deriveVisibleEdges(edges, allVisible).map((e) => e.id)).toEqual([
+    expect(deriveWeaveEdges(edges, allVisible).map((edge) => edge.id)).toEqual([
+      "e1",
+      "e2",
+    ]);
+    expect(deriveLineEdges(edges, allVisible).map((edge) => edge.id)).toEqual([
       "e1",
     ]);
 
-    // Filtering out the garnrolle removes the edge that needs it.
+    // Filtering out the Garnrolle removes the target body and therefore both
+    // the Gewebekante and its strictere Linienkante.
     const onlyNodes = deriveFilteredMarkers(
       scene.entities,
       new Set(["Werkstatt"]),
     );
-    expect(deriveVisibleEdges(edges, onlyNodes)).toHaveLength(0);
+    expect(deriveWeaveEdges(edges, onlyNodes)).toHaveLength(0);
+    expect(deriveLineEdges(edges, onlyNodes)).toHaveLength(0);
+  });
+
+  it("keeps governance Fäden visible through the center endpoint alias", () => {
+    const account = makeAccount();
+    const center = makeCenter();
+    const scene = sceneFrom([], [account], [], [center]);
+    const edges: Edge[] = [
+      {
+        id: "proposal-edge",
+        source_id: account.id,
+        target_id: center.faden_endpoint_id,
+        edge_kind: "reference",
+        faden_type: "proposal",
+        faden_subject_id: "proposal-a",
+      },
+    ];
+
+    expect(deriveWeaveEdges(edges, scene.entities)).toHaveLength(1);
+    expect(deriveLineEdges(edges, scene.entities)).toHaveLength(1);
   });
 
   it("getFilterTypeKey distinguishes nodes, Garnrollen and Webgemeindezentren", () => {

@@ -1075,6 +1075,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
 - [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
 - [relates_to] docs/specs/garnrolle-knoten-faden.md
+- [relates_to] docs/specs/knoten-gewebe-visualisierung.md
 - [relates_to] docs/specs/objektlebenszyklen-und-loeschwirkungen.md
 
 ## docs/specs/list-pagination-api.md
@@ -1105,6 +1106,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/adr/ADR-0015__ortsweberei-gewebezelle-webgemeindezentrum.md
 - [relates_to] docs/domain/vocabulary.md
 - [relates_to] docs/specs/governance-antraege.md
+- [relates_to] docs/specs/knoten-gewebe-visualisierung.md
 - [relates_to] docs/specs/map-experience.md
 
 ## docs/specs/privacy-api.md

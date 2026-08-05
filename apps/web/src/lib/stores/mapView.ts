@@ -11,7 +11,8 @@
  *  - Auswahlzustand (selection)   -> `selectMapEntity()` delegates to uiView.
  *  - Markerbeschreibung (markers) -> `deriveFilteredMarkers`,
  *                                    `deriveAvailableFilterTypes`,
- *                                    `deriveSearchMatchIds`, `deriveVisibleEdges`.
+ *                                    `deriveSearchMatchIds`, `deriveWeaveEdges`,
+ *                                    `deriveLineEdges`.
  *  - Paneldaten (panel feed)      -> the selected entity travels via uiView's
  *                                    `selection.data`; this module only feeds it
  *                                    through `toMapSelection` / `selectMapEntity`.
@@ -145,16 +146,40 @@ function isEdge(e: unknown): e is Edge {
   );
 }
 
-/** Edges whose endpoints are both currently visible markers. */
-export function deriveVisibleEdges<T extends Edge>(
+function visibleEndpointIds(
+  filteredMarkers: MapEntityViewModel[],
+): Set<string> {
+  const visibleIds = new Set<string>();
+  for (const marker of filteredMarkers) {
+    visibleIds.add(marker.id);
+    if (marker.type === "webgemeindezentrum") {
+      visibleIds.add(marker.faden_endpoint_id);
+    }
+  }
+  return visibleIds;
+}
+
+/** Gewebekanten: Der Zielkörper ist sichtbar; die Quelle darf ausgefiltert sein. */
+export function deriveWeaveEdges<T extends Edge>(
   edges: T[],
   filteredMarkers: MapEntityViewModel[],
 ): T[] {
-  const validEdges = edges.filter(isEdge);
-  const visibleIds = new Set(filteredMarkers.map((p) => p.id));
-  return validEdges.filter(
-    (e) => visibleIds.has(e.source_id) && visibleIds.has(e.target_id),
-  );
+  const visibleIds = visibleEndpointIds(filteredMarkers);
+  return edges.filter(isEdge).filter((edge) => visibleIds.has(edge.target_id));
+}
+
+/** Linienkanten: Quelle und Ziel sind beide als Marker sichtbar. */
+export function deriveLineEdges<T extends Edge>(
+  edges: T[],
+  filteredMarkers: MapEntityViewModel[],
+): T[] {
+  const visibleIds = visibleEndpointIds(filteredMarkers);
+  return edges
+    .filter(isEdge)
+    .filter(
+      (edge) =>
+        visibleIds.has(edge.source_id) && visibleIds.has(edge.target_id),
+    );
 }
 
 function normalizeSelectionType(

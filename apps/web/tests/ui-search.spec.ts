@@ -114,6 +114,9 @@ test.describe("Search mode", () => {
     );
     await expect(highlightedMarker).toBeVisible();
     await expect(highlightedMarker).toHaveAttribute("data-id", "mock-node-1");
+    const searchHalo = highlightedMarker.locator(".map-marker__halo");
+    await expect(searchHalo).toHaveCSS("width", "68px");
+    await expect(searchHalo).toHaveCSS("opacity", "1");
 
     const direction = page.getByTestId("search-direction-node-mock-node-1");
     await expect(direction).toBeVisible();

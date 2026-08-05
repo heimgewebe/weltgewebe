@@ -6,6 +6,7 @@ import type {
 } from "maplibre-gl";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import { LAYERS } from "./layers";
 
 export const EDGE_VISUAL_STYLE = {
@@ -17,10 +18,10 @@ export const EDGE_VISUAL_STYLE = {
   mainWidth: 2.25,
   dashArray: [1.4, 0.7] as [number, number],
   byType: {
-    conversation: { color: "#76523d", width: 2.15, dashArray: [1.4, 0.7] },
-    proposal: { color: "#68402f", width: 3.05, dashArray: [2.4, 0.28] },
-    knotting: { color: "#7b4f30", width: 2.75, dashArray: [3.2, 0.2] },
-    vote: { color: "#5f463d", width: 1.85, dashArray: [0.35, 0.82] },
+    conversation: { width: 2.15, dashArray: [1.4, 0.7] },
+    proposal: { width: 3.05, dashArray: [2.4, 0.28] },
+    knotting: { width: 2.75, dashArray: [3.2, 0.2] },
+    vote: { width: 1.85, dashArray: [0.35, 0.82] },
   },
 } as const;
 
@@ -29,7 +30,7 @@ const EDGE_LAYER_VARIANTS = [
     fadenType: "legacy",
     layerId: LAYERS.EDGES_LAYER,
     haloLayerId: LAYERS.EDGES_HALO_LAYER,
-    color: EDGE_VISUAL_STYLE.mainColor,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     width: EDGE_VISUAL_STYLE.mainWidth,
     dashArray: EDGE_VISUAL_STYLE.dashArray,
   },
@@ -37,27 +38,70 @@ const EDGE_LAYER_VARIANTS = [
     fadenType: "conversation",
     layerId: LAYERS.EDGES_CONVERSATION_LAYER,
     haloLayerId: LAYERS.EDGES_CONVERSATION_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.conversation,
   },
   {
     fadenType: "proposal",
     layerId: LAYERS.EDGES_PROPOSAL_LAYER,
     haloLayerId: LAYERS.EDGES_PROPOSAL_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.proposal,
   },
   {
     fadenType: "knotting",
     layerId: LAYERS.EDGES_KNOTTING_LAYER,
     haloLayerId: LAYERS.EDGES_KNOTTING_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.knotting,
   },
   {
     fadenType: "vote",
     layerId: LAYERS.EDGES_VOTE_LAYER,
     haloLayerId: LAYERS.EDGES_VOTE_HALO_LAYER,
+    fallbackColor: EDGE_VISUAL_STYLE.mainColor,
     ...EDGE_VISUAL_STYLE.byType.vote,
   },
 ] as const;
+
+/**
+ * Every layer a complete typed Faden style owns, derived from the variants
+ * themselves so a new thread type cannot be forgotten here. Halo before line,
+ * matching the render order.
+ */
+export const EDGE_THREAD_LAYER_IDS: readonly string[] =
+  EDGE_LAYER_VARIANTS.flatMap((variant) => [
+    variant.haloLayerId,
+    variant.layerId,
+  ]);
+
+/** Minimal surface a style-readiness check needs; keeps it unit-testable. */
+export type EdgeStyleProbe = {
+  getSource: (id: string) => unknown;
+  getLayer: (id: string) => unknown;
+};
+
+/**
+ * The edge style counts as fully rehydrated only when the shared source and
+ * *every* canonical halo and line layer exist. Checking the source plus two
+ * legacy layers would call a half-restored style ready and silently drop the
+ * typed threads after a style switch.
+ */
+export function hasCompleteEdgeThreadStyle(
+  map: EdgeStyleProbe | null | undefined,
+): boolean {
+  if (!map || !map.getSource(LAYERS.EDGES_SOURCE)) return false;
+  return EDGE_THREAD_LAYER_IDS.every((layerId) =>
+    Boolean(map.getLayer(layerId)),
+  );
+}
+
+function primaryThemeColor(point: MapEntityViewModel): string | undefined {
+  if (point.type !== "node" && point.type !== "webgemeindezentrum") {
+    return undefined;
+  }
+  return point.weave?.primaryThemeColor ?? primaryWeaveColor(point);
+}
 
 export function buildEdgeFeatures(
   edges: MapEdge[],
@@ -84,6 +128,7 @@ export function buildEdgeFeatures(
     const target = pointMap.get(edge.target_id);
     if (!source || !target) continue;
 
+    const themeColor = primaryThemeColor(target);
     features.push({
       type: "Feature",
       geometry: {
@@ -98,6 +143,7 @@ export function buildEdgeFeatures(
         kind: edge.edge_kind,
         fadenType: edge.faden_type ?? "legacy",
         fadenSubjectId: edge.faden_subject_id ?? null,
+        ...(themeColor ? { themeColor } : {}),
         opacity,
       },
     });
@@ -152,7 +198,11 @@ export function buildEdgeLayerSpecifications(
       filter,
       layout: commonLayout,
       paint: {
-        "line-color": variant.color,
+        "line-color": [
+          "coalesce",
+          ["get", "themeColor"],
+          variant.fallbackColor,
+        ],
         "line-width": variant.width,
         "line-opacity": opacity,
         "line-dasharray": dashArray,

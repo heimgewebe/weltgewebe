@@ -186,6 +186,7 @@ Generated automatically. Do not edit.
 | specs.contract | Historischer Entwurf: Tombstone und Key-Erase | reference | active | docs/specs/contract.md |
 | specs.garnrolle-knoten-faden | Garnrolle, Knoten und Faden | specification | canonical | docs/specs/garnrolle-knoten-faden.md |
 | specs.governance-antraege | Anträge, Konsent, Veto und Abstimmung | specification | canonical | docs/specs/governance-antraege.md |
+| specs.knoten-gewebe-visualisierung | Knoten-Gewebevisualisierung | specification | canonical | docs/specs/knoten-gewebe-visualisierung.md |
 | specs.list-pagination-api | List Pagination API Spec | reference | active | docs/specs/list-pagination-api.md |
 | specs.map-experience | Kartenerlebnis | specification | canonical | docs/specs/map-experience.md |
 | specs.objektlebenszyklen-und-loeschwirkungen | Objektlebenszyklen und Löschwirkungen | specification | canonical | docs/specs/objektlebenszyklen-und-loeschwirkungen.md |

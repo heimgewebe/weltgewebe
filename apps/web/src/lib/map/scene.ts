@@ -73,7 +73,7 @@ function mapNodesToEntities(nodes: Node[]): MapEntityNode[] {
     summary: n.summary,
     info: n.info,
     kind: n.kind,
-    tags: n.tags,
+    tags: n.tags ?? [],
     modules: n.modules,
     created_at: n.created_at,
     updated_at: n.updated_at,

@@ -21,9 +21,9 @@ test.describe("smoke", () => {
 
     await expect(page.locator("#map")).toBeVisible();
 
-    // Wait for markers to appear to ensure data is loaded
-    // "fairschenkbox" is the title in the new schema-compliant demo data
-    const marker = page.locator('.map-marker[aria-label="fairschenkbox"]');
+    // Wait for a semantic node marker. Its accessible name intentionally
+    // includes the active woven participation counts after the title.
+    const marker = page.locator('.map-marker[aria-label^="fairschenkbox."]');
     await expect(marker).toBeVisible();
 
     expect(consoleLogs).toEqual([]);

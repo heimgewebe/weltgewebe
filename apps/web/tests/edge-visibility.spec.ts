@@ -122,7 +122,11 @@ test.describe("Edge visibility on load", () => {
     expect(edgeState.haloColor).toBe(EDGE_VISUAL_STYLE.haloColor);
     expect(edgeState.haloWidth).toBe(EDGE_VISUAL_STYLE.haloWidth);
     expect(edgeState.haloBlur).toBe(EDGE_VISUAL_STYLE.haloBlur);
-    expect(edgeState.mainColor).toBe(EDGE_VISUAL_STYLE.mainColor);
+    expect(edgeState.mainColor).toEqual([
+      "coalesce",
+      ["get", "themeColor"],
+      EDGE_VISUAL_STYLE.mainColor,
+    ]);
     expect(edgeState.mainWidth).toBe(EDGE_VISUAL_STYLE.mainWidth);
     expect(edgeState.mainOpacity).toEqual([
       "coalesce",

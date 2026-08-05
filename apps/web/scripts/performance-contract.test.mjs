@@ -385,3 +385,17 @@ test("rejects a symlinked canonical contract", (t) => {
     /path contains symbolic link: policies\/performance\.v1\.json/,
   );
 });
+
+test("binds E2E instrumentation to the actual Vite build without running the production budget hook", () => {
+  const packageJson = JSON.parse(
+    readFileSync(resolve(repositoryRoot, "apps/web/package.json"), "utf8"),
+  );
+  const e2eBuild = packageJson.scripts?.["build:e2e"];
+  assert.equal(typeof e2eBuild, "string");
+  assert.match(
+    e2eBuild,
+    /cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true vite build --mode test/,
+  );
+  assert.doesNotMatch(e2eBuild, /\bpnpm build\b/);
+  assert.doesNotMatch(e2eBuild, /assert-route-performance-budget/);
+});

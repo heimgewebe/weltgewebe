@@ -1,7 +1,11 @@
 import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
 import type { MapEntityViewModel } from "$lib/map/types";
+import type { WeaveEntity } from "$lib/map/weaveTheme";
 import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
+import { weaveRuntime, type WeaveRuntime } from "./weaveRuntime";
+
+export { projectMarkersForWeave } from "./weaveRuntime";
 
 function hasRenderablePosition(item: MapEntityViewModel): boolean {
   return (
@@ -40,16 +44,46 @@ export class NodesOverlay {
       marker: Marker;
       element: HTMLElement;
       item: MapEntityViewModel;
+      weaveRoot: HTMLElement | null;
+      weaveSignature: string | null;
       cleanup: () => void;
     }
   >();
   private searchMatchIds = new Set<string>();
   private selectedMarkerId: string | null = null;
+  private compactWeave = false;
+  private readonly handleZoom = () => {
+    if (this.map) this.updateZoom(this.map.getZoom());
+  };
 
   constructor(
-    private map: MapLibreMap,
+    private map: MapLibreMap | null,
     private MarkerClass: MarkerConstructor,
-  ) {}
+    private readonly runtime: WeaveRuntime = weaveRuntime,
+  ) {
+    if (
+      this.map &&
+      typeof this.map.getZoom === "function" &&
+      typeof this.map.on === "function"
+    ) {
+      this.updateZoom(this.map.getZoom());
+      this.map.on("zoom", this.handleZoom);
+    }
+  }
+
+  private syncWeaveDetail(root: HTMLElement) {
+    root.classList.toggle("woven-node--compact", this.compactWeave);
+    root.dataset.weaveDetail = this.compactWeave ? "compact" : "detail";
+  }
+
+  public updateZoom(zoom: number) {
+    const compact = zoom < 13.5;
+    if (compact === this.compactWeave) return;
+    this.compactWeave = compact;
+    for (const { weaveRoot } of this.activeMarkers.values()) {
+      if (weaveRoot) this.syncWeaveDetail(weaveRoot);
+    }
+  }
 
   private getMarkerCategory(
     type: MapEntityViewModel["type"],
@@ -66,19 +100,21 @@ export class NodesOverlay {
     if (item.type !== "webgemeindezentrum") return;
     const visual = element.children[0] as HTMLElement | undefined;
     if (!visual) return;
-    visual.style.borderStyle =
-      item.location_state === "confirmed" ? "" : "dashed";
+    const borderStyle = item.location_state === "confirmed" ? "" : "dashed";
+    if (visual.style.borderStyle !== borderStyle) {
+      visual.style.borderStyle = borderStyle;
+    }
   }
 
-  public update(points: MapEntityViewModel[], showNodes: boolean) {
-    if (!this.map) return;
-
+  public update(points: MapEntityViewModel[], showNodes: boolean): void {
     if (!showNodes) {
-      // If hidden, remove all
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
       this.activeMarkers.clear();
       return;
     }
+
+    const map = this.map;
+    if (!map) return;
 
     const currentIds = new Set<string>();
 
@@ -96,8 +132,6 @@ export class NodesOverlay {
       const markerCategory = this.getMarkerCategory(item.type);
       let existing = this.activeMarkers.get(item.id);
 
-      // A stable id may only keep its DOM marker when the semantic category
-      // is unchanged. Otherwise stale styling/interaction would misdescribe it.
       if (
         existing &&
         existing.element.dataset.markerCategory !== markerCategory
@@ -107,14 +141,9 @@ export class NodesOverlay {
         existing = undefined;
       }
 
-      // Check if we need to update or create
       if (existing) {
-        // Update item data to prevent stale data in delegated events
         existing.item = item;
-
-        // Update position if changed
         const { marker, element } = existing;
-        element.dataset.id = item.id;
         const lngLat = marker.getLngLat();
         if (
           Math.abs(lngLat.lng - item.lon) > 0.000001 ||
@@ -122,21 +151,27 @@ export class NodesOverlay {
         ) {
           marker.setLngLat([item.lon, item.lat]);
         }
-        // Update attributes
-        if (element.title !== item.title) {
-          element.title = item.title;
-          element.setAttribute("aria-label", item.title);
+        if (element.title !== item.title) element.title = item.title;
+        const ariaLabel = this.runtime.label(item);
+        if (element.getAttribute("aria-label") !== ariaLabel) {
+          element.setAttribute("aria-label", ariaLabel);
         }
-        element.dataset.testid = `marker-${item.type}-${item.id}`;
-        element.dataset.markerCategory = markerCategory;
         if (item.type === "webgemeindezentrum") {
-          element.dataset.locationState = item.location_state;
-        } else {
+          if (element.dataset.locationState !== item.location_state) {
+            element.dataset.locationState = item.location_state;
+          }
+        } else if ("locationState" in element.dataset) {
           delete element.dataset.locationState;
         }
         this.syncWebgemeindezentrumAppearance(element, item);
+        if (existing.weaveRoot && item.type !== "garnrolle") {
+          existing.weaveSignature = this.runtime.syncRoot(
+            existing.weaveRoot,
+            item,
+            existing.weaveSignature,
+          );
+        }
       } else {
-        // Create new
         const element = document.createElement("button");
         element.type = "button";
         element.className =
@@ -146,19 +181,13 @@ export class NodesOverlay {
               ? "map-marker marker-webgemeindezentrum"
               : "map-marker";
 
-        // Identifying data for event delegation
         element.dataset.id = item.id;
         element.dataset.markerCategory = markerCategory;
         if (item.type === "webgemeindezentrum") {
           element.dataset.locationState = item.location_state;
         }
-
-        // Robust testing selector based on domain semantics (and unique ID for stability)
         element.dataset.testid = `marker-${item.type}-${item.id}`;
 
-        // MapLibre owns the outer element's transform for geographic positioning.
-        // All Weltgewebe styling and interaction transforms therefore live on
-        // an inner visual element so map movement can never be CSS-interpolated.
         const visual = document.createElement("span");
         visual.className =
           markerCategory === "account"
@@ -168,7 +197,9 @@ export class NodesOverlay {
               : "map-marker__visual marker-node__visual";
         visual.setAttribute("aria-hidden", "true");
 
-        if (markerCategory === "account") {
+        let weaveRoot: HTMLElement | null = null;
+        let weaveSignature: string | null = null;
+        if (item.type === "garnrolle") {
           const icon = document.createElement("img");
           icon.className = "marker-account__icon";
           icon.src = garnrolleIcon;
@@ -176,11 +207,22 @@ export class NodesOverlay {
           icon.setAttribute("aria-hidden", "true");
           icon.draggable = false;
           visual.append(icon);
-        } else if (markerCategory === "webgemeindezentrum") {
-          const icon = document.createElement("span");
-          icon.className = "marker-webgemeindezentrum__icon";
-          icon.setAttribute("aria-hidden", "true");
-          visual.append(icon);
+        } else {
+          const category =
+            item.type === "webgemeindezentrum" ? "webgemeindezentrum" : "node";
+          const woven = this.runtime.createRoot(item as WeaveEntity, category);
+          weaveRoot = woven.root;
+          weaveSignature = woven.signature;
+          this.syncWeaveDetail(weaveRoot);
+          if (item.type === "webgemeindezentrum") {
+            const icon = document.createElement("span");
+            icon.className = "marker-webgemeindezentrum__icon";
+            icon.setAttribute("aria-hidden", "true");
+            icon.append(weaveRoot);
+            visual.append(icon);
+          } else {
+            visual.append(weaveRoot);
+          }
         }
 
         const halo = document.createElement("span");
@@ -190,16 +232,15 @@ export class NodesOverlay {
         element.append(visual, halo);
         this.syncWebgemeindezentrumAppearance(element, item);
 
-        element.setAttribute("aria-label", item.title);
+        element.setAttribute("aria-label", this.runtime.label(item));
         element.title = item.title;
 
         const marker = new this.MarkerClass({ element, anchor: "bottom" })
           .setLngLat([item.lon, item.lat])
-          .addTo(this.map);
-
-        // Re-apply accessibility attributes after addTo()
-        element.setAttribute("aria-label", item.title);
-        element.title = item.title;
+          .addTo(map);
+        // MapLibre assigns its generic "Map marker" label in the constructor.
+        // Restore the domain-specific woven summary after that synchronous step.
+        element.setAttribute("aria-label", this.runtime.label(item));
 
         if (this.searchMatchIds.has(item.id)) {
           element.classList.add("search-highlight");
@@ -215,6 +256,8 @@ export class NodesOverlay {
           marker,
           element,
           item,
+          weaveRoot,
+          weaveSignature,
           cleanup: () => {
             marker.remove();
           },
@@ -222,7 +265,6 @@ export class NodesOverlay {
       }
     }
 
-    // Cleanup removed markers
     for (const [id, { cleanup }] of this.activeMarkers.entries()) {
       if (!currentIds.has(id)) {
         cleanup();
@@ -287,6 +329,9 @@ export class NodesOverlay {
   }
 
   public destroy() {
+    if (this.map && typeof this.map.off === "function") {
+      this.map.off("zoom", this.handleZoom);
+    }
     this.activeMarkers.forEach(({ cleanup }) => cleanup());
     this.activeMarkers.clear();
     this.searchMatchIds.clear();
