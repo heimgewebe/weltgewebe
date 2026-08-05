@@ -117,7 +117,9 @@ jobs:
           --changed-to "$GITHUB_SHA"
 
       - name: Test generated artifact control
-        run: uv run --project tools/py --locked python -m unittest scripts.docmeta.tests.test_validate_generated_artifacts -v
+        run: >-
+          uv run --project tools/py --locked python -m unittest
+          scripts.docmeta.tests.test_validate_generated_artifacts -v
 
       - name: run-ci-validate
         run: make ci-validate
