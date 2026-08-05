@@ -8,6 +8,7 @@ name: agent-safety-preflight
       - "tools/py/pyproject.toml"
       - "tools/py/uv.lock"
       - "toolchain.versions.yml"
+      - ".python-version"
       - "scripts/contracts-agent-check.sh"
       - "scripts/docmeta/generate_agent_readiness.py"
       - "scripts/docmeta/tests/test_generate_agent_readiness.py"
