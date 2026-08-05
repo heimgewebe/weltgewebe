@@ -73,10 +73,7 @@ require_root_safe_directory "$release_dir_real" "resolved release directory"
 require_root_safe_directory "$release_dir_real/scripts" "release scripts directory"
 require_root_safe_directory "$release_dir_real/scripts/ops" "release ops directory"
 installer="$release_dir_real/scripts/ops/install-production-reconciler.sh"
-web_push_bootstrap="$release_dir_real/scripts/ops/ensure_web_push_vapid_env.py"
 require_root_safe_regular_file "$installer" "release installer"
-require_root_safe_regular_file "$web_push_bootstrap" "Web Push VAPID bootstrap"
-require_root_safe_regular_file "$RUNTIME_ENV" "runtime environment"
 [[ -x "$installer" ]] || fail "release installer is not executable: $installer"
 
 if ! release_head="$(git -c core.hooksPath=/dev/null -C "$release_dir_real" rev-parse --verify 'HEAD^{commit}' 2> /dev/null)"; then
@@ -85,6 +82,9 @@ fi
 [[ "$release_head" == "$COMMIT" ]] ||
   fail "release HEAD does not match commit: expected $COMMIT, got $release_head"
 
+web_push_bootstrap="$release_dir_real/scripts/ops/ensure_web_push_vapid_env.py"
+require_root_safe_regular_file "$web_push_bootstrap" "Web Push VAPID bootstrap"
+require_root_safe_regular_file "$RUNTIME_ENV" "runtime environment"
 python3 -I "$web_push_bootstrap" \
   --env-file "$RUNTIME_ENV" \
   --contact "$WEB_PUSH_CONTACT" \
