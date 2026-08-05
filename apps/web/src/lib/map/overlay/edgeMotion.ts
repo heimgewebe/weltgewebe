@@ -47,6 +47,8 @@ export interface EdgeMotionInput {
   target: LngLatTuple;
   kind: string;
   fadenType?: FadenType | "legacy";
+  /** Shared approach corridor (`faden_subject_id`); null/absent = private fallback. */
+  fadenSubjectId?: string | null;
   themeColor?: string;
   themeColors?: string[];
   opacity?: number;
@@ -161,6 +163,7 @@ export function resolveEdgeMotionInput(
     target: [target.lon, target.lat],
     kind: edge.edge_kind,
     fadenType: edge.faden_type ?? "legacy",
+    fadenSubjectId: edge.faden_subject_id ?? null,
     ...theme,
   };
 }
@@ -412,14 +415,21 @@ export class EdgeMotionController {
         if (progress <= 0) continue;
         const palette = this.motionPalette(motion.input);
         const fadenType = motion.input.fadenType ?? "legacy";
+        // Same curve identity as the static projection: thread id + subject corridor.
         const segments = buildProgressClippedThemeSegments(
           motion.input.source,
           motion.input.target,
           palette,
           progress,
+          {
+            fadenType,
+            threadId: motion.input.id,
+            subjectId: motion.input.fadenSubjectId ?? null,
+          },
         );
         for (let strand = 0; strand < segments.length; strand += 1) {
           const segment = segments[strand];
+          if (segment.coordinates.length < 2) continue;
           features.push({
             type: "Feature",
             geometry: {
@@ -430,6 +440,7 @@ export class EdgeMotionController {
               id: motion.input.id,
               kind: motion.input.kind,
               fadenType,
+              fadenSubjectId: motion.input.fadenSubjectId ?? null,
               themeColor: segment.color,
               themeColors: palette,
               themeStrand: strand,
@@ -488,6 +499,19 @@ export class EdgeMotionController {
       const dashArray = [...variant.dashArray] as [number, number];
       const bodyWidth = variant.width;
       if (!this.map.getLayer(shadowId)) {
+        const shadowPaint: LineLayerSpecification["paint"] = {
+          "line-color": EDGE_VISUAL_STYLE.shadowColor,
+          "line-width": bodyWidth + EDGE_VISUAL_STYLE.shadowWidthExtra,
+          "line-blur": EDGE_VISUAL_STYLE.shadowBlur,
+          "line-opacity": [
+            "*",
+            ["coalesce", ["to-number", ["get", "opacity"]], 0],
+            EDGE_VISUAL_STYLE.shadowOpacityFactor,
+          ],
+        };
+        if (!variant.shadowContinuous) {
+          shadowPaint["line-dasharray"] = dashArray;
+        }
         this.map.addLayer(
           {
             id: shadowId,
@@ -495,17 +519,7 @@ export class EdgeMotionController {
             source: EDGE_MOTION_SOURCE,
             filter,
             layout: commonLayout,
-            paint: {
-              "line-color": EDGE_VISUAL_STYLE.shadowColor,
-              "line-width": bodyWidth + EDGE_VISUAL_STYLE.shadowWidthExtra,
-              "line-blur": EDGE_VISUAL_STYLE.shadowBlur,
-              "line-opacity": [
-                "*",
-                ["coalesce", ["to-number", ["get", "opacity"]], 0],
-                EDGE_VISUAL_STYLE.shadowOpacityFactor,
-              ],
-              "line-dasharray": dashArray,
-            },
+            paint: shadowPaint,
           },
           this.map.getLayer(bodyId)
             ? bodyId
@@ -515,6 +529,18 @@ export class EdgeMotionController {
         );
       }
       if (!this.map.getLayer(bodyId)) {
+        const bodyPaint: LineLayerSpecification["paint"] = {
+          "line-color": [
+            "coalesce",
+            ["get", "themeColor"],
+            variant.fallbackColor,
+          ],
+          "line-width": bodyWidth,
+          "line-opacity": ["coalesce", ["to-number", ["get", "opacity"]], 0],
+        };
+        if (!variant.bodyContinuous) {
+          bodyPaint["line-dasharray"] = dashArray;
+        }
         this.map.addLayer(
           {
             id: bodyId,
@@ -522,20 +548,7 @@ export class EdgeMotionController {
             source: EDGE_MOTION_SOURCE,
             filter,
             layout: commonLayout,
-            paint: {
-              "line-color": [
-                "coalesce",
-                ["get", "themeColor"],
-                variant.fallbackColor,
-              ],
-              "line-width": bodyWidth,
-              "line-opacity": [
-                "coalesce",
-                ["to-number", ["get", "opacity"]],
-                0,
-              ],
-              "line-dasharray": dashArray,
-            },
+            paint: bodyPaint,
           },
           this.map.getLayer(highlightId) ? highlightId : firstSymbolId,
         );
@@ -559,6 +572,7 @@ export class EdgeMotionController {
                 ["coalesce", ["to-number", ["get", "opacity"]], 0],
                 EDGE_VISUAL_STYLE.highlightOpacityFactor,
               ],
+              // Braid/fiber rhythm lives primarily on the narrow highlight.
               "line-dasharray": dashArray,
             },
           },

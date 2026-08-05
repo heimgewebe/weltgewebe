@@ -183,23 +183,50 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
 - **Fäden** nutzen eine performante Garnillusion aus begrenzten MapLibre-Layern
   pro Fadenart: subtiler Schatten/Unterzug, farbiger Garnkörper, feiner
   Licht-/Faserakzent. Static- und Motion-Pfad teilen exakt dieselbe
-  Stildefinition (`EDGE_VISUAL_STYLE` / `EDGE_THREAD_VARIANTS`). Typen
-  `knotting`, `conversation`, `proposal`, `vote` und `legacy` bleiben über
-  Breite und sinnvolle Flecht-/Dash-Rhythmen unterscheidbar — keine
-  Straßenmarkierungs- und keine Perlenoptik.
-- **Mehrfarbige Segmente** halten feste Farbsäume entlang der Geometrie. An
-  belegten WebGL-Nahtstellen (runde Line-Caps) gilt eine stabile, minimale
-  geometrische Überdeckung der Segmentenden. Wandernde Farbsäume und
-  unbewiesene Gradient-Experimente sind unzulässig.
+  Stildefinition (`EDGE_VISUAL_STYLE` / `EDGE_THREAD_VARIANTS`) und dieselbe
+  Kurvengeometrie. Typen `knotting`, `conversation`, `proposal`, `vote` und
+  `legacy` bleiben über Breite, Spannungsprofil und sinnvolle
+  Flecht-/Dash-Rhythmen unterscheidbar — keine Straßenmarkierungs- und keine
+  Perlenoptik.
+- **Kurvengeometrie:** Kanonische Fadenlinien sind deterministische, begrenzt
+  abgetastete kubische Bézier-Pfade (oder gleichwertig), keine geraden
+  technischen Linien und keine Kapselketten. Quelle und Ziel bleiben exakt
+  unverändert. Austritt und Einzug liegen nahezu am Sehnenverlauf; die Mitte
+  trägt einen weiten natürlichen Bogen. Kurze Wege bleiben fast gerade; die
+  laterale Auslenkung ist nach Bildschirmentfernung (Chordlänge) begrenzt.
+  Biegungsseite und Mikrovariation entstehen stabil aus Fadenidentität
+  (`threadId` / `faden_subject_id`), nicht aus Zufall, Wellen oder
+  Physiksimulation. Die Abtastpunktzahl ist fest begrenzt
+  (`EDGE_CURVE_MAX_SAMPLES`); es gibt keine per-frame Neuberechnung der
+  Kontrollpunkte und keine Kollisionserkennung.
+- **Spannungs- und Materialprofile** pro Fadenart (`THREAD_CURVE_PROFILES`):
+  Knüpffaden straff, gering gekrümmt und kräftig; Gespräch weich, weiter,
+  leicht asymmetrisch und dünner; Antrag ruhig, mittlere Spannung und breiter;
+  Stimme schmal, antragsbezogen und ohne unabhängige Großkurve. Belegte
+  `faden_subject_id` bindet antragsbezogene Fäden (Antrag/Stimme) in einen
+  gemeinsamen Einzugskorridor (gleiche Biegungsseite und Basiskurve);
+  ohne belegte Subject-ID gilt ein sicherer thread-lokaler Fallback ohne
+  erfundene Beziehung.
+- **Schatten und Garnkörper** sind bei Knüpfen, Gespräch und Antrag weitgehend
+  kontinuierlich; der Flecht-/Faserrhythmus lebt primär im schmalen Highlight.
+  Stimme darf am Körper stichartiger bleiben, behält aber einen feinen
+  kontinuierlichen Schatten-Zusammenhang.
+- **Mehrfarbige Segmente** und Erzeugungs-/Auflösungsanimation segmentieren
+  nach tatsächlicher Kurvenlänge (Bogenfortschritt) und nutzen exakt dieselbe
+  Pfadgeometrie wie der statische Faden. Farbsäume bleiben in diesem
+  Fortschrittsraum fest. An belegten WebGL-Nahtstellen (runde Line-Caps) gilt
+  eine stabile, minimale geometrische Überdeckung der Segmentenden. Wandernde
+  Farbsäume und unbewiesene Gradient-Experimente sind unzulässig.
 
 ## Zentraler Linienanschluss
 
 Kartenkoordinate, MapLibre-Markeranker und sichtbares X- bzw. Garnrollen-Zentrum
-stimmen exakt überein (`anchor: center`). Fadenlinien laufen geometrisch bis zur
-tatsächlichen Mitte jedes Knotens bzw. jeder runden Garnrolle und werden nicht
-am Markerumfang abgeschnitten. Sie liegen unter dem DOM-Marker (WebGL-Ebenen
-vor Symbol- und Marker-DOM), sodass sie optisch in die Mitte eingezogen werden.
-`faden_endpoint_id` bleibt der strikt gültige Alias für Webgemeindezentren.
+stimmen exakt überein (`anchor: center`). Fadenlinien laufen als geglättete
+Kurven geometrisch bis zur tatsächlichen Mitte jedes Knotens bzw. jeder runden
+Garnrolle (exakte Endpunkte) und werden nicht am Markerumfang abgeschnitten. Sie
+liegen unter dem DOM-Marker (WebGL-Ebenen vor Symbol- und Marker-DOM), sodass
+sie optisch in die Mitte eingezogen werden. `faden_endpoint_id` bleibt der
+strikt gültige Alias für Webgemeindezentren.
 
 ## Schichten und Interaktion
 
