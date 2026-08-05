@@ -8,6 +8,7 @@ import {
   buildEdgeFeatures,
   buildEdgeLayerSpecifications,
   hasCompleteEdgeThreadStyle,
+  updateEdges,
 } from "$lib/map/overlay/edges";
 import { LAYERS } from "$lib/map/overlay/layers";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
@@ -130,6 +131,52 @@ describe("buildEdgeFeatures", () => {
     expect(
       buildEdgeFeatures([edge], points.slice(0, 1), true, createdAt),
     ).toEqual([]);
+  });
+
+  it("defensively drops edges with non-finite or out-of-range endpoints", () => {
+    const invalidPoints = [
+      { id: "source", lat: Number.NaN, lon: 9.9 },
+      { id: "target", lat: 53.6, lon: 10.0 },
+    ] as MapEntityViewModel[];
+    const outOfRange = [
+      { id: "source", lat: 53.5, lon: 9.9 },
+      { id: "target", lat: 91, lon: 10.0 },
+    ] as MapEntityViewModel[];
+
+    expect(buildEdgeFeatures([edge], invalidPoints, true, createdAt)).toEqual(
+      [],
+    );
+    expect(buildEdgeFeatures([edge], outOfRange, true, createdAt)).toEqual([]);
+  });
+});
+
+describe("updateEdges source readiness", () => {
+  it("installs the empty GeoJSON source and every canonical layer", () => {
+    const sources = new Map<string, { data: unknown }>();
+    const layers = new Map<string, unknown>();
+    const map = {
+      getSource: (id: string) => sources.get(id),
+      addSource: (id: string, spec: { data: unknown }) => {
+        sources.set(id, { data: spec.data });
+      },
+      getLayer: (id: string) => layers.get(id),
+      addLayer: (layer: { id: string }) => {
+        layers.set(layer.id, layer);
+      },
+      getStyle: () => ({ layers: [{ id: "labels", type: "symbol" }] }),
+    };
+
+    updateEdges(map as never, [], points, true, createdAt);
+
+    expect(sources.has(LAYERS.EDGES_SOURCE)).toBe(true);
+    expect(
+      (sources.get(LAYERS.EDGES_SOURCE)?.data as GeoJSON.FeatureCollection)
+        .features,
+    ).toEqual([]);
+    for (const layerId of EDGE_THREAD_LAYER_IDS) {
+      expect(layers.has(layerId)).toBe(true);
+    }
+    expect(hasCompleteEdgeThreadStyle(map)).toBe(true);
   });
 });
 
