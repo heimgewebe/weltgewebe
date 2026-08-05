@@ -95,11 +95,6 @@ jobs:
       - name: Sync hash-locked Python tooling
         run: uv sync --project tools/py --locked
 
-      # Host interpreter still runs scripts/ci unittest discover + one pytest file
-      # in make validate; pin the same PyYAML revision as tools/py for parity.
-      - name: Install host pytest and PyYAML for Makefile host-python entries
-        run: python -m pip install --disable-pip-version-check --no-cache-dir pytest==8.3.4 pyyaml==6.0.2
-
       - name: Report lifecycle global strict
         run: uv run --project tools/py --locked python -m scripts.docmeta.validate_report_lifecycle --mode strict
 

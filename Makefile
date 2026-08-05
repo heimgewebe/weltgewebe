@@ -20,8 +20,8 @@ require-uv-tooling:
 		echo "Install the version pinned in toolchain.versions.yml (see docs/runbooks/uv-tooling.md)." >&2; \
 		exit 1; \
 	}
-	@$(UV_RUN) python -c "import sys, yaml; assert sys.version_info >= (3, 11), sys.version; assert yaml.__version__ == '6.0.2', yaml.__version__" || { \
-		echo "ERROR: tools/py environment drifted (need Python >=3.11 and locked PyYAML==6.0.2)." >&2; \
+	@$(UV_RUN) python -c "import sys, yaml, pytest; assert sys.version_info >= (3, 11), sys.version; assert yaml.__version__ == '6.0.2', yaml.__version__; assert pytest.__version__ == '8.3.4', pytest.__version__" || { \
+		echo "ERROR: tools/py environment drifted (need Python >=3.11, PyYAML==6.0.2, pytest==8.3.4)." >&2; \
 		echo "Run: uv sync --project tools/py --locked" >&2; \
 		exit 1; \
 	}
@@ -34,10 +34,9 @@ agent-contract-check: require-uv-tooling
 validate-tests: require-uv-tooling agent-contract-check
 	$(UV_RUN) python -m unittest discover scripts/docmeta/tests/
 	$(UV_RUN) python -m unittest discover scripts/agent/tests/
-	# scripts/ci/tests still includes a few host-pytest modules; keep discover on
-	# the CI-provisioned interpreter. Agent/platform contracts above stay uv-bound.
-	$(CI_TEST_GIT_ENV) python3 -m unittest discover scripts/ci/tests/
-	python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py
+	# Full make validate Python path is tools/py only (no bare host python3).
+	$(CI_TEST_GIT_ENV) $(UV_RUN) python -m unittest discover scripts/ci/tests/
+	$(UV_RUN) python -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py
 	$(UV_RUN) python scripts/docmeta/validate_claim_registry.py
 	$(UV_RUN) python scripts/docmeta/validate_doc_freshness_registry.py
 	$(UV_RUN) python -m scripts.docmeta.generate_claim_evidence_map --check

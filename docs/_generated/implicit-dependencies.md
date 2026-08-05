@@ -14,8 +14,6 @@ Generated automatically. Do not edit.
 
 | Source | Inferred Dependency | Evidence | Documented |
 | --- | --- | --- | --- |
-| Makefile (validate-tests) | unittest | `$(CI_TEST_GIT_ENV) python3 -m unittest discover scripts/ci/tests/` | *unclear* |
-| Makefile (validate-tests) | pytest | `python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py` | *unclear* |
 | Makefile (validate-guards) | scripts/docmeta/repo-structure-guard.sh | `bash scripts/docmeta/repo-structure-guard.sh` | *unclear* |
 | Makefile (validate-guards) | scripts/docmeta/docs-relations-guard.sh | `bash scripts/docmeta/docs-relations-guard.sh` | *unclear* |
 | Makefile (validate-guards) | scripts/docmeta/generated-files-guard.sh | `bash scripts/docmeta/generated-files-guard.sh` | *unclear* |

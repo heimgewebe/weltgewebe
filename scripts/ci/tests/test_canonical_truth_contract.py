@@ -33,7 +33,16 @@ class CanonicalTruthContractTests(unittest.TestCase):
             encoding="utf-8"
         )
         main_workflow = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
-        self.assertIn("pytest==8.3.4 pyyaml==6.0.2", docs_workflow)
+        pyproject = (ROOT / "tools/py/pyproject.toml").read_text(encoding="utf-8")
+        # docs-guard / make validate use the single hash-locked tools/py environment.
+        self.assertIn("uv sync --project tools/py --locked", docs_workflow)
+        self.assertNotRegex(
+            docs_workflow,
+            r"pip install .*pytest|pip install .*PyYAML|pip install .*pyyaml",
+        )
+        self.assertIn("PyYAML==6.0.2", pyproject)
+        self.assertIn("pytest==8.3.4", pyproject)
+        # Remaining host-path jobs outside make validate still pin the same versions.
         self.assertIn("pytest==8.3.4 pyyaml==6.0.2", main_workflow)
 
     def test_required_check_catalog_is_strict_and_matches_trusted_producers(
