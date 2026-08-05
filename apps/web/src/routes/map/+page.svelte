@@ -785,6 +785,9 @@
     // build a map, bind listeners and register protocols that nobody ever
     // removes. Every await in the initialiser therefore re-checks this flag.
     let destroyed = false;
+    // A terminal init failure owns this mount. Late async imports may settle,
+    // but they must not construct or revive a map after the failure UI won.
+    let mapInitTerminated = false;
     // One minute changes a seven-day linear opacity by less than 0.0001.
     // Exact expiry remains a separate timeout and is therefore not rounded.
     const edgeDecayInterval = window.setInterval(
@@ -801,14 +804,52 @@
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
+
+    function teardownMapRuntime() {
+      cleanupKomposition?.();
+      cleanupKomposition = undefined;
+      cleanupFocus?.();
+      cleanupFocus = undefined;
+      unsubscribeSysState?.();
+      unsubscribeSysState = undefined;
+      cleanupAuthCamera?.();
+      cleanupAuthCamera = undefined;
+      searchViewportResizeObserver?.disconnect();
+      searchViewportResizeObserver = null;
+      if (searchDirectionFrame !== null) {
+        window.cancelAnimationFrame(searchDirectionFrame);
+        searchDirectionFrame = null;
+      }
+      searchDirectionIndicators = [];
+      nodesOverlay?.destroy();
+      nodesOverlay = null;
+      projectMarkersForWeave = null;
+      edgeMotion?.destroy();
+      edgeMotion = null;
+      resolveMotionInput = null;
+      if (map) {
+        map.off("zoom", updateGarnrolleMarkerScale);
+        map.off("move", handleSearchMapMove);
+        map.off("resize", handleSearchMapResize);
+        map.off("styledata", handleMapStyleData);
+        map.off("idle", rehydrateMapOverlays);
+        if (typeof map.remove === "function") map.remove();
+        map = null;
+      }
+      mapStyleReady = false;
+      mapContainer?.removeEventListener("click", handleMarkerClick);
+      releasePmtilesProtocol?.();
+      releasePmtilesProtocol = undefined;
+    }
+
     const failMapInit = (
       reason: Parameters<typeof resolveMapInitFailure>[1],
       error?: unknown,
     ) => {
-      if (destroyed) return;
+      if (destroyed || mapInitTerminated) return;
       if (resolveMapInitFailure(mapHasLoaded, reason) !== "fail") {
         if (error !== undefined) {
-          console.error("Kartenfehler nach erfolgreichem Laden", error);
+          console.error("Nicht-terminaler Kartenfehler", error);
         }
         return;
       }
@@ -819,6 +860,8 @@
         clearTimeout(loadingTimeout);
         loadingTimeout = undefined;
       }
+      mapInitTerminated = true;
+      teardownMapRuntime();
       isLoading = false;
       mapInitFailed = true;
     };
@@ -882,7 +925,7 @@
         import("$lib/map/overlay/edgeMotion"),
       ]);
       const initialAuth = { authenticated: false };
-      if (destroyed) return;
+      if (destroyed || mapInitTerminated) return;
       projectMarkersForWeave = nodesModule.projectMarkersForWeave;
       const container = mapContainer;
       if (!container) {
@@ -903,7 +946,7 @@
       // deleting the handler that a newer map already installed.
       if (currentBasemap.mode === "local-sovereign") {
         const pmtiles = await import("pmtiles");
-        if (destroyed) return;
+        if (destroyed || mapInitTerminated) return;
         releasePmtilesProtocol = registerPmtilesProtocol(
           maplibregl,
           new pmtiles.Protocol().tile,
@@ -983,6 +1026,7 @@
       map.on("resize", handleSearchMapResize);
 
       const finishLoading = () => {
+        if (destroyed || mapInitTerminated) return;
         mapHasLoaded = true;
         if (loadingTimeout !== undefined) {
           clearTimeout(loadingTimeout);
@@ -1063,34 +1107,7 @@
         delete (window as any).__TEST_SET_ACTIVE_FILTERS__;
         delete (window as any).__TEST_EDGE_MOTION__;
       }
-      cleanupKomposition?.();
-      cleanupFocus?.();
-      unsubscribeSysState?.();
-      cleanupAuthCamera?.();
-      searchViewportResizeObserver?.disconnect();
-      searchViewportResizeObserver = null;
-      if (searchDirectionFrame !== null) {
-        window.cancelAnimationFrame(searchDirectionFrame);
-        searchDirectionFrame = null;
-      }
-      searchDirectionIndicators = [];
-      nodesOverlay?.destroy();
-      nodesOverlay = null;
-      projectMarkersForWeave = null;
-      edgeMotion?.destroy();
-      edgeMotion = null;
-      resolveMotionInput = null;
-      if (map) {
-        map.off("zoom", updateGarnrolleMarkerScale);
-        map.off("move", handleSearchMapMove);
-        map.off("resize", handleSearchMapResize);
-        map.off("styledata", handleMapStyleData);
-        map.off("idle", rehydrateMapOverlays);
-        if (typeof map.remove === "function") map.remove();
-      }
-      mapContainer?.removeEventListener("click", handleMarkerClick);
-      releasePmtilesProtocol?.();
-      releasePmtilesProtocol = undefined;
+      teardownMapRuntime();
     };
   });
 </script>
@@ -1177,8 +1194,8 @@
   {#if mapInitFailed}
     <div class="map-init-error" role="alert" data-testid="map-init-error">
       <p>
-        Die Karte konnte nicht geladen werden. Möglicherweise ist die
-        Verbindung unterbrochen oder eine Programmdatei fehlt.
+        Die Karte konnte nicht geladen werden. Möglicherweise ist die Verbindung
+        unterbrochen oder eine Programmdatei fehlt.
       </p>
       <button
         type="button"

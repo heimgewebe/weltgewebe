@@ -39,7 +39,15 @@ export function resolveMapInitFailure(
   reason: MapInitFailureReason,
 ): MapInitFailureDecision {
   if (hasLoaded) return "ignore";
-  // Secondary auth convergence never owns the map mount lifecycle.
-  if (reason === "auth-camera" || reason === "post-load-error") return "ignore";
+  // Secondary auth convergence and MapLibre resource events never own the
+  // mount lifecycle. The wall-clock deadline remains the terminal fallback if
+  // a pre-load resource error actually prevents the first successful load.
+  if (
+    reason === "auth-camera" ||
+    reason === "post-load-error" ||
+    reason === "maplibre-error"
+  ) {
+    return "ignore";
+  }
   return "fail";
 }

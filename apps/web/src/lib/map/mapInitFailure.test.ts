@@ -7,11 +7,15 @@ import {
 } from "$lib/map/mapInitFailure";
 
 describe("resolveMapInitFailure", () => {
-  it("fails closed for import, constructor, timeout and pre-load map errors", () => {
+  it("fails closed for import, constructor and timeout failures", () => {
     expect(resolveMapInitFailure(false, "import")).toBe("fail");
     expect(resolveMapInitFailure(false, "constructor")).toBe("fail");
     expect(resolveMapInitFailure(false, "timeout")).toBe("fail");
-    expect(resolveMapInitFailure(false, "maplibre-error")).toBe("fail");
+  });
+
+  it("lets the watchdog arbitrate recoverable MapLibre resource errors", () => {
+    expect(resolveMapInitFailure(false, "maplibre-error")).toBe("ignore");
+    expect(resolveMapInitFailure(true, "maplibre-error")).toBe("ignore");
   });
 
   it("ignores failures after the first successful load", () => {
@@ -127,6 +131,40 @@ describe("map page early init-timeout wiring", () => {
     );
     // failMapInit, finishLoading, and onMount cleanup must all cancel it.
     expect(clearOccurrences?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("makes a terminal init failure exclusive with later load success", () => {
+    expect(pageSource).toContain("let mapInitTerminated = false;");
+
+    const failIdx = pageSource.indexOf("const failMapInit = (");
+    const handlerIdx = pageSource.indexOf("const handleSearchMapMove", failIdx);
+    const failSlice = pageSource.slice(failIdx, handlerIdx);
+    expect(failSlice).toContain("mapInitTerminated = true;");
+    expect(failSlice).toContain("teardownMapRuntime();");
+
+    const finishIdx = pageSource.indexOf("const finishLoading = () => {");
+    const loadListenerIdx = pageSource.indexOf(
+      'map.once("load", finishLoading)',
+      finishIdx,
+    );
+    const finishSlice = pageSource.slice(finishIdx, loadListenerIdx);
+    expect(finishSlice).toContain(
+      "if (destroyed || mapInitTerminated) return;",
+    );
+  });
+
+  it("tears down partial map resources on terminal init failure", () => {
+    const teardownIdx = pageSource.indexOf("function teardownMapRuntime()");
+    const failIdx = pageSource.indexOf("const failMapInit = (", teardownIdx);
+    const teardownSlice = pageSource.slice(teardownIdx, failIdx);
+
+    expect(teardownSlice).toContain("nodesOverlay?.destroy();");
+    expect(teardownSlice).toContain("edgeMotion?.destroy();");
+    expect(teardownSlice).toContain(
+      'if (typeof map.remove === "function") map.remove();',
+    );
+    expect(teardownSlice).toContain("map = null;");
+    expect(teardownSlice).toContain("releasePmtilesProtocol?.();");
   });
 
   it("covers hung dynamic imports: deadline fires without waiting for resolve", async () => {
