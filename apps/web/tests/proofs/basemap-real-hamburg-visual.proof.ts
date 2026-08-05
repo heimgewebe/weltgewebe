@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { mockListResponse } from "../fixtures/mockApi";
-import { LOCAL_BASEMAP_STYLE_VERSION } from "../../src/lib/map/basemap";
+import { LOCAL_BASEMAP_STYLE_VERSION } from "../../src/lib/map/basemapStyleVersion";
 
 /**
  * Visual Runtime Proof: Real Hamburg PMTiles via MapLibre

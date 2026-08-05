@@ -1,10 +1,11 @@
 import { BUILD_VERSION } from "$lib/generated/buildVersion";
+import { LOCAL_BASEMAP_STYLE_VERSION } from "./basemapStyleVersion";
 import type { BasemapConfig } from "./config/basemap.current";
 import { normalizeColorScheme, type ColorScheme } from "./colorScheme";
 
 export type { ColorScheme };
 
-export const LOCAL_BASEMAP_STYLE_VERSION = "0.4.0";
+export { LOCAL_BASEMAP_STYLE_VERSION } from "./basemapStyleVersion";
 const LOCAL_BASEMAP_BUILD_VERSION = encodeURIComponent(BUILD_VERSION);
 
 export const REMOTE_VOYAGER_STYLE_URL =

@@ -9,6 +9,9 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style.json"
 STYLE_DARK_PATH = REPO / "map-style" / "style-dark.json"
+STYLE_VERSION_PATH = (
+    REPO / "apps" / "web" / "src" / "lib" / "map" / "basemapStyleVersion.ts"
+)
 COLORS_PATH = REPO / "map-style" / "colors.json"
 UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
 WORKFLOW_PATH = REPO / ".github" / "workflows" / "basemap-runtime-proof.yml"
@@ -83,9 +86,11 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             self.style["metadata"]["weltgewebe:darkStyleSha256"],
             hashlib.sha256(STYLE_DARK_PATH.read_bytes()).hexdigest(),
         )
+        style_version_module = STYLE_VERSION_PATH.read_text(encoding="utf-8")
         self.assertIn(
-            f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
+            f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', style_version_module
         )
+        self.assertIn('from "./basemapStyleVersion"', basemap_module)
         self.assertIn("style-dark.json", basemap_module)
         self.assertIn("LOCAL_BASEMAP_STYLE_DARK_URL", basemap_module)
         self.assertIn("resolveBasemapStyle", basemap_module)

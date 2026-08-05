@@ -10,6 +10,9 @@ REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style-germany.json"
 STYLE_DARK_PATH = REPO / "map-style" / "style-germany-dark.json"
 BASEMAP_MODULE = REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
+STYLE_VERSION_MODULE = (
+    REPO / "apps" / "web" / "src" / "lib" / "map" / "basemapStyleVersion.ts"
+)
 GENERATOR = REPO / "apps" / "web" / "scripts" / "generate-basemap-config.js"
 WORKFLOW = REPO / ".github" / "workflows" / "germany-basemap-rollout.yml"
 VITE_CONFIG = REPO / "apps" / "web" / "vite.config.ts"
@@ -99,7 +102,9 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
             self.style["metadata"]["weltgewebe:darkStyleSha256"],
             hashlib.sha256(STYLE_DARK_PATH.read_bytes()).hexdigest(),
         )
-        self.assertIn(f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', module)
+        version_module = STYLE_VERSION_MODULE.read_text(encoding="utf-8")
+        self.assertIn(f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', version_module)
+        self.assertIn('from "./basemapStyleVersion"', module)
         self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_URL", module)
         self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_DARK_URL", module)
         self.assertIn("style-germany.json", module)
