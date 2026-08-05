@@ -22,6 +22,8 @@ permissions:
       - "Cargo.toml"
       - "Cargo.lock"
       - "toolchain.versions.yml"
+      - "tools/py/**"
+      - ".python-version"
       - "apps/api/**"
       - "apps/web/**"
       - "configs/**"
