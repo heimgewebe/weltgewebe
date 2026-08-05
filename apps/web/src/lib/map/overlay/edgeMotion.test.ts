@@ -18,9 +18,14 @@ import {
   buildEdgeFeatures,
   buildEdgeLayerSpecifications,
   buildProgressClippedThemeSegments,
+  buildThreadPathState,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
+  getThreadPathBuildSerialForTests,
+  pointAtArcProgress,
+  resetThreadPathBuildSerialForTests,
+  sampleThreadCurve,
 } from "$lib/map/overlay/edges";
 import { deriveEntityWeave, targetThemePalette } from "$lib/map/weaveModel";
 
@@ -319,27 +324,107 @@ describe("EdgeMotionController", () => {
   it("grows once, hides only the matching static edge, then becomes idle", () => {
     const { map, scheduler, controller } = createHarness();
     controller.setVisibleEdgeIds(new Set([input.id]));
+    resetThreadPathBuildSerialForTests();
     controller.startCreate(input);
 
     expect(controller.inspect()).toMatchObject({
       activeCount: 1,
       framePending: true,
+      pathBuilds: 1,
     });
+    const pathSerial = controller.inspect().active[0].pathBuildSerial;
     expectCanonicalFilters(map, [input.id]);
 
     scheduler.advance(EDGE_MOTION_DURATION_MS / 2);
     const halfway = motionSource(map).data.features[0];
     expect(halfway.properties?.progress).toBeCloseTo(0.5, 5);
-    // Progress clips the stable full-path geometry at the halfway point.
-    expect(halfway.geometry.coordinates[1]).toEqual([5, 10]);
+    // Progress clips the stable curve at arc-length halfway (exact endpoints preserved).
+    expect(halfway.geometry.coordinates[0]).toEqual([0, 0]);
+    const path = buildThreadPathState([0, 0], [10, 20], [], {
+      fadenType: "legacy",
+      threadId: input.id,
+    });
+    const expectedTip = pointAtArcProgress(path.samples, 0.5, {
+      cumulative: path.cumulative,
+      total: path.totalLength,
+      projected: path.projectedSamples,
+    });
+    const tip = halfway.geometry.coordinates.at(-1)!;
+    expect(tip[0]).toBeCloseTo(expectedTip[0], 8);
+    expect(tip[1]).toBeCloseTo(expectedTip[1], 8);
+    expect(halfway.geometry.coordinates.length).toBeGreaterThanOrEqual(2);
+    // Path is not rebuilt across RAF frames.
+    expect(controller.inspect().pathBuilds).toBe(1);
+    expect(controller.inspect().active[0].pathBuildSerial).toBe(pathSerial);
 
-    scheduler.advance(EDGE_MOTION_DURATION_MS / 2);
+    scheduler.advance(EDGE_MOTION_DURATION_MS / 4);
+    expect(controller.inspect().pathBuilds).toBe(1);
+    expect(controller.inspect().active[0].pathBuildSerial).toBe(pathSerial);
+
+    scheduler.advance(EDGE_MOTION_DURATION_MS / 4);
     expect(controller.inspect()).toMatchObject({
       activeCount: 0,
       framePending: false,
+      pathBuilds: 1,
     });
     expect(motionSource(map).data.features).toEqual([]);
     expectCanonicalFilters(map, []);
+  });
+
+  it("builds the motion path once across many render frames", () => {
+    const { map, scheduler, controller } = createHarness();
+    const multi: EdgeMotionInput = {
+      id: "edge-cache",
+      source: [9.9, 53.5],
+      target: [10.1, 53.65],
+      kind: "reference",
+      fadenType: "proposal",
+      fadenSubjectId: "subject-cache",
+      themeColors: ["#111111", "#222222", "#333333"],
+    };
+    controller.setVisibleEdgeIds(new Set([multi.id]));
+    resetThreadPathBuildSerialForTests();
+    const serialBefore = getThreadPathBuildSerialForTests();
+    controller.startCreate(multi);
+    expect(controller.inspect().pathBuilds).toBe(1);
+    const motionSerial = controller.inspect().active[0].pathBuildSerial;
+
+    for (let step = 0; step < 8; step += 1) {
+      scheduler.advance(EDGE_MOTION_DURATION_MS / 10);
+      expect(controller.inspect().pathBuilds).toBe(1);
+      if (controller.inspect().activeCount > 0) {
+        expect(controller.inspect().active[0].pathBuildSerial).toBe(
+          motionSerial,
+        );
+      }
+      const features = motionSource(map).data.features;
+      if (features.length === 0) continue;
+      const progress = Number(
+        features[features.length - 1].properties?.progress,
+      );
+      const tip = features[features.length - 1].geometry.coordinates.at(-1)!;
+      const path = buildThreadPathState(
+        multi.source,
+        multi.target,
+        multi.themeColors!,
+        {
+          fadenType: multi.fadenType,
+          threadId: multi.id,
+          subjectId: multi.fadenSubjectId,
+        },
+      );
+      const expected = pointAtArcProgress(path.samples, progress, {
+        cumulative: path.cumulative,
+        total: path.totalLength,
+        projected: path.projectedSamples,
+      });
+      expect(tip[0]).toBeCloseTo(expected[0], 8);
+      expect(tip[1]).toBeCloseTo(expected[1], 8);
+    }
+    // Controller pathBuilds stays 1; extra buildThreadPathState calls above are
+    // test-side only and must not be confused with the motion cache.
+    expect(controller.inspect().pathBuilds).toBe(1);
+    expect(getThreadPathBuildSerialForTests()).toBeGreaterThan(serialBefore);
   });
 
   it("keeps multi-theme colours and typed structure during create and release", () => {
@@ -381,14 +466,18 @@ describe("EdgeMotionController", () => {
     expect(creating[0].geometry.coordinates[0]).toEqual([0, 0]);
     expect(creating[0].properties?.themeColor).toBe(palette[0]);
 
-    // Typed motion layers exist with proposal structure (not generic width/dash).
+    // Typed motion layers exist with proposal structure (continuous body, highlight braid).
     const proposalMain = map.getLayer("edge-motion-layer-proposal") as
       | { paint?: Record<string, unknown> }
       | undefined;
+    const proposalHighlight = map.getLayer(
+      "edge-motion-highlight-layer-proposal",
+    ) as { paint?: Record<string, unknown> } | undefined;
     expect(proposalMain?.paint?.["line-width"]).toBe(
       EDGE_VISUAL_STYLE.byType.proposal.width,
     );
-    expect(proposalMain?.paint?.["line-dasharray"]).toEqual([
+    expect(proposalMain?.paint?.["line-dasharray"]).toBeUndefined();
+    expect(proposalHighlight?.paint?.["line-dasharray"]).toEqual([
       ...EDGE_VISUAL_STYLE.byType.proposal.dashArray,
     ]);
 
@@ -417,11 +506,25 @@ describe("EdgeMotionController", () => {
           ? EDGE_MOTION_LAYER
           : `edge-motion-layer-${fadenType}`,
       ) as { paint?: Record<string, unknown> } | undefined;
+      const highlight = map.getLayer(
+        fadenType === "legacy"
+          ? "edge-motion-highlight-layer-legacy"
+          : `edge-motion-highlight-layer-${fadenType}`,
+      ) as { paint?: Record<string, unknown> } | undefined;
       const expected = EDGE_THREAD_VARIANTS.find(
         (variant) => variant.fadenType === fadenType,
       )!;
       expect(main?.paint?.["line-width"]).toBe(expected.width);
-      expect(main?.paint?.["line-dasharray"]).toEqual([...expected.dashArray]);
+      expect(highlight?.paint?.["line-dasharray"]).toEqual([
+        ...expected.dashArray,
+      ]);
+      if (expected.bodyContinuous) {
+        expect(main?.paint?.["line-dasharray"]).toBeUndefined();
+      } else {
+        expect(main?.paint?.["line-dasharray"]).toEqual([
+          ...expected.dashArray,
+        ]);
+      }
     }
 
     controller.cancel("edge-multi");
@@ -448,17 +551,20 @@ describe("EdgeMotionController", () => {
   });
 
   it("clips progress on fixed colour seams rather than walking them", () => {
+    const opts = { fadenType: "legacy", threadId: "edge-seams" };
     const full = buildProgressClippedThemeSegments(
       [0, 0],
       [8, 0],
       ["#aaaaaa", "#bbbbbb"],
       1,
+      opts,
     );
     const half = buildProgressClippedThemeSegments(
       [0, 0],
       [8, 0],
       ["#aaaaaa", "#bbbbbb"],
       0.5,
+      opts,
     );
     expect(full).toHaveLength(4);
     expect(half.length).toBeGreaterThan(0);
@@ -466,7 +572,14 @@ describe("EdgeMotionController", () => {
     // First seam stays at the same absolute geometry for both progress values.
     expect(half[0].coordinates[0]).toEqual(full[0].coordinates[0]);
     expect(half[0].color).toBe(full[0].color);
-    expect(half.at(-1)?.coordinates[1][0]).toBeCloseTo(4, 8);
+    const lastHalf = half[half.length - 1];
+    const tip = lastHalf.coordinates[lastHalf.coordinates.length - 1];
+    const expectedTip = pointAtArcProgress(
+      sampleThreadCurve([0, 0], [8, 0], opts),
+      0.5,
+    );
+    expect(tip[0]).toBeCloseTo(expectedTip[0], 8);
+    expect(tip[1]).toBeCloseTo(expectedTip[1], 8);
   });
 
   it("shares the exact static yarn style definition with motion layers", () => {
@@ -480,23 +593,49 @@ describe("EdgeMotionController", () => {
         variant.fadenType === "legacy"
           ? "edges-layer"
           : `edges-${variant.fadenType}-layer`;
+      const staticHighlightId =
+        variant.fadenType === "legacy"
+          ? "edges-highlight-layer"
+          : `edges-${variant.fadenType}-highlight-layer`;
       const motionBodyId =
         variant.fadenType === "legacy"
           ? EDGE_MOTION_LAYER
           : `edge-motion-layer-${variant.fadenType}`;
+      const motionHighlightId =
+        variant.fadenType === "legacy"
+          ? "edge-motion-highlight-layer-legacy"
+          : `edge-motion-highlight-layer-${variant.fadenType}`;
       const staticBody = staticSpecs.find((spec) => spec.id === staticBodyId);
+      const staticHighlight = staticSpecs.find(
+        (spec) => spec.id === staticHighlightId,
+      );
       const motionBody = map.getLayer(motionBodyId) as
+        | { paint?: Record<string, unknown> }
+        | undefined;
+      const motionHighlight = map.getLayer(motionHighlightId) as
         | { paint?: Record<string, unknown> }
         | undefined;
 
       expect(staticBody?.paint?.["line-width"]).toBe(variant.width);
       expect(motionBody?.paint?.["line-width"]).toBe(variant.width);
-      expect(staticBody?.paint?.["line-dasharray"]).toEqual([
+      // Highlight braid is shared; body continuity matches the variant profile.
+      expect(staticHighlight?.paint?.["line-dasharray"]).toEqual([
         ...variant.dashArray,
       ]);
-      expect(motionBody?.paint?.["line-dasharray"]).toEqual([
+      expect(motionHighlight?.paint?.["line-dasharray"]).toEqual([
         ...variant.dashArray,
       ]);
+      if (variant.bodyContinuous) {
+        expect(staticBody?.paint?.["line-dasharray"]).toBeUndefined();
+        expect(motionBody?.paint?.["line-dasharray"]).toBeUndefined();
+      } else {
+        expect(staticBody?.paint?.["line-dasharray"]).toEqual([
+          ...variant.dashArray,
+        ]);
+        expect(motionBody?.paint?.["line-dasharray"]).toEqual([
+          ...variant.dashArray,
+        ]);
+      }
 
       const typed =
         EDGE_VISUAL_STYLE.byType[
@@ -522,7 +661,20 @@ describe("EdgeMotionController", () => {
     scheduler.advance(EDGE_MOTION_DURATION_MS / 2);
     const features = motionSource(map).data.features;
     expect(features.length).toBeGreaterThan(0);
-    expect(features.at(-1)?.geometry.coordinates[1]).toEqual([5, 10]);
+    const expectedTip = pointAtArcProgress(
+      sampleThreadCurve([0, 0], [10, 20], {
+        fadenType: "legacy",
+        threadId: input.id,
+      }),
+      0.5,
+    );
+    const lastFeature = features[features.length - 1];
+    const tip =
+      lastFeature.geometry.coordinates[
+        lastFeature.geometry.coordinates.length - 1
+      ];
+    expect(tip[0]).toBeCloseTo(expectedTip[0], 8);
+    expect(tip[1]).toBeCloseTo(expectedTip[1], 8);
 
     scheduler.advance(EDGE_MOTION_DURATION_MS / 2);
     expect(controller.inspect()).toMatchObject({

@@ -9,8 +9,8 @@ lifecycle_state: active
 role: norm
 organ: product-map
 owner: product-map
-last_reviewed: 2026-08-05
-review_after: 2026-11-05
+last_reviewed: 2026-08-06
+review_after: 2026-11-06
 depends_on:
   - specs.garnrolle-knoten-faden
   - specs.map-experience
@@ -183,23 +183,85 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
 - **Fäden** nutzen eine performante Garnillusion aus begrenzten MapLibre-Layern
   pro Fadenart: subtiler Schatten/Unterzug, farbiger Garnkörper, feiner
   Licht-/Faserakzent. Static- und Motion-Pfad teilen exakt dieselbe
-  Stildefinition (`EDGE_VISUAL_STYLE` / `EDGE_THREAD_VARIANTS`). Typen
-  `knotting`, `conversation`, `proposal`, `vote` und `legacy` bleiben über
-  Breite und sinnvolle Flecht-/Dash-Rhythmen unterscheidbar — keine
-  Straßenmarkierungs- und keine Perlenoptik.
-- **Mehrfarbige Segmente** halten feste Farbsäume entlang der Geometrie. An
-  belegten WebGL-Nahtstellen (runde Line-Caps) gilt eine stabile, minimale
-  geometrische Überdeckung der Segmentenden. Wandernde Farbsäume und
-  unbewiesene Gradient-Experimente sind unzulässig.
+  Stildefinition (`EDGE_VISUAL_STYLE` / `EDGE_THREAD_VARIANTS`) und dieselbe
+  Kurvengeometrie. Typen `knotting`, `conversation`, `proposal`, `vote` und
+  `legacy` bleiben über Breite, Spannungsprofil und sinnvolle
+  Flecht-/Dash-Rhythmen unterscheidbar — keine Straßenmarkierungs- und keine
+  Perlenoptik.
+- **Kurvengeometrie:** Kanonische Fadenlinien sind deterministische, begrenzt
+  abgetastete kubische Bézier-Pfade (oder gleichwertig), keine geraden
+  technischen Linien und keine Kapselketten. Quelle und Ziel bleiben im
+  GeoJSON exakt die gelieferten Koordinaten. Chord, Normalen, Bulge,
+  Sampling **und Bogenlänge** werden in einer sphärischen Web-Mercator-Ebene
+  (EPSG:3857-Radius, interne Breitenklemme nur für die Projektion) berechnet —
+  nicht in rohen Lon/Lat-Graden und nicht in MapLibre-CSS-Pixeln, solange kein
+  echter `map.project`-Pixelpfad angebunden ist. Kumulative Längen und
+  Progress nutzen Web-Mercator-Meter entlang der projizierten Samples; ein
+  Gradraum-`hypot(Δlng, Δlat)` ist vertragswidrig. Austritt und Einzug liegen
+  für private Fäden nahezu am Sehnenverlauf; die Mitte trägt einen weiten
+  natürlichen Bogen. Kurze Wege bleiben fast gerade; die laterale Auslenkung
+  ist nach projizierter Chordlänge begrenzt (`EDGE_CURVE_FULL_LENGTH_M`,
+  `EDGE_CURVE_MAX_BULGE_M`). Biegungsseite und Mikrovariation entstehen stabil
+  aus Fadenidentität (`threadId` / `faden_subject_id`), nicht aus Zufall,
+  Wellen oder Physiksimulation. Die Abtastpunktzahl ist fest begrenzt
+  (`EDGE_CURVE_MAX_SAMPLES` ≤ 24). Es gibt keine Physiksimulation und keine
+  Kollisionserkennung. Längenunterschiede am Antimeridian nutzen die kürzeste
+  unwrapped Längendifferenz; Zwischenpunkte bleiben endlich (kein
+  NaN/Infinity). Ungültige Unprojektion darf nicht als `[0, 0]` (Nullinsel)
+  maskiert werden: explizites `null`/Fehler und sichere lineare unwrapped
+  Interpolation. Ein vollständiger MapLibre-LineString-Split für
+  World-Wrapping ist in dieser Stufe **nicht** Teil des Vertrags — der Pfad ist
+  intern short-path-sicher, die Kartenrenderer-Grenze bleibt ehrlich offen.
+  Ebenso ist ein statischer Pfadcache über den minütlichen Karten-Refresh
+  hinaus **nicht** Teil dieser Stufe (nur einmal pro Feature-/Motion-Aufbau).
+- **Kanonischer Pfadzustand:** Static und Motion teilen dieselbe reine
+  Path-Builder-Logik und dieselbe Identität. Der unveränderliche Zustand
+  enthält GeoJSON-Sample-Polyline, **einmalig vorbereitete projizierte
+  Samples**, kumulative Bogenlängen in Web-Mercator-Metern, Gesamtlänge und
+  stabile Segmentmetadaten (Farbsäume). Er wird einmal beim Aufbau eines
+  statischen Features bzw. eines `ActiveMotion` erzeugt; pro Animationsframe
+  dürfen nur der sichtbare Fortschrittsausschnitt und die GeoJSON-Feature-Hülle
+  entstehen — keine erneute Kontrollpunkt-, Sampling-, Projektions- oder
+  Seam-Berechnung im RAF. `pointAtArcProgress`, Clipping, Mehrfarben-Segmente
+  und Motion-Tipp lesen denselben vorbereiteten Zustand. Concurrent Motion
+  bleibt durch `EDGE_MOTION_MAX_ACTIVE` (8) begrenzt.
+- **Spannungs- und Materialprofile** pro Fadenart (`THREAD_CURVE_PROFILES`):
+  Knüpffaden straff, gering gekrümmt und kräftig; Gespräch weich, weiter,
+  leicht asymmetrisch und dünner; Antrag ruhig, mittlere Spannung und breiter;
+  Stimme schmal, antragsbezogen und ohne unabhängige Großkurve. Belegte
+  `faden_subject_id` bindet Antrag, antragsbezogenes Gespräch und Stimme in
+  einen **echten target-lokalen Multi-Source-Korridor**: gleiche Biegungsseite
+  und ein deterministischer Anflugvektor aus Subject-ID plus Zielidentität/
+  -lage — **nicht** aus der jeweiligen Quell-Sehne. Der letzte Bézier-
+  Kontrollpunkt liegt auf dieser Achse; Handle-Längen sind relativ
+  (`EDGE_CURVE_MAX_HANDLE_FRACTION`) und absolut (`EDGE_CURVE_MAX_HANDLE_M`)
+  begrenzt, ohne Schleifen, Überschwingen oder Umkehr. Mittlere Bögen und
+  Typenspannungen dürfen differieren. Ohne belegte Subject-ID gilt der
+  bestehende fadenbezogene private Fallback ohne erfundene Beziehung
+  (sehnenrelativer Ansatz).
+- **Schatten und Garnkörper** sind bei Knüpfen, Gespräch und Antrag weitgehend
+  kontinuierlich; der Flecht-/Faserrhythmus lebt primär im schmalen Highlight.
+  Stimme darf am Körper stichartiger bleiben, behält aber einen feinen
+  kontinuierlichen Schatten-Zusammenhang.
+- **Mehrfarbige Segmente** und Erzeugungs-/Auflösungsanimation segmentieren
+  nach projizierter Kurvenlänge (Bogenfortschritt in Metern) und nutzen exakt
+  dieselbe Pfadgeometrie wie der statische Faden. Farbsäume bleiben in diesem
+  Fortschrittsraum fest. Benachbarte Mehrfarben-Segmente überlappen im
+  Arc-Progress (einseitiger Seam-Pullback als Bruchteil der lokalen
+  Segmentlänge). Der Motion-Tipp endet exakt bei
+  `pointAtArcProgress(path, progress)` auf dem vorbereiteten Zustand; kein
+  Segment zeichnet darüber hinaus. Wandernde Farbsäume und unbewiesene
+  Gradient-Experimente sind unzulässig.
 
 ## Zentraler Linienanschluss
 
 Kartenkoordinate, MapLibre-Markeranker und sichtbares X- bzw. Garnrollen-Zentrum
-stimmen exakt überein (`anchor: center`). Fadenlinien laufen geometrisch bis zur
-tatsächlichen Mitte jedes Knotens bzw. jeder runden Garnrolle und werden nicht
-am Markerumfang abgeschnitten. Sie liegen unter dem DOM-Marker (WebGL-Ebenen
-vor Symbol- und Marker-DOM), sodass sie optisch in die Mitte eingezogen werden.
-`faden_endpoint_id` bleibt der strikt gültige Alias für Webgemeindezentren.
+stimmen exakt überein (`anchor: center`). Fadenlinien laufen als geglättete
+Kurven geometrisch bis zur tatsächlichen Mitte jedes Knotens bzw. jeder runden
+Garnrolle (exakte Endpunkte) und werden nicht am Markerumfang abgeschnitten. Sie
+liegen unter dem DOM-Marker (WebGL-Ebenen vor Symbol- und Marker-DOM), sodass
+sie optisch in die Mitte eingezogen werden. `faden_endpoint_id` bleibt der
+strikt gültige Alias für Webgemeindezentren.
 
 ## Schichten und Interaktion
 
