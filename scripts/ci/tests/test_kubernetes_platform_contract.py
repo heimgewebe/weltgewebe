@@ -1769,6 +1769,11 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(
             shlex.split(gitops["run"]),
             [
+                "uv",
+                "run",
+                "--project",
+                "tools/py",
+                "--locked",
                 "python",
                 "scripts/platform/kind_reference.py",
                 "proof",
@@ -1785,6 +1790,71 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("github.event.pull_request", proof_text)
         self.assertNotIn("SOURCE_REF:", proof_text)
         self.assertNotIn("github.head_ref || github.ref_name", proof_text)
+
+    def test_platform_proof_jobs_share_locked_uv_tooling(self) -> None:
+        """All Python-executing jobs must share tools/py lock identity (not pip)."""
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        workflow = yaml.safe_load(workflow_text)
+        self.assertNotIn('python-version: "3.10"', workflow_text)
+        self.assertNotRegex(
+            workflow_text,
+            r"pip install .*PyYAML|pip install .*pyyaml|pip install .*pytest",
+        )
+        self.assertNotIn("PyYAML==6.0.3", workflow_text)
+        python_jobs = (
+            "contract",
+            "trivy-rendered-security",
+            "kind-gitops-proof",
+            "kind-ha-recovery-proof",
+        )
+        for job_name in python_jobs:
+            job = workflow["jobs"][job_name]
+            steps = job["steps"]
+            setup_python = next(
+                step
+                for step in steps
+                if str(step.get("uses", "")).startswith("actions/setup-python@")
+            )
+            self.assertEqual(
+                setup_python["with"]["python-version-file"],
+                ".python-version",
+                job_name,
+            )
+            self.assertNotIn("python-version", setup_python.get("with", {}))
+            setup_uv = next(
+                step
+                for step in steps
+                if str(step.get("uses", "")).startswith("astral-sh/setup-uv@")
+            )
+            self.assertEqual(
+                setup_uv["with"]["version"],
+                "${{ steps.uv-version.outputs.uv_version }}",
+                job_name,
+            )
+            sync_step = next(
+                step
+                for step in steps
+                if step.get("run") == "uv sync --project tools/py --locked"
+            )
+            self.assertEqual(
+                sync_step["name"], "Sync hash-locked Python tooling", job_name
+            )
+            for step in steps:
+                run = step.get("run")
+                if not isinstance(run, str):
+                    continue
+                if "scripts/platform/" in run or "scripts/security/" in run:
+                    self.assertIn(
+                        "uv run --project tools/py --locked python",
+                        run,
+                        f"{job_name}: {step.get('name', run[:40])}",
+                    )
+                    self.assertNotRegex(
+                        run,
+                        r"(?m)^[ \t]*python[ \t]+scripts/",
+                        f"{job_name}: bare python remains",
+                    )
 
     def test_proof_identity_covers_all_api_image_inputs(self) -> None:
         for suite in ("kind-gitops", "ha-recovery"):
