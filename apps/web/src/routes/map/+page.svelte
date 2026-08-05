@@ -1290,7 +1290,8 @@
     background: var(--bg);
     display: grid;
     place-items: center;
-    z-index: var(--z-map-loading);
+    /* Keep the map state above the canvas but below persistent navigation. */
+    z-index: calc(var(--z-map-direction) - 10);
     transition: opacity 0.3s;
   }
   .spinner {
@@ -1319,7 +1320,8 @@
     gap: 16px;
     padding: 24px;
     text-align: center;
-    z-index: var(--z-map-loading);
+    /* A failed map must not make settings, messages or recovery tools unreachable. */
+    z-index: calc(var(--z-map-direction) - 10);
   }
   .map-init-error p {
     margin: 0;
