@@ -11,6 +11,7 @@ permissions:
       - "policies/**"
       - "configs/app.defaults.yml"
       - "tools/py/**"
+      - "toolchain.versions.yml"
       - ".github/workflows/policycheck.yml"
       - ".python-version"
 
