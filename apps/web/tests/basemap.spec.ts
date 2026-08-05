@@ -71,15 +71,27 @@ test.describe("resolveBasemapStyle", () => {
     );
   });
 
-  test("returns local dev-server style URL for local-sovereign", () => {
+  test("returns local dev-server style URL for local-sovereign light", () => {
     const config: BasemapConfig = {
       mode: "local-sovereign",
       center: [0, 0],
       zoom: 1,
     };
 
-    expect(resolveBasemapStyle(config)).toMatch(
-      /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
+    expect(resolveBasemapStyle(config, "light")).toMatch(
+      /^\/local-basemap\/style\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+  });
+
+  test("returns local dark style URL for local-sovereign dark", () => {
+    const config: BasemapConfig = {
+      mode: "local-sovereign",
+      center: [0, 0],
+      zoom: 1,
+    };
+
+    expect(resolveBasemapStyle(config, "dark")).toMatch(
+      /^\/local-basemap\/style-dark\.json\?v=0\.4\.0&build=[^&]+$/,
     );
   });
 });

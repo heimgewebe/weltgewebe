@@ -232,19 +232,28 @@ weltgewebe-basemap
 
 ### 3.2 map-style repo
 
-MapLibre `style.json` ist Teil des `map-style` repositories.
+MapLibre-Style-Dokumente sind Teil des `map-style` repositories.
 
 Style-Ownership ist wichtig, weil:
 
 - Glyphs
 - Layer order
-- Color palette
+- Color palette (hell und dunkel als eigene Style-Dokumente)
 
 sonst wieder fremd kontrolliert werden.
+
+Darkmode der Basemap ist ein eigener MapLibre-Stil (`style-dark.json` /
+`style-germany-dark.json`) mit gleicher Quellen-/Layerstruktur, nicht ein
+CSS-Filter. Das Web wählt den Stil über das globale
+`document.documentElement.dataset.colorScheme` (`light`|`dark`); semantische
+Knoten- und Fadenfarben bleiben Overlay-Verantwortung.
 
 ```text
 weltgewebe-map-style
  ├─ style.json
+ ├─ style-dark.json
+ ├─ style-germany.json
+ ├─ style-germany-dark.json
  ├─ glyphs/
  └─ colors.json
 ```
@@ -336,8 +345,10 @@ maplibregl.addProtocol("pmtiles", protocol.tile);
 
 const map = new maplibregl.Map({
   container: "map",
-  style: "/style.json"
+  // resolveBasemapStyle(config, document.documentElement.dataset.colorScheme)
+  style: "/style.json" // or /style-dark.json when color-scheme is dark
 });
+// On live scheme changes: map.setStyle(...); rehydrate edges/overlays once.
 ```
 
 ---

@@ -14,18 +14,20 @@ import {
 // local-sovereign build, PUBLIC_BASEMAP_VARIANT selects which independently
 // published style/PMTiles contract is used:
 //
-//   regional (default) -> style.json, Hamburg + Schleswig-Holstein aliases
-//   germany            -> style-germany.json, Germany alias
+//   regional (default) -> style.json (+ style-dark.json), Hamburg + SH aliases
+//   germany            -> style-germany.json (+ style-germany-dark.json)
 //
 // When PUBLIC_BASEMAP_MODE is unset/empty and VERCEL=1, the generator selects
 // remote-style because Vercel does not ship the local basemap middleware or
 // static local style/PMTiles files. Outside Vercel the policy default remains.
 //
 // The public build identity also binds the generated frontend to the exact
-// source commit and style bytes used during its build.
+// source commit and style bytes (light + dark) used during its build.
 
 const REMOTE_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+const REMOTE_DARK_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 const LOCAL_BASEMAP_VARIANTS = ["regional", "germany"];
 const DEFAULT_LOCAL_BASEMAP_VARIANT = "regional";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
@@ -86,26 +88,40 @@ if (mode === "remote-style" && rawVariant) {
   process.exit(1);
 }
 
+function localStyleFileNames(selectedVariant) {
+  if (selectedVariant === "germany") {
+    return {
+      light: "style-germany.json",
+      dark: "style-germany-dark.json",
+    };
+  }
+  return {
+    light: "style.json",
+    dark: "style-dark.json",
+  };
+}
+
 // Build/artifact contract: never let a Vercel build claim local-sovereign
-// without a delivered static style file (Vercel has no local-basemap middleware).
+// without delivered static style files (light + dark; Vercel has no middleware).
 if (mode === "local-sovereign") {
-  const styleFileName =
-    variant === "germany" ? "style-germany.json" : "style.json";
-  const deliveredStylePath = path.join(
-    webRoot,
-    "static",
-    "local-basemap",
-    styleFileName,
-  );
-  const delivery = assertVercelLocalBasemapDelivery({
-    mode,
-    isVercel,
-    styleDelivered: fs.existsSync(deliveredStylePath),
-    stylePath: `/local-basemap/${styleFileName}`,
-  });
-  if (!delivery.ok) {
-    console.error(`ERROR: ${delivery.error}`);
-    process.exit(1);
+  const files = localStyleFileNames(variant);
+  for (const styleFileName of [files.light, files.dark]) {
+    const deliveredStylePath = path.join(
+      webRoot,
+      "static",
+      "local-basemap",
+      styleFileName,
+    );
+    const delivery = assertVercelLocalBasemapDelivery({
+      mode,
+      isVercel,
+      styleDelivered: fs.existsSync(deliveredStylePath),
+      stylePath: `/local-basemap/${styleFileName}`,
+    });
+    if (!delivery.ok) {
+      console.error(`ERROR: ${delivery.error}`);
+      process.exit(1);
+    }
   }
 }
 
@@ -143,7 +159,7 @@ export type LocalBasemapVariant = "regional" | "germany";
 
 export type BuildBasemapConfig =
   | { mode: "local-sovereign"; variant: LocalBasemapVariant }
-  | { mode: "remote-style"; styleUrl: string };
+  | { mode: "remote-style"; styleUrl: string; darkStyleUrl: string };
 `;
 
 const body =
@@ -152,6 +168,7 @@ const body =
 export const BUILD_BASEMAP_CONFIG: BuildBasemapConfig = {
   mode: "remote-style",
   styleUrl: "${REMOTE_STYLE_URL}",
+  darkStyleUrl: "${REMOTE_DARK_STYLE_URL}",
 };
 `
     : `
@@ -194,22 +211,31 @@ const sourceCommit = resolveSourceCommit();
 const buildIdentity =
   mode === "local-sovereign"
     ? (() => {
-        const styleFileName =
-          variant === "germany" ? "style-germany.json" : "style.json";
-        const stylePath = path.join(repoRoot, "map-style", styleFileName);
+        const files = localStyleFileNames(variant);
+        const lightPath = path.join(repoRoot, "map-style", files.light);
+        const darkPath = path.join(repoRoot, "map-style", files.dark);
+        if (!fs.existsSync(lightPath)) {
+          throw new Error(`Missing basemap style file: ${lightPath}`);
+        }
+        if (!fs.existsSync(darkPath)) {
+          throw new Error(`Missing basemap dark style file: ${darkPath}`);
+        }
         return {
           schema_version: 1,
           mode,
           variant,
-          style_path: `/local-basemap/${styleFileName}`,
+          style_path: `/local-basemap/${files.light}`,
+          style_dark_path: `/local-basemap/${files.dark}`,
           source_commit: sourceCommit,
-          style_sha256: sha256File(stylePath),
+          style_sha256: sha256File(lightPath),
+          style_dark_sha256: sha256File(darkPath),
         };
       })()
     : {
         schema_version: 1,
         mode,
         style_url: REMOTE_STYLE_URL,
+        style_dark_url: REMOTE_DARK_STYLE_URL,
         source_commit: sourceCommit,
       };
 const buildIdentityPath = path.join(staticIdentityDir, "basemap-build.json");

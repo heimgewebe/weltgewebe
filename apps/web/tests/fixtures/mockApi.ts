@@ -75,12 +75,38 @@ export async function mockApiResponses(
     });
   });
 
-  // Intercept local map style fetching to provide a deterministic base payload during tests.
+  // Intercept local map style fetching (light + dark) for deterministic tests.
+  const emptyStyleBody = JSON.stringify({
+    version: 8,
+    sources: {},
+    layers: [],
+  });
   await page.route("**/local-basemap/style.json*", (route) => {
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ version: 8, sources: {}, layers: [] }),
+      body: emptyStyleBody,
+    });
+  });
+  await page.route("**/local-basemap/style-dark.json*", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: emptyStyleBody,
+    });
+  });
+  await page.route("**/local-basemap/style-germany.json*", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: emptyStyleBody,
+    });
+  });
+  await page.route("**/local-basemap/style-germany-dark.json*", (route) => {
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: emptyStyleBody,
     });
   });
 

@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style-germany.json"
+STYLE_DARK_PATH = REPO / "map-style" / "style-germany-dark.json"
 BASEMAP_MODULE = REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
 GENERATOR = REPO / "apps" / "web" / "scripts" / "generate-basemap-config.js"
 VITE_CONFIG = REPO / "apps" / "web" / "vite.config.ts"
@@ -39,6 +40,7 @@ SCHLESWIG_BUILD_SCRIPT = (
 class GermanyBasemapRolloutTest(unittest.TestCase):
     def setUp(self) -> None:
         self.style = json.loads(STYLE_PATH.read_text(encoding="utf-8"))
+        self.style_dark = json.loads(STYLE_DARK_PATH.read_text(encoding="utf-8"))
 
     def test_germany_style_declares_one_nationwide_pmtiles_source(self) -> None:
         self.assertEqual(
@@ -52,6 +54,10 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         )
         self.assertEqual(
             self.style["metadata"]["weltgewebe:variant"], "germany"
+        )
+        self.assertEqual(self.style_dark["sources"], self.style["sources"])
+        self.assertEqual(
+            self.style_dark["metadata"]["weltgewebe:variant"], "germany"
         )
 
     def test_germany_style_has_required_visual_layers(self) -> None:
@@ -73,13 +79,25 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         )
         layer_ids = [layer["id"] for layer in self.style["layers"]]
         self.assertEqual(len(layer_ids), len(set(layer_ids)))
+        dark_ids = [layer["id"] for layer in self.style_dark["layers"]]
+        self.assertEqual(layer_ids, dark_ids)
+        dark_layers = {layer["id"]: layer for layer in self.style_dark["layers"]}
+        self.assertEqual(
+            dark_layers["roads-germany"]["paint"]["line-color"], "#4a585c"
+        )
 
     def test_style_version_matches_shared_cache_contract(self) -> None:
         module = BASEMAP_MODULE.read_text(encoding="utf-8")
         version = self.style["metadata"]["weltgewebe:version"]
+        self.assertEqual(version, self.style_dark["metadata"]["weltgewebe:version"])
+        self.assertEqual(
+            self.style_dark["metadata"]["weltgewebe:colorScheme"], "dark"
+        )
         self.assertIn(f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', module)
         self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_URL", module)
+        self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_DARK_URL", module)
         self.assertIn("style-germany.json", module)
+        self.assertIn("style-germany-dark.json", module)
 
     def test_build_generator_defaults_to_regional_and_binds_identity(self) -> None:
         generator = GENERATOR.read_text(encoding="utf-8")
@@ -90,6 +108,8 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("PUBLIC_BASEMAP_VARIANT", generator)
         self.assertIn("source_commit", generator)
         self.assertIn("style_sha256", generator)
+        self.assertIn("style_dark_sha256", generator)
+        self.assertIn("style-germany-dark.json", generator)
         self.assertIn("PUBLIC_SOURCE_COMMIT", generator)
         self.assertIn("basemap-build.json", generator)
 

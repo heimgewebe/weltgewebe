@@ -66,7 +66,12 @@ class ComposeDevBuildIdentityContractTests(unittest.TestCase):
         self.assertTrue(mount["read_only"])
 
     def test_repository_basemap_style_inputs_exist(self) -> None:
-        for filename in ("style.json", "style-germany.json"):
+        for filename in (
+            "style.json",
+            "style-dark.json",
+            "style-germany.json",
+            "style-germany-dark.json",
+        ):
             with self.subTest(filename=filename):
                 self.assertTrue((ROOT / "map-style" / filename).is_file())
 

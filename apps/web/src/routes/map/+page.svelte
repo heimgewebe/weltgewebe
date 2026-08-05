@@ -64,6 +64,11 @@
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
   import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
+  import {
+    observeDocumentColorScheme,
+    readDocumentColorScheme,
+    type ColorScheme,
+  } from "$lib/map/colorScheme";
   import { hasRenderableMapPosition } from "$lib/map/coordinates";
   import { areMapEdgesVisuallyEnabled } from "$lib/map/edgeVisibility";
   import { createResettableLazyImport } from "$lib/map/lazyImport";
@@ -819,7 +824,15 @@
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
 
+    let stopColorSchemeObserver: (() => void) | undefined;
+    let activeBasemapScheme: ColorScheme = readDocumentColorScheme();
+    // Generation counter makes rapid light/dark toggles race-safe: only the
+    // latest setStyle completion is allowed to rehydrate overlays.
+    let basemapStyleGeneration = 0;
+
     function teardownMapRuntime() {
+      stopColorSchemeObserver?.();
+      stopColorSchemeObserver = undefined;
       cleanupKomposition?.();
       cleanupKomposition = undefined;
       cleanupFocus?.();
@@ -887,10 +900,12 @@
       invalidateSearchViewportGeometry();
     };
     let styleRehydrateQueued = false;
+    let styleRehydrateGeneration = 0;
     const hasCanonicalEdgeStyle = () => hasCompleteEdgeThreadStyle(map);
     const rehydrateMapOverlays = () => {
       styleRehydrateQueued = false;
       if (destroyed || !map || hasCanonicalEdgeStyle()) return;
+      if (styleRehydrateGeneration !== basemapStyleGeneration) return;
       if (!projectedMarkersData) return;
       updateEdges(
         map,
@@ -901,18 +916,36 @@
       );
       syncEdgeMotionProjection();
     };
-    const handleMapStyleData = () => {
+    const queueOverlayRehydrate = (generation: number) => {
       if (
         destroyed ||
         styleRehydrateQueued ||
         !map ||
         !map.isStyleLoaded() ||
-        hasCanonicalEdgeStyle()
+        hasCanonicalEdgeStyle() ||
+        generation !== basemapStyleGeneration
       ) {
         return;
       }
       styleRehydrateQueued = true;
+      styleRehydrateGeneration = generation;
       queueMicrotask(rehydrateMapOverlays);
+    };
+    const handleMapStyleData = () => {
+      queueOverlayRehydrate(basemapStyleGeneration);
+    };
+    const switchBasemapScheme = (scheme: ColorScheme) => {
+      if (!map || destroyed || mapInitTerminated) return;
+      if (scheme === activeBasemapScheme) return;
+      activeBasemapScheme = scheme;
+      const generation = ++basemapStyleGeneration;
+      styleRehydrateQueued = false;
+      // Camera and UI controls survive setStyle; only basemap layers reload.
+      map.setStyle(resolveBasemapStyle(currentBasemap, scheme));
+      map.once("style.load", () => {
+        if (destroyed || generation !== basemapStyleGeneration) return;
+        queueOverlayRehydrate(generation);
+      });
     };
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
@@ -985,9 +1018,10 @@
         currentBasemap.zoom,
       );
 
+      activeBasemapScheme = readDocumentColorScheme();
       map = new maplibregl.Map({
         container,
-        style: resolveBasemapStyle(currentBasemap),
+        style: resolveBasemapStyle(currentBasemap, activeBasemapScheme),
         center: initialCamera.center,
         zoom: initialCamera.zoom,
         minZoom: currentBasemap.minZoom ?? 10,
@@ -999,6 +1033,9 @@
       });
       map.on("move", handleSearchMapMove);
       map.on("styledata", handleMapStyleData);
+      stopColorSchemeObserver = observeDocumentColorScheme((scheme) => {
+        switchBasemapScheme(scheme);
+      });
       resolveMotionInput = edgeMotionModule.resolveEdgeMotionInput;
       edgeMotion = new edgeMotionModule.EdgeMotionController(map);
       updateGarnrolleMarkerScale();

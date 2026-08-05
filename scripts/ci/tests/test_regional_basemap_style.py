@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
 STYLE_PATH = REPO / "map-style" / "style.json"
+STYLE_DARK_PATH = REPO / "map-style" / "style-dark.json"
 COLORS_PATH = REPO / "map-style" / "colors.json"
 UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
 WORKFLOW_PATH = REPO / ".github" / "workflows" / "basemap-runtime-proof.yml"
@@ -21,6 +22,7 @@ CADDY_PATHS = (
 class RegionalBasemapStyleTest(unittest.TestCase):
     def setUp(self) -> None:
         self.style = json.loads(STYLE_PATH.read_text(encoding="utf-8"))
+        self.style_dark = json.loads(STYLE_DARK_PATH.read_text(encoding="utf-8"))
         self.colors = json.loads(COLORS_PATH.read_text(encoding="utf-8"))
 
     def test_style_declares_all_regional_pmtiles_sources(self) -> None:
@@ -33,6 +35,7 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             sources["basemap-schleswig-holstein"]["url"],
             "pmtiles://basemap-schleswig-holstein.pmtiles",
         )
+        self.assertEqual(self.style_dark["sources"], sources)
 
     def test_each_regional_source_has_the_same_visual_layer_set(self) -> None:
         layers = self.style["layers"]
@@ -65,15 +68,22 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
         ).read_text(encoding="utf-8")
         version = self.style["metadata"]["weltgewebe:version"]
-        self.assertEqual(version, "0.3.1")
+        self.assertEqual(version, "0.4.0")
+        self.assertEqual(
+            self.style_dark["metadata"]["weltgewebe:version"], version
+        )
+        self.assertEqual(
+            self.style["metadata"]["weltgewebe:colorScheme"], "light"
+        )
+        self.assertEqual(
+            self.style_dark["metadata"]["weltgewebe:colorScheme"], "dark"
+        )
         self.assertIn(
             f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
         )
-        self.assertIn(
-            "`/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}"
-            "&build=${LOCAL_BASEMAP_BUILD_VERSION}`",
-            basemap_module,
-        )
+        self.assertIn("style-dark.json", basemap_module)
+        self.assertIn("LOCAL_BASEMAP_STYLE_DARK_URL", basemap_module)
+        self.assertIn("resolveBasemapStyle", basemap_module)
 
         self.assertIn(
             'import { BUILD_VERSION } from "$lib/generated/buildVersion";',
@@ -123,6 +133,39 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             palette = self.colors["theme"][category]
             self.assertEqual(pairs, {k: v for k, v in palette.items() if k != "default"})
             self.assertEqual(expression[-1], palette["default"])
+
+    def test_dark_land_layer_colors_match_the_dark_palette(self) -> None:
+        layers = {layer["id"]: layer for layer in self.style_dark["layers"]}
+        for category in ("landcover", "landuse"):
+            expression = layers[category]["paint"]["fill-color"]
+            pairs = dict(zip(expression[2:-1:2], expression[3:-1:2]))
+            palette = self.colors["theme_dark"][category]
+            self.assertEqual(
+                pairs, {k: v for k, v in palette.items() if k != "default"}
+            )
+            self.assertEqual(expression[-1], palette["default"])
+        self.assertEqual(
+            layers["background"]["paint"]["background-color"],
+            self.colors["theme_dark"]["background"],
+        )
+        for road_layer in ("roads", "roads-schleswig-holstein"):
+            self.assertEqual(
+                layers[road_layer]["paint"]["line-color"],
+                self.colors["theme_dark"]["roads"],
+            )
+        # Dark basemap stays dark; no CSS-filter inversion of the light style.
+        light_bg = self.colors["theme"]["background"]
+        dark_bg = self.colors["theme_dark"]["background"]
+        self.assertNotEqual(light_bg, dark_bg)
+
+    def test_dark_style_preserves_layer_structure(self) -> None:
+        light_ids = [layer["id"] for layer in self.style["layers"]]
+        dark_ids = [layer["id"] for layer in self.style_dark["layers"]]
+        self.assertEqual(light_ids, dark_ids)
+        self.assertEqual(
+            {k: v.get("url") for k, v in self.style["sources"].items()},
+            {k: v.get("url") for k, v in self.style_dark["sources"].items()},
+        )
 
     def test_layer_ids_are_unique_and_sources_exist(self) -> None:
         sources = self.style["sources"]

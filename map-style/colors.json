@@ -28,5 +28,35 @@
       "pitch": "#d2e0ce",
       "default": "#dedbd4"
     }
+  },
+  "theme_dark": {
+    "background": "#12181a",
+    "water": "#1a3348",
+    "roads": "#4a585c",
+    "buildings": "#2a3336",
+    "text": "#d5e0dc",
+    "text-halo": "#0e1517",
+    "landcover": {
+      "farmland": "#2a2e24",
+      "grass": "#243028",
+      "wood": "#1e2a22",
+      "wetland": "#1f2a2a",
+      "sand": "#2e2c24",
+      "default": "#242a28"
+    },
+    "landuse": {
+      "residential": "#2a2f30",
+      "industrial": "#2c2a2a",
+      "commercial": "#302a2a",
+      "retail": "#322c2a",
+      "cemetery": "#273028",
+      "school": "#2c2c28",
+      "university": "#2c2c28",
+      "hospital": "#302a2c",
+      "military": "#2c2a26",
+      "quarry": "#2a2a26",
+      "pitch": "#243028",
+      "default": "#2a2c2a"
+    }
   }
 }

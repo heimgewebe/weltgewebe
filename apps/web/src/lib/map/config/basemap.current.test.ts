@@ -5,6 +5,8 @@ import { resolveBasemapStyle } from "../basemap";
 const CARTO_HOST = "basemaps.cartocdn.com";
 const CARTO_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+const CARTO_DARK_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 
 describe("resolveBasemapMode", () => {
   it("honours an explicit local-sovereign value regardless of context", () => {
@@ -34,25 +36,56 @@ describe("resolveBasemapMode", () => {
 
 describe("resolveBasemapStyle", () => {
   it("maps the default regional sovereign variant to style.json", () => {
-    const style = resolveBasemapStyle({
-      mode: "local-sovereign",
-      variant: "regional",
-    } as any);
+    const style = resolveBasemapStyle(
+      {
+        mode: "local-sovereign",
+        variant: "regional",
+      } as any,
+      "light",
+    );
     expect(style).toMatch(
-      /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
+      /^\/local-basemap\/style\.json\?v=0\.4\.0&build=[^&]+$/,
     );
     expect(style).not.toContain(CARTO_HOST);
   });
 
-  it("maps the Germany sovereign variant to the isolated Germany style", () => {
-    const style = resolveBasemapStyle({
-      mode: "local-sovereign",
-      variant: "germany",
-    } as any);
+  it("maps the regional sovereign dark scheme to style-dark.json", () => {
+    const style = resolveBasemapStyle(
+      {
+        mode: "local-sovereign",
+        variant: "regional",
+      } as any,
+      "dark",
+    );
     expect(style).toMatch(
-      /^\/local-basemap\/style-germany\.json\?v=0\.3\.1&build=[^&]+$/,
+      /^\/local-basemap\/style-dark\.json\?v=0\.4\.0&build=[^&]+$/,
     );
     expect(style).not.toContain(CARTO_HOST);
+  });
+
+  it("maps the Germany sovereign variant to the isolated Germany styles", () => {
+    const light = resolveBasemapStyle(
+      {
+        mode: "local-sovereign",
+        variant: "germany",
+      } as any,
+      "light",
+    );
+    const dark = resolveBasemapStyle(
+      {
+        mode: "local-sovereign",
+        variant: "germany",
+      } as any,
+      "dark",
+    );
+    expect(light).toMatch(
+      /^\/local-basemap\/style-germany\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+    expect(dark).toMatch(
+      /^\/local-basemap\/style-germany-dark\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+    expect(light).not.toContain(CARTO_HOST);
+    expect(dark).not.toContain(CARTO_HOST);
   });
 
   it("keeps legacy local config objects on the regional rollback path", () => {
@@ -60,13 +93,27 @@ describe("resolveBasemapStyle", () => {
     expect(style).toContain("/local-basemap/style.json");
   });
 
-  it("returns the explicit CARTO url only for remote-style", () => {
-    const style = resolveBasemapStyle({
-      mode: "remote-style",
-      styleUrl: CARTO_STYLE_URL,
-    } as any);
+  it("returns the explicit CARTO url only for remote-style light", () => {
+    const style = resolveBasemapStyle(
+      {
+        mode: "remote-style",
+        styleUrl: CARTO_STYLE_URL,
+      } as any,
+      "light",
+    );
     expect(style).toBe(CARTO_STYLE_URL);
     expect(style).toContain(CARTO_HOST);
+  });
+
+  it("returns Dark Matter for remote-style dark with Voyager light", () => {
+    const style = resolveBasemapStyle(
+      {
+        mode: "remote-style",
+        styleUrl: CARTO_STYLE_URL,
+      } as any,
+      "dark",
+    );
+    expect(style).toBe(CARTO_DARK_STYLE_URL);
   });
 });
 
@@ -74,9 +121,14 @@ describe("currentBasemap (build-time generated config)", () => {
   it("never carries a CARTO style url in local-sovereign mode", () => {
     if (currentBasemap.mode === "local-sovereign") {
       expect(currentBasemap).not.toHaveProperty("styleUrl");
-      expect(["regional", "germany"]).toContain(currentBasemap.variant);
-      expect(resolveBasemapStyle(currentBasemap)).toMatch(
-        /^\/local-basemap\/style(?:-germany)?\.json\?v=0\.3\.1&build=[^&]+$/,
+      expect([undefined, "regional", "germany"]).toContain(
+        currentBasemap.variant,
+      );
+      expect(resolveBasemapStyle(currentBasemap, "light")).toMatch(
+        /^\/local-basemap\/style(?:-germany)?\.json\?v=0\.4\.0&build=[^&]+$/,
+      );
+      expect(resolveBasemapStyle(currentBasemap, "dark")).toMatch(
+        /^\/local-basemap\/style(?:-germany)?-dark\.json\?v=0\.4\.0&build=[^&]+$/,
       );
     } else {
       expect(currentBasemap.styleUrl).toContain(CARTO_HOST);

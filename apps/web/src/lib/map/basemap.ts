@@ -1,10 +1,29 @@
 import { BUILD_VERSION } from "$lib/generated/buildVersion";
 import type { BasemapConfig } from "./config/basemap.current";
+import { normalizeColorScheme, type ColorScheme } from "./colorScheme";
 
-export const LOCAL_BASEMAP_STYLE_VERSION = "0.3.1";
+export type { ColorScheme };
+
+export const LOCAL_BASEMAP_STYLE_VERSION = "0.4.0";
 const LOCAL_BASEMAP_BUILD_VERSION = encodeURIComponent(BUILD_VERSION);
-export const LOCAL_BASEMAP_STYLE_URL = `/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}&build=${LOCAL_BASEMAP_BUILD_VERSION}`;
-export const LOCAL_BASEMAP_GERMANY_STYLE_URL = `/local-basemap/style-germany.json?v=${LOCAL_BASEMAP_STYLE_VERSION}&build=${LOCAL_BASEMAP_BUILD_VERSION}`;
+
+export const REMOTE_VOYAGER_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json";
+export const REMOTE_DARK_MATTER_STYLE_URL =
+  "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
+
+function localBasemapStyleUrl(fileName: string): string {
+  return `/local-basemap/${fileName}?v=${LOCAL_BASEMAP_STYLE_VERSION}&build=${LOCAL_BASEMAP_BUILD_VERSION}`;
+}
+
+export const LOCAL_BASEMAP_STYLE_URL = localBasemapStyleUrl("style.json");
+export const LOCAL_BASEMAP_STYLE_DARK_URL =
+  localBasemapStyleUrl("style-dark.json");
+export const LOCAL_BASEMAP_GERMANY_STYLE_URL =
+  localBasemapStyleUrl("style-germany.json");
+export const LOCAL_BASEMAP_GERMANY_STYLE_DARK_URL = localBasemapStyleUrl(
+  "style-germany-dark.json",
+);
 
 function assertNever(x: never): never {
   throw new Error(`Unsupported basemap mode: ${JSON.stringify(x)}`);
@@ -25,16 +44,60 @@ export function rewritePmtilesUrl(url: string, origin: string): string {
   return url;
 }
 
-export function resolveBasemapStyle(config: BasemapConfig): string {
+function resolveLocalSovereignStyle(
+  variant: "regional" | "germany" | undefined,
+  scheme: ColorScheme,
+): string {
+  if (variant === "germany") {
+    return scheme === "dark"
+      ? LOCAL_BASEMAP_GERMANY_STYLE_DARK_URL
+      : LOCAL_BASEMAP_GERMANY_STYLE_URL;
+  }
+  return scheme === "dark"
+    ? LOCAL_BASEMAP_STYLE_DARK_URL
+    : LOCAL_BASEMAP_STYLE_URL;
+}
+
+function resolveRemoteStyle(
+  config: Extract<BasemapConfig, { mode: "remote-style" }>,
+  scheme: ColorScheme,
+): string {
+  if (!config.styleUrl) {
+    throw new Error("styleUrl required for remote-style");
+  }
+  if (scheme === "dark") {
+    if (config.darkStyleUrl) return config.darkStyleUrl;
+    // Known Voyager light default maps to Dark Matter; other explicit light
+    // URLs remain on their explicitly configured host.
+    if (
+      config.styleUrl === REMOTE_VOYAGER_STYLE_URL ||
+      config.styleUrl.includes("/voyager-gl-style/")
+    ) {
+      return REMOTE_DARK_MATTER_STYLE_URL;
+    }
+    // Custom remote light URL without darkStyleUrl: do not invent a second host.
+    return config.styleUrl;
+  }
+  return config.styleUrl;
+}
+
+/**
+ * Resolve the basemap style URL for the active mode and color scheme.
+ *
+ * local-sovereign always stays on same-origin `/local-basemap/*` paths
+ * (no remote style host). remote-style uses Voyager/Dark Matter or the
+ * explicit URLs carried on the config.
+ */
+export function resolveBasemapStyle(
+  config: BasemapConfig,
+  scheme: ColorScheme | string = "light",
+): string {
+  const resolvedScheme = normalizeColorScheme(scheme);
   switch (config.mode) {
     case "remote-style":
-      if (!config.styleUrl)
-        throw new Error("styleUrl required for remote-style");
-      return config.styleUrl;
+      return resolveRemoteStyle(config, resolvedScheme);
     case "local-sovereign":
-      return config.variant === "germany"
-        ? LOCAL_BASEMAP_GERMANY_STYLE_URL
-        : LOCAL_BASEMAP_STYLE_URL;
+      return resolveLocalSovereignStyle(config.variant, resolvedScheme);
     default:
       return assertNever(config);
   }
