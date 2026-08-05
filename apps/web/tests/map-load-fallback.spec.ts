@@ -74,16 +74,15 @@ test.describe("Map Loader Data Resilience", () => {
     await expect(partialBanner).not.toContainText("bewusst unvollständig");
   });
 
-  test("shows an explicit incomplete-data notice when the cursor safety limit is reached", async ({
+  test("demo static-list transport rejects cursor-shaped node responses", async ({
     page,
   }) => {
+    // Empty PUBLIC_GEWEBE_API_BASE uses static-list against the same-origin
+    // demo API. Cursor incomplete/safety-limit semantics remain covered by
+    // cursorPagination unit tests for remote APIs.
     await mockApiResponses(page);
 
     await page.route("**/api/nodes*", async (route) => {
-      const requestUrl = new URL(route.request().url());
-      const cursor = requestUrl.searchParams.get("cursor");
-      const pageIndex = cursor === null ? 0 : Number(cursor.slice(7));
-      const nextCursor = `cursor-${pageIndex + 1}`;
       const timestamp = "2026-07-27T00:00:00Z";
       await route.fulfill({
         status: 200,
@@ -91,11 +90,11 @@ test.describe("Map Loader Data Resilience", () => {
         body: JSON.stringify({
           items: [
             {
-              id: `node-${pageIndex}`,
-              title: `Node ${pageIndex}`,
+              id: "node-0",
+              title: "Node 0",
               kind: "Event",
-              location: { lat: 53.5, lon: 10 + pageIndex * 0.001 },
-              summary: "Cursor limit test",
+              location: { lat: 53.5, lon: 10 },
+              summary: "Cursor envelope is invalid for static-list",
               tags: [],
               created_at: timestamp,
               updated_at: timestamp,
@@ -103,7 +102,7 @@ test.describe("Map Loader Data Resilience", () => {
           ],
           page: {
             limit: 1000,
-            next_cursor: nextCursor,
+            next_cursor: "cursor-1",
             has_more: true,
           },
         }),
@@ -114,12 +113,12 @@ test.describe("Map Loader Data Resilience", () => {
 
     const partialBanner = page.getByTestId("load-state-partial");
     await expect(partialBanner).toBeVisible();
-    await expect(partialBanner).toContainText("bewusst unvollständig");
-    await expect(partialBanner).toContainText("Knoten");
-    await expect(partialBanner).not.toContainText(
-      "konnten nicht geladen werden",
+    await expect(partialBanner).toContainText(
+      "Einige Kartendaten konnten nicht geladen werden",
     );
-    await expect(page.getByTestId("debug-badge")).toContainText("Nodes: 10");
+    await expect(partialBanner).toContainText("Knoten");
+    await expect(partialBanner).not.toContainText("bewusst unvollständig");
+    await expect(page.getByTestId("debug-badge")).toContainText("Nodes: 0");
   });
 
   test("shows failed state when all API resources fail", async ({ page }) => {

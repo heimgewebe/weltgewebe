@@ -39,6 +39,8 @@ function runGenerator(
   delete env.PUBLIC_BASEMAP_VARIANT;
   delete env.PUBLIC_SOURCE_COMMIT;
   delete env.GIT_COMMIT_SHA;
+  // Host may set VERCEL during CI agents; defaults must stay non-Vercel unless requested.
+  delete env.VERCEL;
   if (includePublicSourceCommit) {
     env.PUBLIC_SOURCE_COMMIT = sourceCommit;
   }
@@ -167,4 +169,62 @@ test("rejects a non-canonical source commit", () => {
     result.stderr,
     /PUBLIC_SOURCE_COMMIT must be a full lowercase Git SHA/,
   );
+});
+
+test("on Vercel without explicit mode selects remote-style", () => {
+  const result = runGenerator({ VERCEL: "1" });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(generatedConfig(), /mode: "remote-style"/);
+  assert.deepEqual(buildIdentity(), {
+    schema_version: 1,
+    mode: "remote-style",
+    style_url: remoteStyleUrl,
+    source_commit: sourceCommit,
+  });
+});
+
+test("explicit local-sovereign on Vercel remains local when style is delivered", () => {
+  const deliveredDir = path.join(webRoot, "static", "local-basemap");
+  const deliveredStyle = path.join(deliveredDir, "style.json");
+  fs.mkdirSync(deliveredDir, { recursive: true });
+  const sourceStyle = path.join(repoRoot, "map-style", "style.json");
+  fs.copyFileSync(sourceStyle, deliveredStyle);
+  try {
+    const result = runGenerator({
+      VERCEL: "1",
+      PUBLIC_BASEMAP_MODE: "local-sovereign",
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.match(generatedConfig(), /mode: "local-sovereign"/);
+    assert.match(generatedConfig(), /variant: "regional"/);
+  } finally {
+    fs.rmSync(deliveredStyle, { force: true });
+    try {
+      fs.rmdirSync(deliveredDir);
+    } catch {
+      // directory may contain unrelated leftovers; leave it
+    }
+  }
+});
+
+test("explicit local-sovereign on Vercel fails closed without delivered style", () => {
+  const deliveredStyle = path.join(
+    webRoot,
+    "static",
+    "local-basemap",
+    "style.json",
+  );
+  fs.rmSync(deliveredStyle, { force: true });
+  const result = runGenerator({
+    VERCEL: "1",
+    PUBLIC_BASEMAP_MODE: "local-sovereign",
+  });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /not delivered/);
+});
+
+test("non-Vercel without explicit mode keeps the policy default", () => {
+  const result = runGenerator();
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(generatedConfig(), /mode: "local-sovereign"/);
 });
