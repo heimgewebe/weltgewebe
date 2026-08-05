@@ -1,11 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
-import {
-  NodesOverlay,
-  filterVisibleWeaveEdges,
-  type MarkerConstructor,
-} from "./nodes";
+import { NodesOverlay, type MarkerConstructor } from "./nodes";
+import { deriveWeaveEdges } from "$lib/stores/mapView";
 import { weaveRuntime } from "./weaveRuntime";
 
 function relation(id: string, sourceId: string, targetId: string): MapEdge {
@@ -13,6 +10,7 @@ function relation(id: string, sourceId: string, targetId: string): MapEdge {
     id,
     source_id: sourceId,
     target_id: targetId,
+    edge_kind: "reference",
   } as MapEdge;
 }
 
@@ -32,7 +30,7 @@ describe("NodesOverlay visibility and zoom ownership", () => {
       relation("filtered-source", "missing", centerEndpoint),
       relation("hidden-target", "source", "missing"),
     ];
-    const visibleEdgeIds = filterVisibleWeaveEdges(points, edges).map(
+    const visibleEdgeIds = deriveWeaveEdges(edges, points).map(
       (edge) => edge.id,
     );
 

@@ -66,12 +66,46 @@ test.describe("Garnrolle marker rendering", () => {
 
     const cross = await body
       .locator(".woven-node__cross")
-      .evaluate((element) => ({
-        beforeContent: getComputedStyle(element, "::before").content,
-        afterContent: getComputedStyle(element, "::after").content,
-      }));
+      .evaluate((element) => {
+        const before = getComputedStyle(element, "::before");
+        const after = getComputedStyle(element, "::after");
+        return {
+          beforeContent: before.content,
+          beforeWidth: Number.parseFloat(before.width),
+          beforeHeight: Number.parseFloat(before.height),
+          afterContent: after.content,
+          afterWidth: Number.parseFloat(after.width),
+          afterHeight: Number.parseFloat(after.height),
+          afterTransform: after.transform,
+        };
+      });
     expect(cross.beforeContent).not.toBe("none");
     expect(cross.afterContent).not.toBe("none");
+    expect(cross.beforeHeight).toBeGreaterThan(cross.beforeWidth * 2);
+    expect(cross.afterWidth).toBeGreaterThan(cross.afterHeight * 2);
+    expect(cross.afterTransform).toBe("none");
+
+    const coreBackground = await body
+      .locator(".woven-node__core")
+      .evaluate((element) => getComputedStyle(element).backgroundImage);
+    expect(coreBackground).toMatch(
+      /repeating-conic-gradient.*radial-gradient.*conic-gradient/,
+    );
+
+    const halo = marker.locator(".map-marker__halo");
+    await expect(halo).toHaveCSS("width", "68px");
+    await marker.focus();
+    await expect(halo).toHaveCSS("opacity", "1");
+    const haloExtendsBeyondBody = await marker.evaluate((element) => {
+      const haloBox = element
+        .querySelector<HTMLElement>(".map-marker__halo")!
+        .getBoundingClientRect();
+      const bodyBox = element
+        .querySelector<HTMLElement>(".marker-node__visual")!
+        .getBoundingClientRect();
+      return haloBox.width > bodyBox.width && haloBox.height > bodyBox.height;
+    });
+    expect(haloExtendsBeyondBody).toBe(true);
   });
 
   test("uses round textile haloes instead of rectangular marker and title boxes", async ({
@@ -202,12 +236,17 @@ test.describe("Garnrolle marker rendering", () => {
         const measure = () => {
           const outer = markerElement.getBoundingClientRect();
           const visibleIcon = icon.getBoundingClientRect();
+          const transform = new DOMMatrixReadOnly(
+            getComputedStyle(icon).transform,
+          );
           return {
             zoom: map.getZoom(),
             outerWidth: outer.width,
             outerHeight: outer.height,
             visualWidth: visibleIcon.width,
             visualHeight: visibleIcon.height,
+            transformScaleX: transform.a,
+            transformScaleY: transform.d,
             bottomDelta: Math.abs(outer.bottom - visibleIcon.bottom),
           };
         };
@@ -228,18 +267,28 @@ test.describe("Garnrolle marker rendering", () => {
     expect(metrics.minZoom).toBe(7);
     expect(metrics.local.zoom).toBeCloseTo(13, 5);
     expect(metrics.regional.zoom).toBeCloseTo(7, 5);
-    expect(metrics.local.outerWidth).toBeCloseTo(44, 1);
-    expect(metrics.regional.outerWidth).toBeCloseTo(44, 1);
-    expect(metrics.local.outerHeight).toBeCloseTo(44, 1);
-    expect(metrics.regional.outerHeight).toBeCloseTo(44, 1);
-    expect(metrics.local.visualWidth).toBeCloseTo(44, 1);
-    // Layout engines round transformed images to different device subpixels.
-    // The visual must remain near the canonical 44px × 0.64 projection.
-    expect(metrics.regional.visualWidth).toBeCloseTo(28.16, 0);
-    expect(metrics.regional.visualHeight).toBeCloseTo(28.16, 0);
-    expect(metrics.regional.visualWidth).toBeLessThan(
-      metrics.local.visualWidth,
-    );
+    for (const stage of [metrics.local, metrics.regional]) {
+      expect(stage.outerWidth).toBeGreaterThanOrEqual(43.9);
+      expect(stage.outerWidth).toBeLessThanOrEqual(44.1);
+      expect(stage.outerHeight).toBeGreaterThanOrEqual(43.9);
+      expect(stage.outerHeight).toBeLessThanOrEqual(44.1);
+    }
+    expect(metrics.local.transformScaleX).toBeGreaterThanOrEqual(0.995);
+    expect(metrics.local.transformScaleX).toBeLessThanOrEqual(1.005);
+    expect(metrics.local.transformScaleY).toBeGreaterThanOrEqual(0.995);
+    expect(metrics.local.transformScaleY).toBeLessThanOrEqual(1.005);
+    // Die Transformationsmatrix ist der fachliche Vertrag. Layoutbreiten dürfen
+    // auf unterschiedlichen Geräten auf andere Subpixel gerundet werden.
+    expect(metrics.regional.transformScaleX).toBeGreaterThanOrEqual(0.635);
+    expect(metrics.regional.transformScaleX).toBeLessThanOrEqual(0.645);
+    expect(metrics.regional.transformScaleY).toBeGreaterThanOrEqual(0.635);
+    expect(metrics.regional.transformScaleY).toBeLessThanOrEqual(0.645);
+    const widthRatio = metrics.regional.visualWidth / metrics.local.visualWidth;
+    expect(widthRatio).toBeGreaterThanOrEqual(0.63);
+    expect(widthRatio).toBeLessThanOrEqual(0.65);
+    expect(
+      Math.abs(metrics.regional.visualWidth - metrics.regional.visualHeight),
+    ).toBeLessThanOrEqual(0.25);
     expect(metrics.local.bottomDelta).toBeLessThanOrEqual(0.5);
     expect(metrics.regional.bottomDelta).toBeLessThanOrEqual(0.5);
   });

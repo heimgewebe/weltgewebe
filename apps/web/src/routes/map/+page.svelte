@@ -6,7 +6,6 @@
   import type { Map as MapLibreMap } from "maplibre-gl";
 
   import TopBar from "$lib/components/TopBar.svelte";
-  import ContextPanel from "$lib/components/ContextPanel.svelte";
   import ToolFan from "$lib/components/ToolFan.svelte";
   import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
   import FilterOverlay from "$lib/components/FilterOverlay.svelte";
@@ -57,7 +56,8 @@
     deriveFilteredMarkers,
     deriveSearchResults,
     deriveSearchMatchIds,
-    deriveVisibleEdges,
+    deriveWeaveEdges,
+    deriveLineEdges,
     selectMapEntity,
   } from "$lib/stores/mapView";
   import { get } from "svelte/store";
@@ -194,16 +194,31 @@
   );
   $: filteredResults = [...nodeSearchItems, ...localPublicStructureResults];
   $: searchMatchIds = deriveSearchMatchIds(filteredResults);
-  $: edgesData = deriveVisibleEdges(scene.edges, filteredMarkersData);
+  // Fachlich absichtliche Asymmetrie: Der sichtbare Zielkörper trägt sein
+  // Gewebe auch dann, wenn die Quelle ausgefiltert ist. Eine Linie benötigt
+  // dagegen weiterhin beide sichtbaren Endpunkte.
+  $: weaveEdges = deriveWeaveEdges(scene.edges, filteredMarkersData);
+  $: projectedMarkersData = projectMarkersForWeave
+    ? projectMarkersForWeave(filteredMarkersData, weaveEdges, edgeProjectionNow)
+    : filteredMarkersData;
+  $: lineEdges = deriveLineEdges(weaveEdges, projectedMarkersData);
 
-  let SearchOverlayComponent:
-    | typeof import("$lib/components/SearchOverlay.svelte").default
-    | null = null;
+  type ContextPanelModule =
+    typeof import("$lib/components/ContextPanel.svelte");
+  let contextPanelPromise: Promise<ContextPanelModule> | null = null;
 
-  async function preloadSearchOverlay() {
-    SearchOverlayComponent = (
-      await import("$lib/components/SearchOverlay.svelte")
-    ).default;
+  function loadContextPanel(): Promise<ContextPanelModule> {
+    contextPanelPromise ??= import("$lib/components/ContextPanel.svelte");
+    return contextPanelPromise;
+  }
+
+  type SearchOverlayModule =
+    typeof import("$lib/components/SearchOverlay.svelte");
+  let searchOverlayPromise: Promise<SearchOverlayModule> | null = null;
+
+  function loadSearchOverlay(): Promise<SearchOverlayModule> {
+    searchOverlayPromise ??= import("$lib/components/SearchOverlay.svelte");
+    return searchOverlayPromise;
   }
 
   let mapContainer: HTMLDivElement | null = null;
@@ -215,6 +230,9 @@
   let lastFocusedElement: HTMLElement | null = null;
 
   let nodesOverlay: NodesOverlayController | null = null;
+  let projectMarkersForWeave:
+    | typeof import("$lib/map/overlay/nodes").projectMarkersForWeave
+    | null = null;
   let edgeMotion: EdgeMotionController | null = null;
   let resolveMotionInput:
     | typeof import("$lib/map/overlay/edgeMotion").resolveEdgeMotionInput
@@ -368,13 +386,8 @@
   // Marker data and search highlighting have separate update paths. Filtering or
   // scene changes may touch the full marker set; search changes only toggle the
   // small delta between the previous and next (maximum ten) search matches.
-  $: if (nodesOverlay && filteredMarkersData) {
-    nodesOverlay.update(
-      filteredMarkersData,
-      showNodes,
-      scene.edges,
-      edgeProjectionNow,
-    );
+  $: if (nodesOverlay && projectedMarkersData) {
+    nodesOverlay.update(projectedMarkersData, showNodes);
   }
 
   $: if (nodesOverlay) {
@@ -409,25 +422,25 @@
     if (!edgeMotion) return;
     edgeMotion.syncCanonicalEdges(scene.edges);
     edgeMotion.setVisibleEdgeIds(
-      $view.showEdges ? new Set(edgesData.map((edge) => edge.id)) : new Set(),
+      $view.showEdges ? new Set(lineEdges.map((edge) => edge.id)) : new Set(),
     );
   }
 
   // Reactive update for edges – only after map style is fully loaded. The
   // transient motion controller receives visibility and canonical ids, but
   // neither filtering nor a render-only difference starts a transition.
-  $: if (map && mapStyleReady && edgesData && $view) {
+  $: if (map && mapStyleReady && lineEdges && $view) {
     updateEdges(
       map,
-      edgesData,
-      filteredMarkersData,
+      lineEdges,
+      projectedMarkersData,
       $view.showEdges,
       edgeProjectionNow,
     );
     syncEdgeMotionProjection();
   }
 
-  function scheduleNextEdgeExpiryRefresh(edges = edgesData) {
+  function scheduleNextEdgeExpiryRefresh(edges = weaveEdges) {
     if (edgeExpiryTimeout !== undefined) {
       clearTimeout(edgeExpiryTimeout);
       edgeExpiryTimeout = undefined;
@@ -438,15 +451,15 @@
     edgeExpiryTimeout = setTimeout(
       () => {
         edgeProjectionNow = Date.now();
-        scheduleNextEdgeExpiryRefresh(edgesData);
+        scheduleNextEdgeExpiryRefresh(weaveEdges);
       },
       Math.max(0, nextExpiryAt - nowMs),
     );
   }
 
   $: if (map) {
-    edgesData;
-    scheduleNextEdgeExpiryRefresh(edgesData);
+    weaveEdges;
+    scheduleNextEdgeExpiryRefresh(weaveEdges);
   }
 
   function focusAndFlyToPoint(item: MapEntityViewModel) {
@@ -716,7 +729,6 @@
     import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === "true";
 
   onMount(() => {
-    void preloadSearchOverlay();
     let releasePmtilesProtocol: (() => void) | undefined;
     let cleanupAuthCamera: (() => void) | undefined;
     let authCameraMoved = false;
@@ -746,16 +758,16 @@
     const hasCanonicalEdgeStyle = () =>
       Boolean(
         map?.getSource(LAYERS.EDGES_SOURCE) &&
-          map.getLayer(LAYERS.EDGES_HALO_LAYER) &&
-          map.getLayer(LAYERS.EDGES_LAYER),
+        map.getLayer(LAYERS.EDGES_HALO_LAYER) &&
+        map.getLayer(LAYERS.EDGES_LAYER),
       );
     const rehydrateMapOverlays = () => {
       styleRehydrateQueued = false;
       if (destroyed || !map || hasCanonicalEdgeStyle()) return;
       updateEdges(
         map,
-        edgesData,
-        filteredMarkersData,
+        lineEdges,
+        projectedMarkersData,
         $view.showEdges,
         edgeProjectionNow,
       );
@@ -794,14 +806,14 @@
     (async () => {
       // Public map rendering never waits for session verification. Auth loads
       // after map creation and may perform one guarded convergence later.
-      const [maplibregl, { NodesOverlay }, edgeMotionModule] =
-        await Promise.all([
-          import("maplibre-gl"),
-          import("$lib/map/overlay/nodes"),
-          import("$lib/map/overlay/edgeMotion"),
-        ]);
+      const [maplibregl, nodesModule, edgeMotionModule] = await Promise.all([
+        import("maplibre-gl"),
+        import("$lib/map/overlay/nodes"),
+        import("$lib/map/overlay/edgeMotion"),
+      ]);
       const initialAuth = { authenticated: false };
       if (destroyed) return;
+      projectMarkersForWeave = nodesModule.projectMarkersForWeave;
       const container = mapContainer;
       if (!container) {
         return;
@@ -885,7 +897,7 @@
       );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
-      nodesOverlay = new NodesOverlay(map, maplibregl.Marker);
+      nodesOverlay = new nodesModule.NodesOverlay(map, maplibregl.Marker);
       cleanupKomposition = setupKompositionInteraction(map);
       let sysStateStr = "";
       unsubscribeSysState = systemState.subscribe((val) => {
@@ -961,6 +973,8 @@
       }
       searchDirectionIndicators = [];
       nodesOverlay?.destroy();
+      nodesOverlay = null;
+      projectMarkersForWeave = null;
       edgeMotion?.destroy();
       edgeMotion = null;
       resolveMotionInput = null;
@@ -1000,19 +1014,38 @@
     </div>
   {/if}
 
-  <ContextPanel
-    on:selectRelated={handleRelatedSelect}
-    on:domainChanged={handleDomainChanged}
-  />
-  {#if SearchOverlayComponent}
-    <svelte:component
-      this={SearchOverlayComponent}
-      {filteredResults}
-      searchStatus={nodeSearchStatus}
-      searchMode={nodeSearchMode}
-      searchFallbackReason={nodeSearchFallbackReason}
-      on:select={handleSearchSelect}
-    />
+  {#if $contextPanelOpen}
+    {#await loadContextPanel()}
+      <p role="status" class="sr-only">Lade Details…</p>
+    {:then contextPanelModule}
+      <svelte:component
+        this={contextPanelModule.default}
+        on:selectRelated={handleRelatedSelect}
+        on:domainChanged={handleDomainChanged}
+      />
+    {:catch}
+      <p role="alert">Details konnten nicht geladen werden.</p>
+    {/await}
+  {/if}
+  {#if $isSearchOpen || searchOverlayPromise}
+    {#await loadSearchOverlay()}
+      {#if $isSearchOpen}
+        <p role="status" class="sr-only">Lade Suche…</p>
+      {/if}
+    {:then searchOverlayModule}
+      <svelte:component
+        this={searchOverlayModule.default}
+        {filteredResults}
+        searchStatus={nodeSearchStatus}
+        searchMode={nodeSearchMode}
+        searchFallbackReason={nodeSearchFallbackReason}
+        on:select={handleSearchSelect}
+      />
+    {:catch}
+      {#if $isSearchOpen}
+        <p role="alert">Suche konnte nicht geladen werden.</p>
+      {/if}
+    {/await}
   {/if}
   <SearchDirectionIndicators
     indicators={searchDirectionIndicators}
@@ -1023,7 +1056,7 @@
   {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
     <div class="debug-badge" data-testid="debug-badge">
       Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Zentren: {markerCounts.webgemeindezentren}
-      / Edges: {edgesData.length}
+      / Edges: {lineEdges.length}
       <br />
       API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
       {#if diagnostics.degraded}

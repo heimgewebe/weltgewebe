@@ -31,7 +31,7 @@ function faden(
 }
 
 test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
-  test("renders the canonical zones, separate proposals and topic-coloured threads", async ({
+  test("renders the canonical zones, visible proposal-bound votes and topic-coloured threads", async ({
     page,
   }) => {
     await mockApiResponses(page);
@@ -73,9 +73,7 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven).toHaveAttribute("data-proposal-count", "2");
     await expect(woven).toHaveAttribute("data-vote-threads", "2");
     await expect(woven.locator('[data-zone="proposal"]')).toHaveCount(2);
-    await expect(
-      woven.locator('[data-zone="proposal"] [data-zone="vote"]'),
-    ).toHaveCount(2);
+    await expect(woven.locator('[data-zone="vote"]')).toHaveCount(2);
 
     const rendered = await page.evaluate((nodeId) => {
       const map = (window as any).__TEST_MAP__;
@@ -121,6 +119,53 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven).toHaveAttribute("data-weave-detail", "detail");
     await expect(woven.locator('[data-zone="vote"]').first()).toBeVisible();
 
+    const voteContracts = await woven.evaluate((root) => {
+      const proposals = Array.from(
+        root.querySelectorAll<HTMLElement>('[data-zone="proposal"]'),
+      );
+      const votes = Array.from(
+        root.querySelectorAll<HTMLElement>('[data-zone="vote"]'),
+      );
+      const rootStyle = getComputedStyle(root);
+      return votes.map((vote) => {
+        const slot = vote.dataset.proposalSlot;
+        const proposal = proposals.find(
+          (candidate) => candidate.dataset.proposalSlot === slot,
+        );
+        if (!proposal) throw new Error(`proposal slot ${slot} missing`);
+        const voteStyle = getComputedStyle(vote) as CSSStyleDeclaration & {
+          webkitMaskImage?: string;
+        };
+        const voteRect = vote.getBoundingClientRect();
+        const proposalRect = proposal.getBoundingClientRect();
+        return {
+          slot,
+          sameParent:
+            vote.parentElement === root && proposal.parentElement === root,
+          nestedInProposal: proposal.contains(vote),
+          rootOverflow: rootStyle.overflow,
+          voteWidth: voteRect.width,
+          proposalWidth: proposalRect.width,
+          opacity: Number(voteStyle.opacity),
+          display: voteStyle.display,
+          backgroundImage: voteStyle.backgroundImage,
+          maskImage: voteStyle.maskImage || voteStyle.webkitMaskImage || "",
+        };
+      });
+    });
+
+    expect(voteContracts).toHaveLength(2);
+    for (const contract of voteContracts) {
+      expect(contract.sameParent).toBe(true);
+      expect(contract.nestedInProposal).toBe(false);
+      expect(contract.rootOverflow).toBe("visible");
+      expect(contract.voteWidth).toBeGreaterThan(contract.proposalWidth);
+      expect(contract.opacity).toBeGreaterThan(0);
+      expect(contract.display).not.toBe("none");
+      expect(contract.backgroundImage).toContain("conic-gradient");
+      expect(contract.maskImage).toContain("radial-gradient");
+    }
+
     await page.evaluate(
       (nodeKind) => (window as any).__TEST_SET_ACTIVE_FILTERS__([nodeKind]),
       demoNodes[0].kind || "Knoten",
@@ -133,5 +178,62 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven).toHaveAttribute("data-conversation-threads", "2");
     await expect(woven).toHaveAttribute("data-proposal-count", "2");
     await expect(woven).toHaveAttribute("data-vote-threads", "2");
+  });
+
+  test("expires a target-only weave edge exactly without ever drawing a line", async ({
+    page,
+  }) => {
+    const now = new Date("2026-08-05T08:00:00.000Z");
+    await page.clock.install({ time: now });
+    await mockApiResponses(page);
+
+    const targetOnlyEdge = {
+      id: "target-only-expiring-knotting",
+      source_id: "outside-visible-markers",
+      source_type: "account",
+      target_id: NODE_ID,
+      target_type: "node",
+      edge_kind: "reference",
+      faden_type: "knotting",
+      faden_subject_id: NODE_ID,
+      created_at: new Date(
+        now.getTime() - FADEN_LIFETIME_MS + 1_000,
+      ).toISOString(),
+      expires_at: new Date(now.getTime() + 1_000).toISOString(),
+    };
+
+    await page.route("**/api/edges*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [targetOnlyEdge]),
+        ),
+      });
+    });
+
+    await page.goto("/map");
+    const marker = page.getByTestId(`marker-node-${NODE_ID}`);
+    const woven = marker.locator(".woven-node");
+    await expect(marker).toBeVisible({ timeout: 15_000 });
+    await expect(woven).toHaveAttribute("data-knotting-threads", "1");
+    await expect(
+      page.getByTestId("marker-garnrolle-outside-visible-markers"),
+    ).toHaveCount(0);
+
+    await expect
+      .poll(async () =>
+        page.evaluate(() => {
+          const source = (window as any).__TEST_MAP__?.getSource(
+            "edges-source",
+          );
+          return source?.serialize?.()?.data?.features?.length ?? 0;
+        }),
+      )
+      .toBe(0);
+
+    await page.clock.fastForward(1_001);
+    await expect(woven).toHaveAttribute("data-knotting-threads", "0");
+    await expect(woven).toHaveAttribute("data-proposal-count", "0");
   });
 });

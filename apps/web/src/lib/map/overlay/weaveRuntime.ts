@@ -17,11 +17,6 @@ export type WeaveRootState = {
 };
 
 export type WeaveRuntime = {
-  project: (
-    points: MapEntityViewModel[],
-    edges: MapEdge[],
-    nowMs: number,
-  ) => MapEntityViewModel[];
   label: (item: MapEntityViewModel) => string;
   createRoot: (
     item: WeaveEntity,
@@ -36,6 +31,14 @@ export type WeaveRuntime = {
 
 function entityWeave(item: WeaveEntity): MapEntityWeave {
   return item.weave ?? deriveEntityWeave(item, [], 0);
+}
+
+export function projectMarkersForWeave(
+  points: MapEntityViewModel[],
+  weaveEdges: MapEdge[],
+  nowMs: number,
+): MapEntityViewModel[] {
+  return projectEntityWeaves(points, weaveEdges, nowMs);
 }
 
 export function weaveRenderSignature(weave: MapEntityWeave): string {
@@ -74,11 +77,14 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     String(weave.conversationOpacity),
   );
   const proposals = weave.proposalArcs
-    .map((arc) => {
+    .map((arc, index) => {
+      const slot = String(index + 1);
+      const arcStyle = `--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color};opacity:${arc.opacity}`;
+      const proposal = `<span class="woven-node__proposal-arc" data-zone="proposal" data-proposal-slot="${slot}" data-vote-threads="${arc.voteThreadCount}" style="${arcStyle}"></span>`;
       const votes = arc.voteThreadCount
-        ? `<span class="woven-node__vote-stitches" data-zone="vote" style="background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span>`
+        ? `<span class="woven-node__vote-stitches" data-zone="vote" data-proposal-slot="${slot}" style="${arcStyle};background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span>`
         : "";
-      return `<span class="woven-node__proposal-arc" data-zone="proposal" data-vote-threads="${arc.voteThreadCount}" style="--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color};opacity:${arc.opacity}">${votes}</span>`;
+      return proposal + votes;
     })
     .join("");
   root.innerHTML = `<span class="woven-node__core" data-zone="knotting"><span class="woven-node__cross"></span></span><span class="woven-node__conversation${weave.conversationThreadCount ? "" : " is-empty"}" data-zone="conversation"></span>${proposals}${weave.proposalOverflowCount ? `<span class="woven-node__overflow">+${weave.proposalOverflowCount}</span>` : ""}`;
@@ -91,7 +97,6 @@ function accessibleMarkerLabel(item: MapEntityViewModel): string {
 }
 
 export const weaveRuntime: WeaveRuntime = {
-  project: projectEntityWeaves,
   label: accessibleMarkerLabel,
   createRoot(item, markerCategory) {
     const weave = entityWeave(item);

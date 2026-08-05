@@ -1,17 +1,22 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type {
+  MapEdge,
   MapEntityNode,
   MapEntityWeave,
   MapEntityWebgemeindezentrum,
 } from "$lib/map/types";
+import { FADEN_LIFETIME_MS } from "$lib/map/edgeLifecycle";
 import {
   NodesOverlay,
   diffSearchMatchIds,
-  weaveRenderSignature,
   type MarkerConstructor,
 } from "./nodes";
-import { weaveRuntime } from "./weaveRuntime";
+import {
+  projectMarkersForWeave,
+  weaveRenderSignature,
+  weaveRuntime,
+} from "./weaveRuntime";
 
 class FakeClassList {
   private values = new Set<string>();
@@ -229,7 +234,7 @@ describe("diffSearchMatchIds", () => {
 });
 
 describe("NodesOverlay runtime robustness", () => {
-  it("returns the projection without creating markers when the map is absent", () => {
+  it("accepts projected markers without creating markers when the map is absent", () => {
     vi.stubGlobal("document", {
       createElement: () => new FakeElement(),
     });
@@ -242,6 +247,21 @@ describe("NodesOverlay runtime robustness", () => {
     expect(overlay.getActiveMarker("a")).toBeUndefined();
   });
 
+  it("renders the complete woven marker in its first frame", () => {
+    vi.stubGlobal("document", {
+      createElement: () => new FakeElement(),
+    });
+    const overlay = new NodesOverlay(
+      {} as MapLibreMap,
+      FakeMarker as unknown as MarkerConstructor,
+    );
+    overlay.update([makeNode("a")], true);
+    const root = overlay.getActiveMarker("a")?.element.children[0]
+      .children[0] as HTMLElement | undefined;
+    expect(root?.dataset.zoneOrder).toBe("knotting,conversation,proposal,vote");
+    expect(root?.innerHTML).toContain('data-zone="knotting"');
+  });
+
   it("derives an empty weave instead of crashing when a caller omitted it", () => {
     const overlay = makeOverlay();
     overlay.update([makeNode("a", { weave: undefined })], true);
@@ -249,6 +269,35 @@ describe("NodesOverlay runtime robustness", () => {
       .children[0] as HTMLElement | undefined;
     expect(root?.dataset.proposalCount).toBe("0");
     expect(root?.dataset.voteThreads).toBe("0");
+  });
+});
+
+describe("weave projection timing", () => {
+  it("removes a target-only weave exactly at its lifecycle boundary", () => {
+    const expiresAtMs = 10_000_000;
+    const edge: MapEdge = {
+      id: "target-only",
+      source_id: "hidden-source",
+      target_id: "target",
+      edge_kind: "reference",
+      faden_type: "conversation",
+      faden_subject_id: "conversation-target",
+      lifecycle: {
+        kind: "faden",
+        createdAtMs: expiresAtMs - FADEN_LIFETIME_MS,
+        expiresAtMs,
+      },
+    };
+    const points = [makeNode("target", { weave: undefined })];
+
+    const active = projectMarkersForWeave(points, [edge], expiresAtMs - 1);
+    const expired = projectMarkersForWeave(points, [edge], expiresAtMs);
+
+    if (active[0].type !== "node" || expired[0].type !== "node") {
+      throw new Error("woven projection changed the target entity category");
+    }
+    expect(active[0].weave?.conversationThreadCount).toBe(1);
+    expect(expired[0].weave?.conversationThreadCount).toBe(0);
   });
 });
 
@@ -404,6 +453,15 @@ describe("NodesOverlay woven node marker", () => {
     expect(root?.innerHTML).toContain('data-zone="conversation"');
     expect(root?.innerHTML.match(/data-zone="proposal"/g)).toHaveLength(2);
     expect(root?.innerHTML.match(/data-zone="vote"/g)).toHaveLength(2);
+    expect(root?.innerHTML).toContain(
+      'data-zone="proposal" data-proposal-slot="1"',
+    );
+    expect(root?.innerHTML).toContain(
+      'data-zone="vote" data-proposal-slot="1"',
+    );
+    expect(root?.innerHTML).not.toMatch(
+      /data-zone="proposal"[^>]*>\s*<span[^>]*data-zone="vote"/,
+    );
   });
 
   it("omits empty vote DOM nodes", () => {

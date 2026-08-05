@@ -88,16 +88,16 @@
   z-index: 4;
   overflow: hidden;
   background-image:
+    repeating-conic-gradient(
+      rgba(255, 255, 255, 0.16) 0deg 2deg,
+      rgba(45, 28, 19, 0.18) 2deg 4deg
+    ),
     radial-gradient(
       circle at 38% 28%,
       rgba(255, 255, 255, 0.38) 0 8%,
       transparent 9%
     ),
-    var(--weave-theme-gradient),
-    repeating-conic-gradient(
-      rgba(255, 255, 255, 0.13) 0deg 2deg,
-      rgba(45, 28, 19, 0.16) 2deg 4deg
-    );
+    var(--weave-theme-gradient);
   box-shadow:
     inset 0 0 calc(5px * var(--weave-core-density)) rgba(38, 24, 17, 0.68),
     0 0 0 1px rgba(245, 225, 196, 0.52);
@@ -135,7 +135,6 @@
   height: 34%;
   left: 0;
   top: 33%;
-  transform: rotate(90deg);
 }
 
 .woven-node__conversation {
@@ -217,6 +216,7 @@
 .woven-node__vote-stitches {
   inset: -3%;
   z-index: 6;
+  transform: rotate(var(--arc-start));
   -webkit-mask: radial-gradient(
     circle,
     transparent 0 88%,
@@ -264,7 +264,7 @@
   position: absolute;
   left: 50%;
   bottom: -1px;
-  width: 51px;
+  width: 68px;
   aspect-ratio: 1;
   box-sizing: border-box;
   border: 2px solid var(--marker-halo-color);
@@ -373,6 +373,12 @@
 .map-marker.is-selected .map-marker__halo {
   opacity: 1;
   transform: translateX(-50%);
+}
+
+.map-marker.is-selected:focus-visible .map-marker__halo {
+  box-shadow:
+    0 0 0 3px var(--text),
+    0 0 10px var(--marker-halo-color);
 }
 
 .map-marker.is-selected .woven-node__proposal-arc {

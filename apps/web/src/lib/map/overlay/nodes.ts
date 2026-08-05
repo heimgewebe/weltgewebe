@@ -1,13 +1,11 @@
 import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
-import type {
-  MapEdge,
-  MapEntityViewModel,
-  MapEntityWeave,
-} from "$lib/map/types";
+import type { MapEntityViewModel } from "$lib/map/types";
 import type { WeaveEntity } from "$lib/map/weaveTheme";
 import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
-import type { WeaveRuntime } from "./weaveRuntime";
+import { weaveRuntime, type WeaveRuntime } from "./weaveRuntime";
+
+export { projectMarkersForWeave } from "./weaveRuntime";
 
 function hasRenderablePosition(item: MapEntityViewModel): boolean {
   return (
@@ -37,54 +35,7 @@ export function diffSearchMatchIds(
   return { added, removed };
 }
 
-export function filterVisibleWeaveEdges(
-  points: MapEntityViewModel[],
-  edges: MapEdge[],
-): MapEdge[] {
-  const visibleTargetIds = new Set<string>();
-  for (const point of points) {
-    visibleTargetIds.add(point.id);
-    if (point.type === "webgemeindezentrum") {
-      visibleTargetIds.add(point.faden_endpoint_id);
-    }
-  }
-  return edges.filter((edge) => visibleTargetIds.has(edge.target_id));
-}
-
-export function weaveRenderSignature(weave: MapEntityWeave): string {
-  let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.knottingThreadCount}|${weave.conversationThreadCount}|${weave.conversationOpacity}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}`;
-  for (const { color, startDeg, spanDeg } of weave.themeSegments) {
-    signature += `|${color}:${startDeg}:${spanDeg}`;
-  }
-  for (const {
-    color,
-    startDeg,
-    spanDeg,
-    opacity,
-    voteThreadCount,
-  } of weave.proposalArcs) {
-    signature += `|${color}:${startDeg}:${spanDeg}:${opacity}:${voteThreadCount}`;
-  }
-  return signature;
-}
-
-function createWeavePlaceholder(
-  markerCategory: "node" | "webgemeindezentrum",
-): HTMLElement {
-  const root = document.createElement("span");
-  root.className = `woven-node woven-node--${markerCategory}`;
-  root.setAttribute("aria-hidden", "true");
-  return root;
-}
-
 export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
-
-type LatestUpdate = {
-  points: MapEntityViewModel[];
-  showNodes: boolean;
-  edges: MapEdge[] | undefined;
-  nowMs: number;
-};
 
 export class NodesOverlay {
   private activeMarkers = new Map<
@@ -101,9 +52,6 @@ export class NodesOverlay {
   private searchMatchIds = new Set<string>();
   private selectedMarkerId: string | null = null;
   private compactWeave = false;
-  private runtime: WeaveRuntime | null;
-  private latestUpdate: LatestUpdate | null = null;
-  private destroyed = false;
   private readonly handleZoom = () => {
     if (this.map) this.updateZoom(this.map.getZoom());
   };
@@ -111,24 +59,8 @@ export class NodesOverlay {
   constructor(
     private map: MapLibreMap | null,
     private MarkerClass: MarkerConstructor,
-    runtime: WeaveRuntime | null = null,
+    private readonly runtime: WeaveRuntime = weaveRuntime,
   ) {
-    this.runtime = runtime;
-    if (!runtime) {
-      void import("./weaveRuntime").then(({ weaveRuntime }) => {
-        if (this.destroyed) return;
-        this.runtime = weaveRuntime;
-        const latest = this.latestUpdate;
-        if (latest) {
-          this.update(
-            latest.points,
-            latest.showNodes,
-            latest.edges,
-            latest.nowMs,
-          );
-        }
-      });
-    }
     if (
       this.map &&
       typeof this.map.getZoom === "function" &&
@@ -174,35 +106,19 @@ export class NodesOverlay {
     }
   }
 
-  public update(
-    points: MapEntityViewModel[],
-    showNodes: boolean,
-    edges?: MapEdge[],
-    nowMs = Date.now(),
-  ): MapEntityViewModel[] {
-    this.latestUpdate = { points, showNodes, edges, nowMs };
-    const runtime = this.runtime;
-    let projectedPoints = points;
-    if (runtime && edges !== undefined) {
-      projectedPoints = runtime.project(
-        points,
-        filterVisibleWeaveEdges(points, edges),
-        nowMs,
-      );
-    }
-
+  public update(points: MapEntityViewModel[], showNodes: boolean): void {
     if (!showNodes) {
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
       this.activeMarkers.clear();
-      return projectedPoints;
+      return;
     }
 
     const map = this.map;
-    if (!map) return projectedPoints;
+    if (!map) return;
 
     const currentIds = new Set<string>();
 
-    for (const item of projectedPoints) {
+    for (const item of points) {
       if (!hasRenderablePosition(item)) {
         const existing = this.activeMarkers.get(item.id);
         if (existing) {
@@ -236,7 +152,7 @@ export class NodesOverlay {
           marker.setLngLat([item.lon, item.lat]);
         }
         if (element.title !== item.title) element.title = item.title;
-        const ariaLabel = runtime?.label(item) ?? item.title;
+        const ariaLabel = this.runtime.label(item);
         if (element.getAttribute("aria-label") !== ariaLabel) {
           element.setAttribute("aria-label", ariaLabel);
         }
@@ -248,8 +164,8 @@ export class NodesOverlay {
           delete element.dataset.locationState;
         }
         this.syncWebgemeindezentrumAppearance(element, item);
-        if (runtime && existing.weaveRoot && item.type !== "garnrolle") {
-          existing.weaveSignature = runtime.syncRoot(
+        if (existing.weaveRoot && item.type !== "garnrolle") {
+          existing.weaveSignature = this.runtime.syncRoot(
             existing.weaveRoot,
             item,
             existing.weaveSignature,
@@ -294,12 +210,7 @@ export class NodesOverlay {
         } else {
           const category =
             item.type === "webgemeindezentrum" ? "webgemeindezentrum" : "node";
-          const woven = runtime
-            ? runtime.createRoot(item as WeaveEntity, category)
-            : {
-                root: createWeavePlaceholder(category),
-                signature: null,
-              };
+          const woven = this.runtime.createRoot(item as WeaveEntity, category);
           weaveRoot = woven.root;
           weaveSignature = woven.signature;
           this.syncWeaveDetail(weaveRoot);
@@ -321,12 +232,15 @@ export class NodesOverlay {
         element.append(visual, halo);
         this.syncWebgemeindezentrumAppearance(element, item);
 
-        element.setAttribute("aria-label", runtime?.label(item) ?? item.title);
+        element.setAttribute("aria-label", this.runtime.label(item));
         element.title = item.title;
 
         const marker = new this.MarkerClass({ element, anchor: "bottom" })
           .setLngLat([item.lon, item.lat])
           .addTo(map);
+        // MapLibre assigns its generic "Map marker" label in the constructor.
+        // Restore the domain-specific woven summary after that synchronous step.
+        element.setAttribute("aria-label", this.runtime.label(item));
 
         if (this.searchMatchIds.has(item.id)) {
           element.classList.add("search-highlight");
@@ -357,7 +271,6 @@ export class NodesOverlay {
         this.activeMarkers.delete(id);
       }
     }
-    return projectedPoints;
   }
 
   private setSearchMatch(id: string, highlighted: boolean) {
@@ -416,8 +329,6 @@ export class NodesOverlay {
   }
 
   public destroy() {
-    this.destroyed = true;
-    this.latestUpdate = null;
     if (this.map && typeof this.map.off === "function") {
       this.map.off("zoom", this.handleZoom);
     }

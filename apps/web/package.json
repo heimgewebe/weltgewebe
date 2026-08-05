@@ -23,10 +23,11 @@
   "scripts": {
     "generate:basemap-config": "node scripts/generate-basemap-config.js",
     "dev": "pnpm run generate:client-version && pnpm run generate:basemap-config && vite dev --host",
-    "build": "vite build",
-    "build:container": "pnpm run sync && rimraf build && vite build && node scripts/generate-version.js --server --artifact-tree && node scripts/assert-route-performance-budget.mjs --budget-only",
-    "prebuild": "pnpm run sync && rimraf build",
-    "postbuild": "node scripts/generate-version.js --server --artifact-tree && node scripts/assert-route-performance-budget.mjs --budget-only",
+    "build:prepare": "pnpm run sync && rimraf build",
+    "build:finalize": "node scripts/generate-version.js --server --artifact-tree",
+    "build": "pnpm run build:prepare && vite build && pnpm run build:finalize",
+    "build:container": "pnpm run build:prepare && vite build && pnpm run build:finalize && node scripts/assert-route-performance-budget.mjs --budget-only",
+    "postbuild": "node scripts/assert-route-performance-budget.mjs --budget-only",
     "preview": "vite preview",
     "clean": "rimraf node_modules .svelte-kit build",
     "postinstall": "node ./scripts/verify-cookie-version.js",
@@ -38,7 +39,7 @@
     "prelint": "pnpm run generate:basemap-config",
     "lint": "prettier -c . && eslint . --max-warnings=0",
     "screenshot": "node scripts/record-screenshot.mjs",
-    "build:e2e": "pnpm run sync && rimraf build && cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true vite build --mode test && node scripts/generate-version.js --server --artifact-tree",
+    "build:e2e": "pnpm run build:prepare && cross-env VITE_PUBLIC_ENABLE_TEST_MAP=true vite build --mode test && pnpm run build:finalize",
     "pretest": "pnpm run generate:basemap-config",
     "pretest:ci": "pnpm run generate:basemap-config",
     "pretest:proof:basemap-real": "pnpm run generate:basemap-config",
@@ -69,7 +70,8 @@
     "dev:cs": "node scripts/generate-version.js --client && pnpm run generate:basemap-config && vite dev --host 0.0.0.0 --port 5173",
     "preview:cs": "vite preview --host 0.0.0.0 --port 4173",
     "generate:client-version": "node scripts/generate-version.js --client",
-    "test:route-performance-budget": "node --test scripts/assert-route-performance-budget.test.mjs scripts/performance-contract.test.mjs"
+    "measure:map-start-path": "node scripts/map-start-path-closure.mjs",
+    "test:route-performance-budget": "node --test scripts/assert-route-performance-budget.test.mjs scripts/performance-contract.test.mjs scripts/build-profile-contract.test.mjs scripts/map-start-path-closure.test.mjs"
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
