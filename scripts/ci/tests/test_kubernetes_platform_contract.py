@@ -811,6 +811,13 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             cwd=ROOT,
             input=b"",
         ).decode().strip()
+        orphan_env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "oci-ancestry-test",
+            "GIT_AUTHOR_EMAIL": "oci-ancestry-test@invalid",
+            "GIT_COMMITTER_NAME": "oci-ancestry-test",
+            "GIT_COMMITTER_EMAIL": "oci-ancestry-test@invalid",
+        }
         orphan = subprocess.check_output(
             [
                 "git",
@@ -821,6 +828,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ],
             cwd=ROOT,
             text=True,
+            env=orphan_env,
         ).strip()
         self.assertRegex(orphan, r"^[0-9a-f]{40}$")
         not_ancestor = subprocess.run(
