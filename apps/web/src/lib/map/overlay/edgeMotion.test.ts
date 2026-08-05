@@ -13,13 +13,16 @@ import {
   type EdgeMotionScheduler,
 } from "$lib/map/overlay/edgeMotion";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import { normalizeEdgeLifecycle } from "$lib/map/edgeLifecycle";
 import {
+  buildEdgeFeatures,
   buildEdgeLayerSpecifications,
   buildProgressClippedThemeSegments,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
 } from "$lib/map/overlay/edges";
+import { deriveEntityWeave, targetThemePalette } from "$lib/map/weaveModel";
 
 class ManualScheduler implements EdgeMotionScheduler {
   time = 0;
@@ -244,6 +247,71 @@ describe("resolveEdgeMotionInput", () => {
     expect(resolved?.themeColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(resolved?.themeColors?.length).toBeGreaterThan(0);
     expect(resolved?.themeColors?.[0]).toBe(resolved?.themeColor);
+  });
+
+  it("uses the projected multi-theme weave palette, not monochrome raw fallback", () => {
+    const createdAt = "2026-08-03T00:00:00Z";
+    const createdAtMs = Date.parse(createdAt);
+    const edge = normalizeEdgeLifecycle({
+      id: "edge-multi",
+      source_id: "account",
+      target_id: "node-1",
+      edge_kind: "reference",
+      faden_type: "knotting",
+      created_at: createdAt,
+    });
+    const rawTarget = {
+      type: "node" as const,
+      id: "node-1",
+      title: "Garten",
+      kind: "Knoten",
+      tags: ["Natur", "Bildung", "Kunst"],
+      created_at: createdAt,
+      lat: 53.6,
+      lon: 10.2,
+    };
+    const projectedTarget = {
+      ...rawTarget,
+      weave: deriveEntityWeave(rawTarget, [], createdAtMs),
+    };
+    const source = {
+      type: "garnrolle" as const,
+      id: "account",
+      title: "Quelle",
+      lat: 53.5,
+      lon: 10,
+      created_at: createdAt,
+    };
+    const expectedPalette = targetThemePalette(projectedTarget.weave);
+    expect(expectedPalette.length).toBeGreaterThan(1);
+
+    const motionFromProjected = resolveEdgeMotionInput(edge, [
+      source,
+      projectedTarget,
+    ] as MapEntityViewModel[]);
+    expect(motionFromProjected?.themeColors).toEqual(expectedPalette);
+    expect(motionFromProjected?.themeColor).toBe(expectedPalette[0]);
+
+    // Raw markers without weave collapse to a single colour — the integration
+    // path must never feed them into motion when projection is available.
+    const motionFromRaw = resolveEdgeMotionInput(edge, [
+      source,
+      rawTarget,
+    ] as MapEntityViewModel[]);
+    expect(motionFromRaw?.themeColors).toHaveLength(1);
+    expect(motionFromRaw?.themeColors).not.toEqual(expectedPalette);
+
+    const staticFeatures = buildEdgeFeatures(
+      [edge],
+      [source, projectedTarget] as MapEntityViewModel[],
+      true,
+      createdAtMs,
+    );
+    const staticPalette = staticFeatures[0]?.properties?.themeColors as
+      | string[]
+      | undefined;
+    expect(staticPalette).toEqual(expectedPalette);
+    expect(motionFromProjected?.themeColors).toEqual(staticPalette);
   });
 });
 

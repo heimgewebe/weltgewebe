@@ -48,7 +48,7 @@ export function projectMarkersForWeave(
  * DOM. Ageing conversation and proposal threads change their opacity on every
  * projection step; treating that as structure would tear down and rebuild every
  * marker body once a minute. Opacity is applied separately to the elements that
- * already exist — see {@link applyWeaveOpacity}.
+ * already exist — see {@link applyWeaveDynamicProperties}.
  *
  * Arm overlays include label (and every other DOM-relevant field) so a stable
  * overlay id with a changed title still rebuilds.
@@ -80,11 +80,14 @@ export function weaveRenderSignature(weave: MapEntityWeave): string {
 }
 
 /**
- * Time-dependent opacity, written onto the existing nodes. The conversation
- * ring reads a CSS variable; every proposal arc and its vote stitches are
- * addressed through their shared `data-proposal-slot`.
+ * DOM-preserving dynamic CSS state written onto an already-rendered weave body.
+ * Covers conversation opacity, conversation-ring thickness, and per-slot
+ * proposal/vote opacities — not a structural rebuild.
  */
-export function applyWeaveOpacity(root: HTMLElement, weave: MapEntityWeave) {
+export function applyWeaveDynamicProperties(
+  root: HTMLElement,
+  weave: MapEntityWeave,
+) {
   root.style.setProperty(
     "--weave-conversation-opacity",
     String(weave.conversationOpacity),
@@ -195,8 +198,8 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   for (let index = 0; index < weave.proposalArcs.length; index += 1) {
     const arc = weave.proposalArcs[index];
     const slot = String(index + 1);
-    // Opacity stays out of the markup: applyWeaveOpacity owns it, so a purely
-    // temporal change never has to touch this tree.
+    // Dynamic CSS stays out of the markup: applyWeaveDynamicProperties owns it,
+    // so a purely temporal change never has to touch this tree.
     const arcStyleVars = {
       "--arc-start": `${arc.startDeg}deg`,
       "--arc-span": `${arc.spanDeg}deg`,
@@ -263,14 +266,14 @@ export const weaveRuntime: WeaveRuntime = {
     root.className = `woven-node woven-node--${markerCategory}`;
     root.setAttribute("aria-hidden", "true");
     renderWeave(root, weave);
-    applyWeaveOpacity(root, weave);
+    applyWeaveDynamicProperties(root, weave);
     return { root, signature: weaveRenderSignature(weave) };
   },
   syncRoot(root, item, previousSignature) {
     const weave = entityWeave(item);
     const signature = weaveRenderSignature(weave);
     if (signature !== previousSignature) renderWeave(root, weave);
-    applyWeaveOpacity(root, weave);
+    applyWeaveDynamicProperties(root, weave);
     return signature;
   },
 };

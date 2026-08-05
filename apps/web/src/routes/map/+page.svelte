@@ -207,10 +207,20 @@
   // Gewebe auch dann, wenn die Quelle ausgefiltert ist. Eine Linie benötigt
   // dagegen weiterhin beide sichtbaren Endpunkte.
   $: weaveEdges = deriveWeaveEdges(scene.edges, filteredMarkersData);
+  // Null until the weave projector is loaded. Never fall back to raw markers:
+  // without `weave` multi-theme edges and motion collapse to a single colour.
   $: projectedMarkersData = projectMarkersForWeave
     ? projectMarkersForWeave(filteredMarkersData, weaveEdges, edgeProjectionNow)
-    : filteredMarkersData;
-  $: lineEdges = deriveLineEdges(weaveEdges, projectedMarkersData);
+    : null;
+  // Motion resolves geometry against the unfiltered projected set so filter
+  // visibility can hide transitions without inventing monochrome from raw
+  // markers or losing endpoints that are only temporarily filtered out.
+  $: motionMarkersData = projectMarkersForWeave
+    ? projectMarkersForWeave(markersData, scene.edges, edgeProjectionNow)
+    : null;
+  $: lineEdges = projectedMarkersData
+    ? deriveLineEdges(weaveEdges, projectedMarkersData)
+    : [];
 
   type ContextPanelModule =
     typeof import("$lib/components/ContextPanel.svelte");
@@ -468,7 +478,8 @@
   // Reactive update for edges – only after map style is fully loaded. The
   // transient motion controller receives visibility and canonical ids, but
   // neither filtering nor a render-only difference starts a transition.
-  $: if (map && mapStyleReady && lineEdges && $view) {
+  // Wait for weave projection so static and motion threads share one palette.
+  $: if (map && mapStyleReady && projectedMarkersData && $view) {
     updateEdges(
       map,
       lineEdges,
@@ -574,7 +585,10 @@
   }
 
   function edgeMotionInput(edge: MapEdge): EdgeMotionInput | null {
-    return resolveMotionInput?.(edge, markersData) ?? null;
+    // Projected weave palette (same derivation as static threads), fail-closed
+    // until the projector is ready. Never resolve from raw unprojected markers.
+    if (!resolveMotionInput || !motionMarkersData) return null;
+    return resolveMotionInput(edge, motionMarkersData);
   }
 
   function animateEdgesForNode(
@@ -877,6 +891,7 @@
     const rehydrateMapOverlays = () => {
       styleRehydrateQueued = false;
       if (destroyed || !map || hasCanonicalEdgeStyle()) return;
+      if (!projectedMarkersData) return;
       updateEdges(
         map,
         lineEdges,
