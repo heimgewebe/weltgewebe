@@ -32,9 +32,15 @@ done
 if [ ! -f ".wgx/generated-artifacts.yml" ]; then
   echo "ERROR: .wgx/generated-artifacts.yml missing."
   FAIL=1
-elif ! python3 -m scripts.docmeta.validate_generated_artifacts --check; then
-  echo "ERROR: generated artifact control validation failed."
-  FAIL=1
+else
+  # Same repo-canonical tools/py environment as make validate / UV_RUN.
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "ERROR: uv is required for generated artifact control (tools/py/uv.lock)."
+    FAIL=1
+  elif ! uv run --project tools/py --locked python -m scripts.docmeta.validate_generated_artifacts --check; then
+    echo "ERROR: generated artifact control validation failed."
+    FAIL=1
+  fi
 fi
 
 if [ "$FAIL" -eq 1 ]; then
