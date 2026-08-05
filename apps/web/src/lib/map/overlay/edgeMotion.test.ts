@@ -12,6 +12,10 @@ import {
   type EdgeMotionScheduler,
 } from "$lib/map/overlay/edgeMotion";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import {
+  buildEdgeLayerSpecifications,
+  EDGE_THREAD_LAYER_IDS,
+} from "$lib/map/overlay/edges";
 
 class ManualScheduler implements EdgeMotionScheduler {
   time = 0;
@@ -61,8 +65,9 @@ class MapStub {
   listeners = new Map<string, Set<() => void>>();
 
   constructor() {
-    this.addLayer({ id: "edges-halo-layer", type: "line" });
-    this.addLayer({ id: "edges-layer", type: "line" });
+    for (const layer of buildEdgeLayerSpecifications()) {
+      this.addLayer(layer as unknown as Record<string, unknown>);
+    }
     this.addLayer({ id: "labels", type: "symbol" });
   }
 
@@ -97,6 +102,7 @@ class MapStub {
   addLayer(layer: Record<string, unknown>, beforeId?: string) {
     const id = String(layer.id);
     this.layers.set(id, layer);
+    if ("filter" in layer) this.filters.set(id, layer.filter ?? null);
     const oldIndex = this.layerOrder.indexOf(id);
     if (oldIndex >= 0) this.layerOrder.splice(oldIndex, 1);
     const beforeIndex = beforeId ? this.layerOrder.indexOf(beforeId) : -1;
@@ -110,6 +116,7 @@ class MapStub {
 
   removeLayer(id: string) {
     this.layers.delete(id);
+    this.filters.delete(id);
     const index = this.layerOrder.indexOf(id);
     if (index >= 0) this.layerOrder.splice(index, 1);
   }
@@ -151,6 +158,31 @@ const input: EdgeMotionInput = {
 
 function motionSource(map: MapStub) {
   return map.getSource(EDGE_MOTION_SOURCE)!;
+}
+
+const canonicalLayerSpecifications = new Map(
+  buildEdgeLayerSpecifications().map((specification) => [
+    specification.id,
+    specification,
+  ]),
+);
+
+function expectCanonicalFilters(map: MapStub, hiddenIds: string[]) {
+  expect([...canonicalLayerSpecifications.keys()]).toEqual(
+    EDGE_THREAD_LAYER_IDS,
+  );
+  const hideFilter = ["!", ["in", ["get", "id"], ["literal", hiddenIds]]];
+  for (const layerId of EDGE_THREAD_LAYER_IDS) {
+    const baseFilter =
+      canonicalLayerSpecifications.get(layerId)?.filter ?? null;
+    const expectedFilter =
+      hiddenIds.length === 0
+        ? baseFilter
+        : baseFilter
+          ? ["all", baseFilter, hideFilter]
+          : hideFilter;
+    expect(map.getFilter(layerId)).toEqual(expectedFilter);
+  }
 }
 
 describe("resolveEdgeMotionInput", () => {
@@ -216,10 +248,7 @@ describe("EdgeMotionController", () => {
       activeCount: 1,
       framePending: true,
     });
-    expect(map.getFilter("edges-layer")).toEqual([
-      "!",
-      ["in", ["get", "id"], ["literal", [input.id]]],
-    ]);
+    expectCanonicalFilters(map, [input.id]);
 
     scheduler.advance(EDGE_MOTION_DURATION_MS / 2);
     const halfway = motionSource(map).data.features[0];
@@ -232,7 +261,7 @@ describe("EdgeMotionController", () => {
       framePending: false,
     });
     expect(motionSource(map).data.features).toEqual([]);
-    expect(map.getFilter("edges-layer")).toBeNull();
+    expectCanonicalFilters(map, []);
   });
 
   it("retracts along the same geometry and suppresses the static edge until data removal", () => {
@@ -251,11 +280,11 @@ describe("EdgeMotionController", () => {
       framePending: false,
       suppressedIds: [input.id],
     });
-    expect(map.getFilter("edges-layer")).not.toBeNull();
+    expectCanonicalFilters(map, [input.id]);
 
     controller.syncCanonicalEdges([]);
     expect(controller.inspect().suppressedIds).toEqual([]);
-    expect(map.getFilter("edges-layer")).toBeNull();
+    expectCanonicalFilters(map, []);
   });
 
   it("jumps to the canonical end state under reduced motion without requesting a frame", () => {
@@ -275,7 +304,7 @@ describe("EdgeMotionController", () => {
       suppressedIds: [input.id],
     });
     expect(scheduler.callbacks.size).toBe(0);
-    expect(map.getFilter("edges-layer")).not.toBeNull();
+    expectCanonicalFilters(map, [input.id]);
   });
 
   it("reverses a rapid counter-event without a geometry jump", () => {
@@ -322,7 +351,7 @@ describe("EdgeMotionController", () => {
     });
     expect(map.getSource(EDGE_MOTION_SOURCE)).toBeUndefined();
     expect(map.getLayer(EDGE_MOTION_LAYER)).toBeUndefined();
-    expect(map.getFilter("edges-layer")).toBeNull();
+    expectCanonicalFilters(map, []);
     expect(map.listeners.get("styledata")?.size ?? 0).toBe(0);
   });
 });
