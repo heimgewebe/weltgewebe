@@ -1056,6 +1056,8 @@
         (window as any).__TEST_SET_ACTIVE_FILTERS__ = (types: string[]) => {
           activeFilters.set(new Set(types));
         };
+        (window as any).__TEST_REFRESH_EDGE_PROJECTION__ =
+          refreshEdgeProjection;
         (window as any).__TEST_EDGE_MOTION__ = {
           start: (edgeId: string, phase: "creating" | "releasing") =>
             animateEdgeById(edgeId, phase),
@@ -1105,6 +1107,7 @@
       if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
         delete (window as any).__TEST_SET_ACTIVE_FILTERS__;
+        delete (window as any).__TEST_REFRESH_EDGE_PROJECTION__;
         delete (window as any).__TEST_EDGE_MOTION__;
       }
       teardownMapRuntime();
