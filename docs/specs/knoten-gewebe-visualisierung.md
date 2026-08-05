@@ -190,23 +190,44 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   Perlenoptik.
 - **Kurvengeometrie:** Kanonische Fadenlinien sind deterministische, begrenzt
   abgetastete kubische Bézier-Pfade (oder gleichwertig), keine geraden
-  technischen Linien und keine Kapselketten. Quelle und Ziel bleiben exakt
-  unverändert. Austritt und Einzug liegen nahezu am Sehnenverlauf; die Mitte
-  trägt einen weiten natürlichen Bogen. Kurze Wege bleiben fast gerade; die
-  laterale Auslenkung ist nach Bildschirmentfernung (Chordlänge) begrenzt.
+  technischen Linien und keine Kapselketten. Quelle und Ziel bleiben im
+  GeoJSON exakt die gelieferten Koordinaten. Chord, Normalen, Bulge und
+  Sampling werden in einer sphärischen Web-Mercator-Ebene (EPSG:3857-Radius,
+  interne Breitenklemme nur für die Projektion) berechnet — nicht in rohen
+  Lon/Lat-Graden und nicht in MapLibre-CSS-Pixeln, solange kein echter
+  `map.project`-Pixelpfad angebunden ist. Austritt und Einzug liegen nahezu am
+  Sehnenverlauf; die Mitte trägt einen weiten natürlichen Bogen. Kurze Wege
+  bleiben fast gerade; die laterale Auslenkung ist nach projizierter
+  Chordlänge begrenzt (`EDGE_CURVE_FULL_LENGTH_M`, `EDGE_CURVE_MAX_BULGE_M`).
   Biegungsseite und Mikrovariation entstehen stabil aus Fadenidentität
   (`threadId` / `faden_subject_id`), nicht aus Zufall, Wellen oder
   Physiksimulation. Die Abtastpunktzahl ist fest begrenzt
-  (`EDGE_CURVE_MAX_SAMPLES`); es gibt keine per-frame Neuberechnung der
-  Kontrollpunkte und keine Kollisionserkennung.
+  (`EDGE_CURVE_MAX_SAMPLES` ≤ 24). Es gibt keine Physiksimulation und keine
+  Kollisionserkennung. Längenunterschiede am Antimeridian nutzen die kürzeste
+  unwrapped Längendifferenz; Zwischenpunkte bleiben endlich (kein
+  NaN/Infinity). Ein vollständiger MapLibre-LineString-Split für
+  World-Wrapping ist in dieser Stufe nicht Teil des Vertrags — der Pfad ist
+  intern short-path-sicher, die Kartenrenderer-Grenze bleibt ehrlich offen.
+- **Kanonischer Pfadzustand:** Static und Motion teilen dieselbe reine
+  Path-Builder-Logik und dieselbe Identität. Der unveränderliche Zustand
+  enthält Sample-Polyline, kumulative Bogenlängen, Gesamtlänge und stabile
+  Segmentmetadaten (Farbsäume). Er wird einmal beim Aufbau eines statischen
+  Features bzw. eines `ActiveMotion` erzeugt; pro Animationsframe dürfen nur
+  der sichtbare Fortschrittsausschnitt und die GeoJSON-Feature-Hülle entstehen
+  — keine erneute Kontrollpunkt-, Sampling- oder Seam-Berechnung im RAF.
+  Concurrent Motion bleibt durch `EDGE_MOTION_MAX_ACTIVE` (8) begrenzt.
 - **Spannungs- und Materialprofile** pro Fadenart (`THREAD_CURVE_PROFILES`):
   Knüpffaden straff, gering gekrümmt und kräftig; Gespräch weich, weiter,
   leicht asymmetrisch und dünner; Antrag ruhig, mittlere Spannung und breiter;
   Stimme schmal, antragsbezogen und ohne unabhängige Großkurve. Belegte
-  `faden_subject_id` bindet antragsbezogene Fäden (Antrag/Stimme) in einen
-  gemeinsamen Einzugskorridor (gleiche Biegungsseite und Basiskurve);
-  ohne belegte Subject-ID gilt ein sicherer thread-lokaler Fallback ohne
-  erfundene Beziehung.
+  `faden_subject_id` bindet Antrag, antragsbezogenes Gespräch und Stimme in
+  einen echten gemeinsamen target-seitigen Einzug: gleiche Biegungsseite und
+  gemeinsame letzte Korridorachse / Anflugvektor am Ziel. Mittlere
+  Spannungsprofile und kleine, begrenzte Materialabstände dürfen differieren.
+  Ohne belegte Subject-ID gilt ein typisierter privater Fallback ohne
+  erfundene Beziehung. Handle-Längen sind begrenzt
+  (`EDGE_CURVE_MAX_HANDLE_FRACTION`); die Zielausrichtung wird gegen
+  Sehnenumkehr abgesichert.
 - **Schatten und Garnkörper** sind bei Knüpfen, Gespräch und Antrag weitgehend
   kontinuierlich; der Flecht-/Faserrhythmus lebt primär im schmalen Highlight.
   Stimme darf am Körper stichartiger bleiben, behält aber einen feinen
@@ -214,9 +235,11 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
 - **Mehrfarbige Segmente** und Erzeugungs-/Auflösungsanimation segmentieren
   nach tatsächlicher Kurvenlänge (Bogenfortschritt) und nutzen exakt dieselbe
   Pfadgeometrie wie der statische Faden. Farbsäume bleiben in diesem
-  Fortschrittsraum fest. An belegten WebGL-Nahtstellen (runde Line-Caps) gilt
-  eine stabile, minimale geometrische Überdeckung der Segmentenden. Wandernde
-  Farbsäume und unbewiesene Gradient-Experimente sind unzulässig.
+  Fortschrittsraum fest. Benachbarte Mehrfarben-Segmente überlappen im
+  Arc-Progress (einseitiger Seam-Pullback als Bruchteil der lokalen
+  Segmentlänge). Der Motion-Tipp endet exakt bei
+  `pointAtArcProgress(path, progress)`; kein Segment zeichnet darüber hinaus.
+  Wandernde Farbsäume und unbewiesene Gradient-Experimente sind unzulässig.
 
 ## Zentraler Linienanschluss
 

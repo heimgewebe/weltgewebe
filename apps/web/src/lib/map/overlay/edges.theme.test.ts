@@ -2,8 +2,10 @@ import { describe, expect, it } from "vitest";
 import { normalizeEdgeLifecycle } from "$lib/map/edgeLifecycle";
 import {
   buildEdgeFeatures,
-  buildProgressClippedThemeSegments,
   buildThemedLineSegments,
+  buildThreadPathState,
+  clipThreadPathByProgress,
+  pointAtArcProgress,
   sampleThreadCurve,
   themeSegmentSeamOverlapProgress,
   THEME_SEGMENT_SEAM_OVERLAP,
@@ -165,24 +167,32 @@ describe("edge theme fallback", () => {
     expect(single[0].coordinates[0]).toEqual([0, 0]);
     expect(single[0].coordinates.at(-1)).toEqual([10, 0]);
 
-    const multi = buildThemedLineSegments(
+    const path = buildThreadPathState(
       [0, 0],
       [10, 0],
       ["#111111", "#222222"],
       curveOpts,
     );
+    const multi = clipThreadPathByProgress(path, 1);
     expect(multi).toHaveLength(4);
-    // Adjacent multi-colour strands share an overlapping arc-progress window.
-    // Measured as cumulative path length of each strand vs equal nominal slices.
-    const fullPath = sampleThreadCurve([0, 0], [10, 0], curveOpts);
-    const fullLen = polylineLength(fullPath);
+    // Adjacent multi-colour strands MUST overlap in arc-progress space.
+    // Removing the seam pullback (startProgress === previous endProgress) fails this.
+    for (let index = 1; index < path.segments.length; index += 1) {
+      const prev = path.segments[index - 1];
+      const curr = path.segments[index];
+      expect(curr.startProgress).toBeLessThan(prev.endProgress);
+      expect(prev.endProgress - curr.startProgress).toBeCloseTo(
+        themeSegmentSeamOverlapProgress(path.segments.length),
+        10,
+      );
+    }
+    const fullLen = path.totalLength;
     const segmentCount = 4;
     const nominal = fullLen / segmentCount;
     const seam = themeSegmentSeamOverlapProgress(segmentCount) * fullLen;
     for (let index = 1; index < multi.length; index += 1) {
       const prevLen = polylineLength(multi[index - 1].coordinates);
       const currLen = polylineLength(multi[index].coordinates);
-      // One-sided start pullback makes interior strands slightly longer than nominal.
       expect(currLen).toBeGreaterThan(nominal * 0.5);
       expect(prevLen).toBeGreaterThan(nominal * 0.5);
       expect(currLen).toBeLessThanOrEqual(nominal + seam + 1e-6);
@@ -245,18 +255,18 @@ describe("edge theme fallback", () => {
           expect(painted).toBeLessThanOrEqual(segmentLength * 1.25 + 1e-6);
         }
 
-        // Progress clip stays on the same curve; never invents off-path tips.
+        // Progress clip: tip is exactly pointAtArcProgress; no segment past tip.
+        const pathState = buildThreadPathState(
+          source,
+          target,
+          colors,
+          curveOpts,
+        );
         for (const progress of [0.01, 0.25, 0.5, 0.75, 0.99, 1]) {
-          const clipped = buildProgressClippedThemeSegments(
-            source,
-            target,
-            colors,
-            progress,
-            curveOpts,
-          );
+          const clipped = clipThreadPathByProgress(pathState, progress);
           for (const segment of clipped) {
             expect(polylineLength(segment.coordinates)).toBeGreaterThan(0);
-            expect(segment.coordinates[0]).toBeDefined();
+            expect(segment.coordinates.length).toBeGreaterThanOrEqual(2);
           }
           if (progress >= 1) {
             expect(clipped).toHaveLength(segmentCount);
@@ -264,6 +274,23 @@ describe("edge theme fallback", () => {
           if (progress < 1 && progress > 0) {
             expect(clipped.length).toBeGreaterThan(0);
             expect(clipped.length).toBeLessThanOrEqual(segmentCount);
+            const tip = clipped[clipped.length - 1].coordinates.at(-1)!;
+            const expectedTip = pointAtArcProgress(
+              pathState.samples,
+              progress,
+              {
+                cumulative: pathState.cumulative,
+                total: pathState.totalLength,
+              },
+            );
+            expect(tip[0]).toBeCloseTo(expectedTip[0], 10);
+            expect(tip[1]).toBeCloseTo(expectedTip[1], 10);
+            // No painted end may exceed the motion tip progress.
+            for (const meta of pathState.segments) {
+              if (meta.startProgress >= progress) continue;
+              const paintedEnd = Math.min(progress, meta.endProgress);
+              expect(paintedEnd).toBeLessThanOrEqual(progress + 1e-12);
+            }
           }
         }
       }

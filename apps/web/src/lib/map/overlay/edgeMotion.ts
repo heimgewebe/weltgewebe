@@ -9,10 +9,12 @@ import { targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import {
   buildEndpointIndex,
-  buildProgressClippedThemeSegments,
+  buildThreadPathState,
+  clipThreadPathByProgress,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
+  type ThreadPathState,
 } from "./edges";
 
 export const EDGE_MOTION_SOURCE = "edge-motion-source";
@@ -69,6 +71,11 @@ interface ActiveMotion {
   startedAt: number;
   durationMs: number;
   sequence: number;
+  /**
+   * Immutable canonical path (samples, arc lengths, colour seams). Built once
+   * when the motion is created or its geometry identity changes — never per RAF.
+   */
+  pathState: ThreadPathState;
 }
 
 export interface EdgeMotionSnapshot {
@@ -77,11 +84,14 @@ export interface EdgeMotionSnapshot {
   frameRequests: number;
   frameCallbacks: number;
   styleRefreshes: number;
+  /** Cumulative ThreadPathState builds performed by this controller. */
+  pathBuilds: number;
   suppressedIds: string[];
   active: Array<{
     id: string;
     phase: EdgeMotionPhase;
     progress: number;
+    pathBuildSerial: number;
   }>;
 }
 
@@ -189,6 +199,7 @@ export class EdgeMotionController {
   private frameRequests = 0;
   private frameCallbacks = 0;
   private styleRefreshes = 0;
+  private pathBuilds = 0;
   private readonly scheduler: EdgeMotionScheduler;
 
   private readonly handleStyleData = () => {
@@ -251,6 +262,7 @@ export class EdgeMotionController {
       frameRequests: this.frameRequests,
       frameCallbacks: this.frameCallbacks,
       styleRefreshes: this.styleRefreshes,
+      pathBuilds: this.pathBuilds,
       suppressedIds: Array.from(this.releaseSuppressed).sort(),
       active: Array.from(this.active.values())
         .sort((left, right) => left.sequence - right.sequence)
@@ -258,6 +270,7 @@ export class EdgeMotionController {
           id: motion.input.id,
           phase: motion.phase,
           progress: this.progressAt(motion, now),
+          pathBuildSerial: motion.pathState.buildSerial,
         })),
     };
   }
@@ -307,6 +320,9 @@ export class EdgeMotionController {
     }
 
     if (!existing) this.ensureCapacity();
+    // Reuse the immutable path when geometry identity is unchanged (e.g. reverse
+    // create→release). Rebuild only when endpoints/palette/type/subject change.
+    const pathState = this.resolvePathState(input, existing);
     const distance = Math.abs(targetProgress - currentProgress);
     if (distance <= Number.EPSILON) {
       this.complete({
@@ -317,6 +333,7 @@ export class EdgeMotionController {
         startedAt: now,
         durationMs: 0,
         sequence: ++this.sequence,
+        pathState,
       });
       this.render();
       return;
@@ -330,9 +347,44 @@ export class EdgeMotionController {
       startedAt: now,
       durationMs: Math.max(120, EDGE_MOTION_DURATION_MS * distance),
       sequence: existing?.sequence ?? ++this.sequence,
+      pathState,
     });
     this.render();
     this.scheduleFrame();
+  }
+
+  private motionGeometryKey(input: EdgeMotionInput): string {
+    const palette = this.motionPalette(input).join(",");
+    return [
+      input.source[0],
+      input.source[1],
+      input.target[0],
+      input.target[1],
+      input.fadenType ?? "legacy",
+      input.fadenSubjectId ?? "",
+      input.id,
+      palette,
+    ].join("|");
+  }
+
+  private resolvePathState(
+    input: EdgeMotionInput,
+    existing: ActiveMotion | undefined,
+  ): ThreadPathState {
+    if (
+      existing &&
+      this.motionGeometryKey(existing.input) === this.motionGeometryKey(input)
+    ) {
+      return existing.pathState;
+    }
+    const palette = this.motionPalette(input);
+    const fadenType = input.fadenType ?? "legacy";
+    this.pathBuilds += 1;
+    return buildThreadPathState(input.source, input.target, palette, {
+      fadenType,
+      threadId: input.id,
+      subjectId: input.fadenSubjectId ?? null,
+    });
   }
 
   private ensureCapacity(): void {
@@ -415,18 +467,9 @@ export class EdgeMotionController {
         if (progress <= 0) continue;
         const palette = this.motionPalette(motion.input);
         const fadenType = motion.input.fadenType ?? "legacy";
-        // Same curve identity as the static projection: thread id + subject corridor.
-        const segments = buildProgressClippedThemeSegments(
-          motion.input.source,
-          motion.input.target,
-          palette,
-          progress,
-          {
-            fadenType,
-            threadId: motion.input.id,
-            subjectId: motion.input.fadenSubjectId ?? null,
-          },
-        );
+        // Path (controls, samples, arcs, seams) is immutable on ActiveMotion.
+        // Per frame: progress clip + GeoJSON feature shells only.
+        const segments = clipThreadPathByProgress(motion.pathState, progress);
         for (let strand = 0; strand < segments.length; strand += 1) {
           const segment = segments[strand];
           if (segment.coordinates.length < 2) continue;

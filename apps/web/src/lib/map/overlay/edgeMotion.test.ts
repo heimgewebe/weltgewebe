@@ -18,10 +18,13 @@ import {
   buildEdgeFeatures,
   buildEdgeLayerSpecifications,
   buildProgressClippedThemeSegments,
+  buildThreadPathState,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
+  getThreadPathBuildSerialForTests,
   pointAtArcProgress,
+  resetThreadPathBuildSerialForTests,
   sampleThreadCurve,
 } from "$lib/map/overlay/edges";
 import { deriveEntityWeave, targetThemePalette } from "$lib/map/weaveModel";
@@ -321,12 +324,15 @@ describe("EdgeMotionController", () => {
   it("grows once, hides only the matching static edge, then becomes idle", () => {
     const { map, scheduler, controller } = createHarness();
     controller.setVisibleEdgeIds(new Set([input.id]));
+    resetThreadPathBuildSerialForTests();
     controller.startCreate(input);
 
     expect(controller.inspect()).toMatchObject({
       activeCount: 1,
       framePending: true,
+      pathBuilds: 1,
     });
+    const pathSerial = controller.inspect().active[0].pathBuildSerial;
     expectCanonicalFilters(map, [input.id]);
 
     scheduler.advance(EDGE_MOTION_DURATION_MS / 2);
@@ -334,25 +340,89 @@ describe("EdgeMotionController", () => {
     expect(halfway.properties?.progress).toBeCloseTo(0.5, 5);
     // Progress clips the stable curve at arc-length halfway (exact endpoints preserved).
     expect(halfway.geometry.coordinates[0]).toEqual([0, 0]);
-    const expectedTip = pointAtArcProgress(
-      sampleThreadCurve([0, 0], [10, 20], {
-        fadenType: "legacy",
-        threadId: input.id,
-      }),
-      0.5,
-    );
+    const path = buildThreadPathState([0, 0], [10, 20], [], {
+      fadenType: "legacy",
+      threadId: input.id,
+    });
+    const expectedTip = pointAtArcProgress(path.samples, 0.5, {
+      cumulative: path.cumulative,
+      total: path.totalLength,
+    });
     const tip = halfway.geometry.coordinates.at(-1)!;
     expect(tip[0]).toBeCloseTo(expectedTip[0], 8);
     expect(tip[1]).toBeCloseTo(expectedTip[1], 8);
     expect(halfway.geometry.coordinates.length).toBeGreaterThanOrEqual(2);
+    // Path is not rebuilt across RAF frames.
+    expect(controller.inspect().pathBuilds).toBe(1);
+    expect(controller.inspect().active[0].pathBuildSerial).toBe(pathSerial);
 
-    scheduler.advance(EDGE_MOTION_DURATION_MS / 2);
+    scheduler.advance(EDGE_MOTION_DURATION_MS / 4);
+    expect(controller.inspect().pathBuilds).toBe(1);
+    expect(controller.inspect().active[0].pathBuildSerial).toBe(pathSerial);
+
+    scheduler.advance(EDGE_MOTION_DURATION_MS / 4);
     expect(controller.inspect()).toMatchObject({
       activeCount: 0,
       framePending: false,
+      pathBuilds: 1,
     });
     expect(motionSource(map).data.features).toEqual([]);
     expectCanonicalFilters(map, []);
+  });
+
+  it("builds the motion path once across many render frames", () => {
+    const { map, scheduler, controller } = createHarness();
+    const multi: EdgeMotionInput = {
+      id: "edge-cache",
+      source: [9.9, 53.5],
+      target: [10.1, 53.65],
+      kind: "reference",
+      fadenType: "proposal",
+      fadenSubjectId: "subject-cache",
+      themeColors: ["#111111", "#222222", "#333333"],
+    };
+    controller.setVisibleEdgeIds(new Set([multi.id]));
+    resetThreadPathBuildSerialForTests();
+    const serialBefore = getThreadPathBuildSerialForTests();
+    controller.startCreate(multi);
+    expect(controller.inspect().pathBuilds).toBe(1);
+    const motionSerial = controller.inspect().active[0].pathBuildSerial;
+
+    for (let step = 0; step < 8; step += 1) {
+      scheduler.advance(EDGE_MOTION_DURATION_MS / 10);
+      expect(controller.inspect().pathBuilds).toBe(1);
+      if (controller.inspect().activeCount > 0) {
+        expect(controller.inspect().active[0].pathBuildSerial).toBe(
+          motionSerial,
+        );
+      }
+      const features = motionSource(map).data.features;
+      if (features.length === 0) continue;
+      const progress = Number(
+        features[features.length - 1].properties?.progress,
+      );
+      const tip = features[features.length - 1].geometry.coordinates.at(-1)!;
+      const path = buildThreadPathState(
+        multi.source,
+        multi.target,
+        multi.themeColors!,
+        {
+          fadenType: multi.fadenType,
+          threadId: multi.id,
+          subjectId: multi.fadenSubjectId,
+        },
+      );
+      const expected = pointAtArcProgress(path.samples, progress, {
+        cumulative: path.cumulative,
+        total: path.totalLength,
+      });
+      expect(tip[0]).toBeCloseTo(expected[0], 8);
+      expect(tip[1]).toBeCloseTo(expected[1], 8);
+    }
+    // Controller pathBuilds stays 1; extra buildThreadPathState calls above are
+    // test-side only and must not be confused with the motion cache.
+    expect(controller.inspect().pathBuilds).toBe(1);
+    expect(getThreadPathBuildSerialForTests()).toBeGreaterThan(serialBefore);
   });
 
   it("keeps multi-theme colours and typed structure during create and release", () => {

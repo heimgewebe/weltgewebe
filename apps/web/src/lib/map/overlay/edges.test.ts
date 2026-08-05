@@ -5,6 +5,7 @@ import {
 } from "$lib/map/edgeLifecycle";
 import {
   EDGE_CURVE_MAX_SAMPLES,
+  EDGE_CURVE_MERCATOR_RADIUS_M,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
@@ -13,12 +14,22 @@ import {
   buildEndpointIndex,
   buildProgressClippedThemeSegments,
   buildThemedLineSegments,
+  buildThreadPathState,
+  clipThreadPathByProgress,
+  getThreadPathBuildSerialForTests,
   hasCompleteEdgeThreadStyle,
+  pointAtArcProgress,
+  projectedChord,
+  projectLngLatToMercator,
+  resetThreadPathBuildSerialForTests,
   sampleThreadCurve,
+  shortestLongitudeDelta,
   threadCorridorKey,
   threadCurveControlPoints,
+  threadCurveControlPointsProjected,
   threadCurveProfile,
   threadCurveSampleCount,
+  threadTargetApproachVector,
   updateEdges,
 } from "$lib/map/overlay/edges";
 import { LAYERS } from "$lib/map/overlay/layers";
@@ -329,6 +340,21 @@ describe("natural thread curves", () => {
   const source: [number, number] = [9.9, 53.5];
   const target: [number, number] = [10.1, 53.65];
 
+  function projectedMidDeflection(
+    path: readonly [number, number][],
+    from: [number, number],
+    to: [number, number],
+  ): number {
+    const mid = path[Math.floor(path.length / 2)];
+    const { sourceXY, targetXY } = projectedChord(from, to);
+    const midXY = projectLngLatToMercator(mid[0], mid[1]);
+    const chordMid: [number, number] = [
+      (sourceXY[0] + targetXY[0]) / 2,
+      (sourceXY[1] + targetXY[1]) / 2,
+    ];
+    return Math.hypot(midXY[0] - chordMid[0], midXY[1] - chordMid[1]);
+  }
+
   it("keeps exact endpoints on every sampled curve", () => {
     for (const fadenType of [
       "knotting",
@@ -344,6 +370,10 @@ describe("natural thread curves", () => {
       });
       expect(path[0]).toEqual(source);
       expect(path.at(-1)).toEqual(target);
+      for (const point of path) {
+        expect(Number.isFinite(point[0])).toBe(true);
+        expect(Number.isFinite(point[1])).toBe(true);
+      }
     }
   });
 
@@ -361,26 +391,26 @@ describe("natural thread curves", () => {
     expect(c).toEqual(d);
   });
 
-  it("bends to a stable side from thread identity", () => {
-    const left = threadCurveControlPoints(source, target, {
+  it("enforces real lateral deflection for soft conversation profiles", () => {
+    const path = sampleThreadCurve(source, target, {
       fadenType: "conversation",
-      threadId: "edge-a",
+      threadId: "edge-soft",
     });
-    const again = threadCurveControlPoints(source, target, {
+    expect(path.length).toBeGreaterThanOrEqual(4);
+    expect(path.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+    const deflection = projectedMidDeflection(path, source, target);
+    // Soft profile must leave the projected chord by a meaningful margin.
+    expect(deflection).toBeGreaterThan(80);
+    const again = threadCurveControlPointsProjected(source, target, {
       fadenType: "conversation",
-      threadId: "edge-a",
+      threadId: "edge-soft",
     });
-    expect(left.p1[1] - source[1]).toBeCloseTo(again.p1[1] - source[1], 12);
-    // Control points leave the chord (natural mid arc, not a technical line).
-    const midY = (source[1] + target[1]) / 2;
-    const chordYAtHalf = source[1] + 0.5 * (target[1] - source[1]);
-    const sampleMid = sampleThreadCurve(source, target, {
+    const once = threadCurveControlPointsProjected(source, target, {
       fadenType: "conversation",
-      threadId: "edge-a",
+      threadId: "edge-soft",
     });
-    const midPoint = sampleMid[Math.floor(sampleMid.length / 2)];
-    expect(Math.abs(midPoint[1] - chordYAtHalf)).toBeGreaterThan(1e-6);
-    expect(midY).toBeDefined();
+    expect(again.p1[0]).toBeCloseTo(once.p1[0], 10);
+    expect(again.p1[1]).toBeCloseTo(once.p1[1], 10);
   });
 
   it("keeps short paths nearly straight", () => {
@@ -393,39 +423,31 @@ describe("natural thread curves", () => {
       fadenType: "conversation",
       threadId: "edge-short",
     });
-    const shortMid = shortPath[Math.floor(shortPath.length / 2)];
-    const longMid = longPath[Math.floor(longPath.length / 2)];
-    const shortChord = [
-      (source[0] + nearTarget[0]) / 2,
-      (source[1] + nearTarget[1]) / 2,
-    ];
-    const longChord = [
-      (source[0] + target[0]) / 2,
-      (source[1] + target[1]) / 2,
-    ];
-    const shortDeflect = Math.hypot(
-      shortMid[0] - shortChord[0],
-      shortMid[1] - shortChord[1],
-    );
-    const longDeflect = Math.hypot(
-      longMid[0] - longChord[0],
-      longMid[1] - longChord[1],
-    );
-    // Absolute short deflection stays tiny relative to a full soft conversation arc.
+    const shortDeflect = projectedMidDeflection(shortPath, source, nearTarget);
+    const longDeflect = projectedMidDeflection(longPath, source, target);
     expect(shortDeflect).toBeLessThan(longDeflect * 0.15);
-    expect(shortDeflect).toBeLessThan(0.0005);
+    expect(shortDeflect).toBeLessThan(25);
   });
 
   it("applies distinct tension profiles per Fadenart", () => {
+    /** Lateral offset of the projected Bezier at t=0.5 from the projected chord. */
     const midDeflection = (fadenType: string) => {
-      const path = sampleThreadCurve(source, target, {
-        fadenType,
-        threadId: "edge-profile",
-        subjectId: "shared-subject",
-      });
-      const mid = path[Math.floor(path.length / 2)];
-      const chord = [(source[0] + target[0]) / 2, (source[1] + target[1]) / 2];
-      return Math.hypot(mid[0] - chord[0], mid[1] - chord[1]);
+      const { p0, p1, p2, p3, length } = threadCurveControlPointsProjected(
+        source,
+        target,
+        {
+          fadenType,
+          threadId: "edge-profile",
+          subjectId: "shared-subject",
+        },
+      );
+      // Cubic Bezier at t=0.5: 1/8*(p0+p3)+3/8*(p1+p2)
+      const midX = 0.125 * (p0[0] + p3[0]) + 0.375 * (p1[0] + p2[0]);
+      const midY = 0.125 * (p0[1] + p3[1]) + 0.375 * (p1[1] + p2[1]);
+      const chordMidX = (p0[0] + p3[0]) / 2;
+      const chordMidY = (p0[1] + p3[1]) / 2;
+      expect(length).toBeGreaterThan(0);
+      return Math.hypot(midX - chordMidX, midY - chordMidY);
     };
     const knot = midDeflection("knotting");
     const talk = midDeflection("conversation");
@@ -434,9 +456,13 @@ describe("natural thread curves", () => {
     // Knotting taut; conversation soft/wide; vote no independent large curve.
     expect(talk).toBeGreaterThan(knot);
     expect(talk).toBeGreaterThan(proposal);
-    expect(proposal).toBeGreaterThan(vote);
+    expect(talk).toBeGreaterThan(vote);
+    expect(proposal).toBeGreaterThan(vote * 0.5);
     expect(threadCurveProfile("knotting").tension).toBeGreaterThan(
       threadCurveProfile("conversation").tension,
+    );
+    expect(threadCurveProfile("vote").maxBulgeFraction).toBeLessThan(
+      threadCurveProfile("proposal").maxBulgeFraction,
     );
     expect(EDGE_VISUAL_STYLE.byType.knotting.width).toBeGreaterThan(
       EDGE_VISUAL_STYLE.byType.conversation.width,
@@ -470,7 +496,6 @@ describe("natural thread curves", () => {
     expect(segments).toHaveLength(4);
     expect(segments[0].coordinates[0]).toEqual(source);
     expect(segments.at(-1)?.coordinates.at(-1)).toEqual(target);
-    // Interior strands are polylines on the curve, not two-point capsules.
     for (const segment of segments) {
       expect(segment.coordinates.length).toBeGreaterThanOrEqual(2);
       expect(segment.coordinates.length).toBeLessThanOrEqual(
@@ -486,50 +511,22 @@ describe("natural thread curves", () => {
       subjectId: "subject-42",
     };
     const staticPath = sampleThreadCurve(source, target, opts);
-    const full = buildProgressClippedThemeSegments(
-      source,
-      target,
-      ["#aaaaaa"],
-      1,
-      opts,
-    );
-    const half = buildProgressClippedThemeSegments(
-      source,
-      target,
-      ["#aaaaaa"],
-      0.5,
-      opts,
-    );
+    const pathState = buildThreadPathState(source, target, ["#aaaaaa"], opts);
+    expect(pathState.samples).toEqual(staticPath);
+    const full = clipThreadPathByProgress(pathState, 1);
+    const half = clipThreadPathByProgress(pathState, 0.5);
     expect(full[0].coordinates).toEqual(staticPath);
     expect(half[0].coordinates[0]).toEqual(source);
-    expect(half[0].coordinates.at(-1)).not.toEqual(target);
-    // Half tip lies on the same static path (prefix of full curve).
     const tip = half[0].coordinates.at(-1)!;
-    const onPath = staticPath.some(
-      (point) => Math.hypot(point[0] - tip[0], point[1] - tip[1]) < 1e-9,
-    );
-    // Tip is interpolated; verify it sits between consecutive full-path points
-    // by checking distance to the polyline is tiny via nearest segment.
-    let minDist = Number.POSITIVE_INFINITY;
-    for (let index = 1; index < staticPath.length; index += 1) {
-      const a = staticPath[index - 1];
-      const b = staticPath[index];
-      const abx = b[0] - a[0];
-      const aby = b[1] - a[1];
-      const apx = tip[0] - a[0];
-      const apy = tip[1] - a[1];
-      const ab2 = abx * abx + aby * aby;
-      const t =
-        ab2 > 0 ? Math.max(0, Math.min(1, (apx * abx + apy * aby) / ab2)) : 0;
-      const px = a[0] + abx * t;
-      const py = a[1] + aby * t;
-      minDist = Math.min(minDist, Math.hypot(tip[0] - px, tip[1] - py));
-    }
-    expect(minDist).toBeLessThan(1e-9);
-    expect(onPath || minDist < 1e-9).toBe(true);
+    const expectedTip = pointAtArcProgress(staticPath, 0.5, {
+      cumulative: pathState.cumulative,
+      total: pathState.totalLength,
+    });
+    expect(tip[0]).toBeCloseTo(expectedTip[0], 10);
+    expect(tip[1]).toBeCloseTo(expectedTip[1], 10);
   });
 
-  it("binds proposal-related threads to a shared subject corridor with safe fallback", () => {
+  it("binds antrag-related threads to a shared target approach corridor", () => {
     const subject = "11111111-1111-5111-8111-111111111111";
     expect(threadCorridorKey({ threadId: "vote-1", subjectId: subject })).toBe(
       `subject:${subject}`,
@@ -541,54 +538,132 @@ describe("natural thread curves", () => {
     expect(threadCorridorKey({ threadId: "vote-2", subjectId: null })).toBe(
       "thread:vote-2",
     );
+    expect(
+      threadCorridorKey({
+        threadId: undefined,
+        subjectId: null,
+        fadenType: "vote",
+      }),
+    ).toBe("thread:anon:vote");
 
-    const proposal = threadCurveControlPoints(source, target, {
+    const proposalApproach = threadTargetApproachVector(source, target, {
       fadenType: "proposal",
       threadId: "proposal-1",
       subjectId: subject,
     });
-    const vote = threadCurveControlPoints(source, target, {
+    const voteApproach = threadTargetApproachVector(source, target, {
       fadenType: "vote",
       threadId: "vote-1",
       subjectId: subject,
     });
-    // Same corridor bend side: lateral offset signs match.
-    const propLat = proposal.p1[0] - source[0];
-    const voteLat = vote.p1[0] - source[0];
-    // Along-chord component dominates; compare perpendicular component via p1 offset side.
-    const dx = target[0] - source[0];
-    const dy = target[1] - source[1];
-    const len = Math.hypot(dx, dy);
-    const alongX = dx / len;
-    const alongY = dy / len;
-    const propPerp =
-      (proposal.p1[0] - source[0]) * -alongY +
-      (proposal.p1[1] - source[1]) * alongX;
-    const votePerp =
-      (vote.p1[0] - source[0]) * -alongY + (vote.p1[1] - source[1]) * alongX;
-    expect(Math.sign(propPerp)).toBe(Math.sign(votePerp));
-    expect(propLat).toBeDefined();
-    expect(voteLat).toBeDefined();
-
-    const unboundVote = sampleThreadCurve(source, target, {
-      fadenType: "vote",
-      threadId: "vote-unbound",
-      subjectId: null,
-    });
-    const boundVote = sampleThreadCurve(source, target, {
-      fadenType: "vote",
-      threadId: "vote-bound",
+    const talkApproach = threadTargetApproachVector(source, target, {
+      fadenType: "conversation",
+      threadId: "talk-1",
       subjectId: subject,
     });
-    const midDeflect = (path: [number, number][]) => {
-      const mid = path[Math.floor(path.length / 2)];
-      const chord = [(source[0] + target[0]) / 2, (source[1] + target[1]) / 2];
-      return Math.hypot(mid[0] - chord[0], mid[1] - chord[1]);
-    };
-    // Unbound vote stays safer/smaller without inventing a corridor partner.
-    expect(midDeflect(unboundVote)).toBeLessThanOrEqual(
-      midDeflect(boundVote) * 1.05,
+    // Target-side approach axes align (dot product near 1) — not only bend sign.
+    const dot = (a: [number, number], b: [number, number]) =>
+      a[0] * b[0] + a[1] * b[1];
+    expect(dot(proposalApproach, voteApproach)).toBeGreaterThan(0.985);
+    expect(dot(proposalApproach, talkApproach)).toBeGreaterThan(0.985);
+
+    // Without a subject id the corridor key stays private per thread — never
+    // invents a shared relationship between unrelated votes.
+    expect(
+      threadCorridorKey({ threadId: "vote-private-a", subjectId: null }),
+    ).not.toBe(
+      threadCorridorKey({ threadId: "vote-private-b", subjectId: null }),
     );
+
+    // Corridor-bound types declare the contract; without subject they stay private.
+    expect(threadCurveProfile("vote").corridorBound).toBe(true);
+    expect(threadCurveProfile("proposal").corridorBound).toBe(true);
+    expect(threadCurveProfile("vote").maxBulgeFraction).toBeLessThan(
+      threadCurveProfile("conversation").maxBulgeFraction,
+    );
+  });
+
+  it("projects geometry in Web Mercator with stable EW length across latitudes", () => {
+    const midSource: [number, number] = [10, 45];
+    const midTarget: [number, number] = [10.2, 45];
+    const highSource: [number, number] = [10, 70];
+    const highTarget: [number, number] = [10.2, 70];
+    const midLen = projectedChord(midSource, midTarget).length;
+    const highLen = projectedChord(highSource, highTarget).length;
+    // Same lon delta → same mercator-x chord at any latitude.
+    expect(midLen).toBeCloseTo(highLen, 6);
+    expect(midLen).toBeGreaterThan(0);
+
+    const ns = projectedChord([10, 45], [10, 45.2]).length;
+    // EW and NS with equal degree span differ in projected metres — geometry
+    // uses that projected chord so map-space tension stays comparable.
+    expect(Math.abs(midLen - ns)).toBeGreaterThan(1);
+
+    const path = sampleThreadCurve(midSource, midTarget, {
+      fadenType: "conversation",
+      threadId: "proj-ew",
+    });
+    expect(path[0]).toEqual(midSource);
+    expect(path.at(-1)).toEqual(midTarget);
+  });
+
+  it("uses the short unwrapped antimeridian path without NaN samples", () => {
+    const west: [number, number] = [170, 10];
+    const east: [number, number] = [-170, 10];
+    expect(shortestLongitudeDelta(170, -170)).toBe(20);
+    expect(Math.abs(shortestLongitudeDelta(170, -170))).toBeLessThan(180);
+    const chord = projectedChord(west, east);
+    // Unwrapped target at 190° — short 20° hop, not the 340° long way.
+    expect(chord.unwrappedTargetLng).toBeCloseTo(190, 10);
+    // Naive lon subtraction without unwrap would span 340°.
+    const naiveDx =
+      projectLngLatToMercator(-170, 10)[0] -
+      projectLngLatToMercator(170, 10)[0];
+    const naiveLong = Math.hypot(naiveDx, 0);
+    expect(chord.length).toBeLessThan(naiveLong * 0.2);
+    expect(chord.length).toBeCloseTo(
+      Math.abs((20 * Math.PI * EDGE_CURVE_MERCATOR_RADIUS_M) / 180),
+      0,
+    );
+
+    const path = sampleThreadCurve(west, east, {
+      fadenType: "conversation",
+      threadId: "anti-1",
+    });
+    expect(path[0]).toEqual(west);
+    expect(path.at(-1)).toEqual(east);
+    for (const point of path) {
+      expect(Number.isFinite(point[0])).toBe(true);
+      expect(Number.isFinite(point[1])).toBe(true);
+    }
+    // Intermediate samples follow the unwrapped short corridor (lng ≥ 170).
+    for (let index = 1; index < path.length - 1; index += 1) {
+      expect(path[index][0]).toBeGreaterThan(169);
+    }
+  });
+
+  it("builds a path state once and clips progress without rebuilding", () => {
+    resetThreadPathBuildSerialForTests();
+    const before = getThreadPathBuildSerialForTests();
+    const path = buildThreadPathState(source, target, ["#111111", "#222222"], {
+      fadenType: "proposal",
+      threadId: "cache-1",
+    });
+    expect(getThreadPathBuildSerialForTests()).toBe(before + 1);
+    const a = clipThreadPathByProgress(path, 0.25);
+    const b = clipThreadPathByProgress(path, 0.5);
+    const c = clipThreadPathByProgress(path, 0.9);
+    expect(getThreadPathBuildSerialForTests()).toBe(before + 1);
+    expect(a.length).toBeGreaterThan(0);
+    expect(b.length).toBeGreaterThanOrEqual(a.length);
+    expect(c.length).toBeGreaterThanOrEqual(b.length);
+    const tip = c[c.length - 1].coordinates.at(-1)!;
+    const expected = pointAtArcProgress(path.samples, 0.9, {
+      cumulative: path.cumulative,
+      total: path.totalLength,
+    });
+    expect(tip[0]).toBeCloseTo(expected[0], 10);
+    expect(tip[1]).toBeCloseTo(expected[1], 10);
   });
 
   it("projects continuous body/shadow layers vs highlight braid rhythm", () => {
