@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." > /dev/null 2>&1 && pwd)}"
+TOOLING_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." > /dev/null 2>&1 && pwd)"
+REPO_ROOT="${REPO_ROOT:-$TOOLING_ROOT}"
 POLICY_FILE="${REPO_ROOT}/policies/security.yml"
 
 failures=0
@@ -25,7 +26,12 @@ policy_value() {
 named_matcher_block() {
   local file="$1"
   local matcher="$2"
-  python3 - "$file" "$matcher" << 'PY'
+  # Same repo-canonical tools/py environment as make validate / UV_RUN.
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "ERROR: uv is required for security-headers-guard (tools/py/uv.lock)." >&2
+    return 1
+  fi
+  uv run --project "$TOOLING_ROOT/tools/py" --locked python - "$file" "$matcher" << 'PY'
 from pathlib import Path
 import re
 import sys

@@ -239,6 +239,67 @@ class TestAgentToolingLock(unittest.TestCase):
             + "; ".join(offenders),
         )
 
+    def test_make_validate_shell_dependencies_have_no_bare_host_python3(self) -> None:
+        """All reviewed shell checks reached by make validate use tools/py for Python."""
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
+        recipe_targets = {
+            "validate-guards",
+            "validate-shell-tests",
+        }
+        direct: set[str] = set()
+        current: str | None = None
+        target_re = re.compile(r"^([A-Za-z0-9_.-]+):")
+        shell_re = re.compile(r"^\tbash\s+(scripts/[A-Za-z0-9_./-]+\.sh)\s*$")
+        for line in makefile.splitlines():
+            header = target_re.match(line)
+            if header and not line.startswith("\t"):
+                current = header.group(1)
+                continue
+            if current not in recipe_targets:
+                continue
+            shell = shell_re.match(line)
+            if shell:
+                direct.add(shell.group(1))
+        expected_direct = {
+            "scripts/docmeta/repo-structure-guard.sh",
+            "scripts/docmeta/docs-relations-guard.sh",
+            "scripts/docmeta/generated-files-guard.sh",
+            "scripts/docmeta/coverage-guard.sh",
+            "scripts/tests/test_weltgewebe_up_git_branch.sh",
+            "scripts/tests/test_weltgewebe_up_frontend_required.sh",
+            "scripts/tests/test_weltgewebe_up_deploy_scope.sh",
+            "scripts/tests/test_version_guard.sh",
+            "scripts/tests/test_basemap_mode_guard.sh",
+            "scripts/tests/test_basemap_runtime_proof_contract.sh",
+            "scripts/tests/test_security_headers_guard.sh",
+            "scripts/tests/test_repo_contract_guards.sh",
+            "scripts/tests/test_postgres_backup_restore_contract.sh",
+            "scripts/tests/test_offhost_backup_pull_contract.sh",
+            "scripts/tests/test_web_artifact_install_contract.sh",
+            "scripts/tests/test_api_release_identity_contract.sh",
+        }
+        self.assertEqual(direct, expected_direct)
+        reviewed = direct | {
+            "scripts/guard/compose-image-guard.sh",
+            "scripts/guard/security-headers-guard.sh",
+        }
+        offenders: list[str] = []
+        for relative in sorted(reviewed):
+            for line_number, line in enumerate(
+                (REPO_ROOT / relative).read_text(encoding="utf-8").splitlines(), 1
+            ):
+                stripped = line.lstrip()
+                if stripped.startswith("#!") or stripped.startswith("#"):
+                    continue
+                if re.search(r"(^|[\s;|&])python3\b", line):
+                    offenders.append(f"{relative}:{line_number}: {stripped}")
+        self.assertEqual(
+            offenders,
+            [],
+            "bare host python3 found in reviewed make validate shell checks: "
+            + "; ".join(offenders),
+        )
+
     def test_reviewed_artifact_contract_is_explicit(self) -> None:
         self.assertEqual(EXPECTED_ARTIFACT_COUNT, 28)
         self.assertRegex(EXPECTED_ARTIFACT_SET_SHA256, r"^[0-9a-f]{64}$")

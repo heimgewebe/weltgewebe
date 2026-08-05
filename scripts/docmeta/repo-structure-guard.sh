@@ -13,12 +13,18 @@ echo "Checking repo structure..."
 
 FAIL=0
 
+# Same repo-canonical tools/py environment as make validate / UV_RUN.
+if ! command -v uv >/dev/null 2>&1; then
+  echo "ERROR: uv is required for repo-structure-guard (tools/py/uv.lock)."
+  exit 1
+fi
+
 if [ ! -f "repo.meta.yaml" ]; then
   echo "ERROR: repo.meta.yaml missing."
   FAIL=1
 else
   # parse yaml keys via python basic string parsing
-  python3 -c "
+  uv run --project tools/py --locked python -c "
 import sys
 try:
     with open('repo.meta.yaml', 'r', encoding='utf-8') as f:
