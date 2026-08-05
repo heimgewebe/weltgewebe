@@ -67,7 +67,10 @@
   import { hasRenderableMapPosition } from "$lib/map/coordinates";
   import { areMapEdgesVisuallyEnabled } from "$lib/map/edgeVisibility";
   import { createResettableLazyImport } from "$lib/map/lazyImport";
-  import { resolveMapInitFailure } from "$lib/map/mapInitFailure";
+  import {
+    resolveMapInitFailure,
+    scheduleMapInitTimeout,
+  } from "$lib/map/mapInitFailure";
   import { registerPmtilesProtocol } from "$lib/map/pmtilesProtocol";
   import { getGarnrolleMarkerScale } from "$lib/map/markerScale";
   import { buildMapScene } from "$lib/map/scene";
@@ -979,10 +982,6 @@
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
       map.on("resize", handleSearchMapResize);
 
-      loadingTimeout = setTimeout(() => {
-        failMapInit("timeout", new Error("Kartenladen hat das Zeitlimit überschritten"));
-      }, 10000);
-
       const finishLoading = () => {
         mapHasLoaded = true;
         if (loadingTimeout !== undefined) {
@@ -1026,6 +1025,16 @@
         };
       }
     }
+
+    // Arm before the first await/import inside initialiseMap so a hung
+    // maplibre/nodes/edgeMotion/pmtiles chunk still hits the fail-closed
+    // deadline instead of leaving the loading overlay forever.
+    loadingTimeout = scheduleMapInitTimeout(() => {
+      failMapInit(
+        "timeout",
+        new Error("Kartenladen hat das Zeitlimit überschritten"),
+      );
+    });
 
     // An early dynamic import or Map constructor can fail (offline, a chunk
     // that no longer exists after a deploy). Without central handling the
