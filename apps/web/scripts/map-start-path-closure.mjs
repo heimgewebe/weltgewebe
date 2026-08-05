@@ -112,6 +112,14 @@ export function measureMapStartPath({ buildDir, manifestPath }) {
   const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
   const initialAssets = collectInitialAssetReferences(html).map(normalizeAsset);
   const staticClosure = collectStaticManifestClosure(manifest, initialAssets);
+  // An initially loaded script that the manifest cannot resolve leaves the
+  // import graph incomplete. Reporting a small closure or spare budget from
+  // that would be a measurement of the wrong thing, so stop here instead.
+  if (staticClosure.missingManifestEntries.length > 0) {
+    throw new Error(
+      `map start-path closure is incomplete: ${staticClosure.missingManifestEntries.length} initially loaded JavaScript artefact(s) have no Vite manifest entry: ${staticClosure.missingManifestEntries.join(", ")}`,
+    );
+  }
   const mapRuntimeKey = findMapRuntimeEntry(manifest);
   const dynamicFrontier = (manifest[mapRuntimeKey].dynamicImports ?? []).map(
     (key) => {
@@ -181,6 +189,7 @@ function format(result) {
     `HTML initial: JS ${initial.js.gzip_bytes} B gzip (${initial.js.asset_count} assets) / CSS ${initial.css.gzip_bytes} B gzip (${initial.css.asset_count} assets)`,
     `static import closure: JS ${closure.js.gzip_bytes} B gzip (${closure.js.asset_count} assets) / CSS ${closure.css.gzip_bytes} B gzip (${closure.css.asset_count} assets)`,
     `additional static imports: JS ${additional.js.gzip_bytes} B gzip (${additional.js.asset_count} assets) / CSS ${additional.css.gzip_bytes} B gzip (${additional.css.asset_count} assets)`,
+    `missing manifest entries: ${result.missing_manifest_entries.length}`,
     `dynamic frontier: ${result.dynamic_frontier.length} roots (reported, not counted)`,
   ].join("\n");
 }

@@ -27,6 +27,16 @@ const IGNORED_THEMES = new Set([
 
 export type WeaveEntity = MapEntityNode | MapEntityWebgemeindezentrum;
 
+/** Display-only truncation limit. It never reaches topic identity. */
+export const WEAVE_TOPIC_DISPLAY_MAX_LENGTH = 42;
+
+// A purely technical namespace ("thema:kunst") is display noise and is dropped.
+// A colon that carries meaning stays: "Kunst: Öffentlicher Raum" is one topic,
+// not the topic "Öffentlicher Raum" filed under "Kunst". The two are told apart
+// by shape, not by a blanket strip — a namespace is a lowercase identifier
+// without spaces that is followed immediately by the value.
+const TECHNICAL_NAMESPACE_PREFIX = /^[a-z0-9][a-z0-9._-]{0,23}:(?=\S)/;
+
 function hash(value: string): number {
   let result = 2166136261;
   for (const character of value) {
@@ -35,6 +45,38 @@ function hash(value: string): number {
   return result >>> 0;
 }
 
+/**
+ * Canonical text of one topic: compatibility-normalized, whitespace-unified and
+ * trimmed. Two spellings that differ only in NBSP, repeated spaces or fullwidth
+ * forms are the same topic and must produce the same text.
+ */
+export function normalizeWeaveTopicText(value: string): string {
+  return value
+    .normalize("NFKC")
+    .replace(/\s+/gu, " ")
+    .trim()
+    .replace(TECHNICAL_NAMESPACE_PREFIX, "")
+    .trim();
+}
+
+/**
+ * Identity of one topic. Derived from the complete normalized text — never from
+ * a shortened display form, because two long topics that share a prefix
+ * ("… Hamburg" / "… Hannover") are different topics and must stay apart in
+ * deduplication, hashing, segment ids and colour.
+ */
+export function weaveTopicIdentity(label: string): string {
+  return normalizeWeaveTopicText(label).toLocaleLowerCase("de-DE");
+}
+
+/** Shortening is a late presentation decision and carries no identity. */
+export function weaveTopicDisplayLabel(label: string): string {
+  return label.length > WEAVE_TOPIC_DISPLAY_MAX_LENGTH
+    ? `${label.slice(0, WEAVE_TOPIC_DISPLAY_MAX_LENGTH - 3).trimEnd()}…`
+    : label;
+}
+
+/** Full normalized topic texts, deduplicated by identity, never truncated. */
 export function weaveTopics(entity: WeaveEntity): string[] {
   const raw: Array<string | null | undefined> =
     entity.type === "webgemeindezentrum"
@@ -44,18 +86,18 @@ export function weaveTopics(entity: WeaveEntity): string[] {
   const result: string[] = [];
   for (const value of raw) {
     if (typeof value !== "string") continue;
-    const label = value.replace(/^[^:]{1,24}:/, "").trim();
-    const key = label.toLowerCase();
+    const label = normalizeWeaveTopicText(value);
+    const key = weaveTopicIdentity(label);
     if (!label || IGNORED_THEMES.has(key) || seen.has(key)) continue;
     seen.add(key);
-    result.push(label.length > 42 ? `${label.slice(0, 39).trimEnd()}…` : label);
+    result.push(label);
     if (result.length === 6) break;
   }
   return result.length ? result : ["Gemeingut"];
 }
 
 export function weaveTopicColor(label: string): string {
-  return COLORS[hash(label.toLowerCase()) % COLORS.length];
+  return COLORS[hash(weaveTopicIdentity(label)) % COLORS.length];
 }
 
 export function primaryWeaveColor(entity: WeaveEntity): string {

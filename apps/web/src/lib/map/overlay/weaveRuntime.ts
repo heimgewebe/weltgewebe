@@ -41,21 +41,48 @@ export function projectMarkersForWeave(
   return projectEntityWeaves(points, weaveEdges, nowMs);
 }
 
+/**
+ * Structural signature: only values whose change actually rebuilds the woven
+ * DOM. Ageing conversation and proposal threads change their opacity on every
+ * projection step; treating that as structure would tear down and rebuild every
+ * marker body once a minute. Opacity is applied separately to the elements that
+ * already exist — see {@link applyWeaveOpacity}.
+ */
 export function weaveRenderSignature(weave: MapEntityWeave): string {
-  let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.knottingThreadCount}|${weave.conversationThreadCount}|${weave.conversationOpacity}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}`;
-  for (const { color, startDeg, spanDeg } of weave.themeSegments) {
-    signature += `|${color}:${startDeg}:${spanDeg}`;
+  let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.knottingThreadCount}|${weave.conversationThreadCount}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}`;
+  for (const { id, color, startDeg, spanDeg } of weave.themeSegments) {
+    signature += `|${id}:${color}:${startDeg}:${spanDeg}`;
   }
   for (const {
+    subjectId,
     color,
     startDeg,
     spanDeg,
-    opacity,
     voteThreadCount,
   } of weave.proposalArcs) {
-    signature += `|${color}:${startDeg}:${spanDeg}:${opacity}:${voteThreadCount}`;
+    signature += `|${subjectId}:${color}:${startDeg}:${spanDeg}:${voteThreadCount}`;
   }
   return signature;
+}
+
+/**
+ * Time-dependent opacity, written onto the existing nodes. The conversation
+ * ring reads a CSS variable; every proposal arc and its vote stitches are
+ * addressed through their shared `data-proposal-slot`.
+ */
+export function applyWeaveOpacity(root: HTMLElement, weave: MapEntityWeave) {
+  root.style.setProperty(
+    "--weave-conversation-opacity",
+    String(weave.conversationOpacity),
+  );
+  if (!weave.proposalArcs.length) return;
+  // One query for the whole body: an arc and its vote stitches share a slot.
+  for (const element of root.querySelectorAll<HTMLElement>(
+    "[data-proposal-slot]",
+  )) {
+    const arc = weave.proposalArcs[Number(element.dataset.proposalSlot) - 1];
+    if (arc) element.style.opacity = String(arc.opacity);
+  }
 }
 
 function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
@@ -72,14 +99,12 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     themeConicGradient(weave.themeSegments),
   );
   root.style.setProperty("--weave-core-density", String(weave.coreDensity));
-  root.style.setProperty(
-    "--weave-conversation-opacity",
-    String(weave.conversationOpacity),
-  );
   const proposals = weave.proposalArcs
     .map((arc, index) => {
       const slot = String(index + 1);
-      const arcStyle = `--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color};opacity:${arc.opacity}`;
+      // Opacity stays out of the markup: applyWeaveOpacity owns it, so a purely
+      // temporal change never has to touch this string.
+      const arcStyle = `--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color}`;
       const proposal = `<span class="woven-node__proposal-arc" data-zone="proposal" data-proposal-slot="${slot}" data-vote-threads="${arc.voteThreadCount}" style="${arcStyle}"></span>`;
       const votes = arc.voteThreadCount
         ? `<span class="woven-node__vote-stitches" data-zone="vote" data-proposal-slot="${slot}" style="${arcStyle};background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span>`
@@ -104,12 +129,14 @@ export const weaveRuntime: WeaveRuntime = {
     root.className = `woven-node woven-node--${markerCategory}`;
     root.setAttribute("aria-hidden", "true");
     renderWeave(root, weave);
+    applyWeaveOpacity(root, weave);
     return { root, signature: weaveRenderSignature(weave) };
   },
   syncRoot(root, item, previousSignature) {
     const weave = entityWeave(item);
     const signature = weaveRenderSignature(weave);
     if (signature !== previousSignature) renderWeave(root, weave);
+    applyWeaveOpacity(root, weave);
     return signature;
   },
 };

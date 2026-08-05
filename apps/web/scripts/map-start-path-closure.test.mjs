@@ -71,3 +71,33 @@ test("measures HTML assets, static closure and dynamic frontier separately", () 
     rmSync(directory, { recursive: true, force: true });
   }
 });
+
+test("aborts instead of reporting a budget for an incomplete manifest", () => {
+  const directory = mkdtempSync(join(tmpdir(), "map-start-path-missing-"));
+  try {
+    mkdirSync(join(directory, "_app"));
+    for (const file of ["entry.js", "shared.js", "leaf.js", "missing.js"]) {
+      writeFileSync(
+        join(directory, "_app", file),
+        `export const value = ${JSON.stringify(file)};`,
+      );
+    }
+    writeFileSync(join(directory, "_app/entry.css"), ".entry{display:block}");
+    writeFileSync(join(directory, "_app/leaf.css"), ".leaf{display:block}");
+    // The HTML loads a script the manifest never emitted, so the import graph
+    // is incomplete and any size below it would be a false reserve.
+    writeFileSync(
+      join(directory, "map.html"),
+      '<link rel="modulepreload" href="./_app/entry.js"><link rel="modulepreload" href="./_app/missing.js">',
+    );
+    const manifestPath = join(directory, "manifest.json");
+    writeFileSync(manifestPath, JSON.stringify(manifest));
+
+    assert.throws(
+      () => measureMapStartPath({ buildDir: directory, manifestPath }),
+      /incomplete[\s\S]*_app\/missing\.js/,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

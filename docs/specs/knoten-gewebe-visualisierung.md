@@ -20,8 +20,10 @@ relations:
   - type: relates_to
     target: docs/specs/ortsweberei-webgemeindezentrum.md
 verifies_with:
+  - apps/web/src/lib/map/weaveTheme.ts
   - apps/web/src/lib/map/weaveModel.ts
   - apps/web/src/lib/map/weaveModel.test.ts
+  - apps/web/src/lib/map/overlay/weaveRuntime.ts
   - apps/web/src/lib/map/overlay/nodes.ts
   - apps/web/src/lib/map/overlay/nodes.test.ts
   - apps/web/src/lib/map/overlay/edges.ts
@@ -109,6 +111,45 @@ Die Statusformen `Entwurf`, `Beratung`, `Abstimmung`, `angenommen`, `abgelehnt`,
 der Kartenvertrag den Antragsstatus revisionsgebunden liefert. Bis dahin zeigt
 der Bogen ausschließlich belegte Aktivität.
 
+## Sichtbarkeit: bewusste Asymmetrie zwischen Körper und Linie
+
+Diese Asymmetrie ist normativ und kein Nebeneffekt der Umsetzung.
+
+- Ein **sichtbarer Zielkörper** trägt seine belegte Gewebestruktur auch dann,
+  wenn der Quellmarker ausgefiltert ist. Die Beteiligung am Ziel bleibt wahr,
+  unabhängig davon, ob die beteiligte Garnrolle gerade angezeigt wird.
+- Eine **Kartenlinie** darf ausschließlich existieren, wenn Quelle *und* Ziel
+  als sichtbare Endpunkte aufgelöst sind. Eine Linie zu einem unsichtbaren
+  Endpunkt behauptete eine Lage, die auf der Karte nicht belegt ist.
+- Beide Darstellungen nutzen deshalb bewusst **verschiedene, klar benannte
+  Fadenmengen**: die Gewebemenge (`deriveWeaveEdges`, zielseitig aufgelöst) und
+  die Linienmenge (`deriveLineEdges`, beidseitig aufgelöst). Die Linienmenge ist
+  stets eine Teilmenge der Gewebemenge.
+- Die **Ablaufprojektion gilt trotzdem gemeinsam und exakt**: Beide Mengen
+  werden aus demselben Projektionszeitpunkt abgeleitet. Dieser Zeitpunkt wird
+  bei Fadenänderung, im Minutenintervall, zum exakten Ablaufzeitpunkt und bei
+  der Rückkehr eines zuvor verborgenen Tabs neu gelesen. Ein Faden, der während
+  aktiver Filterung oder im Hintergrund abläuft, darf beim Wiedereinblenden
+  nicht zurückkehren.
+
+## Themenidentität
+
+Die Identität eines Themas entsteht aus seinem **vollständigen normalisierten
+Text**: Unicode-Normalisierung (mindestens NFKC), vereinheitlichter Whitespace,
+getrimmt und sprachlich stabil kleingeschrieben.
+
+Eine Kürzung ist ausschließlich eine spätere Darstellungsentscheidung. Vor
+Deduplizierung, Hashing, Segment-Identität und Farbzuordnung wird niemals
+gekürzt. Zwei lange Themen mit gleichem Präfix — etwa
+`Nachbarschaftliche Lebensmittelversorgung Hamburg` und
+`Nachbarschaftliche Lebensmittelversorgung Hannover` — bleiben verschiedene
+Segmente mit eigener Farbe.
+
+Doppelpunkte werden nicht pauschal entfernt. Ein rein technisches Namensraum-
+Präfix (`thema:kunst`) ist Darstellungsrauschen; ein bedeutungstragender
+Doppelpunkt wie in `Kunst: Öffentlicher Raum` gehört zum Thema und bleibt
+inhaltlich erhalten.
+
 ## Maßstab und Leistung
 
 - **Ferne:** ein kompakter textiler Körper mit Kern, Gesprächsring und klaren
@@ -129,6 +170,22 @@ Gewebekörper neu aufgebaut; MapLibre-Positionierung, Fokus und Auswahl werden
 nicht neu erzeugt. Die bestehende gemeinsame Minutenprojektion und der exakte
 Ablauftimer steuern Linien und Knotenkörper gemeinsam. Dauerhafte physikalische
 Simulationen aller Fasern sind nicht Teil dieses Vertrags.
+
+Ein Neuaufbau des Gewebekörpers ist ausschließlich an **strukturelle** Änderungen
+gebunden: Themenidentitäten, Segmentgeometrie, Antragszuordnung, Fadenzahlen und
+Überlauf. Die zeitliche Deckkraft alternder Gesprächs- und Antragsfäden ist keine
+Strukturänderung; sie wird auf die bereits vorhandenen Elemente geschrieben. Eine
+rein zeitliche Alterung darf den Gewebe-DOM nicht ersetzen.
+
+Die vollständige Bereitschaft des Kartenstils gilt erst dann als erreicht, wenn
+die Fadenquelle und **sämtliche** kanonischen Halo- und Linienebenen der
+typisierten Fadenarten vorhanden sind. Eine unvollständig wiederhergestellte
+Stilmenge darf nicht als bereit behandelt werden.
+
+Scheitert die Karteninitialisierung — etwa weil ein früher dynamischer Import
+nicht geladen werden kann —, endet der Ladezustand. Es erscheint ein sichtbarer,
+zugänglicher Fehlerzustand mit Wiederholungsmöglichkeit. Ein unendlicher
+Ladezustand ist vertragswidrig.
 
 ## Nichtbehauptungen dieser Stufe
 

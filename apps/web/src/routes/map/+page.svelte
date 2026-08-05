@@ -69,8 +69,10 @@
   import { buildMapScene } from "$lib/map/scene";
 
   import type { NodesOverlay as NodesOverlayController } from "$lib/map/overlay/nodes";
-  import { updateEdges } from "$lib/map/overlay/edges";
-  import { LAYERS } from "$lib/map/overlay/layers";
+  import {
+    hasCompleteEdgeThreadStyle,
+    updateEdges,
+  } from "$lib/map/overlay/edges";
   import type {
     EdgeMotionController,
     EdgeMotionInput,
@@ -225,6 +227,7 @@
   let map: MapLibreMap | null = null;
   let mapStyleReady = false;
   let isLoading = true;
+  let mapInitFailed = false;
   let edgeProjectionNow = Date.now();
   let edgeExpiryTimeout: ReturnType<typeof setTimeout> | undefined;
   let lastFocusedElement: HTMLElement | null = null;
@@ -450,16 +453,31 @@
     if (nextExpiryAt == null) return;
     edgeExpiryTimeout = setTimeout(
       () => {
-        edgeProjectionNow = Date.now();
-        scheduleNextEdgeExpiryRefresh(weaveEdges);
+        // The fired timeout is no longer pending. Clearing the handle before
+        // the shared refresh reschedules keeps exactly one expiry timer alive.
+        edgeExpiryTimeout = undefined;
+        refreshEdgeProjection();
       },
       Math.max(0, nextExpiryAt - nowMs),
     );
   }
 
+  /**
+   * The single way the projection instant moves. A thread can expire while it
+   * is filtered away or while the tab is in the background; whoever brings it
+   * back on screen must read the current time, not the one from before the
+   * gap. Every trigger — thread change, minute interval, exact expiry timer and
+   * the return of a hidden tab — therefore goes through here, and each one also
+   * re-plans the next exact expiry.
+   */
+  function refreshEdgeProjection() {
+    edgeProjectionNow = Date.now();
+    scheduleNextEdgeExpiryRefresh(weaveEdges);
+  }
+
   $: if (map) {
     weaveEdges;
-    scheduleNextEdgeExpiryRefresh(weaveEdges);
+    refreshEdgeProjection();
   }
 
   function focusAndFlyToPoint(item: MapEntityViewModel) {
@@ -741,9 +759,17 @@
     let destroyed = false;
     // One minute changes a seven-day linear opacity by less than 0.0001.
     // Exact expiry remains a separate timeout and is therefore not rounded.
-    const edgeDecayInterval = window.setInterval(() => {
-      edgeProjectionNow = Date.now();
-    }, FADEN_PROJECTION_REFRESH_MS);
+    const edgeDecayInterval = window.setInterval(
+      refreshEdgeProjection,
+      FADEN_PROJECTION_REFRESH_MS,
+    );
+    // A background tab throttles both the interval and the expiry timeout. On
+    // return the projection instant is re-read before anything is drawn, so an
+    // expired thread cannot reappear.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") refreshEdgeProjection();
+    };
+    document.addEventListener("visibilitychange", handleVisibilityChange);
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
@@ -755,12 +781,7 @@
       invalidateSearchViewportGeometry();
     };
     let styleRehydrateQueued = false;
-    const hasCanonicalEdgeStyle = () =>
-      Boolean(
-        map?.getSource(LAYERS.EDGES_SOURCE) &&
-        map.getLayer(LAYERS.EDGES_HALO_LAYER) &&
-        map.getLayer(LAYERS.EDGES_LAYER),
-      );
+    const hasCanonicalEdgeStyle = () => hasCompleteEdgeThreadStyle(map);
     const rehydrateMapOverlays = () => {
       styleRehydrateQueued = false;
       if (destroyed || !map || hasCanonicalEdgeStyle()) return;
@@ -803,7 +824,7 @@
       focusAndFlyToPoint(entry.item);
     };
 
-    (async () => {
+    async function initialiseMap() {
       // Public map rendering never waits for session verification. Auth loads
       // after map creation and may perform one guarded convergence later.
       const [maplibregl, nodesModule, edgeMotionModule] = await Promise.all([
@@ -941,12 +962,28 @@
             ),
         };
       }
-    })();
+    }
+
+    // An early dynamic import can fail (offline, a chunk that no longer exists
+    // after a deploy). Without central handling the rejection is silent and the
+    // loading overlay stays up forever, so failure becomes a visible, readable
+    // state with a way out.
+    void initialiseMap().catch((error) => {
+      console.error("Karteninitialisierung fehlgeschlagen", error);
+      if (destroyed) return;
+      if (loadingTimeout !== undefined) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = undefined;
+      }
+      isLoading = false;
+      mapInitFailed = true;
+    });
 
     return () => {
       // Signals the async initialiser to stop at its next await boundary, so a
       // component destroyed mid-import never finishes building a map.
       destroyed = true;
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.clearInterval(edgeDecayInterval);
       if (edgeExpiryTimeout !== undefined) {
         clearTimeout(edgeExpiryTimeout);
@@ -1072,7 +1109,22 @@
     class:filter-open={$isFilterOpen}
     bind:this={mapContainer}
   ></div>
-  {#if isLoading}
+  {#if mapInitFailed}
+    <div class="map-init-error" role="alert" data-testid="map-init-error">
+      <p>
+        Die Karte konnte nicht geladen werden. Möglicherweise ist die
+        Verbindung unterbrochen oder eine Programmdatei fehlt.
+      </p>
+      <button
+        type="button"
+        class="map-init-error__retry"
+        data-testid="map-init-error-retry"
+        on:click={() => window.location.reload()}
+      >
+        Erneut laden
+      </button>
+    </div>
+  {:else if isLoading}
     <div class="loading-overlay">
       <div class="spinner"></div>
     </div>
@@ -1168,6 +1220,38 @@
     to {
       transform: rotate(360deg);
     }
+  }
+
+  /* Shares the loading layer so the failure state is never covered by the
+     overlay it replaces. */
+  .map-init-error {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+    z-index: var(--z-map-loading);
+  }
+  .map-init-error p {
+    margin: 0;
+    max-width: 32rem;
+    color: var(--text);
+  }
+  .map-init-error__retry {
+    padding: 10px 18px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+  .map-init-error__retry:hover {
+    background: var(--accent);
   }
 
   .debug-badge {

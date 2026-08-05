@@ -236,4 +236,134 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven).toHaveAttribute("data-knotting-threads", "0");
     await expect(woven).toHaveAttribute("data-proposal-count", "0");
   });
+
+  test("does not bring an expired thread back when the target is filtered away and shown again", async ({
+    page,
+  }) => {
+    const now = new Date("2026-08-05T08:00:00.000Z");
+    await page.clock.install({ time: now });
+    await mockApiResponses(page);
+
+    // The source is not among the visible markers, so this thread may shape the
+    // target body but must never become a map line.
+    const targetOnlyEdge = {
+      id: "target-only-filtered-knotting",
+      source_id: "outside-visible-markers",
+      source_type: "account",
+      target_id: NODE_ID,
+      target_type: "node",
+      edge_kind: "reference",
+      faden_type: "knotting",
+      faden_subject_id: NODE_ID,
+      created_at: new Date(
+        now.getTime() - FADEN_LIFETIME_MS + 60_000,
+      ).toISOString(),
+      expires_at: new Date(now.getTime() + 60_000).toISOString(),
+    };
+
+    await page.route("**/api/edges*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [targetOnlyEdge]),
+        ),
+      });
+    });
+
+    const mapLineCount = () =>
+      page.evaluate(() => {
+        const source = (window as any).__TEST_MAP__?.getSource("edges-source");
+        return source?.serialize?.()?.data?.features?.length ?? 0;
+      });
+
+    await page.goto("/map");
+    const marker = page.getByTestId(`marker-node-${NODE_ID}`);
+    const woven = marker.locator(".woven-node");
+    await expect(marker).toBeVisible({ timeout: 15_000 });
+    await expect(woven).toHaveAttribute("data-knotting-threads", "1");
+    await expect(
+      page.getByTestId("marker-garnrolle-outside-visible-markers"),
+    ).toHaveCount(0);
+    await expect.poll(mapLineCount).toBe(0);
+
+    // Hide the target: nothing on screen observes the exact expiry any more.
+    await page.evaluate(() =>
+      (window as any).__TEST_SET_ACTIVE_FILTERS__(["Garnrolle"]),
+    );
+    await expect(marker).toHaveCount(0);
+    expect(await mapLineCount()).toBe(0);
+
+    // The thread expires while it is filtered away.
+    await page.clock.fastForward(120_000);
+    expect(await mapLineCount()).toBe(0);
+
+    // Showing it again must read the current time, not the one from before.
+    await page.evaluate(() => (window as any).__TEST_SET_ACTIVE_FILTERS__([]));
+    await expect(marker).toBeVisible();
+    await expect(woven).toHaveAttribute("data-knotting-threads", "0");
+    await expect(woven).toHaveAttribute("data-proposal-count", "0");
+    await expect.poll(mapLineCount).toBe(0);
+  });
+
+  test("dims an ageing proposal thread without replacing its DOM element", async ({
+    page,
+  }) => {
+    const now = new Date("2026-08-05T08:00:00.000Z");
+    await page.clock.install({ time: now });
+    await mockApiResponses(page);
+
+    const ageing = {
+      id: "ageing-proposal",
+      source_id: ACCOUNT_A,
+      source_type: "account",
+      target_id: NODE_ID,
+      target_type: "node",
+      edge_kind: "reference",
+      faden_type: "proposal",
+      faden_subject_id: "proposal-a",
+      created_at: new Date(now.getTime() - 60_000).toISOString(),
+      expires_at: new Date(
+        now.getTime() - 60_000 + FADEN_LIFETIME_MS,
+      ).toISOString(),
+    };
+
+    await page.route("**/api/edges*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockListResponse(route.request().url(), [ageing])),
+      });
+    });
+
+    await page.goto("/map");
+    const marker = page.getByTestId(`marker-node-${NODE_ID}`);
+    await expect(marker).toBeVisible({ timeout: 15_000 });
+    const proposal = marker.locator(
+      '.woven-node [data-zone="proposal"][data-proposal-slot="1"]',
+    );
+    await expect(proposal).toHaveCount(1);
+
+    // A sentinel that only survives if this very element is kept alive.
+    await proposal.evaluate((element) =>
+      element.setAttribute("data-sentinel", "kept"),
+    );
+    const opacityBefore = await proposal.evaluate((element) =>
+      Number((element as HTMLElement).style.opacity),
+    );
+    expect(opacityBefore).toBeGreaterThan(0);
+
+    // Well past one projection step, so the linear decay is clearly visible.
+    await page.clock.fastForward(3_600_000);
+
+    await expect
+      .poll(() =>
+        proposal.evaluate((element) =>
+          Number((element as HTMLElement).style.opacity),
+        ),
+      )
+      .toBeLessThan(opacityBefore);
+    // The DOM was never rebuilt, only its opacity was written.
+    await expect(proposal).toHaveAttribute("data-sentinel", "kept");
+  });
 });

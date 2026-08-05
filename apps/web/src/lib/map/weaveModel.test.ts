@@ -12,9 +12,15 @@ import {
   MAX_VISIBLE_PROPOSAL_ARCS,
   WEAVE_ZONE_ORDER,
   deriveEntityWeave,
+  deriveWeaveThemeSegments,
   projectEntityWeaves,
   voteStitchConicGradient,
 } from "./weaveModel";
+import {
+  WEAVE_TOPIC_DISPLAY_MAX_LENGTH,
+  weaveTopicIdentity,
+  weaveTopics,
+} from "./weaveTheme";
 
 const createdAt = Date.parse("2026-08-01T10:00:00Z");
 const nowMs = createdAt + 60_000;
@@ -109,6 +115,59 @@ describe("woven node projection", () => {
     ).toBe(true);
     expect(weave.knottingThreadCount).toBe(1);
     expect(weave.primaryThemeColor).toBe(weave.themeSegments[0].color);
+  });
+
+  it("keeps two long topics with an identical prefix apart", () => {
+    const hamburg = "Nachbarschaftliche Lebensmittelversorgung Hamburg";
+    const hannover = "Nachbarschaftliche Lebensmittelversorgung Hannover";
+    expect(hamburg.length).toBeGreaterThan(WEAVE_TOPIC_DISPLAY_MAX_LENGTH);
+    expect(hannover.length).toBeGreaterThan(WEAVE_TOPIC_DISPLAY_MAX_LENGTH);
+
+    const segments = deriveWeaveThemeSegments(
+      node({ tags: [hamburg, hannover], kind: "Versorgung" }),
+    );
+    const versorgung = segments.filter((segment) =>
+      segment.id.startsWith("nachbarschaftliche"),
+    );
+
+    expect(versorgung).toHaveLength(2);
+    expect(versorgung[0].id).not.toBe(versorgung[1].id);
+    expect(versorgung[0].color).not.toBe(versorgung[1].color);
+    // Shortening stays a display decision and never reaches identity.
+    expect(versorgung[0].label.length).toBeLessThanOrEqual(
+      WEAVE_TOPIC_DISPLAY_MAX_LENGTH,
+    );
+    expect(versorgung[0].id).toBe(weaveTopicIdentity(hamburg));
+  });
+
+  it("normalizes NBSP, repeated whitespace and fullwidth characters into one topic", () => {
+    expect(weaveTopicIdentity("Offene Werkstatt")).toBe(
+      weaveTopicIdentity("Offene   Werkstatt"),
+    );
+    expect(weaveTopicIdentity("  Offene Werkstatt  ")).toBe(
+      weaveTopicIdentity("Offene Werkstatt"),
+    );
+    // Fullwidth latin letters are compatibility-equivalent under NFKC.
+    expect(weaveTopicIdentity("Ｋｕｎｓｔ")).toBe(weaveTopicIdentity("Kunst"));
+
+    // The first tag separates with NBSP: one topic, so only one segment.
+    expect(
+      weaveTopics(node({ tags: ["Offene Werkstatt", "Offene Werkstatt"] })),
+    ).toEqual(["Offene Werkstatt", "Garten"]);
+  });
+
+  it("keeps a meaningful colon and drops only a technical namespace", () => {
+    expect(weaveTopics(node({ tags: ["Kunst: Öffentlicher Raum"] }))).toEqual([
+      "Kunst: Öffentlicher Raum",
+      "Garten",
+    ]);
+    expect(weaveTopics(node({ tags: ["thema:kunst"] }))).toEqual([
+      "kunst",
+      "Garten",
+    ]);
+    expect(weaveTopicIdentity("Kunst: Öffentlicher Raum")).not.toBe(
+      weaveTopicIdentity("Öffentlicher Raum"),
+    );
   });
 
   it("builds several proposal arcs and binds conversations and votes to their proposal", () => {

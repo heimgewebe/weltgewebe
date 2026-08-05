@@ -3,7 +3,13 @@ import {
   FADEN_LIFETIME_MS,
   normalizeEdgeLifecycle,
 } from "$lib/map/edgeLifecycle";
-import { buildEdgeFeatures } from "$lib/map/overlay/edges";
+import {
+  EDGE_THREAD_LAYER_IDS,
+  buildEdgeFeatures,
+  buildEdgeLayerSpecifications,
+  hasCompleteEdgeThreadStyle,
+} from "$lib/map/overlay/edges";
+import { LAYERS } from "$lib/map/overlay/layers";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
 
 const createdAt = Date.parse("2026-07-17T10:00:00Z");
@@ -124,5 +130,51 @@ describe("buildEdgeFeatures", () => {
     expect(
       buildEdgeFeatures([edge], points.slice(0, 1), true, createdAt),
     ).toEqual([]);
+  });
+});
+
+describe("hasCompleteEdgeThreadStyle", () => {
+  function probe(
+    layerIds: readonly string[],
+    sourceId: string = LAYERS.EDGES_SOURCE,
+  ) {
+    const layers = new Set(layerIds);
+    return {
+      getSource: (id: string) => (id === sourceId ? {} : undefined),
+      getLayer: (id: string) => (layers.has(id) ? {} : undefined),
+    };
+  }
+
+  it("derives the canonical list from the layer specifications themselves", () => {
+    expect(EDGE_THREAD_LAYER_IDS).toEqual(
+      buildEdgeLayerSpecifications().map((specification) => specification.id),
+    );
+    // Halo plus line for legacy and the four typed thread kinds.
+    expect(EDGE_THREAD_LAYER_IDS).toHaveLength(10);
+  });
+
+  it("accepts the complete set of source and thread layers", () => {
+    expect(hasCompleteEdgeThreadStyle(probe(EDGE_THREAD_LAYER_IDS))).toBe(true);
+  });
+
+  it("rejects a style that is missing the last typed layer", () => {
+    expect(
+      hasCompleteEdgeThreadStyle(probe(EDGE_THREAD_LAYER_IDS.slice(0, -1))),
+    ).toBe(false);
+  });
+
+  it("rejects the old partial check of source plus the two legacy layers", () => {
+    expect(
+      hasCompleteEdgeThreadStyle(
+        probe([LAYERS.EDGES_HALO_LAYER, LAYERS.EDGES_LAYER]),
+      ),
+    ).toBe(false);
+  });
+
+  it("rejects a missing edge source and an absent map", () => {
+    expect(
+      hasCompleteEdgeThreadStyle(probe(EDGE_THREAD_LAYER_IDS, "other-source")),
+    ).toBe(false);
+    expect(hasCompleteEdgeThreadStyle(null)).toBe(false);
   });
 });

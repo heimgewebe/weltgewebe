@@ -64,6 +64,38 @@ const EDGE_LAYER_VARIANTS = [
   },
 ] as const;
 
+/**
+ * Every layer a complete typed Faden style owns, derived from the variants
+ * themselves so a new thread type cannot be forgotten here. Halo before line,
+ * matching the render order.
+ */
+export const EDGE_THREAD_LAYER_IDS: readonly string[] =
+  EDGE_LAYER_VARIANTS.flatMap((variant) => [
+    variant.haloLayerId,
+    variant.layerId,
+  ]);
+
+/** Minimal surface a style-readiness check needs; keeps it unit-testable. */
+export type EdgeStyleProbe = {
+  getSource: (id: string) => unknown;
+  getLayer: (id: string) => unknown;
+};
+
+/**
+ * The edge style counts as fully rehydrated only when the shared source and
+ * *every* canonical halo and line layer exist. Checking the source plus two
+ * legacy layers would call a half-restored style ready and silently drop the
+ * typed threads after a style switch.
+ */
+export function hasCompleteEdgeThreadStyle(
+  map: EdgeStyleProbe | null | undefined,
+): boolean {
+  if (!map || !map.getSource(LAYERS.EDGES_SOURCE)) return false;
+  return EDGE_THREAD_LAYER_IDS.every((layerId) =>
+    Boolean(map.getLayer(layerId)),
+  );
+}
+
 function primaryThemeColor(point: MapEntityViewModel): string | undefined {
   if (point.type !== "node" && point.type !== "webgemeindezentrum") {
     return undefined;

@@ -96,6 +96,13 @@ class FakeElement {
   append(...children: FakeElement[]) {
     this.children.push(...children);
   }
+
+  querySelectorAll(): FakeElement[] {
+    // This double stores innerHTML as text and never parses it, so the woven
+    // body has no queryable descendants here. That the temporal opacity really
+    // lands on the existing proposal elements is proven in Playwright.
+    return [];
+  }
 }
 
 class FakeMarker {
@@ -522,9 +529,101 @@ describe("NodesOverlay woven node marker", () => {
     expect(weaveRenderSignature({ ...weave, totalActiveThreadCount: 99 })).toBe(
       weaveRenderSignature(weave),
     );
+    expect(weaveRenderSignature({ ...weave, proposalCount: 3 })).not.toBe(
+      weaveRenderSignature(weave),
+    );
+  });
+
+  it("keeps the render signature free of time-dependent opacity", () => {
+    const weave = makeWeave({
+      conversationThreadCount: 2,
+      conversationOpacity: 0.9,
+      proposalCount: 1,
+      proposalArcs: [
+        {
+          subjectId: "proposal-a",
+          proposalThreadCount: 1,
+          conversationThreadCount: 0,
+          voteThreadCount: 2,
+          bundledSubjectCount: 1,
+          latestActivityAtMs: 10,
+          opacity: 0.9,
+          color: "#5f7a55",
+          startDeg: 55,
+          spanDeg: 250,
+        },
+      ],
+    });
+    const aged: MapEntityWeave = {
+      ...weave,
+      conversationOpacity: 0.3,
+      proposalArcs: weave.proposalArcs.map((arc) => ({ ...arc, opacity: 0.3 })),
+    };
+
+    expect(weaveRenderSignature(aged)).toBe(weaveRenderSignature(weave));
+  });
+
+  it("treats a changed proposal identity as a structural change", () => {
+    const weave = makeWeave({
+      proposalCount: 1,
+      proposalArcs: [
+        {
+          subjectId: "proposal-a",
+          proposalThreadCount: 1,
+          conversationThreadCount: 0,
+          voteThreadCount: 0,
+          bundledSubjectCount: 1,
+          latestActivityAtMs: 10,
+          opacity: 1,
+          color: "#5f7a55",
+          startDeg: 55,
+          spanDeg: 250,
+        },
+      ],
+    });
+    const reassigned: MapEntityWeave = {
+      ...weave,
+      proposalArcs: weave.proposalArcs.map((arc) => ({
+        ...arc,
+        subjectId: "proposal-b",
+      })),
+    };
+
+    expect(weaveRenderSignature(reassigned)).not.toBe(
+      weaveRenderSignature(weave),
+    );
+  });
+
+  it("rebuilds the woven body only for structural change, not for ageing", () => {
+    const overlay = makeOverlay();
+    const weave = makeWeave({
+      conversationThreadCount: 2,
+      conversationOpacity: 0.9,
+    });
+    overlay.update([makeNode("ageing", { weave })], true);
+    const root = overlay.getActiveMarker("ageing")?.element.children[0]
+      .children[0] as HTMLElement | undefined;
+
+    // A sentinel that only a rebuild would overwrite.
+    const sentinel = "<!-- kept -->";
+    if (root) root.innerHTML = sentinel;
+    overlay.update(
+      [makeNode("ageing", { weave: { ...weave, conversationOpacity: 0.2 } })],
+      true,
+    );
+    expect(root?.innerHTML).toBe(sentinel);
     expect(
-      weaveRenderSignature({ ...weave, conversationOpacity: 0.4 }),
-    ).not.toBe(weaveRenderSignature(weave));
+      (root?.style as unknown as Record<string, string>)[
+        "--weave-conversation-opacity"
+      ],
+    ).toBe("0.2");
+
+    // A structural change must still rebuild.
+    overlay.update(
+      [makeNode("ageing", { weave: { ...weave, proposalCount: 4 } })],
+      true,
+    );
+    expect(root?.innerHTML).not.toBe(sentinel);
   });
 
   it("does not rewrite an unchanged accessible label", () => {

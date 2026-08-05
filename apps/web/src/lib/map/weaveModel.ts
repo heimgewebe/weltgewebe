@@ -9,6 +9,8 @@ import type {
 import {
   WEAVE_FALLBACK_COLOR,
   weaveTopicColor,
+  weaveTopicDisplayLabel,
+  weaveTopicIdentity,
   weaveTopics,
   type WeaveEntity,
 } from "$lib/map/weaveTheme";
@@ -36,9 +38,11 @@ export function deriveWeaveThemeSegments(
 ): WeaveThemeSegment[] {
   const labels = weaveTopics(entity);
   const spanDeg = 360 / labels.length;
+  // Identity and colour come from the complete topic text. Only `label` is a
+  // display value and may therefore be shortened.
   return labels.map((label, index) => ({
-    id: label,
-    label,
+    id: weaveTopicIdentity(label),
+    label: weaveTopicDisplayLabel(label),
     color: weaveTopicColor(label),
     startDeg: index * spanDeg,
     spanDeg,

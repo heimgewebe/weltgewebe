@@ -73,3 +73,28 @@ test("keeps interaction-only map chunks outside the startup request path", async
   await expect(page.getByTestId("context-panel")).toBeVisible();
   await expect.poll(() => requested.has(contextFile)).toBe(true);
 });
+
+test("replaces the loading state with a recoverable error when the map runtime chunk fails", async ({
+  page,
+}) => {
+  await mockApiResponses(page);
+
+  const manifest = JSON.parse(
+    readFileSync(".svelte-kit/output/client/.vite/manifest.json", "utf8"),
+  ) as Record<string, ManifestRecord>;
+  const nodesFile = emittedFile(manifest, {
+    source: "src/lib/map/overlay/nodes.ts",
+    name: "nodes",
+  });
+
+  // The map runtime is imported early; failing it must not strand the overlay.
+  await page.route(`**/${nodesFile}`, (route) => route.abort());
+
+  await page.goto("/map");
+
+  const error = page.getByTestId("map-init-error");
+  await expect(error).toBeVisible({ timeout: 15_000 });
+  await expect(error).toHaveAttribute("role", "alert");
+  await expect(page.getByTestId("map-init-error-retry")).toBeVisible();
+  await expect(page.locator(".loading-overlay")).toHaveCount(0);
+});
