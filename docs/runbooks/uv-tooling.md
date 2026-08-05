@@ -36,11 +36,18 @@ Erweiterungen sich anbieten.
   `pyproject.toml` für Repository-Helfer. `PyYAML==6.0.2` ist dort als erste
   Tooling-Abhängigkeit deklariert; `tools/py/uv.lock` bindet die zugelassenen
   Distributionsartefakte an SHA-256-Hashes.
-- **Agent-Contract-Ausführung:** `just agent-contract-check` nutzt
-  `uv run --project tools/py --locked`. Lokal und in CI gilt damit dieselbe
-  Abhängigkeitsauflösung; ein veraltetes oder manipuliertes Lockfile blockiert.
+- **Agent-Contract-Ausführung:** `just agent-contract-check` und
+  `make agent-contract-check` / der volle `make validate`-Pfad nutzen
+  `uv run --project tools/py --locked`. Direkte Teilaufrufe und Make teilen
+  dieselbe Abhängigkeitsauflösung; fehlendes `uv`, Lock- oder Interpreterdrift
+  sowie fehlende gebundene Abhängigkeiten enden fail-closed.
+- **Plattform- und Policy-Checks:** `make platform-check` sowie die Workflows
+  `kubernetes-platform`, `kubernetes-platform-proof`, `kubernetes-proof-oci-mirror`
+  und `policycheck` binden PyYAML über dasselbe `tools/py/uv.lock` (nicht über
+  ungebundene `pip install`-Versionen).
 
-Damit ist `uv` der reproduzierbare Dependency-Pfad für das Agent-Contract-Tooling.
+Damit ist `uv` der reproduzierbare Dependency-Pfad für Agent-, Vertrags- und
+Plattform-Python-Tooling im Make- und CI-Pfad.
 
 ## Potenzial für Verbesserungen
 

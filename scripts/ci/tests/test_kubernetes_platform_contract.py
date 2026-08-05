@@ -772,6 +772,114 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 with self.assertRaises(self.oci_mirror.IntegrityError):
                     self.oci_mirror._load_lock()
 
+    def _write_mutated_oci_lock(self, mutate) -> Path:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        mutate(lock)
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        try:
+            json.dump(lock, handle)
+            handle.flush()
+        finally:
+            handle.close()
+        return Path(handle.name)
+
+    def test_oci_mirror_lock_rejects_unreachable_source_head(self) -> None:
+        """Network-independent: synthetic commit id is not a local object."""
+        path = self._write_mutated_oci_lock(
+            lambda lock: lock["generation"].__setitem__(
+                "source_head", "deadbeef" + "0" * 32
+            )
+        )
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "unreachable"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_oci_mirror_lock_rejects_source_head_outside_allowed_ancestry(self) -> None:
+        """Network-independent: reachable object that is not an ancestor of HEAD."""
+        # Orphan commit object in the object store, never linked into HEAD history.
+        empty_tree = subprocess.check_output(
+            ["git", "hash-object", "-t", "tree", "-w", "--stdin"],
+            cwd=ROOT,
+            input=b"",
+        ).decode().strip()
+        orphan = subprocess.check_output(
+            [
+                "git",
+                "commit-tree",
+                empty_tree,
+                "-m",
+                "oci-ancestry-negative-orphan",
+            ],
+            cwd=ROOT,
+            text=True,
+        ).strip()
+        self.assertRegex(orphan, r"^[0-9a-f]{40}$")
+        not_ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", orphan, "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+        )
+        self.assertNotEqual(not_ancestor.returncode, 0)
+        path = self._write_mutated_oci_lock(
+            lambda lock: lock["generation"].__setitem__("source_head", orphan)
+        )
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "outside allowed ancestry"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_oci_mirror_lock_rejects_manipulated_seed_sha256(self) -> None:
+        """Network-independent: seed digest drift fails before full validation."""
+        path = self._write_mutated_oci_lock(
+            lambda lock: lock["generation"].__setitem__("seed_sha256", "a" * 64)
+        )
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "not bound to source_head"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_oci_mirror_generation_ancestry_runs_before_inventory_checks(self) -> None:
+        """Ancestry failure must not require a complete images section."""
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        lock["generation"]["source_head"] = "deadbeef" + "0" * 32
+        lock["images"] = {}  # would fail inventory if ancestry were deferred
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        try:
+            json.dump(lock, handle)
+            handle.flush()
+        finally:
+            handle.close()
+        path = Path(handle.name)
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "unreachable"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
     def test_strict_oci_rewrites_locked_digests_to_verified_runtime_tags(self) -> None:
         locked = "sha256:" + "a" * 64
         source = f"nats:2.10-alpine@{locked}"

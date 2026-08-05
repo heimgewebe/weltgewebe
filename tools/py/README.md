@@ -3,9 +3,16 @@
 ## Schnellstart
 
 ```bash
-cd tools/py
-uv sync --locked
-uv run --locked python -c "import yaml; print(yaml.__version__)"
+uv sync --project tools/py --locked
+uv run --project tools/py --locked python -c "import yaml; print(yaml.__version__)"
+```
+
+Repo-kanonische Aufrufe (Make, Just, CI) lauten immer:
+
+```bash
+uv run --project tools/py --locked python -m scripts.agent.validate_agent_tooling_lock
+make agent-contract-check   # gleiche Semantik
+make validate               # Agent-/Vertrags-/Plattform-Python über denselben Pfad
 ```
 
 ## Abhängigkeiten hinzufügen

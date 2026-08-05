@@ -1,4 +1,4 @@
-.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests cell-pilot-check platform-check platform-render platform-kind-proof generate diagnose prepare-commit generate-system-map check-system-map-drift
+.PHONY: up down logs ps smoke docs-guard validate ci-validate validate-tests validate-core validate-guards validate-shell-tests cell-pilot-check platform-check platform-render platform-kind-proof generate diagnose prepare-commit generate-system-map check-system-map-drift require-uv-tooling agent-contract-check
 
 # Fixture repositories are short-lived. Detached Git maintenance can outlive a
 # command and race with TemporaryDirectory cleanup or a following local clone.
@@ -9,43 +9,67 @@ CI_TEST_GIT_ENV = \
 	GIT_CONFIG_KEY_1=gc.auto \
 	GIT_CONFIG_VALUE_1=0
 
-validate-tests:
-	python3 -m unittest discover scripts/docmeta/tests/
-	python3 -m unittest discover scripts/agent/tests/
+# Repo-canonical Python for agent and contract checks: tools/py + uv.lock.
+# Direct `uv run --project tools/py --locked …` and make validate share this path.
+UV_PROJECT := tools/py
+UV_RUN := uv run --project $(UV_PROJECT) --locked
+
+require-uv-tooling:
+	@command -v uv >/dev/null 2>&1 || { \
+		echo "ERROR: uv is required for repo-canonical Python checks (tools/py/uv.lock)." >&2; \
+		echo "Install the version pinned in toolchain.versions.yml (see docs/runbooks/uv-tooling.md)." >&2; \
+		exit 1; \
+	}
+	@$(UV_RUN) python -c "import sys, yaml; assert sys.version_info >= (3, 11), sys.version; assert yaml.__version__ == '6.0.2', yaml.__version__" || { \
+		echo "ERROR: tools/py environment drifted (need Python >=3.11 and locked PyYAML==6.0.2)." >&2; \
+		echo "Run: uv sync --project tools/py --locked" >&2; \
+		exit 1; \
+	}
+
+# Same semantics as `just agent-contract-check` / direct uv-bound validators.
+agent-contract-check: require-uv-tooling
+	$(UV_RUN) python -m scripts.agent.validate_agent_tooling_lock
+	$(UV_RUN) python -m scripts.agent.validate_repo_agent_contract
+
+validate-tests: require-uv-tooling agent-contract-check
+	$(UV_RUN) python -m unittest discover scripts/docmeta/tests/
+	$(UV_RUN) python -m unittest discover scripts/agent/tests/
+	# scripts/ci/tests still includes a few host-pytest modules; keep discover on
+	# the CI-provisioned interpreter. Agent/platform contracts above stay uv-bound.
 	$(CI_TEST_GIT_ENV) python3 -m unittest discover scripts/ci/tests/
 	python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py
-	python3 scripts/docmeta/validate_claim_registry.py
-	python3 scripts/docmeta/validate_doc_freshness_registry.py
-	python3 -m scripts.docmeta.generate_claim_evidence_map --check
+	$(UV_RUN) python scripts/docmeta/validate_claim_registry.py
+	$(UV_RUN) python scripts/docmeta/validate_doc_freshness_registry.py
+	$(UV_RUN) python -m scripts.docmeta.generate_claim_evidence_map --check
 
-cell-pilot-check:
-	python3 scripts/platform/validate_two_operator_pilot.py --mode example platform/cell-pilot/two-operator-pilot.example.invalid.json
-	python3 -m unittest scripts.ci.tests.test_two_operator_cell_pilot
+cell-pilot-check: require-uv-tooling
+	$(UV_RUN) python scripts/platform/validate_two_operator_pilot.py --mode example platform/cell-pilot/two-operator-pilot.example.invalid.json
+	$(UV_RUN) python -m unittest scripts.ci.tests.test_two_operator_cell_pilot
 
 platform-check: cell-pilot-check
-	python3 scripts/platform/validate_platform.py
-	python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract
+	$(UV_RUN) python scripts/platform/validate_platform.py
+	$(UV_RUN) python -m unittest scripts.ci.tests.test_kubernetes_platform_contract
 
-platform-render:
-	python3 scripts/platform/validate_platform.py --render
+platform-render: require-uv-tooling
+	$(UV_RUN) python scripts/platform/validate_platform.py --render
 
-platform-kind-proof:
-	python3 scripts/platform/kind_reference.py proof --mode direct
+platform-kind-proof: require-uv-tooling
+	$(UV_RUN) python scripts/platform/kind_reference.py proof --mode direct
 
-validate-core:
-	python3 -m scripts.docmeta.validate_schema
-	python3 -m scripts.docmeta.validate_relations
-	python3 -m scripts.docmeta.check_repo_index_consistency
-	python3 -m scripts.docmeta.check_doc_review_age
-	python3 -m scripts.docmeta.review_impact
-	python3 -m scripts.docmeta.validate_opt_arc_001_db_proof_matrix
-	python3 -m scripts.docmeta.export_docs_index
-	python3 -m scripts.docmeta.generate_audit_gaps
-	python3 -m scripts.docmeta.check_links
-	python3 -m scripts.search.validate_relevance_goldset
+validate-core: require-uv-tooling
+	$(UV_RUN) python -m scripts.docmeta.validate_schema
+	$(UV_RUN) python -m scripts.docmeta.validate_relations
+	$(UV_RUN) python -m scripts.docmeta.check_repo_index_consistency
+	$(UV_RUN) python -m scripts.docmeta.check_doc_review_age
+	$(UV_RUN) python -m scripts.docmeta.review_impact
+	$(UV_RUN) python -m scripts.docmeta.validate_opt_arc_001_db_proof_matrix
+	$(UV_RUN) python -m scripts.docmeta.export_docs_index
+	$(UV_RUN) python -m scripts.docmeta.generate_audit_gaps
+	$(UV_RUN) python -m scripts.docmeta.check_links
+	$(UV_RUN) python -m scripts.search.validate_relevance_goldset
 
-generate-system-map:
-	python3 -m scripts.docmeta.generate_system_map
+generate-system-map: require-uv-tooling
+	$(UV_RUN) python -m scripts.docmeta.generate_system_map
 
 check-system-map-drift: generate-system-map
 	git diff --exit-code HEAD -- docs/_generated/system-map.md
@@ -76,25 +100,25 @@ ci-validate: validate
 
 docs-guard: validate
 
-generate:
+generate: require-uv-tooling
 	bash scripts/docmeta/generate-doc-index.sh
-	python3 -m scripts.docmeta.generate_backlinks
+	$(UV_RUN) python -m scripts.docmeta.generate_backlinks
 	bash scripts/docmeta/generate-impl-index.sh
-	python3 -m scripts.docmeta.generate_orphans
-	python3 -m scripts.docmeta.generate_supersession_map
-	python3 -m scripts.docmeta.generate_system_map
-	python3 -m scripts.docmeta.generate_architecture_drift
-	python3 -m scripts.docmeta.generate_doc_coverage
-	python3 -m scripts.docmeta.generate_knowledge_gaps
-	python3 -m scripts.docmeta.generate_implicit_dependencies
-	python3 -m scripts.docmeta.generate_change_resonance
-	python3 -m scripts.docmeta.generate_staleness_report
-	python3 -m scripts.docmeta.generate_agent_readiness
-	python3 -m scripts.docmeta.generate_claim_evidence_map
-	python3 -m scripts.docmeta.generate_relations_analysis
-	python3 -m scripts.docmeta.generate_relates_to_audit
-	python3 -m scripts.docmeta.generate_report_lifecycle
-	python3 -m scripts.docmeta.generate_report_lifecycle_inventory
+	$(UV_RUN) python -m scripts.docmeta.generate_orphans
+	$(UV_RUN) python -m scripts.docmeta.generate_supersession_map
+	$(UV_RUN) python -m scripts.docmeta.generate_system_map
+	$(UV_RUN) python -m scripts.docmeta.generate_architecture_drift
+	$(UV_RUN) python -m scripts.docmeta.generate_doc_coverage
+	$(UV_RUN) python -m scripts.docmeta.generate_knowledge_gaps
+	$(UV_RUN) python -m scripts.docmeta.generate_implicit_dependencies
+	$(UV_RUN) python -m scripts.docmeta.generate_change_resonance
+	$(UV_RUN) python -m scripts.docmeta.generate_staleness_report
+	$(UV_RUN) python -m scripts.docmeta.generate_agent_readiness
+	$(UV_RUN) python -m scripts.docmeta.generate_claim_evidence_map
+	$(UV_RUN) python -m scripts.docmeta.generate_relations_analysis
+	$(UV_RUN) python -m scripts.docmeta.generate_relates_to_audit
+	$(UV_RUN) python -m scripts.docmeta.generate_report_lifecycle
+	$(UV_RUN) python -m scripts.docmeta.generate_report_lifecycle_inventory
 
 diagnose: generate
 

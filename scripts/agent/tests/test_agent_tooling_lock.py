@@ -92,11 +92,12 @@ class TestAgentToolingLock(unittest.TestCase):
             encoding="utf-8"
         )
         justfile = (REPO_ROOT / "Justfile").read_text(encoding="utf-8")
+        makefile = (REPO_ROOT / "Makefile").read_text(encoding="utf-8")
 
         self.assertNotRegex(workflow, r"pip install .*PyYAML|pip install .*pyyaml")
         self.assertIn("uv sync --project tools/py --locked", workflow)
         self.assertIn(
-            "python -m scripts.agent.validate_agent_tooling_lock",
+            "uv run --project tools/py --locked python -m scripts.agent.validate_agent_tooling_lock",
             workflow,
         )
         self.assertIn(
@@ -106,6 +107,26 @@ class TestAgentToolingLock(unittest.TestCase):
         self.assertIn(
             "uv run --project tools/py --locked python -m scripts.agent.validate_repo_agent_contract",
             justfile,
+        )
+        # Full make validate path must share the same uv-locked agent semantics.
+        self.assertIn("UV_RUN := uv run --project $(UV_PROJECT) --locked", makefile)
+        self.assertIn("require-uv-tooling", makefile)
+        self.assertIn("agent-contract-check", makefile)
+        self.assertIn(
+            "$(UV_RUN) python -m scripts.agent.validate_agent_tooling_lock",
+            makefile,
+        )
+        self.assertIn(
+            "$(UV_RUN) python -m scripts.agent.validate_repo_agent_contract",
+            makefile,
+        )
+        self.assertIn(
+            "$(UV_RUN) python -m unittest discover scripts/agent/tests/",
+            makefile,
+        )
+        self.assertNotRegex(
+            makefile,
+            r"(?m)^validate-tests:.*\n(?:\t.*\n)*?\tpython3 -m unittest discover scripts/agent/tests/",
         )
 
     def test_reviewed_artifact_contract_is_explicit(self) -> None:
