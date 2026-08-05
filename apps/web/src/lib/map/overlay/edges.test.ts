@@ -4,6 +4,8 @@ import {
   normalizeEdgeLifecycle,
 } from "$lib/map/edgeLifecycle";
 import {
+  EDGE_CURVE_MAX_HANDLE_FRACTION,
+  EDGE_CURVE_MAX_HANDLE_M,
   EDGE_CURVE_MAX_SAMPLES,
   EDGE_CURVE_MERCATOR_RADIUS_M,
   EDGE_THREAD_LAYER_IDS,
@@ -16,10 +18,12 @@ import {
   buildThemedLineSegments,
   buildThreadPathState,
   clipThreadPathByProgress,
+  degreeSpacePolylineArcState,
   getThreadPathBuildSerialForTests,
   hasCompleteEdgeThreadStyle,
   pointAtArcProgress,
   projectedChord,
+  projectedSampleToLngLat,
   projectLngLatToMercator,
   resetThreadPathBuildSerialForTests,
   sampleThreadCurve,
@@ -30,6 +34,7 @@ import {
   threadCurveProfile,
   threadCurveSampleCount,
   threadTargetApproachVector,
+  threadTargetLocalCorridorAxis,
   updateEdges,
 } from "$lib/map/overlay/edges";
 import { LAYERS } from "$lib/map/overlay/layers";
@@ -430,15 +435,19 @@ describe("natural thread curves", () => {
   });
 
   it("applies distinct tension profiles per Fadenart", () => {
-    /** Lateral offset of the projected Bezier at t=0.5 from the projected chord. */
-    const midDeflection = (fadenType: string) => {
+    /**
+     * Lateral offset of the projected Bezier at t=0.5 from the projected chord.
+     * Private (no subject): mid-arc profiles must differ by type tension.
+     * Subject-bound multi-source approach is covered separately.
+     */
+    const midDeflection = (fadenType: string, subjectId: string | null) => {
       const { p0, p1, p2, p3, length } = threadCurveControlPointsProjected(
         source,
         target,
         {
           fadenType,
-          threadId: "edge-profile",
-          subjectId: "shared-subject",
+          threadId: `edge-profile-${fadenType}`,
+          subjectId,
         },
       );
       // Cubic Bezier at t=0.5: 1/8*(p0+p3)+3/8*(p1+p2)
@@ -449,21 +458,29 @@ describe("natural thread curves", () => {
       expect(length).toBeGreaterThan(0);
       return Math.hypot(midX - chordMidX, midY - chordMidY);
     };
-    const knot = midDeflection("knotting");
-    const talk = midDeflection("conversation");
-    const proposal = midDeflection("proposal");
-    const vote = midDeflection("vote");
+    const knot = midDeflection("knotting", null);
+    const talk = midDeflection("conversation", null);
+    const proposal = midDeflection("proposal", null);
+    const vote = midDeflection("vote", null);
     // Knotting taut; conversation soft/wide; vote no independent large curve.
     expect(talk).toBeGreaterThan(knot);
     expect(talk).toBeGreaterThan(proposal);
     expect(talk).toBeGreaterThan(vote);
-    expect(proposal).toBeGreaterThan(vote * 0.5);
+    // Proposal mid arc must clearly exceed vote's near-linear stitch — not a
+    // weak half-margin that would still pass if the profiles collapsed.
+    expect(proposal).toBeGreaterThan(vote);
+    expect(proposal / vote).toBeGreaterThan(1.35);
+    expect(threadCurveProfile("proposal").tension).toBeLessThan(
+      threadCurveProfile("vote").tension,
+    );
     expect(threadCurveProfile("knotting").tension).toBeGreaterThan(
       threadCurveProfile("conversation").tension,
     );
     expect(threadCurveProfile("vote").maxBulgeFraction).toBeLessThan(
       threadCurveProfile("proposal").maxBulgeFraction,
     );
+    // Subject-bound: mid deflection is not required to rank like private
+    // profiles (shared target axis dominates); multi-source tests lock approach.
     expect(EDGE_VISUAL_STYLE.byType.knotting.width).toBeGreaterThan(
       EDGE_VISUAL_STYLE.byType.conversation.width,
     );
@@ -521,6 +538,7 @@ describe("natural thread curves", () => {
     const expectedTip = pointAtArcProgress(staticPath, 0.5, {
       cumulative: pathState.cumulative,
       total: pathState.totalLength,
+      projected: pathState.projectedSamples,
     });
     expect(tip[0]).toBeCloseTo(expectedTip[0], 10);
     expect(tip[1]).toBeCloseTo(expectedTip[1], 10);
@@ -564,8 +582,8 @@ describe("natural thread curves", () => {
     // Target-side approach axes align (dot product near 1) — not only bend sign.
     const dot = (a: [number, number], b: [number, number]) =>
       a[0] * b[0] + a[1] * b[1];
-    expect(dot(proposalApproach, voteApproach)).toBeGreaterThan(0.985);
-    expect(dot(proposalApproach, talkApproach)).toBeGreaterThan(0.985);
+    expect(dot(proposalApproach, voteApproach)).toBeGreaterThan(0.999);
+    expect(dot(proposalApproach, talkApproach)).toBeGreaterThan(0.999);
 
     // Without a subject id the corridor key stays private per thread — never
     // invents a shared relationship between unrelated votes.
@@ -581,6 +599,122 @@ describe("natural thread curves", () => {
     expect(threadCurveProfile("vote").maxBulgeFraction).toBeLessThan(
       threadCurveProfile("conversation").maxBulgeFraction,
     );
+  });
+
+  it("shares a true multi-source target-local approach for one subject", () => {
+    const subject = "22222222-2222-5222-8222-222222222222";
+    const sharedTarget: [number, number] = [10.05, 53.55];
+    // Three strongly different sources: W, N, and far SE of the target.
+    const sources: Array<[number, number]> = [
+      [8.5, 53.55],
+      [10.05, 54.4],
+      [12.2, 52.1],
+    ];
+    const types = ["proposal", "vote", "conversation"] as const;
+    const approaches = sources.map((src, index) =>
+      threadTargetApproachVector(src, sharedTarget, {
+        fadenType: types[index],
+        threadId: `multi-src-${index}`,
+        subjectId: subject,
+      }),
+    );
+    const axis = threadTargetLocalCorridorAxis(sharedTarget, subject);
+    const expectedApproach: [number, number] = [-axis[0], -axis[1]];
+    const dot = (a: [number, number], b: [number, number]) =>
+      a[0] * b[0] + a[1] * b[1];
+    for (let i = 0; i < approaches.length; i += 1) {
+      expect(dot(approaches[i], expectedApproach)).toBeGreaterThan(0.999);
+      for (let j = i + 1; j < approaches.length; j += 1) {
+        expect(dot(approaches[i], approaches[j])).toBeGreaterThan(0.999);
+      }
+    }
+
+    for (let i = 0; i < sources.length; i += 1) {
+      const path = sampleThreadCurve(sources[i], sharedTarget, {
+        fadenType: types[i],
+        threadId: `multi-src-${i}`,
+        subjectId: subject,
+      });
+      expect(path[0]).toEqual(sources[i]);
+      expect(path.at(-1)).toEqual(sharedTarget);
+      for (const point of path) {
+        expect(Number.isFinite(point[0])).toBe(true);
+        expect(Number.isFinite(point[1])).toBe(true);
+        // Never spike to null island unless that is a real endpoint.
+        if (
+          Math.abs(sources[i][0]) > 1 ||
+          Math.abs(sources[i][1]) > 1 ||
+          Math.abs(sharedTarget[0]) > 1 ||
+          Math.abs(sharedTarget[1]) > 1
+        ) {
+          expect(point[0] === 0 && point[1] === 0).toBe(false);
+        }
+      }
+
+      // Last control point lies on the target-local corridor axis.
+      const ctrl = threadCurveControlPointsProjected(sources[i], sharedTarget, {
+        fadenType: types[i],
+        threadId: `multi-src-${i}`,
+        subjectId: subject,
+      });
+      const { targetXY } = projectedChord(sources[i], sharedTarget);
+      const outX = ctrl.p2[0] - targetXY[0];
+      const outY = ctrl.p2[1] - targetXY[1];
+      const outLen = Math.hypot(outX, outY);
+      expect(outLen).toBeGreaterThan(0);
+      expect(outLen).toBeLessThanOrEqual(
+        Math.min(
+          ctrl.length * EDGE_CURVE_MAX_HANDLE_FRACTION + 1e-6,
+          EDGE_CURVE_MAX_HANDLE_M + 1e-6,
+        ),
+      );
+      const outUnit: [number, number] = [outX / outLen, outY / outLen];
+      expect(dot(outUnit, axis)).toBeGreaterThan(0.999);
+
+      // Monotone approach in the last quarter: distance to target non-increasing.
+      const lastQuarterFrom = Math.floor(path.length * 0.75);
+      let prevDist = Number.POSITIVE_INFINITY;
+      for (let s = lastQuarterFrom; s < path.length; s += 1) {
+        const xy = projectLngLatToMercator(path[s][0], path[s][1]);
+        const txy = projectLngLatToMercator(sharedTarget[0], sharedTarget[1]);
+        const dist = Math.hypot(xy[0] - txy[0], xy[1] - txy[1]);
+        expect(dist).toBeLessThanOrEqual(prevDist + 1e-6);
+        prevDist = dist;
+      }
+
+      // No self-loop: consecutive sample direction never reverses more than 120°.
+      for (let s = 2; s < path.length; s += 1) {
+        const a = projectLngLatToMercator(path[s - 2][0], path[s - 2][1]);
+        const b = projectLngLatToMercator(path[s - 1][0], path[s - 1][1]);
+        const c = projectLngLatToMercator(path[s][0], path[s][1]);
+        const v1x = b[0] - a[0];
+        const v1y = b[1] - a[1];
+        const v2x = c[0] - b[0];
+        const v2y = c[1] - b[1];
+        const n1 = Math.hypot(v1x, v1y);
+        const n2 = Math.hypot(v2x, v2y);
+        if (n1 < 1e-9 || n2 < 1e-9) continue;
+        const turn = (v1x * v2x + v1y * v2y) / (n1 * n2);
+        expect(turn).toBeGreaterThan(-0.5);
+      }
+    }
+
+    // Mid arcs may still differ by type/source; only the final approach is locked.
+    const midDefl = sources.map((src, index) => {
+      const { p0, p1, p2, p3 } = threadCurveControlPointsProjected(
+        src,
+        sharedTarget,
+        {
+          fadenType: types[index],
+          threadId: `multi-src-${index}`,
+          subjectId: subject,
+        },
+      );
+      const midX = 0.125 * (p0[0] + p3[0]) + 0.375 * (p1[0] + p2[0]);
+      const midY = 0.125 * (p0[1] + p3[1]) + 0.375 * (p1[1] + p2[1]);
+      return Math.hypot(midX - (p0[0] + p3[0]) / 2, midY - (p0[1] + p3[1]) / 2);
+    });
+    expect(midDefl[2]).toBeGreaterThan(midDefl[1]);
   });
 
   it("projects geometry in Web Mercator with stable EW length across latitudes", () => {
@@ -605,6 +739,83 @@ describe("natural thread curves", () => {
     });
     expect(path[0]).toEqual(midSource);
     expect(path.at(-1)).toEqual(midTarget);
+  });
+
+  it("measures arc progress in projected metres, not degree-space hypot", () => {
+    // High-latitude diagonal: degree hypot weights Δlng/Δlat equally; Mercator
+    // does not — a degree-space regression is detectable on total and tip.
+    const highSource: [number, number] = [10, 68];
+    const highTarget: [number, number] = [14, 72];
+    const highPath = buildThreadPathState(highSource, highTarget, [], {
+      fadenType: "conversation",
+      threadId: "arc-high-lat",
+    });
+    const highDegree = degreeSpacePolylineArcState(highPath.samples);
+    // Metres vs degrees: multi-order-of-magnitude gap (regression detector).
+    expect(highPath.totalLength).toBeGreaterThan(highDegree.total * 1000);
+    const highTip = pointAtArcProgress(highPath.samples, 0.5, {
+      cumulative: highPath.cumulative,
+      total: highPath.totalLength,
+      projected: highPath.projectedSamples,
+    });
+    const highDegreeTip = pointAtArcProgress(highPath.samples, 0.5, {
+      cumulative: highDegree.cumulative,
+      total: highDegree.total,
+    });
+    // Degree-space progress misplaces the tip on a high-lat diagonal curve.
+    expect(
+      Math.hypot(highTip[0] - highDegreeTip[0], highTip[1] - highDegreeTip[1]),
+    ).toBeGreaterThan(1e-4);
+
+    // Pure N-S: projected Y stretch ≠ degree Δlat; totalLength is metres.
+    const nsSource: [number, number] = [10, 45];
+    const nsTarget: [number, number] = [10, 50];
+    const nsPath = buildThreadPathState(nsSource, nsTarget, [], {
+      fadenType: "conversation",
+      threadId: "arc-ns",
+    });
+    const nsDegree = degreeSpacePolylineArcState(nsPath.samples);
+    expect(nsPath.totalLength).toBeGreaterThan(nsDegree.total * 1000);
+    expect(nsPath.projectedSamples.length).toBe(nsPath.samples.length);
+    expect(nsPath.cumulative[0]).toBe(0);
+    expect(nsPath.cumulative[nsPath.cumulative.length - 1]).toBe(
+      nsPath.totalLength,
+    );
+    // Path state total is in metres (order of hundreds of km for 5° latitude).
+    expect(nsPath.totalLength).toBeGreaterThan(100_000);
+    // N-S midpoint progress differs once Mercator Y is nonlinear in lat.
+    const nsTip = pointAtArcProgress(nsPath.samples, 0.5, {
+      cumulative: nsPath.cumulative,
+      total: nsPath.totalLength,
+      projected: nsPath.projectedSamples,
+    });
+    const nsDegreeTip = pointAtArcProgress(nsPath.samples, 0.5, {
+      cumulative: nsDegree.cumulative,
+      total: nsDegree.total,
+    });
+    expect(Math.abs(nsTip[1] - nsDegreeTip[1])).toBeGreaterThan(1e-5);
+  });
+
+  it("never masks invalid projection as null-island [0,0]", () => {
+    expect(projectedSampleToLngLat(Number.NaN, 0)).toBeNull();
+    expect(projectedSampleToLngLat(0, Number.NaN)).toBeNull();
+    expect(projectedSampleToLngLat(Number.POSITIVE_INFINITY, 0)).toBeNull();
+    expect(projectedSampleToLngLat(0, Number.NEGATIVE_INFINITY)).toBeNull();
+    // Finite projection still works.
+    const origin = projectedSampleToLngLat(0, 0);
+    expect(origin).not.toBeNull();
+    expect(origin![0]).toBeCloseTo(0, 10);
+    expect(origin![1]).toBeCloseTo(0, 10);
+    // Sampled paths never inject a [0,0] spike on non-zero endpoints.
+    const path = sampleThreadCurve([9, 53], [11, 54], {
+      fadenType: "proposal",
+      threadId: "finite-fallback",
+    });
+    for (const point of path) {
+      expect(Number.isFinite(point[0])).toBe(true);
+      expect(Number.isFinite(point[1])).toBe(true);
+      expect(point[0] === 0 && point[1] === 0).toBe(false);
+    }
   });
 
   it("uses the short unwrapped antimeridian path without NaN samples", () => {
@@ -661,6 +872,7 @@ describe("natural thread curves", () => {
     const expected = pointAtArcProgress(path.samples, 0.9, {
       cumulative: path.cumulative,
       total: path.totalLength,
+      projected: path.projectedSamples,
     });
     expect(tip[0]).toBeCloseTo(expected[0], 10);
     expect(tip[1]).toBeCloseTo(expected[1], 10);

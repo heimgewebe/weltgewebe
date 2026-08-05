@@ -6,7 +6,8 @@ import {
   buildThreadPathState,
   clipThreadPathByProgress,
   pointAtArcProgress,
-  sampleThreadCurve,
+  projectLngLatToMercator,
+  shortestLongitudeDelta,
   themeSegmentSeamOverlapProgress,
   THEME_SEGMENT_SEAM_OVERLAP,
 } from "$lib/map/overlay/edges";
@@ -27,12 +28,17 @@ const curveOpts = {
   threadId: "edge-theme",
 } as const;
 
-function polylineLength(points: readonly [number, number][]): number {
+/** Projected Web-Mercator length (metres) with short-path unwrap continuity. */
+function projectedPolylineLength(points: readonly [number, number][]): number {
+  if (points.length < 2) return 0;
   let total = 0;
+  let unwrapLng = points[0][0];
+  let prevXY = projectLngLatToMercator(unwrapLng, points[0][1]);
   for (let index = 1; index < points.length; index += 1) {
-    const prev = points[index - 1];
-    const curr = points[index];
-    total += Math.hypot(curr[0] - prev[0], curr[1] - prev[1]);
+    unwrapLng = unwrapLng + shortestLongitudeDelta(unwrapLng, points[index][0]);
+    const currXY = projectLngLatToMercator(unwrapLng, points[index][1]);
+    total += Math.hypot(currXY[0] - prevXY[0], currXY[1] - prevXY[1]);
+    prevXY = currXY;
   }
   return total;
 }
@@ -191,8 +197,8 @@ describe("edge theme fallback", () => {
     const nominal = fullLen / segmentCount;
     const seam = themeSegmentSeamOverlapProgress(segmentCount) * fullLen;
     for (let index = 1; index < multi.length; index += 1) {
-      const prevLen = polylineLength(multi[index - 1].coordinates);
-      const currLen = polylineLength(multi[index].coordinates);
+      const prevLen = projectedPolylineLength(multi[index - 1].coordinates);
+      const currLen = projectedPolylineLength(multi[index].coordinates);
       expect(currLen).toBeGreaterThan(nominal * 0.5);
       expect(prevLen).toBeGreaterThan(nominal * 0.5);
       expect(currLen).toBeLessThanOrEqual(nominal + seam + 1e-6);
@@ -228,8 +234,13 @@ describe("edge theme fallback", () => {
         const segmentCount = colors.length * 2;
         expect(segments).toHaveLength(segmentCount);
 
-        const path = sampleThreadCurve(source, target, curveOpts);
-        const pathLength = polylineLength(path);
+        const pathState = buildThreadPathState(
+          source,
+          target,
+          colors,
+          curveOpts,
+        );
+        const pathLength = pathState.totalLength;
         const segmentLength = pathLength / segmentCount;
         const maxOverlap =
           themeSegmentSeamOverlapProgress(segmentCount) * pathLength;
@@ -246,7 +257,7 @@ describe("edge theme fallback", () => {
         expect(segments.at(-1)?.coordinates.at(-1)).toEqual(target);
 
         for (let index = 0; index < segments.length; index += 1) {
-          const painted = polylineLength(segments[index].coordinates);
+          const painted = projectedPolylineLength(segments[index].coordinates);
           expect(painted).toBeGreaterThan(0);
           // One-sided: at most segment length + local overlap.
           expect(painted).toBeLessThanOrEqual(
@@ -256,16 +267,12 @@ describe("edge theme fallback", () => {
         }
 
         // Progress clip: tip is exactly pointAtArcProgress; no segment past tip.
-        const pathState = buildThreadPathState(
-          source,
-          target,
-          colors,
-          curveOpts,
-        );
         for (const progress of [0.01, 0.25, 0.5, 0.75, 0.99, 1]) {
           const clipped = clipThreadPathByProgress(pathState, progress);
           for (const segment of clipped) {
-            expect(polylineLength(segment.coordinates)).toBeGreaterThan(0);
+            expect(
+              projectedPolylineLength(segment.coordinates),
+            ).toBeGreaterThan(0);
             expect(segment.coordinates.length).toBeGreaterThanOrEqual(2);
           }
           if (progress >= 1) {
@@ -281,6 +288,7 @@ describe("edge theme fallback", () => {
               {
                 cumulative: pathState.cumulative,
                 total: pathState.totalLength,
+                projected: pathState.projectedSamples,
               },
             );
             expect(tip[0]).toBeCloseTo(expectedTip[0], 10);

@@ -347,6 +347,7 @@ describe("EdgeMotionController", () => {
     const expectedTip = pointAtArcProgress(path.samples, 0.5, {
       cumulative: path.cumulative,
       total: path.totalLength,
+      projected: path.projectedSamples,
     });
     const tip = halfway.geometry.coordinates.at(-1)!;
     expect(tip[0]).toBeCloseTo(expectedTip[0], 8);
@@ -415,6 +416,7 @@ describe("EdgeMotionController", () => {
       const expected = pointAtArcProgress(path.samples, progress, {
         cumulative: path.cumulative,
         total: path.totalLength,
+        projected: path.projectedSamples,
       });
       expect(tip[0]).toBeCloseTo(expected[0], 8);
       expect(tip[1]).toBeCloseTo(expected[1], 8);
