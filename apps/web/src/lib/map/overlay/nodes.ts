@@ -27,6 +27,9 @@ export function diffSearchMatchIds(
 
 export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
 
+/** Canonical MapLibre marker anchor for nodes, centers, and Garnrollen. */
+export const MARKER_GEO_ANCHOR = "center" as const;
+
 export class NodesOverlay {
   private activeMarkers = new Map<
     string,
@@ -225,7 +228,12 @@ export class NodesOverlay {
         element.setAttribute("aria-label", this.runtime.label(item));
         element.title = item.title;
 
-        const marker = new this.MarkerClass({ element, anchor: "bottom" })
+        // Center anchor: map coordinate, MapLibre pin, and visible knot/spool
+        // center share one geographic point so Fäden reach the true midpoint.
+        const marker = new this.MarkerClass({
+          element,
+          anchor: MARKER_GEO_ANCHOR,
+        })
           .setLngLat([item.lon, item.lat])
           .addTo(map);
         // MapLibre assigns its generic "Map marker" label in the constructor.

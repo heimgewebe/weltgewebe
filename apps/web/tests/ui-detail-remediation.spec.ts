@@ -68,7 +68,7 @@ test.describe("UI detail remediation", () => {
     expect(tab?.height).toBeGreaterThanOrEqual(44);
   });
 
-  test("keeps the visible node marker on the original bottom anchor", async ({
+  test("keeps the visible node marker on the shared geographic center anchor", async ({
     page,
   }) => {
     const marker = page.locator(".map-marker:not(.marker-account)").first();
@@ -79,9 +79,12 @@ test.describe("UI detail remediation", () => {
     ]);
     expect(markerBox).not.toBeNull();
     expect(visualBox).not.toBeNull();
-    expect(Math.round((visualBox?.y ?? 0) + (visualBox?.height ?? 0))).toBe(
-      Math.round((markerBox?.y ?? 0) + (markerBox?.height ?? 0)),
-    );
+    const markerCenterY = (markerBox?.y ?? 0) + (markerBox?.height ?? 0) / 2;
+    const visualCenterY = (visualBox?.y ?? 0) + (visualBox?.height ?? 0) / 2;
+    const markerCenterX = (markerBox?.x ?? 0) + (markerBox?.width ?? 0) / 2;
+    const visualCenterX = (visualBox?.x ?? 0) + (visualBox?.width ?? 0) / 2;
+    expect(Math.abs(visualCenterY - markerCenterY)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(visualCenterX - markerCenterX)).toBeLessThanOrEqual(1.5);
   });
 
   test("exposes the finished conversation tab but no unfinished proposal tab or raw coordinates", async ({

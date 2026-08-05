@@ -8,6 +8,7 @@ import type { FadenType, MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import {
+  buildEndpointIndex,
   buildProgressClippedThemeSegments,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
@@ -15,20 +16,25 @@ import {
 } from "./edges";
 
 export const EDGE_MOTION_SOURCE = "edge-motion-source";
-/** Legacy aliases kept for tests that probe one representative typed pair. */
+/** Legacy aliases kept for tests that probe one representative typed triple. */
 export const EDGE_MOTION_LAYER = "edge-motion-layer-legacy";
-export const EDGE_MOTION_HALO_LAYER = "edge-motion-halo-layer-legacy";
+export const EDGE_MOTION_SHADOW_LAYER = "edge-motion-shadow-layer-legacy";
+export const EDGE_MOTION_HIGHLIGHT_LAYER = "edge-motion-highlight-layer-legacy";
+/** @deprecated Prefer EDGE_MOTION_SHADOW_LAYER. */
+export const EDGE_MOTION_HALO_LAYER = EDGE_MOTION_SHADOW_LAYER;
 export const EDGE_MOTION_DURATION_MS = 720;
 export const EDGE_MOTION_MAX_ACTIVE = 8;
 
 /**
- * Bounded, canonical motion layers: one halo+main pair per thread type.
- * Same structural types as the static projection — no unbounded layer growth.
+ * Bounded, canonical motion layers: one shadow+body+highlight triple per
+ * thread type. Same structural types and yarn paint as the static projection —
+ * no unbounded layer growth.
  */
 export const EDGE_MOTION_LAYER_IDS: readonly string[] =
   EDGE_THREAD_VARIANTS.flatMap((variant) => [
-    motionHaloLayerId(variant.fadenType),
+    motionShadowLayerId(variant.fadenType),
     motionMainLayerId(variant.fadenType),
+    motionHighlightLayerId(variant.fadenType),
   ]);
 
 type LngLatTuple = [number, number];
@@ -83,10 +89,16 @@ function motionMainLayerId(fadenType: string): string {
     : `edge-motion-layer-${fadenType}`;
 }
 
-function motionHaloLayerId(fadenType: string): string {
+function motionShadowLayerId(fadenType: string): string {
   return fadenType === "legacy"
-    ? EDGE_MOTION_HALO_LAYER
-    : `edge-motion-halo-layer-${fadenType}`;
+    ? EDGE_MOTION_SHADOW_LAYER
+    : `edge-motion-shadow-layer-${fadenType}`;
+}
+
+function motionHighlightLayerId(fadenType: string): string {
+  return fadenType === "legacy"
+    ? EDGE_MOTION_HIGHLIGHT_LAYER
+    : `edge-motion-highlight-layer-${fadenType}`;
 }
 
 function defaultScheduler(): EdgeMotionScheduler {
@@ -111,17 +123,6 @@ function easeInOutCubic(value: number): number {
     : 1 - Math.pow(-2 * progress + 2, 3) / 2;
 }
 
-function buildPointMap(points: readonly MapEntityViewModel[]) {
-  const pointMap = new Map<string, MapEntityViewModel>();
-  for (const point of points) {
-    pointMap.set(point.id, point);
-    if (point.type === "webgemeindezentrum") {
-      pointMap.set(point.faden_endpoint_id, point);
-    }
-  }
-  return pointMap;
-}
-
 function motionThemeFromTarget(target: MapEntityViewModel): {
   themeColor?: string;
   themeColors?: string[];
@@ -143,7 +144,7 @@ export function resolveEdgeMotionInput(
   edge: MapEdge,
   points: readonly MapEntityViewModel[],
 ): EdgeMotionInput | null {
-  const pointMap = buildPointMap(points);
+  const pointMap = buildEndpointIndex(points);
   const source = pointMap.get(edge.source_id);
   const target = pointMap.get(edge.target_id);
   if (!source || !target) return null;
@@ -169,7 +170,7 @@ export function resolveEdgeMotionInput(
  *
  * The canonical edge source remains untouched. While one transition is visible,
  * the same edge id is filtered from the static layers and drawn in this separate
- * source with the same themed segments and per-type width/dash as the static
+ * source with the same themed segments and per-type yarn style as the static
  * projection. A single RAF exists only while at least one transition is active.
  */
 export class EdgeMotionController {
@@ -390,7 +391,7 @@ export class EdgeMotionController {
   private motionPalette(input: EdgeMotionInput): string[] {
     if (input.themeColors?.length) return input.themeColors;
     if (input.themeColor) return [input.themeColor];
-    return [EDGE_VISUAL_STYLE.mainColor];
+    return [EDGE_VISUAL_STYLE.bodyColor];
   }
 
   private render(): void {
@@ -476,41 +477,47 @@ export class EdgeMotionController {
     };
 
     for (const variant of EDGE_THREAD_VARIANTS) {
-      const haloId = motionHaloLayerId(variant.fadenType);
-      const mainId = motionMainLayerId(variant.fadenType);
+      const shadowId = motionShadowLayerId(variant.fadenType);
+      const bodyId = motionMainLayerId(variant.fadenType);
+      const highlightId = motionHighlightLayerId(variant.fadenType);
       const filter = [
         "==",
         ["get", "fadenType"],
         variant.fadenType,
       ] as LineLayerSpecification["filter"];
       const dashArray = [...variant.dashArray] as [number, number];
-      if (!this.map.getLayer(haloId)) {
+      const bodyWidth = variant.width;
+      if (!this.map.getLayer(shadowId)) {
         this.map.addLayer(
           {
-            id: haloId,
+            id: shadowId,
             type: "line",
             source: EDGE_MOTION_SOURCE,
             filter,
             layout: commonLayout,
             paint: {
-              "line-color": EDGE_VISUAL_STYLE.haloColor,
-              "line-width": variant.width + 2.75,
-              "line-blur": EDGE_VISUAL_STYLE.haloBlur,
+              "line-color": EDGE_VISUAL_STYLE.shadowColor,
+              "line-width": bodyWidth + EDGE_VISUAL_STYLE.shadowWidthExtra,
+              "line-blur": EDGE_VISUAL_STYLE.shadowBlur,
               "line-opacity": [
                 "*",
                 ["coalesce", ["to-number", ["get", "opacity"]], 0],
-                EDGE_VISUAL_STYLE.haloOpacityFactor,
+                EDGE_VISUAL_STYLE.shadowOpacityFactor,
               ],
               "line-dasharray": dashArray,
             },
           },
-          this.map.getLayer(mainId) ? mainId : firstSymbolId,
+          this.map.getLayer(bodyId)
+            ? bodyId
+            : this.map.getLayer(highlightId)
+              ? highlightId
+              : firstSymbolId,
         );
       }
-      if (!this.map.getLayer(mainId)) {
+      if (!this.map.getLayer(bodyId)) {
         this.map.addLayer(
           {
-            id: mainId,
+            id: bodyId,
             type: "line",
             source: EDGE_MOTION_SOURCE,
             filter,
@@ -521,11 +528,36 @@ export class EdgeMotionController {
                 ["get", "themeColor"],
                 variant.fallbackColor,
               ],
-              "line-width": variant.width,
+              "line-width": bodyWidth,
               "line-opacity": [
                 "coalesce",
                 ["to-number", ["get", "opacity"]],
                 0,
+              ],
+              "line-dasharray": dashArray,
+            },
+          },
+          this.map.getLayer(highlightId) ? highlightId : firstSymbolId,
+        );
+      }
+      if (!this.map.getLayer(highlightId)) {
+        this.map.addLayer(
+          {
+            id: highlightId,
+            type: "line",
+            source: EDGE_MOTION_SOURCE,
+            filter,
+            layout: commonLayout,
+            paint: {
+              "line-color": EDGE_VISUAL_STYLE.highlightColor,
+              "line-width": Math.max(
+                0.55,
+                bodyWidth * EDGE_VISUAL_STYLE.highlightWidthFactor,
+              ),
+              "line-opacity": [
+                "*",
+                ["coalesce", ["to-number", ["get", "opacity"]], 0],
+                EDGE_VISUAL_STYLE.highlightOpacityFactor,
               ],
               "line-dasharray": dashArray,
             },

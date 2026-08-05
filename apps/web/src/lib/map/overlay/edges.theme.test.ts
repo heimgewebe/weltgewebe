@@ -128,6 +128,32 @@ describe("edge theme fallback", () => {
     expect(segments.at(-1)?.coordinates[1]).toEqual([8, 0]);
   });
 
+  it("applies stable geometric seam overlap only between multi-colour joins", () => {
+    const single = buildThemedLineSegments([0, 0], [10, 0], ["#111111"]);
+    expect(single).toHaveLength(1);
+    expect(single[0].coordinates).toEqual([
+      [0, 0],
+      [10, 0],
+    ]);
+
+    const multi = buildThemedLineSegments(
+      [0, 0],
+      [10, 0],
+      ["#111111", "#222222"],
+    );
+    expect(multi).toHaveLength(4);
+    // Adjacent segments must overlap so WebGL round-caps leave no hairline gap.
+    expect(multi[0].coordinates[1][0]).toBeGreaterThan(
+      multi[1].coordinates[0][0],
+    );
+    expect(multi[1].coordinates[1][0]).toBeGreaterThan(
+      multi[2].coordinates[0][0],
+    );
+    // Endpoints of the full path remain exact; only interior joins overlap.
+    expect(multi[0].coordinates[0]).toEqual([0, 0]);
+    expect(multi.at(-1)?.coordinates[1]).toEqual([10, 0]);
+  });
+
   it("keeps themeColor absent for Garnrollen", () => {
     const points = [
       {

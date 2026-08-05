@@ -469,6 +469,51 @@ describe("EdgeMotionController", () => {
     expect(half.at(-1)?.coordinates[1][0]).toBeCloseTo(4, 8);
   });
 
+  it("shares the exact static yarn style definition with motion layers", () => {
+    const staticSpecs = buildEdgeLayerSpecifications();
+    const { map, controller } = createHarness();
+    // Ensure motion layers exist.
+    controller.startCreate(input);
+
+    for (const variant of EDGE_THREAD_VARIANTS) {
+      const staticBodyId =
+        variant.fadenType === "legacy"
+          ? "edges-layer"
+          : `edges-${variant.fadenType}-layer`;
+      const motionBodyId =
+        variant.fadenType === "legacy"
+          ? EDGE_MOTION_LAYER
+          : `edge-motion-layer-${variant.fadenType}`;
+      const staticBody = staticSpecs.find((spec) => spec.id === staticBodyId);
+      const motionBody = map.getLayer(motionBodyId) as
+        | { paint?: Record<string, unknown> }
+        | undefined;
+
+      expect(staticBody?.paint?.["line-width"]).toBe(variant.width);
+      expect(motionBody?.paint?.["line-width"]).toBe(variant.width);
+      expect(staticBody?.paint?.["line-dasharray"]).toEqual([
+        ...variant.dashArray,
+      ]);
+      expect(motionBody?.paint?.["line-dasharray"]).toEqual([
+        ...variant.dashArray,
+      ]);
+
+      const typed =
+        EDGE_VISUAL_STYLE.byType[
+          variant.fadenType as keyof typeof EDGE_VISUAL_STYLE.byType
+        ];
+      expect(variant.width).toBe(typed?.width ?? EDGE_VISUAL_STYLE.bodyWidth);
+      expect(variant.dashArray).toEqual(
+        typed?.dashArray ?? EDGE_VISUAL_STYLE.dashArray,
+      );
+    }
+
+    // Bounded yarn stack: three layers per type for static and motion alike.
+    expect(EDGE_THREAD_LAYER_IDS).toHaveLength(EDGE_THREAD_VARIANTS.length * 3);
+    expect(EDGE_MOTION_LAYER_IDS).toHaveLength(EDGE_THREAD_VARIANTS.length * 3);
+    controller.destroy();
+  });
+
   it("retracts along the same geometry and suppresses the static edge until data removal", () => {
     const { map, scheduler, controller } = createHarness();
     controller.setVisibleEdgeIds(new Set([input.id]));
@@ -537,7 +582,7 @@ describe("EdgeMotionController", () => {
       });
     }
     expect(controller.inspect().activeCount).toBe(EDGE_MOTION_MAX_ACTIVE);
-    expect(EDGE_MOTION_LAYER_IDS.length).toBe(EDGE_THREAD_VARIANTS.length * 2);
+    expect(EDGE_MOTION_LAYER_IDS.length).toBe(EDGE_THREAD_VARIANTS.length * 3);
 
     for (const layerId of EDGE_MOTION_LAYER_IDS) {
       map.removeLayer(layerId);

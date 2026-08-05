@@ -7,6 +7,7 @@ import {
   EDGE_THREAD_LAYER_IDS,
   buildEdgeFeatures,
   buildEdgeLayerSpecifications,
+  buildEndpointIndex,
   hasCompleteEdgeThreadStyle,
   updateEdges,
 } from "$lib/map/overlay/edges";
@@ -39,6 +40,23 @@ describe("buildEdgeFeatures", () => {
     expect(features).toHaveLength(1);
     expect(features[0].properties?.opacity).toBe(0.5);
     expect(features[0].properties).not.toHaveProperty("themeColor");
+  });
+
+  it("indexes Faden endpoints by id and faden_endpoint_id for center attachment", () => {
+    const centerEndpointId = "22222222-2222-5222-8222-222222222222";
+    const center = {
+      type: "webgemeindezentrum",
+      id: "webgemeindezentrum-hammer-park",
+      faden_endpoint_id: centerEndpointId,
+      lat: 53.5585,
+      lon: 10.058,
+    } as MapEntityViewModel;
+    const index = buildEndpointIndex([points[0], center]);
+    expect(index.get("source")?.lon).toBe(9.9);
+    expect(index.get(centerEndpointId)?.id).toBe(
+      "webgemeindezentrum-hammer-park",
+    );
+    expect(index.get("webgemeindezentrum-hammer-park")?.lat).toBe(53.5585);
   });
 
   it("resolves a Webgemeindezentrum through its strict Faden UUID alias", () => {
@@ -231,8 +249,8 @@ describe("hasCompleteEdgeThreadStyle", () => {
     expect(EDGE_THREAD_LAYER_IDS).toEqual(
       buildEdgeLayerSpecifications().map((specification) => specification.id),
     );
-    // Halo plus line for legacy and the four typed thread kinds.
-    expect(EDGE_THREAD_LAYER_IDS).toHaveLength(10);
+    // Shadow + body + highlight for legacy and the four typed thread kinds.
+    expect(EDGE_THREAD_LAYER_IDS).toHaveLength(15);
   });
 
   it("accepts the complete set of source and thread layers", () => {
@@ -245,12 +263,40 @@ describe("hasCompleteEdgeThreadStyle", () => {
     ).toBe(false);
   });
 
-  it("rejects the old partial check of source plus the two legacy layers", () => {
+  it("rejects the old partial check of source plus two legacy layers", () => {
     expect(
       hasCompleteEdgeThreadStyle(
-        probe([LAYERS.EDGES_HALO_LAYER, LAYERS.EDGES_LAYER]),
+        probe([
+          LAYERS.EDGES_SHADOW_LAYER,
+          LAYERS.EDGES_LAYER,
+          LAYERS.EDGES_HIGHLIGHT_LAYER,
+        ]),
       ),
     ).toBe(false);
+  });
+
+  it("keeps shadow/body/highlight triples and shared static paint bounds", () => {
+    const specs = buildEdgeLayerSpecifications();
+    expect(specs).toHaveLength(15);
+    for (let index = 0; index < specs.length; index += 3) {
+      const shadow = specs[index];
+      const body = specs[index + 1];
+      const highlight = specs[index + 2];
+      expect(shadow.id).toContain("shadow");
+      expect(highlight.id).toContain("highlight");
+      expect(shadow.paint?.["line-width"]).toBeGreaterThan(
+        Number(body.paint?.["line-width"]),
+      );
+      expect(Number(highlight.paint?.["line-width"])).toBeLessThan(
+        Number(body.paint?.["line-width"]),
+      );
+      expect(shadow.paint?.["line-dasharray"]).toEqual(
+        body.paint?.["line-dasharray"],
+      );
+      expect(highlight.paint?.["line-dasharray"]).toEqual(
+        body.paint?.["line-dasharray"],
+      );
+    }
   });
 
   it("rejects a missing edge source and an absent map", () => {

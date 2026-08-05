@@ -20,78 +20,111 @@ test.describe("Edge visibility on load", () => {
       { timeout: 15000 },
     );
 
-    // Wait for the edges layer to appear – this is the rendering layer, not just the data source
+    // Wait for the yarn stack: shadow, body and highlight for legacy edges.
     await page.waitForFunction(
       () => {
         const m = (window as any).__TEST_MAP__;
         return (
           m &&
           m.getLayer("edges-layer") !== undefined &&
-          m.getLayer("edges-halo-layer") !== undefined
+          m.getLayer("edges-shadow-layer") !== undefined &&
+          m.getLayer("edges-highlight-layer") !== undefined
         );
       },
       undefined,
       { timeout: 5000 },
     );
 
-    // Verify the full rendering pipeline: source exists, layer exists, features are populated
+    // Verify the full rendering pipeline: source exists, layers exist, features are populated
     const edgeState = await page.evaluate(() => {
       const m = (window as any).__TEST_MAP__;
       if (!m)
         return {
           source: false,
           layer: false,
-          haloLayer: false,
+          shadowLayer: false,
+          highlightLayer: false,
           featureCount: 0,
         };
 
       const source = m.getSource("edges-source");
       const layer = m.getLayer("edges-layer");
-      const haloLayer = m.getLayer("edges-halo-layer");
+      const shadowLayer = m.getLayer("edges-shadow-layer");
+      const highlightLayer = m.getLayer("edges-highlight-layer");
 
-      // Extract paint properties for deeper verification
-      let haloColor = null;
-      let haloWidth = null;
-      let haloOpacity = null;
+      let shadowColor = null;
+      let shadowWidth = null;
+      let shadowOpacity = null;
       let mainOpacity = null;
-      let haloBlur = null;
+      let shadowBlur = null;
       let mainColor = null;
       let mainWidth = null;
+      let highlightColor = null;
+      let highlightWidth = null;
       let isUnderMain = false;
+      let highlightAboveMain = false;
 
-      let haloDasharray = null;
+      let shadowDasharray = null;
       let mainDasharray = null;
+      let highlightDasharray = null;
 
-      if (haloLayer && layer) {
-        haloColor = m.getPaintProperty("edges-halo-layer", "line-color");
-        haloWidth = m.getPaintProperty("edges-halo-layer", "line-width");
-        haloOpacity = m.getPaintProperty("edges-halo-layer", "line-opacity");
+      if (shadowLayer && layer && highlightLayer) {
+        shadowColor = m.getPaintProperty("edges-shadow-layer", "line-color");
+        shadowWidth = m.getPaintProperty("edges-shadow-layer", "line-width");
+        shadowOpacity = m.getPaintProperty(
+          "edges-shadow-layer",
+          "line-opacity",
+        );
         mainOpacity = m.getPaintProperty("edges-layer", "line-opacity");
-        haloBlur = m.getPaintProperty("edges-halo-layer", "line-blur");
+        shadowBlur = m.getPaintProperty("edges-shadow-layer", "line-blur");
         mainColor = m.getPaintProperty("edges-layer", "line-color");
         mainWidth = m.getPaintProperty("edges-layer", "line-width");
-        haloDasharray = m.getPaintProperty(
-          "edges-halo-layer",
+        highlightColor = m.getPaintProperty(
+          "edges-highlight-layer",
+          "line-color",
+        );
+        highlightWidth = m.getPaintProperty(
+          "edges-highlight-layer",
+          "line-width",
+        );
+        shadowDasharray = m.getPaintProperty(
+          "edges-shadow-layer",
           "line-dasharray",
         );
         mainDasharray = m.getPaintProperty("edges-layer", "line-dasharray");
+        highlightDasharray = m.getPaintProperty(
+          "edges-highlight-layer",
+          "line-dasharray",
+        );
 
-        // Check z-index / layer order: halo should be before main layer in the style layers array
         const styleLayers = m.getStyle().layers;
         if (styleLayers) {
-          const haloIndex = styleLayers.findIndex(
-            (l: any) => l.id === "edges-halo-layer",
+          const shadowIndex = styleLayers.findIndex(
+            (l: any) => l.id === "edges-shadow-layer",
           );
           const mainIndex = styleLayers.findIndex(
             (l: any) => l.id === "edges-layer",
           );
-          if (haloIndex !== -1 && mainIndex !== -1 && haloIndex < mainIndex) {
+          const highlightIndex = styleLayers.findIndex(
+            (l: any) => l.id === "edges-highlight-layer",
+          );
+          if (
+            shadowIndex !== -1 &&
+            mainIndex !== -1 &&
+            shadowIndex < mainIndex
+          ) {
             isUnderMain = true;
+          }
+          if (
+            highlightIndex !== -1 &&
+            mainIndex !== -1 &&
+            highlightIndex > mainIndex
+          ) {
+            highlightAboveMain = true;
           }
         }
       }
 
-      // Access GeoJSON data via the public serialize() API to avoid relying on internal _data
       let featureCount = 0;
       if (source && typeof source.serialize === "function") {
         const serialized = source.serialize();
@@ -101,52 +134,67 @@ test.describe("Edge visibility on load", () => {
       return {
         source: source !== undefined,
         layer: layer !== undefined,
-        haloLayer: haloLayer !== undefined,
-        haloColor,
-        haloWidth,
-        haloOpacity,
+        shadowLayer: shadowLayer !== undefined,
+        highlightLayer: highlightLayer !== undefined,
+        shadowColor,
+        shadowWidth,
+        shadowOpacity,
         mainOpacity,
-        haloBlur,
+        shadowBlur,
         mainColor,
         mainWidth,
-        haloDasharray,
+        highlightColor,
+        highlightWidth,
+        shadowDasharray,
         mainDasharray,
+        highlightDasharray,
         isUnderMain,
+        highlightAboveMain,
         featureCount,
       };
     });
 
     expect(edgeState.source).toBe(true);
     expect(edgeState.layer).toBe(true);
-    expect(edgeState.haloLayer).toBe(true);
-    expect(edgeState.haloColor).toBe(EDGE_VISUAL_STYLE.haloColor);
-    expect(edgeState.haloWidth).toBe(EDGE_VISUAL_STYLE.haloWidth);
-    expect(edgeState.haloBlur).toBe(EDGE_VISUAL_STYLE.haloBlur);
+    expect(edgeState.shadowLayer).toBe(true);
+    expect(edgeState.highlightLayer).toBe(true);
+    expect(edgeState.shadowColor).toBe(EDGE_VISUAL_STYLE.shadowColor);
+    expect(edgeState.shadowWidth).toBe(
+      EDGE_VISUAL_STYLE.bodyWidth + EDGE_VISUAL_STYLE.shadowWidthExtra,
+    );
+    expect(edgeState.shadowBlur).toBe(EDGE_VISUAL_STYLE.shadowBlur);
     expect(edgeState.mainColor).toEqual([
       "coalesce",
       ["get", "themeColor"],
-      EDGE_VISUAL_STYLE.mainColor,
+      EDGE_VISUAL_STYLE.bodyColor,
     ]);
-    expect(edgeState.mainWidth).toBe(EDGE_VISUAL_STYLE.mainWidth);
+    expect(edgeState.mainWidth).toBe(EDGE_VISUAL_STYLE.bodyWidth);
+    expect(edgeState.highlightColor).toBe(EDGE_VISUAL_STYLE.highlightColor);
+    expect(edgeState.highlightWidth).toBe(
+      Math.max(
+        0.55,
+        EDGE_VISUAL_STYLE.bodyWidth * EDGE_VISUAL_STYLE.highlightWidthFactor,
+      ),
+    );
     expect(edgeState.mainOpacity).toEqual([
       "coalesce",
       ["to-number", ["get", "opacity"]],
       0,
     ]);
-    expect(edgeState.haloOpacity).toEqual([
+    expect(edgeState.shadowOpacity).toEqual([
       "*",
       edgeState.mainOpacity,
-      EDGE_VISUAL_STYLE.haloOpacityFactor,
+      EDGE_VISUAL_STYLE.shadowOpacityFactor,
     ]);
-    // Structural invariant: Halo and main line must share the exact same dasharray
-    // to prevent the solid background from visually filling the dashed gaps.
+    // Structural invariant: yarn layers share the same braid dasharray so
+    // shadow/body/highlight stay one thread instead of three mismatched strokes.
     expect(edgeState.mainDasharray).toBeDefined();
     expect(edgeState.mainDasharray).not.toBeNull();
-    expect(edgeState.haloDasharray).toBeDefined();
-    expect(edgeState.haloDasharray).not.toBeNull();
-    expect(edgeState.haloDasharray).toEqual(edgeState.mainDasharray);
+    expect(edgeState.shadowDasharray).toEqual(edgeState.mainDasharray);
+    expect(edgeState.highlightDasharray).toEqual(edgeState.mainDasharray);
 
     expect(edgeState.isUnderMain).toBe(true);
+    expect(edgeState.highlightAboveMain).toBe(true);
     expect(edgeState.featureCount).toBeGreaterThan(0);
   });
 });

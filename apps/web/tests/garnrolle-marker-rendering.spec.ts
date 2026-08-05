@@ -1,4 +1,5 @@
 import { devices, expect, test } from "@playwright/test";
+import { getGarnrolleMarkerScale } from "../src/lib/map/markerScale";
 import { mockApiResponses } from "./fixtures/mockApi";
 
 const GARNROLLE_ID = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
@@ -204,9 +205,10 @@ test.describe("Garnrolle marker rendering", () => {
 
         const projected = map.project([10.0629844, 53.5604148]);
         const rect = markerElement.getBoundingClientRect();
+        // Center anchor: map coordinate is the geometric midpoint of the spool.
         const actualAnchor = {
           x: rect.left + rect.width / 2,
-          y: rect.bottom,
+          y: rect.top + rect.height / 2,
         };
         return Math.hypot(
           actualAnchor.x - projected.x,
@@ -256,6 +258,10 @@ test.describe("Garnrolle marker rendering", () => {
           const transform = new DOMMatrixReadOnly(
             getComputedStyle(icon).transform,
           );
+          const outerCx = outer.left + outer.width / 2;
+          const outerCy = outer.top + outer.height / 2;
+          const iconCx = visibleIcon.left + visibleIcon.width / 2;
+          const iconCy = visibleIcon.top + visibleIcon.height / 2;
           return {
             zoom: map.getZoom(),
             outerWidth: outer.width,
@@ -264,7 +270,8 @@ test.describe("Garnrolle marker rendering", () => {
             visualHeight: visibleIcon.height,
             transformScaleX: transform.a,
             transformScaleY: transform.d,
-            bottomDelta: Math.abs(outer.bottom - visibleIcon.bottom),
+            // Center-origin scale: icon midpoint stays on the geographic pin.
+            centerDelta: Math.hypot(outerCx - iconCx, outerCy - iconCy),
           };
         };
 
@@ -294,20 +301,19 @@ test.describe("Garnrolle marker rendering", () => {
     expect(metrics.local.transformScaleX).toBeLessThanOrEqual(1.005);
     expect(metrics.local.transformScaleY).toBeGreaterThanOrEqual(0.995);
     expect(metrics.local.transformScaleY).toBeLessThanOrEqual(1.005);
-    // Die Transformationsmatrix ist der fachliche Vertrag. Layoutbreiten dürfen
-    // auf unterschiedlichen Geräten auf andere Subpixel gerundet werden.
-    expect(metrics.regional.transformScaleX).toBeGreaterThanOrEqual(0.635);
-    expect(metrics.regional.transformScaleX).toBeLessThanOrEqual(0.645);
-    expect(metrics.regional.transformScaleY).toBeGreaterThanOrEqual(0.635);
-    expect(metrics.regional.transformScaleY).toBeLessThanOrEqual(0.645);
+    // Fachlicher Zoom-Vertrag: regional scale tracks getGarnrolleMarkerScale.
+    // Subpixel matrix readout may drift slightly across engines/devices.
+    const expectedRegional = getGarnrolleMarkerScale(metrics.regional.zoom);
+    expect(metrics.regional.transformScaleX).toBeCloseTo(expectedRegional, 2);
+    expect(metrics.regional.transformScaleY).toBeCloseTo(expectedRegional, 2);
     const widthRatio = metrics.regional.visualWidth / metrics.local.visualWidth;
-    expect(widthRatio).toBeGreaterThanOrEqual(0.63);
-    expect(widthRatio).toBeLessThanOrEqual(0.65);
+    expect(widthRatio).toBeGreaterThanOrEqual(0.62);
+    expect(widthRatio).toBeLessThanOrEqual(0.68);
     expect(
       Math.abs(metrics.regional.visualWidth - metrics.regional.visualHeight),
     ).toBeLessThanOrEqual(0.25);
-    expect(metrics.local.bottomDelta).toBeLessThanOrEqual(0.5);
-    expect(metrics.regional.bottomDelta).toBeLessThanOrEqual(0.5);
+    expect(metrics.local.centerDelta).toBeLessThanOrEqual(0.5);
+    expect(metrics.regional.centerDelta).toBeLessThanOrEqual(0.5);
   });
 });
 

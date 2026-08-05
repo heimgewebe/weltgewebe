@@ -23,10 +23,12 @@
   box-sizing: border-box;
   display: grid;
   place-items: center;
-  align-self: end;
+  align-self: center;
+  justify-self: center;
   position: relative;
   z-index: 2;
-  transform-origin: center bottom;
+  /* Geographic anchor, MapLibre marker center, and visible knot center coincide. */
+  transform-origin: center center;
   transition: transform 0.18s ease-out;
   pointer-events: none;
 }
@@ -37,7 +39,6 @@
   border: 0;
   border-radius: 0;
   background: transparent;
-  bottom: 2px;
   filter: drop-shadow(0 2px 2px rgba(35, 22, 15, 0.4));
   transition:
     transform 0.18s ease-out,
@@ -63,25 +64,28 @@
 }
 
 /* Inner layers: crossing → conversation → X arms → proposals → votes. */
+/* Soft yarn knot at the over/under junction — not a bullseye or black hole. */
 .woven-node__crossing {
   position: absolute;
   left: 50%;
   top: 50%;
   z-index: 1;
-  width: 9px;
-  height: 9px;
-  margin: -4.5px 0 0 -4.5px;
-  border-radius: 50%;
+  width: 7px;
+  height: 7px;
+  margin: -3.5px 0 0 -3.5px;
+  border-radius: 45%;
   background:
+    linear-gradient(135deg, rgba(250, 238, 214, 0.42) 0 28%, transparent 42%),
+    linear-gradient(315deg, rgba(32, 20, 14, 0.35) 0 30%, transparent 48%),
     radial-gradient(
-      circle at 35% 30%,
-      rgba(255, 248, 232, 0.55),
-      transparent 55%
-    ),
-    radial-gradient(circle, #3a261c 0 62%, transparent 64%);
+      circle at 40% 35%,
+      color-mix(in srgb, var(--weave-primary), #f3e4c8 34%) 0 48%,
+      color-mix(in srgb, var(--weave-primary), #2a1a12 28%) 70%,
+      transparent 76%
+    );
   box-shadow:
-    0 0 0 1px rgba(245, 225, 196, 0.45),
-    inset 0 0 calc(3px * var(--weave-core-density)) rgba(30, 18, 12, 0.55);
+    0 0 0 0.6px rgba(34, 21, 14, 0.5),
+    inset 0 0 calc(2px * var(--weave-core-density)) rgba(30, 18, 12, 0.35);
   pointer-events: none;
 }
 
@@ -148,35 +152,59 @@
   z-index: 2;
 }
 
+/*
+ * Diagonal yarn arms: slightly tapered toward the knot center, dark rim,
+ * narrow light edge, and fine braid/fiber texture. Not pill/capsule patches.
+ */
 .woven-node__arm {
   --arm-color: var(--weave-primary);
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 12px;
-  height: 48%;
-  margin-left: -6px;
-  margin-top: -48%;
-  border-radius: 999px;
+  width: 10px;
+  height: 49%;
+  margin-left: -5px;
+  margin-top: -49%;
+  /* Outer tip wider, strongly tapered into the knot — not a pill/capsule. */
+  border-radius: 55% 55% 40% 40% / 22% 22% 48% 48%;
+  clip-path: polygon(6% 0%, 94% 0%, 58% 96%, 42% 96%);
   transform-origin: center bottom;
   background:
-    repeating-linear-gradient(
-      180deg,
-      var(--arm-color) 0 3px,
-      color-mix(in srgb, var(--arm-color), #f4e5cd 32%) 3px 4px,
-      var(--arm-color) 4px 7px
-    ),
+    /* Narrow light fiber ridge. */
     linear-gradient(
       90deg,
-      rgba(40, 25, 17, 0.22),
-      transparent 35%,
-      transparent 65%,
-      rgba(40, 25, 17, 0.18)
-    );
+      transparent 0%,
+      rgba(255, 246, 224, 0.5) 12%,
+      transparent 26%,
+      transparent 74%,
+      rgba(255, 246, 224, 0.28) 88%,
+      transparent 100%
+    ),
+    /* Longitudinal braid / fiber rhythm. */
+    repeating-linear-gradient(
+        180deg,
+        color-mix(in srgb, var(--arm-color), #1a100b 28%) 0 1.1px,
+        var(--arm-color) 1.1px 2.3px,
+        color-mix(in srgb, var(--arm-color), #f6ead0 36%) 2.3px 3.1px,
+        var(--arm-color) 3.1px 4.4px,
+        color-mix(in srgb, var(--arm-color), #3a261c 20%) 4.4px 5.5px
+      ),
+    /* Soft cylindrical yarn body. */
+    linear-gradient(
+        90deg,
+        color-mix(in srgb, var(--arm-color), #140d09 34%) 0%,
+        color-mix(in srgb, var(--arm-color), #2a1a12 12%) 18%,
+        var(--arm-color) 40%,
+        color-mix(in srgb, var(--arm-color), #f3e4c8 22%) 54%,
+        var(--arm-color) 72%,
+        color-mix(in srgb, var(--arm-color), #140d09 28%) 100%
+      );
   box-shadow:
-    inset 0 0 1px rgba(40, 25, 17, 0.55),
-    0 1px 1px rgba(40, 25, 17, 0.28);
-  filter: drop-shadow(0 1px 0 rgba(44, 28, 19, 0.35));
+    0 0 0 0.85px rgba(22, 13, 9, 0.7),
+    inset 0.85px 0 0 rgba(255, 246, 224, 0.38),
+    inset -0.85px 0 0 rgba(18, 11, 8, 0.34),
+    0 1.2px 1.6px rgba(22, 13, 9, 0.38);
+  filter: drop-shadow(0 1px 0.5px rgba(34, 21, 14, 0.3));
 }
 
 .woven-node__arm[data-arm="northwest"] {
@@ -193,6 +221,15 @@
 
 .woven-node__arm[data-arm="southwest"] {
   transform: rotate(-135deg);
+}
+
+/* Over strand reads slightly proud of the under strand at the junction. */
+.woven-node__strand--over .woven-node__arm {
+  filter: drop-shadow(0 1.2px 0.6px rgba(34, 21, 14, 0.36));
+}
+
+.woven-node__strand--under .woven-node__arm {
+  filter: drop-shadow(0 0.4px 0.4px rgba(34, 21, 14, 0.22));
 }
 
 .woven-node__arm-overlay {
@@ -310,7 +347,9 @@
 .woven-node--compact .woven-node__arm {
   /* Compact: solid arm colours without the fine weave texture. */
   background: var(--arm-color);
-  box-shadow: inset 0 0 1px rgba(40, 25, 17, 0.45);
+  box-shadow:
+    0 0 0 0.7px rgba(28, 17, 12, 0.55),
+    inset 0.5px 0 0 rgba(255, 245, 220, 0.22);
 }
 
 .woven-node__overflow {
@@ -335,14 +374,14 @@
 .map-marker__halo {
   position: absolute;
   left: 50%;
-  bottom: -1px;
+  top: 50%;
   width: 68px;
   aspect-ratio: 1;
   box-sizing: border-box;
   border: 2px solid var(--marker-halo-color);
   border-radius: 50%;
   opacity: 0;
-  transform: translateX(-50%) scale(0.82);
+  transform: translate(-50%, -50%) scale(0.82);
   box-shadow: 0 0 10px var(--marker-halo-color);
   transition:
     opacity 0.14s ease,
@@ -395,7 +434,6 @@
 
 .marker-account .map-marker__halo {
   width: 42px;
-  bottom: 0;
 }
 
 .marker-account__icon {
@@ -404,7 +442,7 @@
   height: 100%;
   object-fit: contain;
   transform: scale(var(--garnrolle-marker-scale, 1));
-  transform-origin: center bottom;
+  transform-origin: center center;
   filter: drop-shadow(0 1px 1px rgba(34, 24, 16, 0.42));
   transition: transform 0.2s ease-out;
   pointer-events: none;
@@ -444,7 +482,7 @@
 .map-marker.search-highlight .map-marker__halo,
 .map-marker.is-selected .map-marker__halo {
   opacity: 1;
-  transform: translateX(-50%);
+  transform: translate(-50%, -50%);
 }
 
 .map-marker.is-selected:focus-visible .map-marker__halo {

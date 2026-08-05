@@ -647,17 +647,52 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     expect(mobileTouch.height).toBeGreaterThanOrEqual(44);
     await capture("mobile-narrow");
 
-    // Geographic anchor remains bottom-centered after density/viewport changes.
+    // Geographic center anchor: marker, visual and X-crossing share one midpoint.
     const anchor = await marker.evaluate((element) => {
-      const style = getComputedStyle(element);
+      const visual = element.querySelector(
+        ".map-marker__visual",
+      ) as HTMLElement | null;
+      const crossing = element.querySelector(
+        ".woven-node__crossing",
+      ) as HTMLElement | null;
+      if (!visual || !crossing) {
+        throw new Error("marker visual or crossing missing");
+      }
+      const markerBox = element.getBoundingClientRect();
+      const visualBox = visual.getBoundingClientRect();
+      const crossingBox = crossing.getBoundingClientRect();
+      const style = getComputedStyle(visual);
       return {
-        transform: style.transform,
         transformOrigin: style.transformOrigin,
+        markerCx: markerBox.left + markerBox.width / 2,
+        markerCy: markerBox.top + markerBox.height / 2,
+        visualCx: visualBox.left + visualBox.width / 2,
+        visualCy: visualBox.top + visualBox.height / 2,
+        crossingCx: crossingBox.left + crossingBox.width / 2,
+        crossingCy: crossingBox.top + crossingBox.height / 2,
       };
     });
-    expect(
-      anchor.transformOrigin === "50% 100%" ||
-        anchor.transform.includes("matrix"),
-    ).toBe(true);
+    expect(Math.abs(anchor.visualCx - anchor.markerCx)).toBeLessThanOrEqual(2);
+    expect(Math.abs(anchor.visualCy - anchor.markerCy)).toBeLessThanOrEqual(2);
+    expect(Math.abs(anchor.crossingCx - anchor.markerCx)).toBeLessThanOrEqual(
+      3,
+    );
+    expect(Math.abs(anchor.crossingCy - anchor.markerCy)).toBeLessThanOrEqual(
+      3,
+    );
+    // transform-origin is center: keyword, percent, or resolved px near mid-box.
+    const originParts = anchor.transformOrigin
+      .split(/\s+/)
+      .map((part) => Number.parseFloat(part))
+      .filter((value) => Number.isFinite(value));
+    const originLooksCentered =
+      anchor.transformOrigin.includes("center") ||
+      anchor.transformOrigin.includes("50%") ||
+      (originParts.length >= 2 &&
+        originParts[0] > 15 &&
+        originParts[0] < 35 &&
+        originParts[1] > 15 &&
+        originParts[1] < 35);
+    expect(originLooksCentered).toBe(true);
   });
 });
