@@ -125,12 +125,46 @@ export interface MapEdge extends Edge {
 
 export type WeaveZone = "knotting" | "conversation" | "proposal" | "vote";
 
+/** Stable diagonal arms of the woven X core (not a plus). */
+export type WeaveArm = "northwest" | "northeast" | "southeast" | "southwest";
+
+export const WEAVE_ARMS: readonly WeaveArm[] = [
+  "northwest",
+  "northeast",
+  "southeast",
+  "southwest",
+] as const;
+
+/**
+ * One topic that colours the body. Identity (`id`) is the full normalised topic
+ * text (`NFKC` + whitespace unify + trim) — never case-folded, never a
+ * truncated display label. At most four topics receive a primary arm; further
+ * topics stay in the model.
+ */
 export interface WeaveThemeSegment {
   id: string;
   label: string;
   color: string;
-  startDeg: number;
-  spanDeg: number;
+  /** Primary visual arm when this topic is among the four core colours. */
+  arm: WeaveArm | null;
+}
+
+/** Exactly one coloured arm slot of the diagonal X. */
+export interface WeaveXCoreSegment {
+  arm: WeaveArm;
+  themeId: string;
+  label: string;
+  color: string;
+}
+
+/**
+ * Bounded content resting on an arm. Empty until the public map projection
+ * exposes node-attached content; never invent counts.
+ */
+export interface WeaveArmOverlay {
+  arm: WeaveArm;
+  id: string;
+  label: string;
 }
 
 export interface WeaveProposalArc {
@@ -153,9 +187,22 @@ export interface WeaveProposalArc {
  */
 export interface MapEntityWeave {
   zoneOrder: WeaveZone[];
+  /** Full theme identities; visual X uses at most four primary arm colours. */
   themeSegments: WeaveThemeSegment[];
+  /** Four arm slots of the diagonal X core. */
+  xCoreSegments: WeaveXCoreSegment[];
+  /**
+   * Deterministic, capped arm overlays. Empty when the map contract does not
+   * yet project node-attached content (truth boundary).
+   */
+  armOverlays: WeaveArmOverlay[];
   primaryThemeColor: string;
   coreDensity: number;
+  /**
+   * Saturated conversation-ring thickness in relative units [0, 1].
+   * 0 means no ring (invisible); grows with log1p of active conversations.
+   */
+  conversationRingThickness: number;
   knottingThreadCount: number;
   conversationThreadCount: number;
   conversationOpacity: number;
@@ -163,6 +210,7 @@ export interface MapEntityWeave {
   proposalCount: number;
   proposalOverflowCount: number;
   voteThreadCount: number;
+  /** Full vote relation count; visible stitches are capped separately. */
   totalActiveThreadCount: number;
 }
 

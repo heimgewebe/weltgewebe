@@ -1,8 +1,13 @@
 import { devices, expect, test, type Page } from "@playwright/test";
-import { mockApiResponses } from "./fixtures/mockApi";
+import { FADEN_LIFETIME_MS } from "../src/lib/map/edgeLifecycle";
+import { demoAccounts, demoNodes } from "../src/lib/demo/demoData";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 
 const EDGE_ID = "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc";
 const NODE_ID = "b52be17c-4ab7-4434-98ce-520f86290cf0";
+const MULTI_EDGE_ID = "motion-multi-theme-edge";
+const MULTI_NODE_ID = demoNodes[0].id;
+const MULTI_ACCOUNT_ID = demoAccounts[0].id;
 const LEGACY_EDGE_FILTER = ["==", ["get", "fadenType"], "legacy"];
 const IPAD_PRO_11_LANDSCAPE = {
   userAgent: devices["iPad Pro 11 landscape"].userAgent,
@@ -177,7 +182,12 @@ test.describe("event-bound Faden motion", () => {
     await page.waitForFunction(() => {
       const map = window.__TEST_MAP__;
       return Boolean(
-        map?.getLayer("edges-layer") && map.getLayer("edge-motion-layer"),
+        map?.getLayer("edges-layer") &&
+        map.getLayer("edge-motion-layer-legacy") &&
+        map.getLayer("edge-motion-layer-proposal") &&
+        map.getLayer("edge-motion-layer-conversation") &&
+        map.getLayer("edge-motion-layer-knotting") &&
+        map.getLayer("edge-motion-layer-vote"),
       );
     });
 
@@ -280,6 +290,125 @@ test.describe("reduced motion", () => {
       frameRequests: 0,
       suppressedIds: [EDGE_ID],
     });
+  });
+});
+
+test.describe("motion/static multi-theme palette parity", () => {
+  test("motion reuses the projected multi-theme braid and never invents monochrome", async ({
+    page,
+  }) => {
+    const createdAtMs = Date.now() - 60_000;
+    const createdAt = new Date(createdAtMs).toISOString();
+    const expiresAt = new Date(createdAtMs + FADEN_LIFETIME_MS).toISOString();
+    const multiThemeNode = {
+      ...demoNodes[0],
+      tags: ["Natur", "Bildung", "Kunst"],
+      kind: "Knoten",
+    };
+    const multiEdge = {
+      id: MULTI_EDGE_ID,
+      source_id: MULTI_ACCOUNT_ID,
+      source_type: "account",
+      target_id: MULTI_NODE_ID,
+      target_type: "node",
+      edge_kind: "reference",
+      faden_type: "knotting",
+      faden_subject_id: MULTI_NODE_ID,
+      created_at: createdAt,
+      expires_at: expiresAt,
+    };
+
+    await mockApiResponses(page);
+    await page.route("**/api/nodes*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [multiThemeNode]),
+        ),
+      });
+    });
+    await page.route("**/api/edges*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [multiEdge]),
+        ),
+      });
+    });
+
+    await page.goto("/map");
+    await page.waitForFunction(
+      () => {
+        const map = window.__TEST_MAP__;
+        const staticFeatures =
+          map?.getSource("edges-source")?.serialize()?.data?.features ?? [];
+        return Boolean(
+          map?.isStyleLoaded() &&
+          window.__TEST_EDGE_MOTION__ &&
+          staticFeatures.some(
+            (feature) =>
+              Array.isArray(feature.properties?.themeColors) &&
+              feature.properties.themeColors.length > 1,
+          ),
+        );
+      },
+      undefined,
+      { timeout: 15_000 },
+    );
+
+    const staticPalette = await page.evaluate((edgeId) => {
+      const features =
+        window.__TEST_MAP__?.getSource("edges-source")?.serialize()?.data
+          ?.features ?? [];
+      const match = features.find(
+        (feature) => feature.properties?.id === edgeId,
+      );
+      return (match?.properties?.themeColors as string[] | undefined) ?? [];
+    }, MULTI_EDGE_ID);
+    expect(staticPalette.length).toBeGreaterThan(1);
+
+    expect(
+      await page.evaluate(
+        (edgeId) => window.__TEST_EDGE_MOTION__?.start(edgeId, "creating"),
+        MULTI_EDGE_ID,
+      ),
+    ).toBe(true);
+
+    await expect
+      .poll(async () => (await motionFeatures(page)).length)
+      .toBeGreaterThan(1);
+
+    const motionState = await page.evaluate(() => {
+      const features =
+        window.__TEST_MAP__?.getSource("edge-motion-source")?.serialize()?.data
+          ?.features ?? [];
+      return {
+        count: features.length,
+        palettes: features.map(
+          (feature) =>
+            (feature.properties?.themeColors as string[] | undefined) ?? [],
+        ),
+        strandColors: features.map(
+          (feature) => feature.properties?.themeColor as string | undefined,
+        ),
+      };
+    });
+
+    expect(motionState.count).toBeGreaterThan(1);
+    for (const palette of motionState.palettes) {
+      expect(palette).toEqual(staticPalette);
+      expect(palette.length).toBeGreaterThan(1);
+    }
+    expect(new Set(motionState.strandColors).size).toBeGreaterThan(1);
+    for (const color of motionState.strandColors) {
+      expect(staticPalette).toContain(color);
+    }
+
+    await expect
+      .poll(async () => (await snapshot(page))?.activeCount, { timeout: 3000 })
+      .toBe(0);
   });
 });
 

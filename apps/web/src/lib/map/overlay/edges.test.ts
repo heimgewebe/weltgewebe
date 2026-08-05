@@ -100,9 +100,44 @@ describe("buildEdgeFeatures", () => {
         type: "node",
         weave: {
           zoneOrder: ["knotting", "conversation", "proposal", "vote"],
-          themeSegments: [],
+          themeSegments: [
+            {
+              id: "natur",
+              label: "Natur",
+              color: "#5f7a55",
+              arm: "northwest",
+            },
+          ],
+          xCoreSegments: [
+            {
+              arm: "northwest",
+              themeId: "natur",
+              label: "Natur",
+              color: "#5f7a55",
+            },
+            {
+              arm: "northeast",
+              themeId: "natur",
+              label: "Natur",
+              color: "#5f7a55",
+            },
+            {
+              arm: "southeast",
+              themeId: "natur",
+              label: "Natur",
+              color: "#5f7a55",
+            },
+            {
+              arm: "southwest",
+              themeId: "natur",
+              label: "Natur",
+              color: "#5f7a55",
+            },
+          ],
+          armOverlays: [],
           primaryThemeColor: "#5f7a55",
           coreDensity: 0.5,
+          conversationRingThickness: 0,
           knottingThreadCount: 0,
           conversationThreadCount: 0,
           conversationOpacity: 0,

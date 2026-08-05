@@ -7,6 +7,7 @@ import type {
 import { isValidMapCoordinate } from "$lib/map/coordinates";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import { MAX_X_CORE_THEMES, targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import { LAYERS } from "./layers";
 
@@ -97,12 +98,142 @@ export function hasCompleteEdgeThreadStyle(
   );
 }
 
-function primaryThemeColor(point: MapEntityViewModel): string | undefined {
+function targetThemeColors(point: MapEntityViewModel): string[] | undefined {
   if (point.type !== "node" && point.type !== "webgemeindezentrum") {
     return undefined;
   }
-  return point.weave?.primaryThemeColor ?? primaryWeaveColor(point);
+  if (point.weave) {
+    return targetThemePalette(point.weave);
+  }
+  return [primaryWeaveColor(point)];
 }
+
+export type ThemedLineSegment = {
+  coordinates: [[number, number], [number, number]];
+  color: string;
+};
+
+function interpolateLngLat(
+  source: [number, number],
+  target: [number, number],
+  progress: number,
+): [number, number] {
+  const bounded = Math.max(0, Math.min(1, progress));
+  return [
+    source[0] + (target[0] - source[0]) * bounded,
+    source[1] + (target[1] - source[1]) * bounded,
+  ];
+}
+
+/**
+ * Controlled multi-theme braid: the line is subdivided into a bounded number of
+ * equal segments whose colours cycle through the target palette (max four).
+ * One theme stays a single solid feature. No rainbow blend and no extra layers.
+ * Segment boundaries are fixed along the full path so motion clipping never
+ * walks colour seams frame-by-frame.
+ */
+export function buildThemedLineSegments(
+  source: [number, number],
+  target: [number, number],
+  colors: readonly string[],
+): ThemedLineSegment[] {
+  const palette = colors.slice(0, MAX_X_CORE_THEMES);
+  if (palette.length <= 1) {
+    return [
+      {
+        coordinates: [source, target],
+        color: palette[0] ?? "#76523d",
+      },
+    ];
+  }
+  // Two segments per colour so the repeating weave reads along the whole edge.
+  const segmentCount = palette.length * 2;
+  const segments: ThemedLineSegment[] = [];
+  for (let index = 0; index < segmentCount; index += 1) {
+    const t0 = index / segmentCount;
+    const t1 = (index + 1) / segmentCount;
+    segments.push({
+      coordinates: [
+        interpolateLngLat(source, target, t0),
+        interpolateLngLat(source, target, t1),
+      ],
+      color: palette[index % palette.length],
+    });
+  }
+  return segments;
+}
+
+/**
+ * Same stable full-path segments as {@link buildThemedLineSegments}, clipped to
+ * the draw progress in [0, 1] measured from source toward target. Colour
+ * boundaries stay fixed; only the visible length changes.
+ */
+export function buildProgressClippedThemeSegments(
+  source: [number, number],
+  target: [number, number],
+  colors: readonly string[],
+  progress: number,
+): ThemedLineSegment[] {
+  const bounded = Math.max(0, Math.min(1, progress));
+  if (bounded <= 0) return [];
+  const full = buildThemedLineSegments(source, target, colors);
+  if (bounded >= 1) return full;
+
+  const segmentCount = full.length;
+  const clipped: ThemedLineSegment[] = [];
+  for (let index = 0; index < segmentCount; index += 1) {
+    const t0 = index / segmentCount;
+    const t1 = (index + 1) / segmentCount;
+    if (bounded <= t0) break;
+    const clipEnd = Math.min(bounded, t1);
+    clipped.push({
+      coordinates: [
+        interpolateLngLat(source, target, t0),
+        interpolateLngLat(source, target, clipEnd),
+      ],
+      color: full[index].color,
+    });
+  }
+  return clipped;
+}
+
+/** Structural paint values shared by static threads and edge motion. */
+export function edgeThreadVisual(fadenType: string | undefined): {
+  width: number;
+  dashArray: [number, number];
+} {
+  if (fadenType && fadenType in EDGE_VISUAL_STYLE.byType) {
+    const style =
+      EDGE_VISUAL_STYLE.byType[
+        fadenType as keyof typeof EDGE_VISUAL_STYLE.byType
+      ];
+    return {
+      width: style.width,
+      dashArray: [...style.dashArray] as [number, number],
+    };
+  }
+  return {
+    width: EDGE_VISUAL_STYLE.mainWidth,
+    dashArray: [...EDGE_VISUAL_STYLE.dashArray] as [number, number],
+  };
+}
+
+/**
+ * Canonical thread variants used by both static projection and motion overlay.
+ * Halo/main layer ids remain source-specific; structure (type, width, dash) is
+ * shared so the two paths cannot drift.
+ */
+export const EDGE_THREAD_VARIANTS = EDGE_LAYER_VARIANTS.map((variant) => ({
+  fadenType: variant.fadenType,
+  width: variant.width,
+  dashArray: [...variant.dashArray] as [number, number],
+  fallbackColor: variant.fallbackColor,
+})) as ReadonlyArray<{
+  fadenType: (typeof EDGE_LAYER_VARIANTS)[number]["fadenType"];
+  width: number;
+  dashArray: [number, number];
+  fallbackColor: string;
+}>;
 
 export function buildEdgeFeatures(
   edges: MapEdge[],
@@ -137,25 +268,45 @@ export function buildEdgeFeatures(
       continue;
     }
 
-    const themeColor = primaryThemeColor(target);
-    features.push({
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: [
+    const themeColors = targetThemeColors(target);
+    const palette = themeColors ?? [];
+    const segments = themeColors
+      ? buildThemedLineSegments(
           [source.lon, source.lat],
           [target.lon, target.lat],
-        ],
-      },
-      properties: {
-        id: edge.id,
-        kind: edge.edge_kind,
-        fadenType: edge.faden_type ?? "legacy",
-        fadenSubjectId: edge.faden_subject_id ?? null,
-        ...(themeColor ? { themeColor } : {}),
-        opacity,
-      },
-    });
+          themeColors,
+        )
+      : [
+          {
+            coordinates: [
+              [source.lon, source.lat],
+              [target.lon, target.lat],
+            ] as [[number, number], [number, number]],
+            color: undefined as string | undefined,
+          },
+        ];
+
+    for (let strand = 0; strand < segments.length; strand += 1) {
+      const segment = segments[strand];
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: segment.coordinates,
+        },
+        properties: {
+          id: edge.id,
+          kind: edge.edge_kind,
+          fadenType: edge.faden_type ?? "legacy",
+          fadenSubjectId: edge.faden_subject_id ?? null,
+          ...(segment.color ? { themeColor: segment.color } : {}),
+          ...(palette.length ? { themeColors: palette } : {}),
+          themeStrand: strand,
+          themeStrandCount: segments.length,
+          opacity,
+        },
+      });
+    }
   }
 
   return features;

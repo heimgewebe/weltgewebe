@@ -3,9 +3,13 @@ import type {
   MapEdge,
   MapEntityViewModel,
   MapEntityWeave,
+  WeaveArm,
+  WeaveArmOverlay,
   WeaveProposalArc,
   WeaveThemeSegment,
+  WeaveXCoreSegment,
 } from "$lib/map/types";
+import { WEAVE_ARMS } from "$lib/map/types";
 import {
   WEAVE_FALLBACK_COLOR,
   weaveTopicColor,
@@ -22,6 +26,20 @@ export const WEAVE_ZONE_ORDER: MapEntityWeave["zoneOrder"] = [
   "vote",
 ];
 export const MAX_VISIBLE_PROPOSAL_ARCS = 8;
+/** Visual X core uses at most four primary colour regions. */
+export const MAX_X_CORE_THEMES = 4;
+/**
+ * Cap on visible arm overlays. The public map projection does not yet expose
+ * node-attached content, so the projection is always empty (truth boundary).
+ */
+export const MAX_VISIBLE_ARM_OVERLAYS = 4;
+/** Visible vote stitches per proposal arc; the model keeps the full count. */
+export const MAX_VISIBLE_VOTE_STITCHES = 12;
+/**
+ * Conversation count at which log1p thickness reaches the fixed maximum.
+ * Higher counts stay capped — no unbounded ring growth.
+ */
+export const CONVERSATION_THICKNESS_SATURATION_COUNT = 20;
 
 type Group = {
   subjectId: string;
@@ -33,20 +51,100 @@ type Group = {
   opacity: number;
 };
 
+/**
+ * Diagonal strand pairing:
+ * - strand A (under): northwest ↔ southeast
+ * - strand B (over):  northeast ↔ southwest
+ *
+ * One theme colours the whole X; two themes each take one strand; three leave
+ * the remaining arm on strand A with the first theme; four map 1:1; more than
+ * four keep full identities in themeSegments while only the first four paint.
+ */
+export function assignXCoreSegments(
+  topicLabels: readonly string[],
+): WeaveXCoreSegment[] {
+  const visual = topicLabels.slice(0, MAX_X_CORE_THEMES).map((label) => ({
+    themeId: weaveTopicIdentity(label),
+    label: weaveTopicDisplayLabel(label),
+    color: weaveTopicColor(label),
+  }));
+  const fallback = {
+    themeId: weaveTopicIdentity("Gemeingut"),
+    label: "Gemeingut",
+    color: WEAVE_FALLBACK_COLOR,
+  };
+  const themes = visual.length ? visual : [fallback];
+
+  if (themes.length === 1) {
+    return WEAVE_ARMS.map((arm) => ({ arm, ...themes[0] }));
+  }
+  if (themes.length === 2) {
+    return [
+      { arm: "northwest", ...themes[0] },
+      { arm: "southeast", ...themes[0] },
+      { arm: "northeast", ...themes[1] },
+      { arm: "southwest", ...themes[1] },
+    ];
+  }
+  if (themes.length === 3) {
+    return [
+      { arm: "northwest", ...themes[0] },
+      { arm: "northeast", ...themes[1] },
+      { arm: "southeast", ...themes[2] },
+      { arm: "southwest", ...themes[0] },
+    ];
+  }
+  return [
+    { arm: "northwest", ...themes[0] },
+    { arm: "northeast", ...themes[1] },
+    { arm: "southeast", ...themes[2] },
+    { arm: "southwest", ...themes[3] },
+  ];
+}
+
 export function deriveWeaveThemeSegments(
   entity: WeaveEntity,
 ): WeaveThemeSegment[] {
   const labels = weaveTopics(entity);
-  const spanDeg = 360 / labels.length;
+  const xCore = assignXCoreSegments(labels);
+  const primaryArmByTheme = new Map<string, WeaveArm>();
+  for (const segment of xCore) {
+    if (!primaryArmByTheme.has(segment.themeId)) {
+      primaryArmByTheme.set(segment.themeId, segment.arm);
+    }
+  }
   // Identity and colour come from the complete topic text. Only `label` is a
-  // display value and may therefore be shortened.
-  return labels.map((label, index) => ({
-    id: weaveTopicIdentity(label),
-    label: weaveTopicDisplayLabel(label),
-    color: weaveTopicColor(label),
-    startDeg: index * spanDeg,
-    spanDeg,
-  }));
+  // display value and may therefore be shortened at the very end.
+  return labels.map((label) => {
+    const id = weaveTopicIdentity(label);
+    return {
+      id,
+      label: weaveTopicDisplayLabel(label),
+      color: weaveTopicColor(label),
+      arm: primaryArmByTheme.get(id) ?? null,
+    };
+  });
+}
+
+/**
+ * log1p saturation into [0, 1]. Zero conversations stay invisible; growth is
+ * smooth and hard-capped at CONVERSATION_THICKNESS_SATURATION_COUNT.
+ */
+export function conversationRingThickness(count: number): number {
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  const ratio =
+    Math.log1p(count) / Math.log1p(CONVERSATION_THICKNESS_SATURATION_COUNT);
+  return Math.min(1, Math.max(0, ratio));
+}
+
+/**
+ * Truth boundary: the public node/map projection does not yet carry a bounded
+ * list of content pieces attached to a node. Prepare the type and a hard cap,
+ * return empty, and never invent overlay counts for the renderer.
+ */
+export function deriveArmOverlays(entity: WeaveEntity): WeaveArmOverlay[] {
+  void entity;
+  return [];
 }
 
 function newGroup(subjectId: string): Group {
@@ -103,8 +201,15 @@ export function deriveEntityWeave(
   edges: MapEdge[],
   nowMs: number,
 ): MapEntityWeave {
+  const topicLabels = weaveTopics(entity);
   const themeSegments = deriveWeaveThemeSegments(entity);
-  const primaryThemeColor = themeSegments[0]?.color ?? WEAVE_FALLBACK_COLOR;
+  const xCoreSegments = assignXCoreSegments(topicLabels);
+  const armOverlays = deriveArmOverlays(entity).slice(
+    0,
+    MAX_VISIBLE_ARM_OVERLAYS,
+  );
+  const primaryThemeColor =
+    xCoreSegments[0]?.color ?? themeSegments[0]?.color ?? WEAVE_FALLBACK_COLOR;
   const endpointId =
     entity.type === "webgemeindezentrum" ? entity.faden_endpoint_id : entity.id;
   const groups = new Map<string, Group>();
@@ -182,12 +287,17 @@ export function deriveEntityWeave(
   return {
     zoneOrder: WEAVE_ZONE_ORDER,
     themeSegments,
+    xCoreSegments,
+    armOverlays,
     primaryThemeColor,
     coreDensity: Math.min(
       1,
       0.42 +
         Math.log2(knottingThreadCount + 1) * 0.14 +
-        themeSegments.length * 0.045,
+        Math.min(MAX_X_CORE_THEMES, themeSegments.length) * 0.045,
+    ),
+    conversationRingThickness: conversationRingThickness(
+      conversationThreadCount,
     ),
     knottingThreadCount,
     conversationThreadCount,
@@ -228,15 +338,25 @@ export function projectEntityWeaves(
   });
 }
 
-export function themeConicGradient(segments: WeaveThemeSegment[]): string {
-  return segments.length
-    ? `conic-gradient(${segments
-        .map(
-          ({ color, startDeg, spanDeg }) =>
-            `${color} ${startDeg}deg ${startDeg + spanDeg}deg`,
-        )
-        .join(",")})`
-    : WEAVE_FALLBACK_COLOR;
+/** Ordered, de-duplicated target theme palette for edge paint (max four). */
+export function targetThemePalette(
+  entity:
+    | Pick<MapEntityWeave, "themeSegments" | "primaryThemeColor">
+    | null
+    | undefined,
+): string[] {
+  if (!entity) return [WEAVE_FALLBACK_COLOR];
+  const colors: string[] = [];
+  const seen = new Set<string>();
+  for (const segment of entity.themeSegments) {
+    if (seen.has(segment.id)) continue;
+    seen.add(segment.id);
+    colors.push(segment.color);
+    if (colors.length === MAX_X_CORE_THEMES) break;
+  }
+  return colors.length
+    ? colors
+    : [entity.primaryThemeColor || WEAVE_FALLBACK_COLOR];
 }
 
 export function voteStitchConicGradient(
@@ -245,7 +365,7 @@ export function voteStitchConicGradient(
   color = "#f6ead7",
 ): string {
   if (!voteCount || !spanDeg) return "transparent";
-  const count = Math.min(14, voteCount);
+  const count = Math.min(MAX_VISIBLE_VOTE_STITCHES, voteCount);
   const step = spanDeg / (count + 1);
   const width = Math.max(0.8, Math.min(2.1, step * 0.34));
   const stops: string[] = [];
@@ -262,4 +382,24 @@ export function voteStitchConicGradient(
   }
   stops.push(`transparent ${lastEnd}deg 360deg`);
   return `conic-gradient(${stops.join(",")})`;
+}
+
+/**
+ * Upper bound on DOM element nodes for one maximally complex woven body.
+ * Used by the deterministic budget test; keep in sync with {@link renderWeave}.
+ */
+export function maxWeaveDomNodeBudget(): number {
+  // crossing + conversation + x root + 2 strands + 4 arms
+  // + max arm overlays + 8 proposal arcs + 8 vote siblings + overflow badge
+  return (
+    1 +
+    1 +
+    1 +
+    2 +
+    4 +
+    MAX_VISIBLE_ARM_OVERLAYS +
+    MAX_VISIBLE_PROPOSAL_ARCS +
+    MAX_VISIBLE_PROPOSAL_ARCS +
+    1
+  );
 }

@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-map
 owner: product-map
-last_reviewed: 2026-08-04
+last_reviewed: 2026-08-05
 review_after: 2026-10-13
 depends_on:
   - specs.garnrolle-knoten-faden
@@ -56,18 +56,27 @@ Lage, Breite, Bindung und Rhythmus unterscheiden können.
 
 ## Kanonische Zonen
 
-1. **Knüpfkern** — Knotenanlage und echte Bearbeitung. Jeder Knoten beginnt als
-   gewebtes Kreuz in der Farbe seines ersten verfügbaren Themas. Weitere Themen
-   bilden faserige radiale Segmente, keine glatten Diagrammflächen.
-2. **Gesprächsring** — aktive Gesprächsfäden liegen unmittelbar um den Kern. Sie
-   sind lockerer gebunden und verflüchtigen sich mit ihrer Fadenlebensdauer.
+1. **Knüpfkern (diagonales X)** — Knotenanlage und echte Bearbeitung. Der Kern
+   ist ein diagonales gewebtes X aus zwei über/unter gekreuzten textilen
+   Strängen mit vier stabilen Armen (`northwest`, `northeast`, `southeast`,
+   `southwest`). Kein Plus und kein Zielscheiben-Primärmotiv. Themen färben die
+   Arme deterministisch: ein Thema einfarbig, zwei Themen je einen Strang
+   (NW–SE bzw. NE–SW), drei oder vier Themen stabil auf die Arme verteilt, mehr
+   als vier Themen bleiben vollständig im Modell und verdichten die Sicht auf
+   maximal vier Primärfarben. Belegte Armauflagerungen sind vorbereitet, bleiben
+   aber leer, solange die öffentliche Kartenprojektion keine dem Knoten
+   hinzugefügten Inhalte liefert (Wahrheitsgrenze).
+2. **Gesprächsring** — aktive Gesprächsfäden liegen unmittelbar um die Kreuzung.
+   Die Ringdicke wächst gesättigt (`log1p` oder gleichwertig) bis zu einer festen
+   Maximaldicke; bei null Gesprächen ist der Ring unsichtbar. Rein zeitliche
+   Alterungsopazität aktualisiert CSS/Style am bestehenden DOM.
 3. **Antragsring** — jeder aktive Antrag erhält einen getrennten äußeren
    Antragsbogen. Bis zu sieben aktuelle Bögen bleiben einzeln sichtbar; eine
    achte Darstellung bündelt zusätzlichen Überlauf wahrheitsgetreu und nennt
    dessen Anzahl.
 4. **Stimmkränze** — es gibt keinen losgelösten globalen Stimmring. Stimmstiche
    liegen ausschließlich am Bogen des Antrags, dessen `faden_subject_id` sie
-   teilen.
+   teilen; als DOM-Geschwister der Antragsbögen, nicht verschachtelt.
 
 Gesprächsfäden mit derselben `faden_subject_id` wie ein sichtbarer Antrag werden
 zusätzlich als antragsbezogenes Gespräch am betreffenden Bogen gezählt. Der
@@ -91,12 +100,20 @@ Relation noch einen erfundenen Webungsschlag.
 
 Die Themenfarben stammen derzeit aus den verfügbaren Knotenschlagwörtern und der
 Knotenart. Für Webgemeindezentren werden Gemeinschaft und Mitentscheidung als
-vorhandener Produktkontext verwendet. Antrags- und Stimmfäden erben in dieser
-Stufe die Primärfarbe ihres Zielkörpers, weil die öffentliche Fadenprojektion
-noch keinen eigenen Themenbezug pro Antrag oder Webungsakt enthält.
+vorhandener Produktkontext verwendet. Fadenlinien erben die Themenpalette ihres
+Zielkörpers: ein Thema einfarbig, mehrere Themen als kontrollierte, entlang der
+Linie wiederholte Teilstränge (keine Regenbogenblendung). Die Fadenart bleibt
+davon unabhängig über Breite, Dash/Flechtmuster, Halo und Dichte unterscheidbar.
 
-Eine zukünftige Themenbindung muss explizit im Domänenvertrag stehen; sie darf
-nicht aus Antragstexten geraten werden.
+Eine zukünftige Themenbindung pro Antrag muss explizit im Domänenvertrag stehen;
+sie darf nicht aus Antragstexten geraten werden.
+
+## Wahrheitsgrenze Armauflagerungen
+
+Die öffentliche Knoten-/Kartenprojektion liefert in dieser Stufe noch keine
+begrenzte Liste dem Knoten hinzugefügter Inhalte. Das Modell und der Renderer
+halten deshalb eine leere, fest gedeckelte Armauflagerungsprojektion bereit und
+zeigen keine erfundenen Zahlen.
 
 ## Mehrere Anträge
 
@@ -134,21 +151,32 @@ Diese Asymmetrie ist normativ und kein Nebeneffekt der Umsetzung.
 
 ## Themenidentität
 
-Die Identität eines Themas entsteht aus seinem **vollständigen normalisierten
-Text**: Unicode-Normalisierung (mindestens NFKC), vereinheitlichter Whitespace,
-getrimmt und sprachlich stabil kleingeschrieben.
-
-Eine Kürzung ist ausschließlich eine spätere Darstellungsentscheidung. Vor
-Deduplizierung, Hashing, Segment-Identität und Farbzuordnung wird niemals
-gekürzt. Zwei lange Themen mit gleichem Präfix — etwa
+Die Identität eines Themas entsteht exakt aus
+`value.normalize('NFKC').replace(/\s+/g, ' ').trim()`. Es folgt **keine**
+zusätzliche Kleinschreibung und keine generische Präfixentfernung. Vor
+Deduplizierung, Hashing, Segment-Identität und Farbzuordnung findet **keine**
+Kürzung statt. Zwei lange Themen mit gleichem Präfix — etwa
 `Nachbarschaftliche Lebensmittelversorgung Hamburg` und
 `Nachbarschaftliche Lebensmittelversorgung Hannover` — bleiben verschiedene
-Segmente mit eigener Farbe.
+Segmente mit eigener Farbe. Auch case-verschiedene normalisierte Themen
+(`Kunst` / `kunst`) bleiben getrennte Identitäten. Eine rein technische
+Ignorier-/Vergleichslogik darf case-insensitiv arbeiten, ohne die Identität zu
+falten.
 
-Doppelpunkte werden nicht pauschal entfernt. Ein rein technisches Namensraum-
-Präfix (`thema:kunst`) ist Darstellungsrauschen; ein bedeutungstragender
-Doppelpunkt wie in `Kunst: Öffentlicher Raum` gehört zum Thema und bleibt
-inhaltlich erhalten.
+Bedeutungstragende Doppelpunkte (z. B. `Kunst: Öffentlicher Raum` oder
+`kunst:öffentlicher raum`) bleiben in Identität, Anzeige und Farbe vollständig
+erhalten. Nur ein explizit allowlisteter technischer Namensraum (aktuell
+`thema:`) darf höchstens in der **finalen Anzeige** entfallen; Identität, Hash
+und Farbe behalten den vollständigen normalisierten Text. Alle eindeutig
+normalisierten Themen bleiben im Modell; die visuelle Palette/X-Geometrie bleibt
+auf höchstens vier Primärfarben begrenzt.
+
+## Schichten und Interaktion
+
+Schichten innen nach außen: Kreuzung, Gesprächsring, X-Arme/Auflagerungen,
+Proposal-Segmente, Stimmen, externer Fokus/Such/Auswahlhalo. Kein quadratischer
+Hintergrund, keine Box um Marker oder Namen, kein Clipping des Gewebekörpers,
+geografischer Bottom-Anker stabil, Touchziel mindestens 44×44.
 
 ## Maßstab und Leistung
 

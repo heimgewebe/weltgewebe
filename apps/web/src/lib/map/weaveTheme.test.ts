@@ -52,4 +52,19 @@ describe("weaveTopicHash code-point hashing", () => {
     expect(weaveTopicHash(smile)).not.toBe(weaveTopicHash(grin));
     expect(weaveTopicColor(smile)).toMatch(/^#[0-9a-f]{6}$/i);
   });
+
+  it("keeps case-distinct identities for hash and colour without toLowerCase", () => {
+    // Contract: identity is NFKC + whitespace only — never case-folded.
+    // weaveTopicHash and weaveTopicColor consume that exact identity.
+    expect(weaveTopicIdentity("Kunst")).toBe("Kunst");
+    expect(weaveTopicIdentity("kunst")).toBe("kunst");
+    expect(weaveTopicIdentity("Kunst")).not.toBe(weaveTopicIdentity("kunst"));
+    expect(weaveTopicHash("Kunst")).not.toBe(weaveTopicHash("kunst"));
+    // These two currently land on different palette slots; if a future pair
+    // collides via palette modulo, do not invent a false uniqueness guarantee
+    // here — only identities and hashes are absolute.
+    expect(weaveTopicColor("Kunst")).not.toBe(weaveTopicColor("kunst"));
+    expect(weaveTopicColor("Kunst")).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(weaveTopicColor("kunst")).toMatch(/^#[0-9a-f]{6}$/i);
+  });
 });
