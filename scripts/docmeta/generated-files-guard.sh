@@ -34,7 +34,7 @@ if [ ! -f ".wgx/generated-artifacts.yml" ]; then
   FAIL=1
 else
   # Same repo-canonical tools/py environment as make validate / UV_RUN.
-  if ! command -v uv >/dev/null 2>&1; then
+  if ! command -v uv > /dev/null 2>&1; then
     echo "ERROR: uv is required for generated artifact control (tools/py/uv.lock)."
     FAIL=1
   elif ! uv run --project tools/py --locked python -m scripts.docmeta.validate_generated_artifacts --check; then

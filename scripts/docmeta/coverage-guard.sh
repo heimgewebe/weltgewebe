@@ -34,7 +34,7 @@ for path in "${CRITICAL_PATHS[@]}"; do
 done
 
 # Same repo-canonical tools/py environment as make validate / UV_RUN.
-if ! command -v uv >/dev/null 2>&1; then
+if ! command -v uv > /dev/null 2>&1; then
   echo "ERROR: uv is required for coverage-guard (tools/py/uv.lock)."
   exit 1
 fi

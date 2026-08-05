@@ -7,7 +7,7 @@ echo "Checking docs relations..."
 FAIL=0
 
 # Same repo-canonical tools/py environment as make validate / UV_RUN.
-if ! command -v uv >/dev/null 2>&1; then
+if ! command -v uv > /dev/null 2>&1; then
   echo "ERROR: uv is required for docs-relations-guard (tools/py/uv.lock)."
   exit 1
 fi

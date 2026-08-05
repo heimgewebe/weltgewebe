@@ -21,7 +21,7 @@ fail() {
   exit 1
 }
 
-if ! command -v uv >/dev/null 2>&1; then
+if ! command -v uv > /dev/null 2>&1; then
   echo "ERROR: uv is required for version-guard tests (tools/py/uv.lock)." >&2
   exit 1
 fi

@@ -97,7 +97,7 @@ fi
 write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile.vps" "'self'"
 
 # Same repo-canonical tools/py environment as make validate / UV_RUN.
-if ! command -v uv >/dev/null 2>&1; then
+if ! command -v uv > /dev/null 2>&1; then
   echo "ERROR: uv is required for security headers guard tests (tools/py/uv.lock)." >&2
   exit 1
 fi

@@ -27,7 +27,7 @@ named_matcher_block() {
   local file="$1"
   local matcher="$2"
   # Same repo-canonical tools/py environment as make validate / UV_RUN.
-  if ! command -v uv >/dev/null 2>&1; then
+  if ! command -v uv > /dev/null 2>&1; then
     echo "ERROR: uv is required for security-headers-guard (tools/py/uv.lock)." >&2
     return 1
   fi

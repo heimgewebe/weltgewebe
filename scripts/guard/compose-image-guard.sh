@@ -4,7 +4,7 @@ TOOLING_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." > /dev/null 2>&1
 REPO_ROOT="${REPO_ROOT:-$TOOLING_ROOT}"
 # Same repo-canonical tools/py environment as make validate / UV_RUN.
 # Invoked from repo root by make validate / test_repo_contract_guards.
-if ! command -v uv >/dev/null 2>&1; then
+if ! command -v uv > /dev/null 2>&1; then
   echo "ERROR: uv is required for compose-image-guard (tools/py/uv.lock)." >&2
   exit 1
 fi
