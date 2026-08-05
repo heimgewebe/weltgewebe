@@ -10,7 +10,7 @@ role: norm
 organ: product-map
 owner: product-map
 last_reviewed: 2026-08-05
-review_after: 2026-10-13
+review_after: 2026-11-05
 depends_on:
   - specs.garnrolle-knoten-faden
   - specs.map-experience
@@ -135,7 +135,7 @@ Diese Asymmetrie ist normativ und kein Nebeneffekt der Umsetzung.
 - Ein **sichtbarer Zielkörper** trägt seine belegte Gewebestruktur auch dann,
   wenn der Quellmarker ausgefiltert ist. Die Beteiligung am Ziel bleibt wahr,
   unabhängig davon, ob die beteiligte Garnrolle gerade angezeigt wird.
-- Eine **Kartenlinie** darf ausschließlich existieren, wenn Quelle *und* Ziel
+- Eine **Kartenlinie** darf ausschließlich existieren, wenn Quelle _und_ Ziel
   als sichtbare Endpunkte aufgelöst sind. Eine Linie zu einem unsichtbaren
   Endpunkt behauptete eine Lage, die auf der Karte nicht belegt ist.
 - Beide Darstellungen nutzen deshalb bewusst **verschiedene, klar benannte
@@ -171,12 +171,42 @@ und Farbe behalten den vollständigen normalisierten Text. Alle eindeutig
 normalisierten Themen bleiben im Modell; die visuelle Palette/X-Geometrie bleibt
 auf höchstens vier Primärfarben begrenzt.
 
+## Materialsprache Knoten und Fäden
+
+Knoten und Fäden teilen dieselbe textile Materialsprache.
+
+- **Knotenarme** sind diagonal gewebte Garnarme: leicht zum Zentrum zulaufend,
+  mit feiner Flecht-/Faserstruktur, dunklem Rand und schmaler Lichtkante. Kein
+  Plus, kein Bullseye, kein schwarzes Loch, keine Pill-/Kapseloptik und kein
+  quadratischer Hintergrund. Mehrthemenfarben bleiben pro Arm sichtbar; die
+  Über-/Unter-Kreuzung der beiden Diagonalen ist klar lesbar.
+- **Fäden** nutzen eine performante Garnillusion aus begrenzten MapLibre-Layern
+  pro Fadenart: subtiler Schatten/Unterzug, farbiger Garnkörper, feiner
+  Licht-/Faserakzent. Static- und Motion-Pfad teilen exakt dieselbe
+  Stildefinition (`EDGE_VISUAL_STYLE` / `EDGE_THREAD_VARIANTS`). Typen
+  `knotting`, `conversation`, `proposal`, `vote` und `legacy` bleiben über
+  Breite und sinnvolle Flecht-/Dash-Rhythmen unterscheidbar — keine
+  Straßenmarkierungs- und keine Perlenoptik.
+- **Mehrfarbige Segmente** halten feste Farbsäume entlang der Geometrie. An
+  belegten WebGL-Nahtstellen (runde Line-Caps) gilt eine stabile, minimale
+  geometrische Überdeckung der Segmentenden. Wandernde Farbsäume und
+  unbewiesene Gradient-Experimente sind unzulässig.
+
+## Zentraler Linienanschluss
+
+Kartenkoordinate, MapLibre-Markeranker und sichtbares X- bzw. Garnrollen-Zentrum
+stimmen exakt überein (`anchor: center`). Fadenlinien laufen geometrisch bis zur
+tatsächlichen Mitte jedes Knotens bzw. jeder runden Garnrolle und werden nicht
+am Markerumfang abgeschnitten. Sie liegen unter dem DOM-Marker (WebGL-Ebenen
+vor Symbol- und Marker-DOM), sodass sie optisch in die Mitte eingezogen werden.
+`faden_endpoint_id` bleibt der strikt gültige Alias für Webgemeindezentren.
+
 ## Schichten und Interaktion
 
 Schichten innen nach außen: Kreuzung, Gesprächsring, X-Arme/Auflagerungen,
 Proposal-Segmente, Stimmen, externer Fokus/Such/Auswahlhalo. Kein quadratischer
 Hintergrund, keine Box um Marker oder Namen, kein Clipping des Gewebekörpers,
-geografischer Bottom-Anker stabil, Touchziel mindestens 44×44.
+geografischer Center-Anker stabil, Touchziel mindestens 44×44.
 
 ## Maßstab und Leistung
 

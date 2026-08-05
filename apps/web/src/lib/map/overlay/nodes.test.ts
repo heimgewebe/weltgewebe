@@ -2,12 +2,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Map as MapLibreMap } from "maplibre-gl";
 import type {
   MapEdge,
+  MapEntityGarnrolle,
   MapEntityNode,
   MapEntityWeave,
   MapEntityWebgemeindezentrum,
 } from "$lib/map/types";
 import { FADEN_LIFETIME_MS } from "$lib/map/edgeLifecycle";
 import {
+  MARKER_GEO_ANCHOR,
   NodesOverlay,
   diffSearchMatchIds,
   type MarkerConstructor,
@@ -182,7 +184,9 @@ class FakeMarker {
   private lat = 0;
   removed = false;
 
-  constructor(public options: { element?: FakeElement } = {}) {}
+  constructor(
+    public options: { element?: FakeElement; anchor?: string } = {},
+  ) {}
 
   setLngLat([lng, lat]: [number, number]) {
     this.lng = lng;
@@ -271,6 +275,17 @@ function makeNode(
     lon: 10,
     weave: makeWeave(),
     ...overrides,
+  };
+}
+
+function makeAccount(id: string): MapEntityGarnrolle {
+  return {
+    type: "garnrolle",
+    id,
+    title: `Garnrolle ${id}`,
+    lat: 53.51,
+    lon: 10.01,
+    created_at: "2025-01-01T00:00:00Z",
   };
 }
 
@@ -366,6 +381,24 @@ describe("NodesOverlay runtime robustness", () => {
       .children[0] as HTMLElement | undefined;
     expect(root?.dataset.zoneOrder).toBe("knotting,conversation,proposal,vote");
     expect(root?.innerHTML).toContain('data-zone="knotting"');
+  });
+
+  it("pins node, center and Garnrolle markers on the shared geographic center", () => {
+    const overlay = makeOverlay();
+    overlay.update(
+      [makeNode("node-a"), makeCenter("center-a"), makeAccount("spool-a")],
+      true,
+    );
+    for (const id of ["node-a", "center-a", "spool-a"] as const) {
+      const entry = overlay.getActiveMarker(id);
+      const marker = entry?.marker as unknown as FakeMarker;
+      expect(marker.options.anchor).toBe(MARKER_GEO_ANCHOR);
+      expect(marker.options.anchor).toBe("center");
+      expect(marker.getLngLat()).toEqual({
+        lng: entry?.item.lon,
+        lat: entry?.item.lat,
+      });
+    }
   });
 
   it("derives an empty weave instead of crashing when a caller omitted it", () => {

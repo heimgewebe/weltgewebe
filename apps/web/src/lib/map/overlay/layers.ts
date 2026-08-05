@@ -18,18 +18,33 @@ export const LAYERS = {
   // 1. Basemap is handled by map.setStyle()
 
   // 2. Edges. MapLibre does not support data expressions for line-dasharray,
-  // so every textile Faden pattern owns one fixed halo/main layer pair.
+  // so every textile Faden pattern owns one fixed shadow/body/highlight triple.
   EDGES_SOURCE: "edges-source",
+  EDGES_SHADOW_LAYER: "edges-shadow-layer",
   EDGES_LAYER: "edges-layer",
-  EDGES_HALO_LAYER: "edges-halo-layer",
+  EDGES_HIGHLIGHT_LAYER: "edges-highlight-layer",
+  /** @deprecated Prefer EDGES_SHADOW_LAYER; kept as alias for older probes. */
+  EDGES_HALO_LAYER: "edges-shadow-layer",
+  EDGES_CONVERSATION_SHADOW_LAYER: "edges-conversation-shadow-layer",
   EDGES_CONVERSATION_LAYER: "edges-conversation-layer",
-  EDGES_CONVERSATION_HALO_LAYER: "edges-conversation-halo-layer",
+  EDGES_CONVERSATION_HIGHLIGHT_LAYER: "edges-conversation-highlight-layer",
+  /** @deprecated Prefer EDGES_CONVERSATION_SHADOW_LAYER. */
+  EDGES_CONVERSATION_HALO_LAYER: "edges-conversation-shadow-layer",
+  EDGES_PROPOSAL_SHADOW_LAYER: "edges-proposal-shadow-layer",
   EDGES_PROPOSAL_LAYER: "edges-proposal-layer",
-  EDGES_PROPOSAL_HALO_LAYER: "edges-proposal-halo-layer",
+  EDGES_PROPOSAL_HIGHLIGHT_LAYER: "edges-proposal-highlight-layer",
+  /** @deprecated Prefer EDGES_PROPOSAL_SHADOW_LAYER. */
+  EDGES_PROPOSAL_HALO_LAYER: "edges-proposal-shadow-layer",
+  EDGES_KNOTTING_SHADOW_LAYER: "edges-knotting-shadow-layer",
   EDGES_KNOTTING_LAYER: "edges-knotting-layer",
-  EDGES_KNOTTING_HALO_LAYER: "edges-knotting-halo-layer",
+  EDGES_KNOTTING_HIGHLIGHT_LAYER: "edges-knotting-highlight-layer",
+  /** @deprecated Prefer EDGES_KNOTTING_SHADOW_LAYER. */
+  EDGES_KNOTTING_HALO_LAYER: "edges-knotting-shadow-layer",
+  EDGES_VOTE_SHADOW_LAYER: "edges-vote-shadow-layer",
   EDGES_VOTE_LAYER: "edges-vote-layer",
-  EDGES_VOTE_HALO_LAYER: "edges-vote-halo-layer",
+  EDGES_VOTE_HIGHLIGHT_LAYER: "edges-vote-highlight-layer",
+  /** @deprecated Prefer EDGES_VOTE_SHADOW_LAYER. */
+  EDGES_VOTE_HALO_LAYER: "edges-vote-shadow-layer",
 
   // 3. Nodes are HTML markers, so they inherently sit above WebGL.
 
