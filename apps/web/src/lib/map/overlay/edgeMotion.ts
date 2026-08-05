@@ -7,13 +7,29 @@ import { isValidMapCoordinate } from "$lib/map/coordinates";
 import type { FadenType, MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
-import { EDGE_THREAD_LAYER_IDS, EDGE_VISUAL_STYLE } from "./edges";
+import {
+  buildProgressClippedThemeSegments,
+  EDGE_THREAD_LAYER_IDS,
+  EDGE_THREAD_VARIANTS,
+  EDGE_VISUAL_STYLE,
+} from "./edges";
 
 export const EDGE_MOTION_SOURCE = "edge-motion-source";
-export const EDGE_MOTION_LAYER = "edge-motion-layer";
-export const EDGE_MOTION_HALO_LAYER = "edge-motion-halo-layer";
+/** Legacy aliases kept for tests that probe one representative typed pair. */
+export const EDGE_MOTION_LAYER = "edge-motion-layer-legacy";
+export const EDGE_MOTION_HALO_LAYER = "edge-motion-halo-layer-legacy";
 export const EDGE_MOTION_DURATION_MS = 720;
 export const EDGE_MOTION_MAX_ACTIVE = 8;
+
+/**
+ * Bounded, canonical motion layers: one halo+main pair per thread type.
+ * Same structural types as the static projection — no unbounded layer growth.
+ */
+export const EDGE_MOTION_LAYER_IDS: readonly string[] =
+  EDGE_THREAD_VARIANTS.flatMap((variant) => [
+    motionHaloLayerId(variant.fadenType),
+    motionMainLayerId(variant.fadenType),
+  ]);
 
 type LngLatTuple = [number, number];
 type EdgeMotionPhase = "creating" | "releasing";
@@ -61,6 +77,18 @@ export interface EdgeMotionSnapshot {
   }>;
 }
 
+function motionMainLayerId(fadenType: string): string {
+  return fadenType === "legacy"
+    ? EDGE_MOTION_LAYER
+    : `edge-motion-layer-${fadenType}`;
+}
+
+function motionHaloLayerId(fadenType: string): string {
+  return fadenType === "legacy"
+    ? EDGE_MOTION_HALO_LAYER
+    : `edge-motion-halo-layer-${fadenType}`;
+}
+
 function defaultScheduler(): EdgeMotionScheduler {
   return {
     now: () => performance.now(),
@@ -81,18 +109,6 @@ function easeInOutCubic(value: number): number {
   return progress < 0.5
     ? 4 * progress * progress * progress
     : 1 - Math.pow(-2 * progress + 2, 3) / 2;
-}
-
-function interpolatePoint(
-  source: LngLatTuple,
-  target: LngLatTuple,
-  progress: number,
-): LngLatTuple {
-  const bounded = clamp01(progress);
-  return [
-    source[0] + (target[0] - source[0]) * bounded,
-    source[1] + (target[1] - source[1]) * bounded,
-  ];
 }
 
 function buildPointMap(points: readonly MapEntityViewModel[]) {
@@ -153,7 +169,8 @@ export function resolveEdgeMotionInput(
  *
  * The canonical edge source remains untouched. While one transition is visible,
  * the same edge id is filtered from the static layers and drawn in this separate
- * source. A single RAF exists only while at least one transition is active.
+ * source with the same themed segments and per-type width/dash as the static
+ * projection. A single RAF exists only while at least one transition is active.
  */
 export class EdgeMotionController {
   private readonly active = new Map<string, ActiveMotion>();
@@ -250,11 +267,8 @@ export class EdgeMotionController {
     this.releaseSuppressed.clear();
     this.restoreStaticFilters();
     try {
-      if (this.map.getLayer(EDGE_MOTION_LAYER)) {
-        this.map.removeLayer(EDGE_MOTION_LAYER);
-      }
-      if (this.map.getLayer(EDGE_MOTION_HALO_LAYER)) {
-        this.map.removeLayer(EDGE_MOTION_HALO_LAYER);
+      for (const layerId of EDGE_MOTION_LAYER_IDS) {
+        if (this.map.getLayer(layerId)) this.map.removeLayer(layerId);
       }
       if (this.map.getSource(EDGE_MOTION_SOURCE)) {
         this.map.removeSource(EDGE_MOTION_SOURCE);
@@ -373,6 +387,12 @@ export class EdgeMotionController {
     if (this.active.size > 0) this.scheduleFrame();
   }
 
+  private motionPalette(input: EdgeMotionInput): string[] {
+    if (input.themeColors?.length) return input.themeColors;
+    if (input.themeColor) return [input.themeColor];
+    return [EDGE_VISUAL_STYLE.mainColor];
+  }
+
   private render(): void {
     if (this.destroyed || this.rendering) return;
     this.rendering = true;
@@ -389,34 +409,36 @@ export class EdgeMotionController {
         }
         const progress = this.progressAt(motion, now);
         if (progress <= 0) continue;
-        features.push({
-          type: "Feature",
-          geometry: {
-            type: "LineString",
-            coordinates: [
-              motion.input.source,
-              interpolatePoint(
-                motion.input.source,
-                motion.input.target,
-                progress,
-              ),
-            ],
-          },
-          properties: {
-            id: motion.input.id,
-            kind: motion.input.kind,
-            fadenType: motion.input.fadenType ?? "legacy",
-            ...(motion.input.themeColor
-              ? { themeColor: motion.input.themeColor }
-              : {}),
-            ...(motion.input.themeColors?.length
-              ? { themeColors: motion.input.themeColors }
-              : {}),
-            opacity: clamp01(motion.input.opacity ?? 1),
-            phase: motion.phase,
-            progress,
-          },
-        });
+        const palette = this.motionPalette(motion.input);
+        const fadenType = motion.input.fadenType ?? "legacy";
+        const segments = buildProgressClippedThemeSegments(
+          motion.input.source,
+          motion.input.target,
+          palette,
+          progress,
+        );
+        for (let strand = 0; strand < segments.length; strand += 1) {
+          const segment = segments[strand];
+          features.push({
+            type: "Feature",
+            geometry: {
+              type: "LineString",
+              coordinates: segment.coordinates,
+            },
+            properties: {
+              id: motion.input.id,
+              kind: motion.input.kind,
+              fadenType,
+              themeColor: segment.color,
+              themeColors: palette,
+              themeStrand: strand,
+              themeStrandCount: segments.length,
+              opacity: clamp01(motion.input.opacity ?? 1),
+              phase: motion.phase,
+              progress,
+            },
+          });
+        }
       }
       const source = this.map.getSource(EDGE_MOTION_SOURCE) as
         | GeoJSONSource
@@ -431,10 +453,9 @@ export class EdgeMotionController {
   }
 
   private hasMotionStyle(): boolean {
-    return Boolean(
-      this.map.getSource(EDGE_MOTION_SOURCE) &&
-      this.map.getLayer(EDGE_MOTION_HALO_LAYER) &&
-      this.map.getLayer(EDGE_MOTION_LAYER),
+    if (!this.map.getSource(EDGE_MOTION_SOURCE)) return false;
+    return EDGE_MOTION_LAYER_IDS.every((layerId) =>
+      Boolean(this.map.getLayer(layerId)),
     );
   }
 
@@ -453,48 +474,65 @@ export class EdgeMotionController {
       "line-join": "round",
       "line-cap": "round",
     };
-    if (!this.map.getLayer(EDGE_MOTION_HALO_LAYER)) {
-      this.map.addLayer(
-        {
-          id: EDGE_MOTION_HALO_LAYER,
-          type: "line",
-          source: EDGE_MOTION_SOURCE,
-          layout: commonLayout,
-          paint: {
-            "line-color": EDGE_VISUAL_STYLE.haloColor,
-            "line-width": EDGE_VISUAL_STYLE.haloWidth,
-            "line-blur": EDGE_VISUAL_STYLE.haloBlur,
-            "line-opacity": [
-              "*",
-              ["coalesce", ["to-number", ["get", "opacity"]], 0],
-              EDGE_VISUAL_STYLE.haloOpacityFactor,
-            ],
-            "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
+
+    for (const variant of EDGE_THREAD_VARIANTS) {
+      const haloId = motionHaloLayerId(variant.fadenType);
+      const mainId = motionMainLayerId(variant.fadenType);
+      const filter = [
+        "==",
+        ["get", "fadenType"],
+        variant.fadenType,
+      ] as LineLayerSpecification["filter"];
+      const dashArray = [...variant.dashArray] as [number, number];
+      if (!this.map.getLayer(haloId)) {
+        this.map.addLayer(
+          {
+            id: haloId,
+            type: "line",
+            source: EDGE_MOTION_SOURCE,
+            filter,
+            layout: commonLayout,
+            paint: {
+              "line-color": EDGE_VISUAL_STYLE.haloColor,
+              "line-width": variant.width + 2.75,
+              "line-blur": EDGE_VISUAL_STYLE.haloBlur,
+              "line-opacity": [
+                "*",
+                ["coalesce", ["to-number", ["get", "opacity"]], 0],
+                EDGE_VISUAL_STYLE.haloOpacityFactor,
+              ],
+              "line-dasharray": dashArray,
+            },
           },
-        },
-        firstSymbolId,
-      );
-    }
-    if (!this.map.getLayer(EDGE_MOTION_LAYER)) {
-      this.map.addLayer(
-        {
-          id: EDGE_MOTION_LAYER,
-          type: "line",
-          source: EDGE_MOTION_SOURCE,
-          layout: commonLayout,
-          paint: {
-            "line-color": [
-              "coalesce",
-              ["get", "themeColor"],
-              EDGE_VISUAL_STYLE.mainColor,
-            ],
-            "line-width": EDGE_VISUAL_STYLE.mainWidth,
-            "line-opacity": ["coalesce", ["to-number", ["get", "opacity"]], 0],
-            "line-dasharray": EDGE_VISUAL_STYLE.dashArray,
+          this.map.getLayer(mainId) ? mainId : firstSymbolId,
+        );
+      }
+      if (!this.map.getLayer(mainId)) {
+        this.map.addLayer(
+          {
+            id: mainId,
+            type: "line",
+            source: EDGE_MOTION_SOURCE,
+            filter,
+            layout: commonLayout,
+            paint: {
+              "line-color": [
+                "coalesce",
+                ["get", "themeColor"],
+                variant.fallbackColor,
+              ],
+              "line-width": variant.width,
+              "line-opacity": [
+                "coalesce",
+                ["to-number", ["get", "opacity"]],
+                0,
+              ],
+              "line-dasharray": dashArray,
+            },
           },
-        },
-        firstSymbolId,
-      );
+          firstSymbolId,
+        );
+      }
     }
     return true;
   }

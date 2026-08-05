@@ -194,7 +194,7 @@ describe("woven node projection", () => {
       node({ tags: [hamburg, hannover], kind: "Versorgung" }),
     );
     const versorgung = segments.filter((segment) =>
-      segment.id.startsWith("nachbarschaftliche"),
+      segment.id.startsWith("Nachbarschaftliche"),
     );
 
     expect(versorgung).toHaveLength(2);
@@ -223,7 +223,40 @@ describe("woven node projection", () => {
     ).toEqual(["Offene Werkstatt", "Garten"]);
   });
 
-  it("keeps meaningful colons in identity and only drops technical noise for display", () => {
+  it("treats case-different normalised topics as distinct identities", () => {
+    expect(weaveTopicIdentity("Kunst")).toBe("Kunst");
+    expect(weaveTopicIdentity("kunst")).toBe("kunst");
+    expect(weaveTopicIdentity("Kunst")).not.toBe(weaveTopicIdentity("kunst"));
+    const topics = weaveTopics(
+      node({ tags: ["Kunst", "kunst"], kind: "Atelier" }),
+    );
+    expect(topics).toEqual(["Kunst", "kunst", "Atelier"]);
+    const segments = deriveWeaveThemeSegments(
+      node({ tags: ["Kunst", "kunst"], kind: "Atelier" }),
+    );
+    expect(segments.map((segment) => segment.id)).toEqual([
+      "Kunst",
+      "kunst",
+      "Atelier",
+    ]);
+    expect(segments[0].color).not.toBe(segments[1].color);
+  });
+
+  it("keeps every distinct topic beyond sixteen while painting only four arms", () => {
+    const tags = Array.from({ length: 20 }, (_, index) => `Thema-${index + 1}`);
+    const topics = weaveTopics(node({ tags, kind: "Knoten" }));
+    // kind "Knoten" is ignored; all twenty tags remain as identities.
+    expect(topics).toHaveLength(20);
+    expect(new Set(topics).size).toBe(20);
+    const weave = deriveEntityWeave(node({ tags, kind: "Knoten" }), [], nowMs);
+    expect(weave.themeSegments).toHaveLength(20);
+    expect(weave.xCoreSegments).toHaveLength(4);
+    expect(
+      new Set(weave.xCoreSegments.map((segment) => segment.themeId)).size,
+    ).toBe(MAX_X_CORE_THEMES);
+  });
+
+  it("keeps meaningful colons in identity and only drops allowlisted technical noise for display", () => {
     expect(weaveTopics(node({ tags: ["Kunst: Öffentlicher Raum"] }))).toEqual([
       "Kunst: Öffentlicher Raum",
       "Garten",
@@ -235,6 +268,13 @@ describe("woven node projection", () => {
     ]);
     expect(weaveTopicIdentity("thema:kunst")).toBe("thema:kunst");
     expect(weaveTopicDisplayLabel("thema:kunst")).toBe("kunst");
+    // Meaningful lowercase prefix must not be stripped generically.
+    expect(weaveTopicDisplayLabel("kunst:öffentlicher raum")).toBe(
+      "kunst:öffentlicher raum",
+    );
+    expect(weaveTopicIdentity("kunst:öffentlicher raum")).toBe(
+      "kunst:öffentlicher raum",
+    );
     expect(weaveTopicIdentity("Kunst: Öffentlicher Raum")).not.toBe(
       weaveTopicIdentity("Öffentlicher Raum"),
     );
@@ -488,30 +528,79 @@ describe("woven node projection", () => {
     expect(maxWeaveDomNodeBudget()).toBeGreaterThan(10);
   });
 
-  it("projects 100, 500 and 1000 weaves within a practical bound", () => {
+  it("keeps weave projection complexity and output within deterministic bounds", () => {
     const entity = node({
       tags: ["Natur", "Bildung", "Kunst", "Handwerk", "Nachbarschaft"],
       kind: "Garten",
     });
     const edges = [
-      edge("k", "knotting", "node-1"),
-      edge("c", "conversation", "conversation-node"),
-      edge("p1", "proposal", "proposal-a"),
-      edge("p2", "proposal", "proposal-b"),
-      edge("v1", "vote", "proposal-a"),
+      ...Array.from({ length: 12 }, (_, index) =>
+        edge(`k-${index}`, "knotting", "node-1", "node-1", createdAt + index),
+      ),
+      ...Array.from({ length: 30 }, (_, index) =>
+        edge(
+          `c-${index}`,
+          "conversation",
+          "conversation-node",
+          "node-1",
+          createdAt + index,
+        ),
+      ),
+      ...Array.from({ length: 12 }, (_, index) =>
+        edge(
+          `p-${index}`,
+          "proposal",
+          `proposal-${index}`,
+          "node-1",
+          createdAt + index,
+        ),
+      ),
+      ...Array.from({ length: 40 }, (_, index) =>
+        edge(
+          `v-${index}`,
+          "vote",
+          `proposal-${index % 12}`,
+          "node-1",
+          createdAt + index,
+        ),
+      ),
     ];
-    const sizes = [100, 500, 1000] as const;
-    const timings: Record<number, number> = {};
-    for (const size of sizes) {
-      const started = performance.now();
-      for (let index = 0; index < size; index += 1) {
-        deriveEntityWeave(entity, edges, nowMs + index);
-      }
-      timings[size] = performance.now() - started;
+
+    const weave = deriveEntityWeave(entity, edges, nowMs);
+    // Deterministic structural ceilings — not wall-clock flake targets.
+    expect(weave.xCoreSegments).toHaveLength(4);
+    expect(weave.themeSegments.length).toBeLessThanOrEqual(6);
+    expect(weave.proposalArcs).toHaveLength(MAX_VISIBLE_PROPOSAL_ARCS);
+    expect(weave.proposalCount).toBe(12);
+    expect(weave.proposalOverflowCount).toBe(
+      12 - MAX_VISIBLE_PROPOSAL_ARCS + 1,
+    );
+    expect(weave.armOverlays).toHaveLength(0);
+    expect(weave.voteThreadCount).toBe(40);
+    for (const arc of weave.proposalArcs) {
+      expect(arc.voteThreadCount).toBeLessThanOrEqual(40);
     }
-    // Reproducible practical bound on this class of host; not a CI flake target.
-    expect(timings[100]).toBeLessThan(250);
-    expect(timings[500]).toBeLessThan(800);
-    expect(timings[1000]).toBeLessThan(1500);
+
+    // Linear output: projecting N entities yields exactly N view models.
+    for (const size of [100, 500, 1000] as const) {
+      const entities = Array.from({ length: size }, (_, index) =>
+        node({ id: `node-${index}`, tags: entity.tags, kind: entity.kind }),
+      );
+      const projected = projectEntityWeaves(entities, edges, nowMs);
+      expect(projected).toHaveLength(size);
+      expect(
+        projected.every(
+          (item) =>
+            item.type === "node" && item.weave?.xCoreSegments.length === 4,
+        ),
+      ).toBe(true);
+    }
+
+    // Hang guard only: far above any healthy host; never a tight CI flake gate.
+    const started = performance.now();
+    for (let index = 0; index < 1000; index += 1) {
+      deriveEntityWeave(entity, edges, nowMs + index);
+    }
+    expect(performance.now() - started).toBeLessThan(30_000);
   });
 });

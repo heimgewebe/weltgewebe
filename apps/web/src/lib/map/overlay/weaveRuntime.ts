@@ -49,17 +49,20 @@ export function projectMarkersForWeave(
  * projection step; treating that as structure would tear down and rebuild every
  * marker body once a minute. Opacity is applied separately to the elements that
  * already exist — see {@link applyWeaveOpacity}.
+ *
+ * Arm overlays include label (and every other DOM-relevant field) so a stable
+ * overlay id with a changed title still rebuilds.
  */
 export function weaveRenderSignature(weave: MapEntityWeave): string {
   let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.conversationRingThickness}|${weave.knottingThreadCount}|${weave.conversationThreadCount}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}|${weave.armOverlays.length}`;
-  for (const { id, color, arm } of weave.themeSegments) {
-    signature += `|${id}:${color}:${arm ?? "-"}`;
+  for (const { id, color, arm, label } of weave.themeSegments) {
+    signature += `|${id}:${color}:${arm ?? "-"}:${label}`;
   }
-  for (const { arm, themeId, color } of weave.xCoreSegments) {
-    signature += `|x:${arm}:${themeId}:${color}`;
+  for (const { arm, themeId, color, label } of weave.xCoreSegments) {
+    signature += `|x:${arm}:${themeId}:${color}:${label}`;
   }
   for (const overlay of weave.armOverlays) {
-    signature += `|o:${overlay.arm}:${overlay.id}`;
+    signature += `|o:${overlay.arm}:${overlay.id}:${overlay.label}`;
   }
   for (const {
     subjectId,
@@ -67,8 +70,11 @@ export function weaveRenderSignature(weave: MapEntityWeave): string {
     startDeg,
     spanDeg,
     voteThreadCount,
+    proposalThreadCount,
+    conversationThreadCount,
+    bundledSubjectCount,
   } of weave.proposalArcs) {
-    signature += `|${subjectId}:${color}:${startDeg}:${spanDeg}:${voteThreadCount}`;
+    signature += `|${subjectId}:${color}:${startDeg}:${spanDeg}:${voteThreadCount}:${proposalThreadCount}:${conversationThreadCount}:${bundledSubjectCount}`;
   }
   return signature;
 }
@@ -101,6 +107,22 @@ function armColor(arms: readonly WeaveXCoreSegment[], arm: WeaveArm): string {
   return arms.find((segment) => segment.arm === arm)?.color ?? "#76523d";
 }
 
+function createSpan(
+  className: string,
+  attributes: Record<string, string> = {},
+): HTMLElement {
+  const element = document.createElement("span");
+  element.className = className;
+  for (const [name, value] of Object.entries(attributes)) {
+    if (name === "title") {
+      element.title = value;
+    } else {
+      element.setAttribute(name, value);
+    }
+  }
+  return element;
+}
+
 function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   Object.assign(root.dataset, {
     zoneOrder: "knotting,conversation,proposal,vote",
@@ -121,32 +143,100 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     root.style.setProperty(`--weave-arm-${segment.arm}`, segment.color);
   }
 
+  // Clear previous structure without parsing untrusted HTML.
+  while (root.firstChild) root.removeChild(root.firstChild);
+
   const arms = weave.xCoreSegments;
-  const armMarkup = (arm: WeaveArm) =>
-    `<span class="woven-node__arm" data-arm="${arm}" style="--arm-color:${armColor(arms, arm)}"></span>`;
-  const overlays = weave.armOverlays
-    .map(
-      (overlay) =>
-        `<span class="woven-node__arm-overlay" data-arm="${overlay.arm}" data-overlay-id="${overlay.id}" title="${overlay.label}"></span>`,
-    )
-    .join("");
-  // Layer order inside the body: crossing → conversation → X (under then over)
-  // → arm overlays → proposals → vote siblings → overflow badge.
-  const xCore = `<span class="woven-node__x" data-zone="knotting" data-x-geometry="diagonal"><span class="woven-node__strand woven-node__strand--under" data-strand="a">${armMarkup("northwest")}${armMarkup("southeast")}</span><span class="woven-node__strand woven-node__strand--over" data-strand="b">${armMarkup("northeast")}${armMarkup("southwest")}</span>${overlays}</span>`;
-  const proposals = weave.proposalArcs
-    .map((arc, index) => {
-      const slot = String(index + 1);
-      // Opacity stays out of the markup: applyWeaveOpacity owns it, so a purely
-      // temporal change never has to touch this string.
-      const arcStyle = `--arc-start:${arc.startDeg}deg;--arc-span:${arc.spanDeg}deg;--arc-color:${arc.color}`;
-      const proposal = `<span class="woven-node__proposal-arc" data-zone="proposal" data-proposal-slot="${slot}" data-vote-threads="${arc.voteThreadCount}" style="${arcStyle}"></span>`;
-      const votes = arc.voteThreadCount
-        ? `<span class="woven-node__vote-stitches" data-zone="vote" data-proposal-slot="${slot}" data-vote-total="${arc.voteThreadCount}" data-vote-visible="${Math.min(MAX_VISIBLE_VOTE_STITCHES, arc.voteThreadCount)}" style="${arcStyle};background:${voteStitchConicGradient(arc.spanDeg, arc.voteThreadCount)}"></span>`
-        : "";
-      return proposal + votes;
-    })
-    .join("");
-  root.innerHTML = `<span class="woven-node__crossing" data-zone="crossing"></span><span class="woven-node__conversation${weave.conversationThreadCount ? "" : " is-empty"}" data-zone="conversation"></span>${xCore}${proposals}${weave.proposalOverflowCount ? `<span class="woven-node__overflow">+${weave.proposalOverflowCount}</span>` : ""}`;
+  const crossing = createSpan("woven-node__crossing", {
+    "data-zone": "crossing",
+  });
+  const conversationClass = weave.conversationThreadCount
+    ? "woven-node__conversation"
+    : "woven-node__conversation is-empty";
+  const conversation = createSpan(conversationClass, {
+    "data-zone": "conversation",
+  });
+
+  const xCore = createSpan("woven-node__x", {
+    "data-zone": "knotting",
+    "data-x-geometry": "diagonal",
+  });
+  const strandUnder = createSpan(
+    "woven-node__strand woven-node__strand--under",
+    {
+      "data-strand": "a",
+    },
+  );
+  for (const arm of ["northwest", "southeast"] as const) {
+    const armEl = createSpan("woven-node__arm", { "data-arm": arm });
+    armEl.style.setProperty("--arm-color", armColor(arms, arm));
+    strandUnder.append(armEl);
+  }
+  const strandOver = createSpan("woven-node__strand woven-node__strand--over", {
+    "data-strand": "b",
+  });
+  for (const arm of ["northeast", "southwest"] as const) {
+    const armEl = createSpan("woven-node__arm", { "data-arm": arm });
+    armEl.style.setProperty("--arm-color", armColor(arms, arm));
+    strandOver.append(armEl);
+  }
+  xCore.append(strandUnder, strandOver);
+  for (const overlay of weave.armOverlays) {
+    const overlayEl = createSpan("woven-node__arm-overlay", {
+      "data-arm": overlay.arm,
+      "data-overlay-id": overlay.id,
+      title: overlay.label,
+    });
+    xCore.append(overlayEl);
+  }
+
+  root.append(crossing, conversation, xCore);
+
+  for (let index = 0; index < weave.proposalArcs.length; index += 1) {
+    const arc = weave.proposalArcs[index];
+    const slot = String(index + 1);
+    // Opacity stays out of the markup: applyWeaveOpacity owns it, so a purely
+    // temporal change never has to touch this tree.
+    const arcStyleVars = {
+      "--arc-start": `${arc.startDeg}deg`,
+      "--arc-span": `${arc.spanDeg}deg`,
+      "--arc-color": arc.color,
+    } as const;
+    const proposal = createSpan("woven-node__proposal-arc", {
+      "data-zone": "proposal",
+      "data-proposal-slot": slot,
+      "data-vote-threads": String(arc.voteThreadCount),
+    });
+    for (const [name, value] of Object.entries(arcStyleVars)) {
+      proposal.style.setProperty(name, value);
+    }
+    root.append(proposal);
+
+    if (arc.voteThreadCount) {
+      const votes = createSpan("woven-node__vote-stitches", {
+        "data-zone": "vote",
+        "data-proposal-slot": slot,
+        "data-vote-total": String(arc.voteThreadCount),
+        "data-vote-visible": String(
+          Math.min(MAX_VISIBLE_VOTE_STITCHES, arc.voteThreadCount),
+        ),
+      });
+      for (const [name, value] of Object.entries(arcStyleVars)) {
+        votes.style.setProperty(name, value);
+      }
+      votes.style.background = voteStitchConicGradient(
+        arc.spanDeg,
+        arc.voteThreadCount,
+      );
+      root.append(votes);
+    }
+  }
+
+  if (weave.proposalOverflowCount) {
+    const overflow = createSpan("woven-node__overflow");
+    overflow.textContent = `+${weave.proposalOverflowCount}`;
+    root.append(overflow);
+  }
 }
 
 /**

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import { FADEN_LIFETIME_MS } from "../src/lib/map/edgeLifecycle";
 import { demoAccounts, demoNodes } from "../src/lib/demo/demoData";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
+import { activateToolFanAction } from "./fixtures/toolFan";
 
 const NODE_ID = demoNodes[0].id;
 const ACCOUNT_A = demoAccounts[0].id;
@@ -446,5 +447,214 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       .toBeLessThan(opacityBefore);
     // The DOM was never rebuilt, only its opacity was written.
     await expect(proposal).toHaveAttribute("data-sentinel", "kept");
+  });
+
+  test("keeps geometry contracts across density, zoom and viewports with visual evidence", async ({
+    page,
+  }, testInfo) => {
+    await mockApiResponses(page);
+    const denseNode = {
+      ...demoNodes[0],
+      tags: ["Natur", "Bildung", "Kunst", "Handwerk"],
+      kind: "Knoten",
+    };
+    await page.route("**/api/nodes*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [denseNode]),
+        ),
+      });
+    });
+
+    const edges = [
+      faden("knotting-dense", ACCOUNT_A, "knotting", NODE_ID),
+      ...Array.from({ length: 12 }, (_, index) =>
+        faden(
+          `conversation-dense-${index}`,
+          index % 2 === 0 ? ACCOUNT_A : ACCOUNT_B,
+          "conversation",
+          "conversation-node",
+        ),
+      ),
+      ...Array.from({ length: 10 }, (_, index) =>
+        faden(
+          `proposal-dense-${index}`,
+          index % 2 === 0 ? ACCOUNT_A : ACCOUNT_B,
+          "proposal",
+          `proposal-dense-${index}`,
+        ),
+      ),
+      ...Array.from({ length: 20 }, (_, index) =>
+        faden(
+          `vote-dense-${index}`,
+          index % 2 === 0 ? ACCOUNT_A : ACCOUNT_B,
+          "vote",
+          `proposal-dense-${index % 10}`,
+        ),
+      ),
+    ];
+    await page.route("**/api/edges*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockListResponse(route.request().url(), edges)),
+      });
+    });
+
+    const evidenceDir = testInfo.outputPath("pr-1685-visual-evidence");
+    const capture = async (name: string) => {
+      await page.screenshot({
+        path: `${evidenceDir}/${name}.png`,
+        fullPage: false,
+      });
+    };
+
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/map");
+    const marker = page.getByTestId(`marker-node-${NODE_ID}`);
+    const woven = marker.locator(".woven-node");
+    await expect(marker).toBeVisible({ timeout: 15_000 });
+
+    // Full counts stay in model/aria even when the visual proposal slots cap at 8.
+    await expect(woven).toHaveAttribute("data-proposal-count", "10");
+    await expect(woven).toHaveAttribute("data-conversation-threads", "12");
+    await expect(woven).toHaveAttribute("data-vote-threads", "20");
+    await expect(woven.locator('[data-zone="proposal"]')).toHaveCount(8);
+    await expect(woven.locator(".woven-node__overflow")).toHaveText("+3");
+    await expect(woven.locator(".woven-node__arm")).toHaveCount(4);
+    await expect(woven).toHaveAttribute("data-x-geometry", "diagonal");
+
+    const geometry = await woven.evaluate((root) => {
+      const style = getComputedStyle(root);
+      const host = (root.closest(".map-marker") ??
+        root.parentElement?.parentElement) as HTMLElement | null;
+      const hostBox = host?.getBoundingClientRect();
+      const arms = Array.from(
+        root.querySelectorAll<HTMLElement>(".woven-node__arm"),
+      ).map((arm) => {
+        const armStyle = getComputedStyle(arm);
+        return {
+          arm: arm.dataset.arm,
+          color: arm.style.getPropertyValue("--arm-color").trim(),
+          transform: armStyle.transform,
+        };
+      });
+      const box = root.getBoundingClientRect();
+      return {
+        overflow: style.overflow,
+        background: style.backgroundColor,
+        borderRadius: style.borderRadius,
+        width: box.width,
+        height: box.height,
+        arms,
+        hostWidth: hostBox?.width ?? 0,
+        hostHeight: hostBox?.height ?? 0,
+        distinctArmColors: new Set(
+          arms.map((entry) => entry.color).filter(Boolean),
+        ).size,
+      };
+    });
+    expect(geometry.overflow).toBe("visible");
+    expect(
+      geometry.background === "rgba(0, 0, 0, 0)" ||
+        geometry.background === "transparent",
+    ).toBe(true);
+    expect(geometry.distinctArmColors).toBeGreaterThan(1);
+    expect(geometry.distinctArmColors).toBeLessThanOrEqual(4);
+    expect(geometry.hostWidth).toBeGreaterThanOrEqual(44);
+    expect(geometry.hostHeight).toBeGreaterThanOrEqual(44);
+    // Diagonal X: both strands are rotated; no axis-aligned plus arms.
+    expect(
+      geometry.arms.every(
+        (arm) => arm.transform.includes("matrix") || arm.transform !== "none",
+      ),
+    ).toBe(true);
+
+    await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(13.4));
+    await expect(woven).toHaveAttribute("data-weave-detail", "compact");
+    await expect(woven.locator('[data-zone="vote"]').first()).toBeHidden();
+    await capture("desktop-zoom-13.4-compact");
+
+    await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(13.6));
+    await expect(woven).toHaveAttribute("data-weave-detail", "detail");
+    await expect(woven.locator('[data-zone="vote"]').first()).toBeVisible();
+    await capture("desktop-zoom-13.6-detail");
+
+    await marker.focus();
+    await expect(marker).toBeFocused();
+    await capture("desktop-focus");
+
+    await marker.click();
+    await expect(marker).toHaveClass(/is-selected/);
+    await expect(marker).toHaveAttribute("data-selected", "true");
+    await capture("desktop-selected");
+
+    // Drive the real T006 search path with a fixture that returns this node.
+    await page.route("**/api/search*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [
+            {
+              id: denseNode.id,
+              kind: denseNode.kind,
+              title: denseNode.title,
+              created_at: denseNode.created_at,
+              updated_at: denseNode.created_at,
+              tags: denseNode.tags,
+              location: { lat: denseNode.lat, lon: denseNode.lon },
+            },
+          ],
+          mode: "mock",
+          generation_id: "pr-1685-dense-search",
+          offset: 0,
+        }),
+      });
+    });
+    await activateToolFanAction(page, "find");
+    const searchInput = page.locator(".search-box input");
+    await expect(searchInput).toBeVisible();
+    await searchInput.fill(denseNode.title);
+    await expect(marker).toHaveAttribute("data-search-match", "true", {
+      timeout: 10_000,
+    });
+    await expect(marker.locator(".map-marker__halo")).toHaveCSS("opacity", "1");
+    await capture("desktop-search-halo");
+
+    await page.emulateMedia({ colorScheme: "dark" });
+    await capture("desktop-dark");
+    await page.emulateMedia({ colorScheme: "light" });
+    await capture("desktop-light");
+
+    await page.setViewportSize({ width: 820, height: 1024 });
+    await expect(woven).toBeVisible();
+    await capture("tablet-detail");
+
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(woven).toBeVisible();
+    await expect(marker).toBeVisible();
+    const mobileTouch = await marker.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return { width: box.width, height: box.height };
+    });
+    expect(mobileTouch.width).toBeGreaterThanOrEqual(44);
+    expect(mobileTouch.height).toBeGreaterThanOrEqual(44);
+    await capture("mobile-narrow");
+
+    // Geographic anchor remains bottom-centered after density/viewport changes.
+    const anchor = await marker.evaluate((element) => {
+      const style = getComputedStyle(element);
+      return {
+        transform: style.transform,
+        transformOrigin: style.transformOrigin,
+      };
+    });
+    expect(
+      anchor.transformOrigin === "50% 100%" ||
+        anchor.transform.includes("matrix"),
+    ).toBe(true);
   });
 });

@@ -58,7 +58,6 @@ class FakeElement {
   dataset: Record<string, string> = {};
   title = "";
   textContent = "";
-  innerHTML = "";
   type = "";
   src = "";
   alt = "";
@@ -67,6 +66,7 @@ class FakeElement {
   attributes = new Map<string, string>();
   style = new FakeStyle();
   private _className = "";
+  private _innerHTML = "";
 
   set className(value: string) {
     this._className = value;
@@ -79,6 +79,12 @@ class FakeElement {
 
   setAttribute(name: string, value: string) {
     this.attributes.set(name, value);
+    if (name.startsWith("data-")) {
+      const key = name
+        .slice(5)
+        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+      this.dataset[key] = value;
+    }
   }
 
   getAttribute(name: string) {
@@ -95,13 +101,79 @@ class FakeElement {
 
   append(...children: FakeElement[]) {
     this.children.push(...children);
+    this._innerHTML = "";
   }
 
-  querySelectorAll(): FakeElement[] {
-    // This double stores innerHTML as text and never parses it, so the woven
-    // body has no queryable descendants here. That the temporal opacity really
-    // lands on the existing proposal elements is proven in Playwright.
-    return [];
+  get firstChild(): FakeElement | null {
+    return this.children[0] ?? null;
+  }
+
+  removeChild(child: FakeElement): FakeElement {
+    const index = this.children.indexOf(child);
+    if (index >= 0) this.children.splice(index, 1);
+    return child;
+  }
+
+  set innerHTML(value: string) {
+    this._innerHTML = value;
+    this.children = [];
+    this.textContent = "";
+  }
+
+  get innerHTML(): string {
+    if (this.children.length === 0) return this._innerHTML;
+    return this.children.map((child) => child.outerHTML).join("");
+  }
+
+  get outerHTML(): string {
+    const attrs: string[] = [];
+    if (this._className) attrs.push(`class="${this._className}"`);
+    for (const [name, value] of this.attributes) {
+      attrs.push(`${name}="${value}"`);
+    }
+    if (this.title) attrs.push(`title="${this.title}"`);
+    const open = attrs.length ? `<span ${attrs.join(" ")}>` : "<span>";
+    const body =
+      this.children.length > 0
+        ? this.children.map((child) => child.outerHTML).join("")
+        : this.textContent || this._innerHTML;
+    return `${open}${body}</span>`;
+  }
+
+  querySelectorAll(selector = "*"): FakeElement[] {
+    const matches: FakeElement[] = [];
+    const visit = (node: FakeElement) => {
+      for (const child of node.children) {
+        if (selector === "*" || FakeElement.matches(child, selector)) {
+          matches.push(child);
+        }
+        visit(child);
+      }
+    };
+    visit(this);
+    return matches;
+  }
+
+  private static matches(node: FakeElement, selector: string): boolean {
+    if (selector === "*") return true;
+    if (selector.startsWith(".")) {
+      return node.classList.contains(selector.slice(1));
+    }
+    if (selector.startsWith("[") && selector.endsWith("]")) {
+      const body = selector.slice(1, -1);
+      const eq = body.indexOf("=");
+      if (eq < 0) return node.attributes.has(body) || body in node.dataset;
+      const name = body.slice(0, eq);
+      const raw = body.slice(eq + 1).replace(/^["']|["']$/g, "");
+      if (name.startsWith("data-")) {
+        const key = name
+          .slice(5)
+          .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
+        return node.dataset[key] === raw || node.attributes.get(name) === raw;
+      }
+      return node.attributes.get(name) === raw;
+    }
+    return false;
   }
 }
 
@@ -627,6 +699,35 @@ describe("NodesOverlay woven node marker", () => {
     expect(weaveRenderSignature(reassigned)).not.toBe(
       weaveRenderSignature(weave),
     );
+  });
+
+  it("rebuilds arm overlays when the label changes under a stable id", () => {
+    const base = makeWeave({
+      armOverlays: [{ arm: "northwest", id: "overlay-1", label: "Notiz A" }],
+    });
+    const renamed = makeWeave({
+      armOverlays: [
+        { arm: "northwest", id: "overlay-1", label: 'Notiz "B" & <C>' },
+      ],
+    });
+    expect(weaveRenderSignature(renamed)).not.toBe(weaveRenderSignature(base));
+
+    const overlay = makeOverlay();
+    overlay.update([makeNode("overlay-label", { weave: base })], true);
+    const root = overlay.getActiveMarker("overlay-label")?.element.children[0]
+      .children[0] as FakeElement | undefined;
+    const before = root?.querySelectorAll(".woven-node__arm-overlay")[0];
+    expect(before?.title).toBe("Notiz A");
+    expect(before?.getAttribute("data-overlay-id")).toBe("overlay-1");
+
+    overlay.update([makeNode("overlay-label", { weave: renamed })], true);
+    const after = root?.querySelectorAll(".woven-node__arm-overlay")[0];
+    expect(after?.title).toBe('Notiz "B" & <C>');
+    expect(after?.getAttribute("data-overlay-id")).toBe("overlay-1");
+    // Attribute APIs must keep raw text — no HTML/script injection path.
+    expect(root?.innerHTML).not.toContain("<script");
+    expect(after?.getAttribute("title")).toBeNull();
+    expect(after?.title).toBe('Notiz "B" & <C>');
   });
 
   it("marks the conversation ring empty and invisible when no talks are active", () => {

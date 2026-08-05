@@ -137,8 +137,9 @@ export const WEAVE_ARMS: readonly WeaveArm[] = [
 
 /**
  * One topic that colours the body. Identity (`id`) is the full normalised topic
- * text (lowercased for case folding) — never a truncated display label.
- * At most four topics receive a primary arm; further topics stay in the model.
+ * text (`NFKC` + whitespace unify + trim) — never case-folded, never a
+ * truncated display label. At most four topics receive a primary arm; further
+ * topics stay in the model.
  */
 export interface WeaveThemeSegment {
   id: string;

@@ -177,7 +177,12 @@ test.describe("event-bound Faden motion", () => {
     await page.waitForFunction(() => {
       const map = window.__TEST_MAP__;
       return Boolean(
-        map?.getLayer("edges-layer") && map.getLayer("edge-motion-layer"),
+        map?.getLayer("edges-layer") &&
+        map.getLayer("edge-motion-layer-legacy") &&
+        map.getLayer("edge-motion-layer-proposal") &&
+        map.getLayer("edge-motion-layer-conversation") &&
+        map.getLayer("edge-motion-layer-knotting") &&
+        map.getLayer("edge-motion-layer-vote"),
       );
     });
 

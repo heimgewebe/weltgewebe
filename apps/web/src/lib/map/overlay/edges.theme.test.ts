@@ -97,10 +97,15 @@ describe("edge theme fallback", () => {
     expect(features.length).toBeGreaterThan(1);
     const palette = features[0].properties?.themeColors as string[];
     expect(palette.length).toBeGreaterThan(1);
-    expect(
-      new Set(features.map((feature) => feature.properties?.themeColor)).size,
-    ).toBe(palette.length);
+    const strandColors = features.map(
+      (feature) => feature.properties?.themeColor,
+    );
+    // Controlled braid: multiple strands, each colour drawn from the palette.
+    // Distinct topic identities may still hash to the same paint colour.
+    expect(new Set(strandColors).size).toBeGreaterThan(1);
+    expect(new Set(strandColors).size).toBeLessThanOrEqual(palette.length);
     for (const feature of features) {
+      expect(palette).toContain(feature.properties?.themeColor);
       expect(feature.properties?.themeColors).toEqual(palette);
       expect(feature.properties?.fadenType).toBe("legacy");
     }

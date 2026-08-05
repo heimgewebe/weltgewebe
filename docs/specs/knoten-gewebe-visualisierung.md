@@ -152,18 +152,24 @@ Diese Asymmetrie ist normativ und kein Nebeneffekt der Umsetzung.
 ## Themenidentität
 
 Die Identität eines Themas entsteht exakt aus
-`value.normalize('NFKC').replace(/\s+/g, ' ').trim()` und anschließender
-sprachlich stabiler Kleinschreibung. Vor Deduplizierung, Hashing, Segment-
-Identität und Farbzuordnung findet **keine** Präfixentfernung und keine Kürzung
-statt. Zwei lange Themen mit gleichem Präfix — etwa
+`value.normalize('NFKC').replace(/\s+/g, ' ').trim()`. Es folgt **keine**
+zusätzliche Kleinschreibung und keine generische Präfixentfernung. Vor
+Deduplizierung, Hashing, Segment-Identität und Farbzuordnung findet **keine**
+Kürzung statt. Zwei lange Themen mit gleichem Präfix — etwa
 `Nachbarschaftliche Lebensmittelversorgung Hamburg` und
 `Nachbarschaftliche Lebensmittelversorgung Hannover` — bleiben verschiedene
-Segmente mit eigener Farbe.
+Segmente mit eigener Farbe. Auch case-verschiedene normalisierte Themen
+(`Kunst` / `kunst`) bleiben getrennte Identitäten. Eine rein technische
+Ignorier-/Vergleichslogik darf case-insensitiv arbeiten, ohne die Identität zu
+falten.
 
-Bedeutungstragende Doppelpunkte (z. B. `Kunst: Öffentlicher Raum`) bleiben in
-Identität und Farbe vollständig erhalten. Ein rein technisches Namensraum-Präfix
-darf höchstens in der **finalen Anzeige** entfallen; Identität, Hash und Farbe
-behalten den vollständigen normalisierten Text.
+Bedeutungstragende Doppelpunkte (z. B. `Kunst: Öffentlicher Raum` oder
+`kunst:öffentlicher raum`) bleiben in Identität, Anzeige und Farbe vollständig
+erhalten. Nur ein explizit allowlisteter technischer Namensraum (aktuell
+`thema:`) darf höchstens in der **finalen Anzeige** entfallen; Identität, Hash
+und Farbe behalten den vollständigen normalisierten Text. Alle eindeutig
+normalisierten Themen bleiben im Modell; die visuelle Palette/X-Geometrie bleibt
+auf höchstens vier Primärfarben begrenzt.
 
 ## Schichten und Interaktion
 

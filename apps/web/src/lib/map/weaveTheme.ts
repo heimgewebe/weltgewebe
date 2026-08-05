@@ -31,11 +31,13 @@ export type WeaveEntity = MapEntityNode | MapEntityWebgemeindezentrum;
 export const WEAVE_TOPIC_DISPLAY_MAX_LENGTH = 42;
 
 /**
- * A purely technical namespace ("thema:kunst") is display noise and may be
- * dropped only for the final visible label. Identity, deduplication, hash,
- * colour and segment ids keep the full normalised text — including any colon.
+ * Only these exact technical namespaces may be stripped for the final visible
+ * label. Generic "word:" prefixes stay — meaningful topics such as
+ * `kunst:öffentlicher raum` must not lose their colon-bearing identity text.
+ * Identity, deduplication, hash, colour and segment ids always keep the full
+ * normalised text, including any colon.
  */
-const TECHNICAL_NAMESPACE_PREFIX = /^[a-z0-9][a-z0-9._-]{0,23}:(?=\S)/;
+const TECHNICAL_NAMESPACE_ALLOWLIST = new Set(["thema"]);
 
 /**
  * FNV-1a over Unicode code points. Iterating the string already yields full
@@ -82,32 +84,49 @@ function takeGraphemes(value: string, maxGraphemes: number): string {
 
 /**
  * Canonical text of one topic: compatibility-normalised, whitespace-unified and
- * trimmed. No prefix stripping here — identity, hash, colour and segment ids
- * all consume this exact form (after case folding).
+ * trimmed. No prefix stripping and no case folding — identity, hash, colour and
+ * segment ids all consume this exact form.
  */
 export function normalizeWeaveTopicText(value: string): string {
   return value.normalize("NFKC").replace(/\s+/gu, " ").trim();
 }
 
 /**
- * Identity of one topic. Derived from the complete normalised text — never from
- * a shortened display form, and never after technical-namespace stripping.
- * Two long topics that share a prefix ("… Hamburg" / "… Hannover") stay apart.
+ * Identity of one topic. Exact user contract:
+ * `value.normalize('NFKC').replace(/\s+/g, ' ').trim()`.
+ * Never shortened, never case-folded, never prefix-stripped. Ignore/compare
+ * helpers may still fold case separately.
  */
 export function weaveTopicIdentity(label: string): string {
-  return normalizeWeaveTopicText(label).toLocaleLowerCase("de-DE");
+  return normalizeWeaveTopicText(label);
+}
+
+/** Case-insensitive membership in the technical ignore set only. */
+function isIgnoredThemeIdentity(identity: string): boolean {
+  return IGNORED_THEMES.has(identity.toLocaleLowerCase("de-DE"));
+}
+
+/**
+ * Drop only an allowlisted technical namespace for display. Meaningful colons
+ * (`Kunst: Öffentlicher Raum`, `kunst:öffentlicher raum`) stay intact.
+ */
+function stripAllowlistedTechnicalNamespace(value: string): string {
+  const colon = value.indexOf(":");
+  if (colon <= 0) return value;
+  const namespace = value.slice(0, colon);
+  if (!TECHNICAL_NAMESPACE_ALLOWLIST.has(namespace)) return value;
+  const remainder = value.slice(colon + 1).trim();
+  return remainder || value;
 }
 
 /**
  * Shortening is a late presentation decision and carries no identity.
- * Only at this stage may a pure technical namespace prefix be dropped and the
+ * Only at this stage may an allowlisted technical namespace be dropped and the
  * remaining grapheme clusters truncated for the visible label.
  */
 export function weaveTopicDisplayLabel(label: string): string {
   const normalised = normalizeWeaveTopicText(label);
-  const withoutNoise = normalised
-    .replace(TECHNICAL_NAMESPACE_PREFIX, "")
-    .trim();
+  const withoutNoise = stripAllowlistedTechnicalNamespace(normalised);
   const display = withoutNoise || normalised;
   if (countGraphemes(display) <= WEAVE_TOPIC_DISPLAY_MAX_LENGTH) return display;
   const body = takeGraphemes(
@@ -118,9 +137,9 @@ export function weaveTopicDisplayLabel(label: string): string {
 }
 
 /**
- * Full normalised topic texts, deduplicated by identity, never truncated.
- * The model may keep more than four topics; the X core later compresses the
- * visual to at most four primary arm colours.
+ * Full normalised topic texts, deduplicated by identity, never truncated and
+ * never hard-capped. The model keeps every distinct topic; the X core later
+ * compresses the visual to at most four primary arm colours.
  */
 export function weaveTopics(entity: WeaveEntity): string[] {
   const raw: Array<string | null | undefined> =
@@ -133,10 +152,9 @@ export function weaveTopics(entity: WeaveEntity): string[] {
     if (typeof value !== "string") continue;
     const label = normalizeWeaveTopicText(value);
     const key = weaveTopicIdentity(label);
-    if (!label || IGNORED_THEMES.has(key) || seen.has(key)) continue;
+    if (!label || isIgnoredThemeIdentity(key) || seen.has(key)) continue;
     seen.add(key);
     result.push(label);
-    if (result.length === 16) break;
   }
   return result.length ? result : ["Gemeingut"];
 }
