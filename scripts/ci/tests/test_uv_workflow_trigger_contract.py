@@ -37,6 +37,33 @@ class UvWorkflowTriggerContractTest(unittest.TestCase):
         )
 
 
+    def test_oci_mirror_publish_job_uses_locked_uv_tooling(self) -> None:
+        text = (ROOT / ".github/workflows/kubernetes-proof-oci-mirror.yml").read_text(
+            encoding="utf-8"
+        )
+        publish_job = text.split("\n  publish:\n", 1)[1].split(
+            "\n  verify-read-access:\n", 1
+        )[0]
+        self.assertIn('python-version-file: ".python-version"', publish_job)
+        self.assertNotIn('python-version: "3.10"', publish_job)
+        self.assertIn(
+            "uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990",
+            publish_job,
+        )
+        self.assertIn("uv sync --project tools/py --locked", publish_job)
+        self.assertIn(
+            "uv run --project tools/py --locked python scripts/platform/publish_oci_mirror.py validate",
+            publish_job,
+        )
+        self.assertIn(
+            "uv run --project tools/py --locked python scripts/platform/publish_oci_mirror.py publish",
+            publish_job,
+        )
+        self.assertNotRegex(
+            publish_job, r"(?m)^[ \t]*python[ \t]+scripts/platform/"
+        )
+
+
     def test_core_guard_job_bootstraps_uv_before_fixture_suites(self) -> None:
         text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         guard_job = text.split("\n  guard-tests:\n", 1)[1].split("\n  ci:\n", 1)[0]
