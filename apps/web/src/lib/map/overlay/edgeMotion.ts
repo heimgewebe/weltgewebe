@@ -3,6 +3,7 @@ import type {
   LineLayerSpecification,
   Map as MapLibreMap,
 } from "maplibre-gl";
+import { isValidMapCoordinate } from "$lib/map/coordinates";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { EDGE_THREAD_LAYER_IDS, EDGE_VISUAL_STYLE } from "./edges";
 
@@ -110,10 +111,8 @@ export function resolveEdgeMotionInput(
   const target = pointMap.get(edge.target_id);
   if (!source || !target) return null;
   if (
-    !Number.isFinite(source.lon) ||
-    !Number.isFinite(source.lat) ||
-    !Number.isFinite(target.lon) ||
-    !Number.isFinite(target.lat)
+    !isValidMapCoordinate(source.lon, source.lat) ||
+    !isValidMapCoordinate(target.lon, target.lat)
   ) {
     return null;
   }

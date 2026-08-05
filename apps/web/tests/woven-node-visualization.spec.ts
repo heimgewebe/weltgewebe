@@ -294,8 +294,12 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(marker).toHaveCount(0);
     expect(await mapLineCount()).toBe(0);
 
-    // The thread expires while it is filtered away.
-    await page.clock.fastForward(120_000);
+    // Advance wall time without firing the unrelated map-init watchdog, then
+    // run the same projection refresh used by the production interval.
+    await page.clock.setSystemTime(new Date(now.getTime() + 120_000));
+    await page.evaluate(() =>
+      (window as any).__TEST_REFRESH_EDGE_PROJECTION__(),
+    );
     expect(await mapLineCount()).toBe(0);
 
     // Showing it again must read the current time, not the one from before.
@@ -353,8 +357,12 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     );
     expect(opacityBefore).toBeGreaterThan(0);
 
-    // Well past one projection step, so the linear decay is clearly visible.
-    await page.clock.fastForward(3_600_000);
+    // Move the projection instant without firing the unrelated map-init
+    // watchdog, then invoke the same production refresh used by the interval.
+    await page.clock.setSystemTime(new Date(now.getTime() + 3_600_000));
+    await page.evaluate(() =>
+      (window as any).__TEST_REFRESH_EDGE_PROJECTION__(),
+    );
 
     await expect
       .poll(() =>

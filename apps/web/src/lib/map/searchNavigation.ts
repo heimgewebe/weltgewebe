@@ -1,4 +1,5 @@
 import type { AuthStatus } from "$lib/auth/store";
+import { hasRenderableMapPosition } from "$lib/map/coordinates";
 import type { MapEntityViewModel } from "$lib/map/types";
 import type { MapUrlFocus } from "$lib/map/urlState";
 
@@ -32,18 +33,6 @@ export interface SearchDirectionIndicator {
   y: number;
   angle: number;
   side: IndicatorSide;
-}
-
-function hasRenderablePosition(item: MapEntityViewModel | undefined): boolean {
-  return Boolean(
-    item &&
-    Number.isFinite(item.lat) &&
-    Number.isFinite(item.lon) &&
-    item.lat >= -90 &&
-    item.lat <= 90 &&
-    item.lon >= -180 &&
-    item.lon <= 180,
-  );
 }
 
 function findFocusTarget(
@@ -80,7 +69,7 @@ export function resolveInitialMapCamera(
   focusedZoom = 14,
 ): MapCameraTarget {
   const focusTarget = findFocusTarget(markers, focus);
-  if (hasRenderablePosition(focusTarget)) {
+  if (hasRenderableMapPosition(focusTarget)) {
     return {
       center: [focusTarget!.lon, focusTarget!.lat],
       zoom: Math.max(fallbackZoom, focusedZoom),
@@ -89,7 +78,7 @@ export function resolveInitialMapCamera(
   }
 
   const ownGarnrolle = findOwnGarnrolle(markers, auth);
-  if (hasRenderablePosition(ownGarnrolle)) {
+  if (hasRenderableMapPosition(ownGarnrolle)) {
     return {
       center: [ownGarnrolle!.lon, ownGarnrolle!.lat],
       zoom: Math.max(fallbackZoom, focusedZoom),

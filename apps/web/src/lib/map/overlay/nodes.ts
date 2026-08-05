@@ -1,4 +1,5 @@
 import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
+import { hasRenderableMapPosition } from "$lib/map/coordinates";
 import type { MapEntityViewModel } from "$lib/map/types";
 import type { WeaveEntity } from "$lib/map/weaveTheme";
 import "./markers.css";
@@ -6,17 +7,6 @@ import { garnrolleIcon } from "$lib/ui/icons";
 import { weaveRuntime, type WeaveRuntime } from "./weaveRuntime";
 
 export { projectMarkersForWeave } from "./weaveRuntime";
-
-function hasRenderablePosition(item: MapEntityViewModel): boolean {
-  return (
-    Number.isFinite(item.lat) &&
-    Number.isFinite(item.lon) &&
-    item.lat >= -90 &&
-    item.lat <= 90 &&
-    item.lon >= -180 &&
-    item.lon <= 180
-  );
-}
 
 export function diffSearchMatchIds(
   previous: ReadonlySet<string>,
@@ -119,7 +109,7 @@ export class NodesOverlay {
     const currentIds = new Set<string>();
 
     for (const item of points) {
-      if (!hasRenderablePosition(item)) {
+      if (!hasRenderableMapPosition(item)) {
         const existing = this.activeMarkers.get(item.id);
         if (existing) {
           existing.cleanup();

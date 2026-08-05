@@ -2,6 +2,7 @@ import { get } from "svelte/store";
 import { page } from "$app/stores";
 import type { AuthStatus } from "$lib/auth/store";
 import { authStore } from "$lib/auth/store";
+import { hasRenderableMapPosition } from "$lib/map/coordinates";
 import type { MapEntityViewModel } from "$lib/map/types";
 import { parseMapUrlState } from "$lib/map/urlState";
 import type { Map as MapLibreMap } from "maplibre-gl";
@@ -63,12 +64,7 @@ export function installAuthCameraConvergence(
       (marker) =>
         marker.type === "garnrolle" &&
         marker.id === status.account_id &&
-        Number.isFinite(marker.lat) &&
-        marker.lat >= -90 &&
-        marker.lat <= 90 &&
-        Number.isFinite(marker.lon) &&
-        marker.lon >= -180 &&
-        marker.lon <= 180,
+        hasRenderableMapPosition(marker),
     );
     if (!own) return;
     alreadyApplied = true;

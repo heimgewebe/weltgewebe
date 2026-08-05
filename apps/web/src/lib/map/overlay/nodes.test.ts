@@ -594,6 +594,31 @@ describe("NodesOverlay woven node marker", () => {
     );
   });
 
+  it("marks the conversation ring empty and invisible when no talks are active", () => {
+    const overlay = makeOverlay();
+    overlay.update(
+      [
+        makeNode("quiet", {
+          weave: makeWeave({
+            conversationThreadCount: 0,
+            conversationOpacity: 0,
+          }),
+        }),
+      ],
+      true,
+    );
+    const root = overlay.getActiveMarker("quiet")?.element.children[0]
+      .children[0] as HTMLElement | undefined;
+    expect(root?.innerHTML).toContain(
+      'class="woven-node__conversation is-empty" data-zone="conversation"',
+    );
+    expect(
+      (root?.style as unknown as Record<string, string>)[
+        "--weave-conversation-opacity"
+      ],
+    ).toBe("0");
+  });
+
   it("rebuilds the woven body only for structural change, not for ageing", () => {
     const overlay = makeOverlay();
     const weave = makeWeave({

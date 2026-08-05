@@ -64,6 +64,13 @@
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
   import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
+  import { hasRenderableMapPosition } from "$lib/map/coordinates";
+  import { areMapEdgesVisuallyEnabled } from "$lib/map/edgeVisibility";
+  import { createResettableLazyImport } from "$lib/map/lazyImport";
+  import {
+    resolveMapInitFailure,
+    scheduleMapInitTimeout,
+  } from "$lib/map/mapInitFailure";
   import { registerPmtilesProtocol } from "$lib/map/pmtilesProtocol";
   import { getGarnrolleMarkerScale } from "$lib/map/markerScale";
   import { buildMapScene } from "$lib/map/scene";
@@ -207,20 +214,36 @@
 
   type ContextPanelModule =
     typeof import("$lib/components/ContextPanel.svelte");
+  // Keep a handle so the template can retain a successful mount after close,
+  // while still resetting rejected promises for a later retry.
   let contextPanelPromise: Promise<ContextPanelModule> | null = null;
+  const loadContextPanelModule = createResettableLazyImport(
+    () => import("$lib/components/ContextPanel.svelte"),
+  );
 
   function loadContextPanel(): Promise<ContextPanelModule> {
-    contextPanelPromise ??= import("$lib/components/ContextPanel.svelte");
-    return contextPanelPromise;
+    const promise = loadContextPanelModule();
+    contextPanelPromise = promise;
+    void promise.catch(() => {
+      if (contextPanelPromise === promise) contextPanelPromise = null;
+    });
+    return promise;
   }
 
   type SearchOverlayModule =
     typeof import("$lib/components/SearchOverlay.svelte");
   let searchOverlayPromise: Promise<SearchOverlayModule> | null = null;
+  const loadSearchOverlayModule = createResettableLazyImport(
+    () => import("$lib/components/SearchOverlay.svelte"),
+  );
 
   function loadSearchOverlay(): Promise<SearchOverlayModule> {
-    searchOverlayPromise ??= import("$lib/components/SearchOverlay.svelte");
-    return searchOverlayPromise;
+    const promise = loadSearchOverlayModule();
+    searchOverlayPromise = promise;
+    void promise.catch(() => {
+      if (searchOverlayPromise === promise) searchOverlayPromise = null;
+    });
+    return promise;
   }
 
   let mapContainer: HTMLDivElement | null = null;
@@ -228,6 +251,8 @@
   let mapStyleReady = false;
   let isLoading = true;
   let mapInitFailed = false;
+  // True only after MapLibre emitted its first successful `load`.
+  let mapHasLoaded = false;
   let edgeProjectionNow = Date.now();
   let edgeExpiryTimeout: ReturnType<typeof setTimeout> | undefined;
   let lastFocusedElement: HTMLElement | null = null;
@@ -359,10 +384,12 @@
       searchDirectionIndicators = [];
       return;
     }
-    const projected = filteredResults.map((item) => ({
-      item,
-      point: map!.project([item.lon, item.lat]),
-    }));
+    const projected = filteredResults
+      .filter((item) => hasRenderableMapPosition(item))
+      .map((item) => ({
+        item,
+        point: map!.project([item.lon, item.lat]),
+      }));
     searchDirectionIndicators = deriveSearchDirectionIndicators(
       projected,
       bounds,
@@ -421,11 +448,20 @@
     if (map) tick().then(refreshSearchViewportObservers);
   }
 
+  // Lines require visible node endpoints. Hiding nodes must therefore hide
+  // lines as well; otherwise GeoJSON edges float without their markers.
+  $: edgesVisuallyEnabled = areMapEdgesVisuallyEnabled(
+    $view.showEdges,
+    $view.showNodes,
+  );
+
   function syncEdgeMotionProjection() {
     if (!edgeMotion) return;
     edgeMotion.syncCanonicalEdges(scene.edges);
     edgeMotion.setVisibleEdgeIds(
-      $view.showEdges ? new Set(lineEdges.map((edge) => edge.id)) : new Set(),
+      edgesVisuallyEnabled
+        ? new Set(lineEdges.map((edge) => edge.id))
+        : new Set(),
     );
   }
 
@@ -437,7 +473,7 @@
       map,
       lineEdges,
       projectedMarkersData,
-      $view.showEdges,
+      edgesVisuallyEnabled,
       edgeProjectionNow,
     );
     syncEdgeMotionProjection();
@@ -485,18 +521,10 @@
     // the route only keeps the map-side concern (flyTo).
     selectMapEntity(item);
 
-    const lat = item.lat;
-    const lon = item.lon;
-    if (
-      map &&
-      typeof lat === "number" &&
-      typeof lon === "number" &&
-      Number.isFinite(lat) &&
-      Number.isFinite(lon)
-    ) {
+    if (map && hasRenderableMapPosition(item)) {
       const currentZoom = map.getZoom();
       map.flyTo({
-        center: [lon, lat],
+        center: [item.lon, item.lat],
         zoom: Math.max(currentZoom, 14),
         speed: 0.8,
         curve: 1,
@@ -757,6 +785,9 @@
     // build a map, bind listeners and register protocols that nobody ever
     // removes. Every await in the initialiser therefore re-checks this flag.
     let destroyed = false;
+    // A terminal init failure owns this mount. Late async imports may settle,
+    // but they must not construct or revive a map after the failure UI won.
+    let mapInitTerminated = false;
     // One minute changes a seven-day linear opacity by less than 0.0001.
     // Exact expiry remains a separate timeout and is therefore not rounded.
     const edgeDecayInterval = window.setInterval(
@@ -773,6 +804,67 @@
     // Hoisted so the cleanup can clear it; otherwise a component destroyed
     // before the style loads leaves a 10s timer pointing at dead state.
     let loadingTimeout: ReturnType<typeof setTimeout> | undefined = undefined;
+
+    function teardownMapRuntime() {
+      cleanupKomposition?.();
+      cleanupKomposition = undefined;
+      cleanupFocus?.();
+      cleanupFocus = undefined;
+      unsubscribeSysState?.();
+      unsubscribeSysState = undefined;
+      cleanupAuthCamera?.();
+      cleanupAuthCamera = undefined;
+      searchViewportResizeObserver?.disconnect();
+      searchViewportResizeObserver = null;
+      if (searchDirectionFrame !== null) {
+        window.cancelAnimationFrame(searchDirectionFrame);
+        searchDirectionFrame = null;
+      }
+      searchDirectionIndicators = [];
+      nodesOverlay?.destroy();
+      nodesOverlay = null;
+      projectMarkersForWeave = null;
+      edgeMotion?.destroy();
+      edgeMotion = null;
+      resolveMotionInput = null;
+      if (map) {
+        map.off("zoom", updateGarnrolleMarkerScale);
+        map.off("move", handleSearchMapMove);
+        map.off("resize", handleSearchMapResize);
+        map.off("styledata", handleMapStyleData);
+        map.off("idle", rehydrateMapOverlays);
+        if (typeof map.remove === "function") map.remove();
+        map = null;
+      }
+      mapStyleReady = false;
+      mapContainer?.removeEventListener("click", handleMarkerClick);
+      releasePmtilesProtocol?.();
+      releasePmtilesProtocol = undefined;
+    }
+
+    const failMapInit = (
+      reason: Parameters<typeof resolveMapInitFailure>[1],
+      error?: unknown,
+    ) => {
+      if (destroyed || mapInitTerminated) return;
+      if (resolveMapInitFailure(mapHasLoaded, reason) !== "fail") {
+        if (error !== undefined) {
+          console.error("Nicht-terminaler Kartenfehler", error);
+        }
+        return;
+      }
+      if (error !== undefined) {
+        console.error("Karteninitialisierung fehlgeschlagen", error);
+      }
+      if (loadingTimeout !== undefined) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = undefined;
+      }
+      mapInitTerminated = true;
+      teardownMapRuntime();
+      isLoading = false;
+      mapInitFailed = true;
+    };
     const handleSearchMapMove = () => {
       authCameraMoved = true;
       scheduleSearchDirectionIndicators();
@@ -789,7 +881,7 @@
         map,
         lineEdges,
         projectedMarkersData,
-        $view.showEdges,
+        edgesVisuallyEnabled,
         edgeProjectionNow,
       );
       syncEdgeMotionProjection();
@@ -833,7 +925,7 @@
         import("$lib/map/overlay/edgeMotion"),
       ]);
       const initialAuth = { authenticated: false };
-      if (destroyed) return;
+      if (destroyed || mapInitTerminated) return;
       projectMarkersForWeave = nodesModule.projectMarkersForWeave;
       const container = mapContainer;
       if (!container) {
@@ -854,7 +946,7 @@
       // deleting the handler that a newer map already installed.
       if (currentBasemap.mode === "local-sovereign") {
         const pmtiles = await import("pmtiles");
-        if (destroyed) return;
+        if (destroyed || mapInitTerminated) return;
         releasePmtilesProtocol = registerPmtilesProtocol(
           maplibregl,
           new pmtiles.Protocol().tile,
@@ -896,15 +988,21 @@
       edgeMotion = new edgeMotionModule.EdgeMotionController(map);
       updateGarnrolleMarkerScale();
       map.on("zoom", updateGarnrolleMarkerScale);
-      void import("$lib/map/authCameraConvergence").then((module) => {
-        if (!destroyed && map) {
-          cleanupAuthCamera = module.installAuthCameraConvergence(
-            map,
-            markersData,
-            () => authCameraMoved,
-          );
-        }
-      });
+      void import("$lib/map/authCameraConvergence")
+        .then((module) => {
+          if (!destroyed && map) {
+            cleanupAuthCamera = module.installAuthCameraConvergence(
+              map,
+              markersData,
+              () => authCameraMoved,
+            );
+          }
+        })
+        .catch((error) => {
+          // Secondary path: never fail the whole map for a delayed auth camera
+          // helper, but do not leave an unhandled rejection either.
+          failMapInit("auth-camera", error);
+        });
       map.addControl(
         new maplibregl.NavigationControl({ showZoom: true }),
         "bottom-right",
@@ -927,21 +1025,29 @@
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
       map.on("resize", handleSearchMapResize);
 
-      loadingTimeout = setTimeout(() => {
-        isLoading = false;
-      }, 10000);
-
       const finishLoading = () => {
-        clearTimeout(loadingTimeout);
+        if (destroyed || mapInitTerminated) return;
+        mapHasLoaded = true;
+        if (loadingTimeout !== undefined) {
+          clearTimeout(loadingTimeout);
+          loadingTimeout = undefined;
+        }
         isLoading = false;
         mapStyleReady = true;
         invalidateSearchViewportGeometry();
       };
 
       map.once("load", finishLoading);
-      map.on("error", () => {
-        clearTimeout(loadingTimeout);
-        isLoading = false;
+      map.on("error", (event) => {
+        const error =
+          event && typeof event === "object" && "error" in event
+            ? (event as { error?: unknown }).error
+            : event;
+        if (mapHasLoaded) {
+          failMapInit("post-load-error", error);
+          return;
+        }
+        failMapInit("maplibre-error", error);
       });
 
       // Expose map for testing
@@ -950,6 +1056,8 @@
         (window as any).__TEST_SET_ACTIVE_FILTERS__ = (types: string[]) => {
           activeFilters.set(new Set(types));
         };
+        (window as any).__TEST_REFRESH_EDGE_PROJECTION__ =
+          refreshEdgeProjection;
         (window as any).__TEST_EDGE_MOTION__ = {
           start: (edgeId: string, phase: "creating" | "releasing") =>
             animateEdgeById(edgeId, phase),
@@ -964,19 +1072,22 @@
       }
     }
 
-    // An early dynamic import can fail (offline, a chunk that no longer exists
-    // after a deploy). Without central handling the rejection is silent and the
-    // loading overlay stays up forever, so failure becomes a visible, readable
-    // state with a way out.
+    // Arm before the first await/import inside initialiseMap so a hung
+    // maplibre/nodes/edgeMotion/pmtiles chunk still hits the fail-closed
+    // deadline instead of leaving the loading overlay forever.
+    loadingTimeout = scheduleMapInitTimeout(() => {
+      failMapInit(
+        "timeout",
+        new Error("Kartenladen hat das Zeitlimit überschritten"),
+      );
+    });
+
+    // An early dynamic import or Map constructor can fail (offline, a chunk
+    // that no longer exists after a deploy). Without central handling the
+    // rejection is silent and the loading overlay stays up forever, so failure
+    // becomes a visible, readable state with a way out.
     void initialiseMap().catch((error) => {
-      console.error("Karteninitialisierung fehlgeschlagen", error);
-      if (destroyed) return;
-      if (loadingTimeout !== undefined) {
-        clearTimeout(loadingTimeout);
-        loadingTimeout = undefined;
-      }
-      isLoading = false;
-      mapInitFailed = true;
+      failMapInit(mapHasLoaded ? "post-load-error" : "import", error);
     });
 
     return () => {
@@ -996,36 +1107,10 @@
       if (shouldExposeTestMap) {
         delete (window as any).__TEST_MAP__;
         delete (window as any).__TEST_SET_ACTIVE_FILTERS__;
+        delete (window as any).__TEST_REFRESH_EDGE_PROJECTION__;
         delete (window as any).__TEST_EDGE_MOTION__;
       }
-      cleanupKomposition?.();
-      cleanupFocus?.();
-      unsubscribeSysState?.();
-      cleanupAuthCamera?.();
-      searchViewportResizeObserver?.disconnect();
-      searchViewportResizeObserver = null;
-      if (searchDirectionFrame !== null) {
-        window.cancelAnimationFrame(searchDirectionFrame);
-        searchDirectionFrame = null;
-      }
-      searchDirectionIndicators = [];
-      nodesOverlay?.destroy();
-      nodesOverlay = null;
-      projectMarkersForWeave = null;
-      edgeMotion?.destroy();
-      edgeMotion = null;
-      resolveMotionInput = null;
-      if (map) {
-        map.off("zoom", updateGarnrolleMarkerScale);
-        map.off("move", handleSearchMapMove);
-        map.off("resize", handleSearchMapResize);
-        map.off("styledata", handleMapStyleData);
-        map.off("idle", rehydrateMapOverlays);
-        if (typeof map.remove === "function") map.remove();
-      }
-      mapContainer?.removeEventListener("click", handleMarkerClick);
-      releasePmtilesProtocol?.();
-      releasePmtilesProtocol = undefined;
+      teardownMapRuntime();
     };
   });
 </script>
@@ -1112,8 +1197,8 @@
   {#if mapInitFailed}
     <div class="map-init-error" role="alert" data-testid="map-init-error">
       <p>
-        Die Karte konnte nicht geladen werden. Möglicherweise ist die
-        Verbindung unterbrochen oder eine Programmdatei fehlt.
+        Die Karte konnte nicht geladen werden. Möglicherweise ist die Verbindung
+        unterbrochen oder eine Programmdatei fehlt.
       </p>
       <button
         type="button"
@@ -1205,7 +1290,8 @@
     background: var(--bg);
     display: grid;
     place-items: center;
-    z-index: var(--z-map-loading);
+    /* Keep the map state above the canvas but below persistent navigation. */
+    z-index: calc(var(--z-map-direction) - 10);
     transition: opacity 0.3s;
   }
   .spinner {
@@ -1234,7 +1320,8 @@
     gap: 16px;
     padding: 24px;
     text-align: center;
-    z-index: var(--z-map-loading);
+    /* A failed map must not make settings, messages or recovery tools unreachable. */
+    z-index: calc(var(--z-map-direction) - 10);
   }
   .map-init-error p {
     margin: 0;

@@ -4,6 +4,7 @@ import type {
   LineLayerSpecification,
   Map as MapLibreMap,
 } from "maplibre-gl";
+import { isValidMapCoordinate } from "$lib/map/coordinates";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
@@ -126,7 +127,15 @@ export function buildEdgeFeatures(
 
     const source = pointMap.get(edge.source_id);
     const target = pointMap.get(edge.target_id);
+    // Missing or geographically invalid endpoints must never produce a line;
+    // MapLibre would still draw NaN/out-of-range coordinates as garbage.
     if (!source || !target) continue;
+    if (
+      !isValidMapCoordinate(source.lon, source.lat) ||
+      !isValidMapCoordinate(target.lon, target.lat)
+    ) {
+      continue;
+    }
 
     const themeColor = primaryThemeColor(target);
     features.push({
@@ -227,13 +236,16 @@ export function updateEdges(
     features,
   };
 
+  // Always install the canonical source and every typed layer, even with an
+  // empty FeatureCollection. Otherwise a style switch while no lines are
+  // visible never rehydrates the full layer set and hasCompleteEdgeThreadStyle
+  // keeps scheduling forever.
   if (source) {
     source.setData(geoJsonData);
-    ensureEdgeLayers(map, sourceId);
-  } else if (features.length > 0) {
+  } else {
     map.addSource(sourceId, { type: "geojson", data: geoJsonData });
-    ensureEdgeLayers(map, sourceId);
   }
+  ensureEdgeLayers(map, sourceId);
 }
 
 function ensureEdgeLayers(map: MapLibreMap, sourceId: string) {

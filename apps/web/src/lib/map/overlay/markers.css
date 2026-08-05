@@ -162,9 +162,11 @@
   filter: saturate(0.92) drop-shadow(0 0 1px rgba(48, 31, 22, 0.45));
 }
 
+/* No active conversation threads: the ring must be semantically invisible,
+ * not a faint grey placeholder that still reads as a conversation band. */
 .woven-node__conversation.is-empty {
-  opacity: 0.2;
-  filter: grayscale(0.8);
+  opacity: 0;
+  visibility: hidden;
 }
 
 .woven-node__proposal-arc {

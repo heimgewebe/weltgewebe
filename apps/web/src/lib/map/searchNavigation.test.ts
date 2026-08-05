@@ -77,6 +77,34 @@ describe("resolveInitialMapCamera", () => {
       },
     );
   });
+
+  it("ignores focus targets with invalid coordinates", () => {
+    const invalidFocus = [
+      {
+        type: "node",
+        id: "focus-node",
+        title: "Ungültig",
+        kind: "Ort",
+        lat: Number.NaN,
+        lon: 11,
+        created_at: "2026-01-01T00:00:00Z",
+        tags: [],
+      },
+    ] as MapEntityViewModel[];
+    expect(
+      resolveInitialMapCamera(
+        invalidFocus,
+        guest,
+        { type: "node", id: "focus-node" },
+        [10, 53],
+        12,
+      ),
+    ).toEqual({
+      center: [10, 53],
+      zoom: 12,
+      source: "fallback",
+    });
+  });
 });
 
 describe("deriveSearchDirectionIndicators", () => {
