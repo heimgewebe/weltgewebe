@@ -4,8 +4,7 @@ import type {
   Map as MapLibreMap,
 } from "maplibre-gl";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
-import { EDGE_VISUAL_STYLE } from "./edges";
-import { LAYERS } from "./layers";
+import { EDGE_THREAD_LAYER_IDS, EDGE_VISUAL_STYLE } from "./edges";
 
 export const EDGE_MOTION_SOURCE = "edge-motion-source";
 export const EDGE_MOTION_LAYER = "edge-motion-layer";
@@ -474,7 +473,7 @@ export class EdgeMotionController {
 
   private applyStaticFilters(): void {
     const hiddenIds = this.hiddenIds();
-    for (const layerId of [LAYERS.EDGES_HALO_LAYER, LAYERS.EDGES_LAYER]) {
+    for (const layerId of EDGE_THREAD_LAYER_IDS) {
       if (!this.map.getLayer(layerId)) continue;
       if (!this.baseFilters.has(layerId)) {
         this.baseFilters.set(layerId, this.map.getFilter(layerId) ?? null);
