@@ -605,7 +605,10 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
               created_at: denseNode.created_at,
               updated_at: denseNode.created_at,
               tags: denseNode.tags,
-              location: { lat: denseNode.lat, lon: denseNode.lon },
+              location: {
+                lat: denseNode.location.lat,
+                lon: denseNode.location.lon,
+              },
             },
           ],
           mode: "mock",
