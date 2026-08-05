@@ -50,6 +50,9 @@ class UvWorkflowTriggerContractTest(unittest.TestCase):
         canonical_truth = "uv run --project tools/py --locked python -m unittest scripts.ci.tests.test_canonical_truth_contract -v"
         self.assertIn(canonical_truth, guard_job)
         self.assertNotIn("run: python3 -m unittest scripts.ci.tests.test_canonical_truth_contract -v", guard_job)
+        merge_governance = "uv run --project tools/py --locked python -m unittest scripts.quality.tests.test_review_governance -v"
+        self.assertIn(merge_governance, guard_job)
+        self.assertNotIn("run: python3 -m unittest scripts.quality.tests.test_review_governance -v", guard_job)
 
 
 if __name__ == "__main__":

@@ -218,7 +218,7 @@ jobs:
         run: python3 -m unittest scripts.ci.tests.test_convergence_adapter_contract -v
 
       - name: Validate merge governance contracts
-        run: python3 -m unittest scripts.quality.tests.test_review_governance -v
+        run: uv run --project tools/py --locked python -m unittest scripts.quality.tests.test_review_governance -v
 
   ci:
     needs: docs-changes
