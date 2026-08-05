@@ -3,6 +3,10 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import {
+  assertVercelLocalBasemapDelivery,
+  resolveBasemapModeForBuild,
+} from "./basemap-mode-resolve.mjs";
 
 // Build-time basemap configuration generator.
 //
@@ -12,6 +16,10 @@ import { fileURLToPath } from "node:url";
 //
 //   regional (default) -> style.json, Hamburg + Schleswig-Holstein aliases
 //   germany            -> style-germany.json, Germany alias
+//
+// When PUBLIC_BASEMAP_MODE is unset/empty and VERCEL=1, the generator selects
+// remote-style because Vercel does not ship the local basemap middleware or
+// static local style/PMTiles files. Outside Vercel the policy default remains.
 //
 // The public build identity also binds the generated frontend to the exact
 // source commit and style bytes used during its build.
@@ -46,18 +54,18 @@ if (
 }
 
 const rawMode = process.env.PUBLIC_BASEMAP_MODE;
-let mode;
-if (rawMode === undefined || rawMode === "") {
-  mode = policy.defaultMode;
-} else if (policy.allowedModes.includes(rawMode)) {
-  mode = rawMode;
-} else {
-  console.error(`ERROR: Invalid PUBLIC_BASEMAP_MODE='${rawMode}'.`);
-  console.error(
-    `       Allowed values: ${policy.allowedModes.join(", ")} (or unset for default: ${policy.defaultMode}).`,
-  );
+const isVercel = process.env.VERCEL === "1";
+const modeResolution = resolveBasemapModeForBuild({
+  rawMode,
+  defaultMode: policy.defaultMode,
+  allowedModes: policy.allowedModes,
+  isVercel,
+});
+if (!modeResolution.ok) {
+  console.error(`ERROR: ${modeResolution.error}`);
   process.exit(1);
 }
+const mode = modeResolution.mode;
 
 const rawVariant = process.env.PUBLIC_BASEMAP_VARIANT;
 let variant = DEFAULT_LOCAL_BASEMAP_VARIANT;
@@ -76,6 +84,29 @@ if (mode === "remote-style" && rawVariant) {
     "ERROR: PUBLIC_BASEMAP_VARIANT is only valid with PUBLIC_BASEMAP_MODE=local-sovereign.",
   );
   process.exit(1);
+}
+
+// Build/artifact contract: never let a Vercel build claim local-sovereign
+// without a delivered static style file (Vercel has no local-basemap middleware).
+if (mode === "local-sovereign") {
+  const styleFileName =
+    variant === "germany" ? "style-germany.json" : "style.json";
+  const deliveredStylePath = path.join(
+    webRoot,
+    "static",
+    "local-basemap",
+    styleFileName,
+  );
+  const delivery = assertVercelLocalBasemapDelivery({
+    mode,
+    isVercel,
+    styleDelivered: fs.existsSync(deliveredStylePath),
+    stylePath: `/local-basemap/${styleFileName}`,
+  });
+  if (!delivery.ok) {
+    console.error(`ERROR: ${delivery.error}`);
+    process.exit(1);
+  }
 }
 
 const requireCanonicalCommit = (value, source) => {

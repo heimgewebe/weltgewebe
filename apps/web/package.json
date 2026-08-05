@@ -47,7 +47,7 @@
     "pretest:proof:web-runtime": "pnpm run generate:basemap-config",
     "pretest:unit": "pnpm run generate:client-version && pnpm run generate:basemap-config",
     "test:unit": "vitest run",
-    "test:basemap-config": "node --test scripts/generate-basemap-config.test.mjs",
+    "test:basemap-config": "node --test scripts/generate-basemap-config.test.mjs scripts/basemap-mode-resolve.test.mjs",
     "test:pmtiles-validator": "node --test scripts/validate-pmtiles.test.mjs",
     "test:public-web-assets": "node --test scripts/generate-public-web-assets.test.mjs",
     "test:web-runtime-evidence": "node --test scripts/web-runtime-evidence.test.mjs",
