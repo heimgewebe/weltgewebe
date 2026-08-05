@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ STYLE_PATH = REPO / "map-style" / "style-germany.json"
 STYLE_DARK_PATH = REPO / "map-style" / "style-germany-dark.json"
 BASEMAP_MODULE = REPO / "apps" / "web" / "src" / "lib" / "map" / "basemap.ts"
 GENERATOR = REPO / "apps" / "web" / "scripts" / "generate-basemap-config.js"
+WORKFLOW = REPO / ".github" / "workflows" / "germany-basemap-rollout.yml"
 VITE_CONFIG = REPO / "apps" / "web" / "vite.config.ts"
 BUILD_SCRIPT = REPO / "scripts" / "basemap" / "build-germany-pmtiles.sh"
 PREPARE_SCRIPT = REPO / "scripts" / "basemap" / "prepare-germany-rollout.sh"
@@ -93,6 +95,10 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertEqual(
             self.style_dark["metadata"]["weltgewebe:colorScheme"], "dark"
         )
+        self.assertEqual(
+            self.style["metadata"]["weltgewebe:darkStyleSha256"],
+            hashlib.sha256(STYLE_DARK_PATH.read_bytes()).hexdigest(),
+        )
         self.assertIn(f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', module)
         self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_URL", module)
         self.assertIn("LOCAL_BASEMAP_GERMANY_STYLE_DARK_URL", module)
@@ -108,10 +114,20 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("PUBLIC_BASEMAP_VARIANT", generator)
         self.assertIn("source_commit", generator)
         self.assertIn("style_sha256", generator)
-        self.assertIn("style_dark_sha256", generator)
+        self.assertIn("verifyDarkStyleBinding", generator)
+        self.assertIn("weltgewebe:darkStyleSha256", generator)
         self.assertIn("style-germany-dark.json", generator)
         self.assertIn("PUBLIC_SOURCE_COMMIT", generator)
         self.assertIn("basemap-build.json", generator)
+
+    def test_germany_workflow_binds_the_dark_style_transitively(self) -> None:
+        workflow = WORKFLOW.read_text(encoding="utf-8")
+        self.assertGreaterEqual(
+            workflow.count('"map-style/style-germany-dark.json"'), 2
+        )
+        self.assertIn("EXPECTED_STYLE_DARK_SHA256", workflow)
+        self.assertIn('light_style["metadata"]["weltgewebe:darkStyleSha256"]', workflow)
+        self.assertNotIn('"style_dark_sha256":', workflow)
 
     def test_germany_proof_uses_versioned_files_without_switching_aliases(self) -> None:
         vite = VITE_CONFIG.read_text(encoding="utf-8")

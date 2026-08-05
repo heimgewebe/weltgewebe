@@ -5,7 +5,8 @@
     "weltgewebe:version": "0.4.0",
     "weltgewebe:variant": "germany",
     "weltgewebe:note": "Opt-in nationwide PMTiles source; production activation requires artifact and live runtime proof",
-    "weltgewebe:colorScheme": "light"
+    "weltgewebe:colorScheme": "light",
+    "weltgewebe:darkStyleSha256": "253bbbbdb0fadc932675585f48d27c86f9e41f421c5454a9e924e010b8e4fdf7"
   },
   "sources": {
     "basemap-germany": {

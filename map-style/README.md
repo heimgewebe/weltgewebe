@@ -15,6 +15,7 @@ To ensure total visual sovereignty and compliance (no silent vendor dependencies
 * Style version `0.4.0` renders `landcover` and `landuse` before water, roads, buildings and labels. Rural areas therefore remain recognizable instead of collapsing into the uniform background.
 * Light and dark basemaps are separate MapLibre style documents with the same sources and layer ids. Dark mode is a real palette, not a CSS filter. Semantic node/edge colours live in the overlay and are not part of these styles.
 * The web runtime requests the mutable style with its declared version as a query parameter and selects light/dark from `document.documentElement.dataset.colorScheme`. A style change must bump both `weltgewebe:version` and `LOCAL_BASEMAP_STYLE_VERSION`; CI rejects drift between them.
+* Each light style embeds the exact SHA-256 of its dark counterpart. The existing build identity hashes the light style, thereby transitively binding both style byte streams without changing the published identity schema; the generator fails closed on any mismatch.
 
 ## Structure
 

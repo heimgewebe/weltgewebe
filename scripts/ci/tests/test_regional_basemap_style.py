@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import unittest
 from pathlib import Path
@@ -77,6 +78,10 @@ class RegionalBasemapStyleTest(unittest.TestCase):
         )
         self.assertEqual(
             self.style_dark["metadata"]["weltgewebe:colorScheme"], "dark"
+        )
+        self.assertEqual(
+            self.style["metadata"]["weltgewebe:darkStyleSha256"],
+            hashlib.sha256(STYLE_DARK_PATH.read_bytes()).hexdigest(),
         )
         self.assertIn(
             f'LOCAL_BASEMAP_STYLE_VERSION = "{version}"', basemap_module
@@ -166,6 +171,18 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             {k: v.get("url") for k, v in self.style["sources"].items()},
             {k: v.get("url") for k, v in self.style_dark["sources"].items()},
         )
+
+    def test_visual_proofs_follow_the_shared_style_version(self) -> None:
+        proof_dir = REPO / "apps" / "web" / "tests" / "proofs"
+        for filename in (
+            "basemap-real-hamburg-visual.proof.ts",
+            "basemap-real-schleswig-holstein-visual.proof.ts",
+            "basemap-real-germany-visual.proof.ts",
+        ):
+            with self.subTest(filename=filename):
+                proof = (proof_dir / filename).read_text(encoding="utf-8")
+                self.assertIn("LOCAL_BASEMAP_STYLE_VERSION", proof)
+                self.assertNotIn("v=0.3.1", proof)
 
     def test_layer_ids_are_unique_and_sources_exist(self) -> None:
         sources = self.style["sources"]

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 import fs from "node:fs";
 import path from "node:path";
 import { mockListResponse } from "../fixtures/mockApi";
+import { LOCAL_BASEMAP_STYLE_VERSION } from "../../src/lib/map/basemap";
 
 /**
  * Visual Runtime Proof: real Schleswig-Holstein PMTiles via MapLibre.
@@ -186,7 +187,7 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
       await page.goto(`/map?proof=1&region=${REGION}&t=${Date.now()}`);
 
       const styleResponse = await page.request.get(
-        "/local-basemap/style.json?v=0.3.1",
+        `/local-basemap/style.json?v=${LOCAL_BASEMAP_STYLE_VERSION}`,
       );
       expect(styleResponse.status()).toBe(200);
       expect(styleResponse.headers()["content-type"] ?? "").toContain(
@@ -196,7 +197,9 @@ test.describe("Basemap Real Schleswig-Holstein Visual Runtime Proof", () => {
         metadata?: Record<string, string>;
         sources?: Record<string, { url?: string }>;
       };
-      expect(styleJson.metadata?.["weltgewebe:version"]).toBe("0.3.1");
+      expect(styleJson.metadata?.["weltgewebe:version"]).toBe(
+        LOCAL_BASEMAP_STYLE_VERSION,
+      );
       expect(styleJson.sources?.[SOURCE_ID]?.url).toBe(
         `pmtiles://${PMTILES_FILENAME}`,
       );

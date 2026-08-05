@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import fs from "node:fs";
 import path from "node:path";
 import { mockListResponse } from "../fixtures/mockApi";
+import { LOCAL_BASEMAP_STYLE_VERSION } from "../../src/lib/map/basemap";
 
 /**
  * Visual Runtime Proof: Real Germany PMTiles via MapLibre
@@ -324,7 +325,7 @@ test.describe("Basemap Real Germany Visual Runtime Proof", () => {
 
       // Preflight: style endpoint must exist and point to the local Germany PMTiles alias
       const styleResponse = await page.request.get(
-        "/local-basemap/style-germany.json?v=0.3.1",
+        `/local-basemap/style-germany.json?v=${LOCAL_BASEMAP_STYLE_VERSION}`,
       );
       expect(
         styleResponse.status(),
