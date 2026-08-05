@@ -51,10 +51,29 @@ export const EDGE_VISUAL_STYLE = {
 /**
  * Multi-colour WebGL line segments share exact endpoints. Round caps leave a
  * proven hairline seam between adjacent coloured features. Each interior join
- * therefore extends by this fraction of the full path length — a stable
- * geometric overlap, not a walking gradient.
+ * therefore extends by this fraction of the *local segment length* on the
+ * trailing (start) side only — a stable geometric overlap, not a share of the
+ * full path and not a walking gradient. Scaling to segment length keeps the
+ * visible colour band stable across short/long geometries and multi-colour
+ * braids; one-sided extension avoids double-sided order dominance.
  */
 export const THEME_SEGMENT_SEAM_OVERLAP = 0.012;
+
+/**
+ * Absolute progress-space overlap for one multi-colour braid with
+ * `segmentCount` equal segments. Always a fraction of the local segment
+ * length, never of the full path; zero for single-segment / mono-colour.
+ */
+export function themeSegmentSeamOverlapProgress(segmentCount: number): number {
+  if (!Number.isFinite(segmentCount) || segmentCount < 2) return 0;
+  const segmentLength = 1 / segmentCount;
+  // Hard cap: never more than a quarter of the segment so start stays strictly
+  // before end even if THEME_SEGMENT_SEAM_OVERLAP is raised aggressively.
+  return Math.min(
+    THEME_SEGMENT_SEAM_OVERLAP * segmentLength,
+    segmentLength * 0.25,
+  );
+}
 
 const EDGE_LAYER_VARIANTS = [
   {
@@ -165,8 +184,9 @@ function interpolateLngLat(
  * One theme stays a single solid feature. No rainbow blend and no extra layers.
  * Segment boundaries are fixed along the full path so motion clipping never
  * walks colour seams frame-by-frame. Adjacent multi-colour segments overlap by
- * {@link THEME_SEGMENT_SEAM_OVERLAP} of the full path to close proven WebGL
- * hairline joins under round line-caps.
+ * {@link themeSegmentSeamOverlapProgress} (fraction of local segment length,
+ * trailing/start side only) to close proven WebGL hairline joins under round
+ * line-caps without growing colour bands with full path length.
  */
 export function buildThemedLineSegments(
   source: [number, number],
@@ -184,16 +204,18 @@ export function buildThemedLineSegments(
   }
   // Two segments per colour so the repeating weave reads along the whole edge.
   const segmentCount = palette.length * 2;
+  const seamOverlap = themeSegmentSeamOverlapProgress(segmentCount);
   const segments: ThemedLineSegment[] = [];
   for (let index = 0; index < segmentCount; index += 1) {
     const t0 = index / segmentCount;
     const t1 = (index + 1) / segmentCount;
+    // One-sided: pull the start of each non-first segment back over the prior
+    // join only. Nominal ends stay exact so later paint order does not get a
+    // second, full-path-scaled invasion into the next colour.
     const start =
-      index === 0 ? t0 : Math.max(0, t0 - THEME_SEGMENT_SEAM_OVERLAP);
-    const end =
-      index === segmentCount - 1
-        ? t1
-        : Math.min(1, t1 + THEME_SEGMENT_SEAM_OVERLAP);
+      index === 0 ? t0 : Math.max(0, Math.min(t1, t0 - seamOverlap));
+    const end = t1;
+    if (!(start < end)) continue;
     segments.push({
       coordinates: [
         interpolateLngLat(source, target, start),
@@ -232,19 +254,18 @@ export function buildProgressClippedThemeSegments(
   }
 
   const segmentCount = full.length;
+  const seamOverlap = themeSegmentSeamOverlapProgress(segmentCount);
   const clipped: ThemedLineSegment[] = [];
   for (let index = 0; index < segmentCount; index += 1) {
     const t0 = index / segmentCount;
     const t1 = (index + 1) / segmentCount;
     if (bounded <= t0) break;
-    const nominalEnd = Math.min(bounded, t1);
-    // Backward overlap closes the prior join; never draw past `bounded`.
+    // One-sided backward overlap closes the prior join; never draw past
+    // `bounded` and never extend the nominal end into the next colour.
     const start =
-      index === 0 ? t0 : Math.max(0, t0 - THEME_SEGMENT_SEAM_OVERLAP);
-    const end =
-      nominalEnd >= t1 && index < segmentCount - 1
-        ? Math.min(bounded, t1 + THEME_SEGMENT_SEAM_OVERLAP)
-        : nominalEnd;
+      index === 0 ? t0 : Math.max(0, Math.min(t1, t0 - seamOverlap));
+    const end = Math.min(bounded, t1);
+    if (!(start < end)) continue;
     clipped.push({
       coordinates: [
         interpolateLngLat(source, target, start),

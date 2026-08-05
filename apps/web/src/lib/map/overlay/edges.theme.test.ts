@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { normalizeEdgeLifecycle } from "$lib/map/edgeLifecycle";
 import {
   buildEdgeFeatures,
+  buildProgressClippedThemeSegments,
   buildThemedLineSegments,
+  THEME_SEGMENT_SEAM_OVERLAP,
+  themeSegmentSeamOverlapProgress,
 } from "$lib/map/overlay/edges";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
 import { deriveEntityWeave } from "$lib/map/weaveModel";
@@ -152,6 +155,98 @@ describe("edge theme fallback", () => {
     // Endpoints of the full path remain exact; only interior joins overlap.
     expect(multi[0].coordinates[0]).toEqual([0, 0]);
     expect(multi.at(-1)?.coordinates[1]).toEqual([10, 0]);
+  });
+
+  it("bounds seam overlap to a fraction of local segment length, not full path", () => {
+    const palettes = [
+      ["#111111", "#222222"],
+      ["#111111", "#222222", "#333333", "#444444"],
+    ] as const;
+    const geometries: Array<[[number, number], [number, number]]> = [
+      [
+        [0, 0],
+        [1, 0],
+      ],
+      [
+        [0, 0],
+        [100, 0],
+      ],
+    ];
+
+    for (const colors of palettes) {
+      for (const [source, target] of geometries) {
+        const pathLength = target[0] - source[0];
+        const segments = buildThemedLineSegments(source, target, colors);
+        // Two braid units per colour (matches buildThemedLineSegments).
+        const segmentCount = colors.length * 2;
+        expect(segments).toHaveLength(segmentCount);
+
+        const segmentLength = pathLength / segmentCount;
+        const maxOverlap =
+          themeSegmentSeamOverlapProgress(segmentCount) * pathLength;
+        // Overlap must track segment length: 1.2% of segment, never 1.2% of path.
+        expect(maxOverlap).toBeCloseTo(
+          THEME_SEGMENT_SEAM_OVERLAP * segmentLength,
+          10,
+        );
+        // Distinct from the old full-path formula for multi-segment braids.
+        expect(maxOverlap).toBeLessThan(
+          THEME_SEGMENT_SEAM_OVERLAP * pathLength * 0.5,
+        );
+
+        expect(segments[0].coordinates[0]).toEqual(source);
+        expect(segments.at(-1)?.coordinates[1]).toEqual(target);
+
+        for (let index = 0; index < segments.length; index += 1) {
+          const [start, end] = segments[index].coordinates;
+          // No inverted or zero-length progress geometry.
+          expect(end[0]).toBeGreaterThan(start[0]);
+          expect(start[0]).toBeGreaterThanOrEqual(source[0] - 1e-12);
+          expect(end[0]).toBeLessThanOrEqual(target[0] + 1e-12);
+
+          const painted = end[0] - start[0];
+          // One-sided: at most segment length + local overlap.
+          expect(painted).toBeLessThanOrEqual(
+            segmentLength + maxOverlap + 1e-9,
+          );
+          // Never flood more than ~half a neighbour (hard cap is 0.25).
+          expect(painted).toBeLessThanOrEqual(segmentLength * 1.25 + 1e-9);
+
+          if (index > 0) {
+            const prevEnd = segments[index - 1].coordinates[1][0];
+            const currStart = start[0];
+            const overlap = prevEnd - currStart;
+            expect(overlap).toBeGreaterThan(0);
+            expect(overlap).toBeLessThanOrEqual(maxOverlap + 1e-9);
+          }
+
+          // Nominal end stays exact (one-sided start pullback only).
+          const nominalEnd =
+            source[0] + ((index + 1) / segmentCount) * pathLength;
+          expect(end[0]).toBeCloseTo(nominalEnd, 10);
+        }
+
+        // Progress clip must not invent negative/overflowing ranges.
+        for (const progress of [0.01, 0.25, 0.5, 0.75, 0.99, 1]) {
+          const clipped = buildProgressClippedThemeSegments(
+            source,
+            target,
+            colors,
+            progress,
+          );
+          const tip = source[0] + progress * pathLength;
+          for (const segment of clipped) {
+            const [start, end] = segment.coordinates;
+            expect(end[0]).toBeGreaterThan(start[0]);
+            expect(end[0]).toBeLessThanOrEqual(tip + 1e-9);
+            expect(start[0]).toBeGreaterThanOrEqual(source[0] - 1e-12);
+          }
+          if (progress >= 1) {
+            expect(clipped).toHaveLength(segmentCount);
+          }
+        }
+      }
+    }
   });
 
   it("keeps themeColor absent for Garnrollen", () => {
