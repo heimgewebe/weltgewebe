@@ -47,6 +47,9 @@ class UvWorkflowTriggerContractTest(unittest.TestCase):
         self.assertIn("uv sync --project tools/py --locked", guard_job)
         self.assertIn(fixture_step, guard_job)
         self.assertLess(guard_job.index(setup_uv), guard_job.index(fixture_step))
+        canonical_truth = "uv run --project tools/py --locked python -m unittest scripts.ci.tests.test_canonical_truth_contract -v"
+        self.assertIn(canonical_truth, guard_job)
+        self.assertNotIn("run: python3 -m unittest scripts.ci.tests.test_canonical_truth_contract -v", guard_job)
 
 
 if __name__ == "__main__":
