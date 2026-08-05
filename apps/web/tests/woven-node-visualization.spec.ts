@@ -31,10 +31,24 @@ function faden(
 }
 
 test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
-  test("renders the canonical zones, visible proposal-bound votes and topic-coloured threads", async ({
+  test("renders the diagonal X, zones, proposal-bound votes and topic-coloured threads", async ({
     page,
   }) => {
     await mockApiResponses(page);
+    // kind "Knoten" is ignored as a theme, so the two tags alone colour the arms.
+    const multiThemeNode = {
+      ...demoNodes[0],
+      tags: ["Natur", "Bildung"],
+      kind: "Knoten",
+    };
+    await page.route("**/api/nodes*", async (route) => {
+      const requestUrl = route.request().url();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockListResponse(requestUrl, [multiThemeNode])),
+      });
+    });
     const edges = [
       faden("knotting-a", ACCOUNT_A, "knotting", NODE_ID),
       faden(
@@ -68,23 +82,45 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       "data-zone-order",
       "knotting,conversation,proposal,vote",
     );
+    await expect(woven).toHaveAttribute("data-x-geometry", "diagonal");
     await expect(woven).toHaveAttribute("data-knotting-threads", "1");
     await expect(woven).toHaveAttribute("data-conversation-threads", "2");
     await expect(woven).toHaveAttribute("data-proposal-count", "2");
     await expect(woven).toHaveAttribute("data-vote-threads", "2");
+    await expect(woven.locator(".woven-node__arm")).toHaveCount(4);
     await expect(woven.locator('[data-zone="proposal"]')).toHaveCount(2);
     await expect(woven.locator('[data-zone="vote"]')).toHaveCount(2);
+    await expect(woven.locator(".woven-node__cross")).toHaveCount(0);
+
+    const armColors = await woven.evaluate((root) =>
+      Array.from(root.querySelectorAll<HTMLElement>(".woven-node__arm")).map(
+        (arm) => ({
+          arm: arm.dataset.arm,
+          color: arm.style.getPropertyValue("--arm-color").trim(),
+        }),
+      ),
+    );
+    expect(new Set(armColors.map((entry) => entry.color)).size).toBe(2);
+    const nw = armColors.find((entry) => entry.arm === "northwest")?.color;
+    const se = armColors.find((entry) => entry.arm === "southeast")?.color;
+    const ne = armColors.find((entry) => entry.arm === "northeast")?.color;
+    const sw = armColors.find((entry) => entry.arm === "southwest")?.color;
+    expect(nw).toBe(se);
+    expect(ne).toBe(sw);
+    expect(nw).not.toBe(ne);
 
     const rendered = await page.evaluate((nodeId) => {
       const map = (window as any).__TEST_MAP__;
       const source = map?.getSource("edges-source");
       const serialized = source?.serialize?.();
+      const root = document.querySelector(
+        `[data-testid="marker-node-${nodeId}"] .woven-node`,
+      ) as HTMLElement | null;
       return {
-        markerTheme: (
-          document.querySelector(
-            `[data-testid="marker-node-${nodeId}"] .woven-node`,
-          ) as HTMLElement | null
-        )?.style.getPropertyValue("--weave-primary"),
+        markerTheme: root?.style.getPropertyValue("--weave-primary"),
+        armColors: Array.from(
+          root?.querySelectorAll<HTMLElement>(".woven-node__arm") ?? [],
+        ).map((arm) => arm.style.getPropertyValue("--arm-color").trim()),
         typedFeatures:
           serialized?.data?.features
             ?.filter(
@@ -93,15 +129,25 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
             .map((feature: any) => ({
               type: feature.properties.fadenType,
               themeColor: feature.properties.themeColor,
+              themeColors: feature.properties.themeColors,
+              id: feature.properties.id,
             })) ?? [],
       };
     }, NODE_ID);
 
     expect(rendered.markerTheme).toMatch(/^#[0-9a-f]{6}$/i);
-    expect(rendered.typedFeatures).toHaveLength(edges.length);
-    expect(
-      new Set(rendered.typedFeatures.map((feature: any) => feature.themeColor)),
-    ).toEqual(new Set([rendered.markerTheme]));
+    expect(rendered.typedFeatures.length).toBeGreaterThanOrEqual(edges.length);
+    const edgeIds = new Set(
+      rendered.typedFeatures.map((feature: any) => feature.id),
+    );
+    expect(edgeIds.size).toBe(edges.length);
+    for (const feature of rendered.typedFeatures) {
+      expect(feature.themeColors?.length).toBeGreaterThan(1);
+      expect(feature.themeColors).toEqual(
+        expect.arrayContaining(rendered.armColors),
+      );
+      expect(feature.themeColors).toContain(feature.themeColor);
+    }
     expect(
       new Set(rendered.typedFeatures.map((feature: any) => feature.type)),
     ).toEqual(new Set(["knotting", "conversation", "proposal", "vote"]));
@@ -111,13 +157,38 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       /Knüpfkern 1.*Gesprächsring 2.*Anträge 2.*Stimmen 2/,
     );
 
+    // Zoom may only toggle compact/detail classes — never replace the marker body.
+    await woven.evaluate((element) =>
+      element.setAttribute("data-zoom-sentinel", "kept"),
+    );
     await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(13));
     await expect(woven).toHaveAttribute("data-weave-detail", "compact");
     await expect(woven.locator('[data-zone="vote"]').first()).toBeHidden();
+    await expect(woven).toHaveAttribute("data-zoom-sentinel", "kept");
 
     await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(14));
     await expect(woven).toHaveAttribute("data-weave-detail", "detail");
     await expect(woven.locator('[data-zone="vote"]').first()).toBeVisible();
+    await expect(woven).toHaveAttribute("data-zoom-sentinel", "kept");
+
+    const layerOrder = await woven.evaluate((root) => {
+      const z = (selector: string) =>
+        Number.parseInt(
+          getComputedStyle(root.querySelector(selector) as Element).zIndex,
+          10,
+        );
+      return {
+        crossing: z(".woven-node__crossing"),
+        conversation: z(".woven-node__conversation"),
+        x: z(".woven-node__x"),
+        proposal: z('[data-zone="proposal"]'),
+        vote: z('[data-zone="vote"]'),
+      };
+    });
+    expect(layerOrder.crossing).toBeLessThan(layerOrder.conversation);
+    expect(layerOrder.conversation).toBeLessThan(layerOrder.x);
+    expect(layerOrder.x).toBeLessThan(layerOrder.proposal);
+    expect(layerOrder.proposal).toBeLessThan(layerOrder.vote);
 
     const voteContracts = await woven.evaluate((root) => {
       const proposals = Array.from(
@@ -150,6 +221,7 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
           display: voteStyle.display,
           backgroundImage: voteStyle.backgroundImage,
           maskImage: voteStyle.maskImage || voteStyle.webkitMaskImage || "",
+          voteTotal: vote.dataset.voteTotal,
         };
       });
     });
@@ -164,11 +236,12 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       expect(contract.display).not.toBe("none");
       expect(contract.backgroundImage).toContain("conic-gradient");
       expect(contract.maskImage).toContain("radial-gradient");
+      expect(Number(contract.voteTotal)).toBeGreaterThan(0);
     }
 
     await page.evaluate(
       (nodeKind) => (window as any).__TEST_SET_ACTIVE_FILTERS__([nodeKind]),
-      demoNodes[0].kind || "Knoten",
+      multiThemeNode.kind || "Knoten",
     );
     await expect(
       page.locator('[data-testid^="marker-garnrolle-"]'),

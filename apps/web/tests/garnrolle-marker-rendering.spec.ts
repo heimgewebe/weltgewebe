@@ -60,37 +60,54 @@ test.describe("Garnrolle marker rendering", () => {
       "data-zone-order",
       "knotting,conversation,proposal,vote",
     );
-    await expect(body).toHaveCSS("border-radius", "50%");
+    // X body is not a bullseye disc; no circular marker box.
+    await expect(body).toHaveCSS("border-radius", "0px");
+    await expect(body).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
     await expect(body.locator('[data-zone="knotting"]')).toHaveCount(1);
     await expect(body.locator('[data-zone="conversation"]')).toHaveCount(1);
 
-    const cross = await body
-      .locator(".woven-node__cross")
+    await expect(body).toHaveAttribute("data-x-geometry", "diagonal");
+    const xGeometry = await body
+      .locator(".woven-node__x")
       .evaluate((element) => {
-        const before = getComputedStyle(element, "::before");
-        const after = getComputedStyle(element, "::after");
-        return {
-          beforeContent: before.content,
-          beforeWidth: Number.parseFloat(before.width),
-          beforeHeight: Number.parseFloat(before.height),
-          afterContent: after.content,
-          afterWidth: Number.parseFloat(after.width),
-          afterHeight: Number.parseFloat(after.height),
-          afterTransform: after.transform,
-        };
+        const arms = Array.from(
+          element.querySelectorAll<HTMLElement>(".woven-node__arm"),
+        ).map((arm) => {
+          const style = getComputedStyle(arm);
+          return {
+            arm: arm.dataset.arm,
+            transform: style.transform,
+            width: Number.parseFloat(style.width),
+            height: Number.parseFloat(style.height),
+          };
+        });
+        const strands = Array.from(
+          element.querySelectorAll<HTMLElement>(".woven-node__strand"),
+        ).map((strand) => ({
+          strand: strand.dataset.strand,
+          zIndex: Number.parseInt(getComputedStyle(strand).zIndex, 10),
+        }));
+        return { arms, strands };
       });
-    expect(cross.beforeContent).not.toBe("none");
-    expect(cross.afterContent).not.toBe("none");
-    expect(cross.beforeHeight).toBeGreaterThan(cross.beforeWidth * 2);
-    expect(cross.afterWidth).toBeGreaterThan(cross.afterHeight * 2);
-    expect(cross.afterTransform).toBe("none");
+    expect(xGeometry.arms.map((arm) => arm.arm).sort()).toEqual([
+      "northeast",
+      "northwest",
+      "southeast",
+      "southwest",
+    ]);
+    // Diagonal X: each arm is an elongated rotated band — never an axis-aligned plus.
+    for (const arm of xGeometry.arms) {
+      expect(arm.height).toBeGreaterThan(arm.width);
+      expect(arm.transform).not.toBe("none");
+      expect(arm.transform).toMatch(/matrix/);
+    }
+    const under = xGeometry.strands.find((strand) => strand.strand === "a");
+    const over = xGeometry.strands.find((strand) => strand.strand === "b");
+    expect(under && over).toBeTruthy();
+    expect((over?.zIndex ?? 0) > (under?.zIndex ?? 0)).toBe(true);
 
-    const coreBackground = await body
-      .locator(".woven-node__core")
-      .evaluate((element) => getComputedStyle(element).backgroundImage);
-    expect(coreBackground).toMatch(
-      /repeating-conic-gradient.*radial-gradient.*conic-gradient/,
-    );
+    await expect(body.locator(".woven-node__crossing")).toHaveCount(1);
+    await expect(body.locator(".woven-node__cross")).toHaveCount(0);
 
     const halo = marker.locator(".map-marker__halo");
     await expect(halo).toHaveCSS("width", "68px");

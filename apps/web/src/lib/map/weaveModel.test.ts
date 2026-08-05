@@ -10,14 +10,22 @@ import type {
 } from "$lib/map/types";
 import {
   MAX_VISIBLE_PROPOSAL_ARCS,
+  MAX_VISIBLE_VOTE_STITCHES,
+  MAX_X_CORE_THEMES,
   WEAVE_ZONE_ORDER,
+  assignXCoreSegments,
+  conversationRingThickness,
+  deriveArmOverlays,
   deriveEntityWeave,
   deriveWeaveThemeSegments,
+  maxWeaveDomNodeBudget,
   projectEntityWeaves,
+  targetThemePalette,
   voteStitchConicGradient,
 } from "./weaveModel";
 import {
   WEAVE_TOPIC_DISPLAY_MAX_LENGTH,
+  weaveTopicDisplayLabel,
   weaveTopicIdentity,
   weaveTopics,
 } from "./weaveTheme";
@@ -114,7 +122,66 @@ describe("woven node projection", () => {
       weave.themeSegments.every((theme) => /^#[0-9a-f]{6}$/i.test(theme.color)),
     ).toBe(true);
     expect(weave.knottingThreadCount).toBe(1);
-    expect(weave.primaryThemeColor).toBe(weave.themeSegments[0].color);
+    expect(weave.primaryThemeColor).toBe(weave.xCoreSegments[0].color);
+    expect(weave.xCoreSegments).toHaveLength(4);
+  });
+
+  it("colours one theme across all four X arms", () => {
+    const arms = assignXCoreSegments(["Natur"]);
+    expect(arms).toHaveLength(4);
+    expect(new Set(arms.map((arm) => arm.color)).size).toBe(1);
+    expect(arms.map((arm) => arm.arm)).toEqual([
+      "northwest",
+      "northeast",
+      "southeast",
+      "southwest",
+    ]);
+  });
+
+  it("assigns two themes to the two diagonal strands", () => {
+    const arms = assignXCoreSegments(["Natur", "Bildung"]);
+    const byArm = Object.fromEntries(
+      arms.map((segment) => [segment.arm, segment.themeId]),
+    );
+    expect(byArm.northwest).toBe(byArm.southeast);
+    expect(byArm.northeast).toBe(byArm.southwest);
+    expect(byArm.northwest).not.toBe(byArm.northeast);
+  });
+
+  it("distributes three and four themes stably across arms", () => {
+    const three = assignXCoreSegments(["A", "B", "C"]);
+    expect(three.map((segment) => segment.themeId)).toEqual([
+      weaveTopicIdentity("A"),
+      weaveTopicIdentity("B"),
+      weaveTopicIdentity("C"),
+      weaveTopicIdentity("A"),
+    ]);
+    const four = assignXCoreSegments(["A", "B", "C", "D"]);
+    expect(four.map((segment) => segment.arm)).toEqual([
+      "northwest",
+      "northeast",
+      "southeast",
+      "southwest",
+    ]);
+    expect(new Set(four.map((segment) => segment.themeId)).size).toBe(4);
+  });
+
+  it("keeps more than four theme identities while painting only four arms", () => {
+    const tags = ["T1", "T2", "T3", "T4", "T5", "T6"];
+    const weave = deriveEntityWeave(
+      node({ tags, kind: "Werkstatt" }),
+      [],
+      nowMs,
+    );
+    expect(weave.themeSegments.length).toBeGreaterThan(MAX_X_CORE_THEMES);
+    expect(weave.xCoreSegments).toHaveLength(4);
+    const painted = new Set(
+      weave.xCoreSegments.map((segment) => segment.themeId),
+    );
+    expect(painted.size).toBe(MAX_X_CORE_THEMES);
+    expect(weave.themeSegments.some((segment) => segment.arm === null)).toBe(
+      true,
+    );
   });
 
   it("keeps two long topics with an identical prefix apart", () => {
@@ -156,15 +223,18 @@ describe("woven node projection", () => {
     ).toEqual(["Offene Werkstatt", "Garten"]);
   });
 
-  it("keeps a meaningful colon and drops only a technical namespace", () => {
+  it("keeps meaningful colons in identity and only drops technical noise for display", () => {
     expect(weaveTopics(node({ tags: ["Kunst: Öffentlicher Raum"] }))).toEqual([
       "Kunst: Öffentlicher Raum",
       "Garten",
     ]);
+    // Identity keeps the full normalised text — no prefix strip before hash/id.
     expect(weaveTopics(node({ tags: ["thema:kunst"] }))).toEqual([
-      "kunst",
+      "thema:kunst",
       "Garten",
     ]);
+    expect(weaveTopicIdentity("thema:kunst")).toBe("thema:kunst");
+    expect(weaveTopicDisplayLabel("thema:kunst")).toBe("kunst");
     expect(weaveTopicIdentity("Kunst: Öffentlicher Raum")).not.toBe(
       weaveTopicIdentity("Öffentlicher Raum"),
     );
@@ -255,10 +325,35 @@ describe("woven node projection", () => {
     ).toMatchObject([{ label: "Gemeingut" }]);
   });
 
-  it("emits hard transparent gaps around vote stitches", () => {
+  it("emits hard transparent gaps around vote stitches and caps visible stitches", () => {
     expect(voteStitchConicGradient(60, 1)).toBe(
       "conic-gradient(transparent 0deg 28.95deg,#f6ead7 28.95deg 31.05deg,transparent 31.05deg 360deg)",
     );
+    const many = voteStitchConicGradient(90, 100);
+    const visibleStops = many.match(/#f6ead7/g) ?? [];
+    expect(visibleStops).toHaveLength(MAX_VISIBLE_VOTE_STITCHES);
+  });
+
+  it("saturates conversation ring thickness with log1p", () => {
+    expect(conversationRingThickness(0)).toBe(0);
+    const one = conversationRingThickness(1);
+    const few = conversationRingThickness(4);
+    const many = conversationRingThickness(40);
+    expect(one).toBeGreaterThan(0);
+    expect(few).toBeGreaterThan(one);
+    expect(many).toBe(1);
+    expect(
+      deriveEntityWeave(
+        node(),
+        [edge("talk", "conversation", "conversation-node")],
+        nowMs,
+      ).conversationRingThickness,
+    ).toBeGreaterThan(0);
+  });
+
+  it("projects empty arm overlays until a content source exists", () => {
+    expect(deriveArmOverlays(node())).toEqual([]);
+    expect(deriveEntityWeave(node(), [], nowMs).armOverlays).toEqual([]);
   });
 
   it("resolves Webgemeindezentrum activity through the drawable endpoint alias", () => {
@@ -321,6 +416,7 @@ describe("woven node projection", () => {
     expect(weave.totalActiveThreadCount).toBe(0);
     expect(weave.conversationThreadCount).toBe(0);
     expect(weave.conversationOpacity).toBe(0);
+    expect(weave.conversationRingThickness).toBe(0);
   });
 
   it("keeps seven proposals separate and uses the eighth visual slot as overflow", () => {
@@ -374,5 +470,48 @@ describe("woven node projection", () => {
       subjectId: "__proposal-overflow__",
       bundledSubjectCount: 3,
     });
+  });
+
+  it("exposes a full target theme palette for edge paint", () => {
+    const weave = deriveEntityWeave(
+      node({ tags: ["Natur", "Bildung", "Kunst"], kind: "Garten" }),
+      [],
+      nowMs,
+    );
+    const palette = targetThemePalette(weave);
+    expect(palette.length).toBeGreaterThan(1);
+    expect(palette.length).toBeLessThanOrEqual(MAX_X_CORE_THEMES);
+  });
+
+  it("documents a fixed DOM-node budget for the maximal marker", () => {
+    expect(maxWeaveDomNodeBudget()).toBeLessThanOrEqual(40);
+    expect(maxWeaveDomNodeBudget()).toBeGreaterThan(10);
+  });
+
+  it("projects 100, 500 and 1000 weaves within a practical bound", () => {
+    const entity = node({
+      tags: ["Natur", "Bildung", "Kunst", "Handwerk", "Nachbarschaft"],
+      kind: "Garten",
+    });
+    const edges = [
+      edge("k", "knotting", "node-1"),
+      edge("c", "conversation", "conversation-node"),
+      edge("p1", "proposal", "proposal-a"),
+      edge("p2", "proposal", "proposal-b"),
+      edge("v1", "vote", "proposal-a"),
+    ];
+    const sizes = [100, 500, 1000] as const;
+    const timings: Record<number, number> = {};
+    for (const size of sizes) {
+      const started = performance.now();
+      for (let index = 0; index < size; index += 1) {
+        deriveEntityWeave(entity, edges, nowMs + index);
+      }
+      timings[size] = performance.now() - started;
+    }
+    // Reproducible practical bound on this class of host; not a CI flake target.
+    expect(timings[100]).toBeLessThan(250);
+    expect(timings[500]).toBeLessThan(800);
+    expect(timings[1000]).toBeLessThan(1500);
   });
 });

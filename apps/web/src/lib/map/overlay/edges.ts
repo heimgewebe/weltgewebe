@@ -7,6 +7,7 @@ import type {
 import { isValidMapCoordinate } from "$lib/map/coordinates";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import { MAX_X_CORE_THEMES, targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import { LAYERS } from "./layers";
 
@@ -97,11 +98,59 @@ export function hasCompleteEdgeThreadStyle(
   );
 }
 
-function primaryThemeColor(point: MapEntityViewModel): string | undefined {
+function targetThemeColors(point: MapEntityViewModel): string[] | undefined {
   if (point.type !== "node" && point.type !== "webgemeindezentrum") {
     return undefined;
   }
-  return point.weave?.primaryThemeColor ?? primaryWeaveColor(point);
+  if (point.weave) {
+    return targetThemePalette(point.weave);
+  }
+  return [primaryWeaveColor(point)];
+}
+
+/**
+ * Controlled multi-theme braid: the line is subdivided into a bounded number of
+ * equal segments whose colours cycle through the target palette (max four).
+ * One theme stays a single solid feature. No rainbow blend and no extra layers.
+ */
+export function buildThemedLineSegments(
+  source: [number, number],
+  target: [number, number],
+  colors: readonly string[],
+): Array<{ coordinates: [[number, number], [number, number]]; color: string }> {
+  const palette = colors.slice(0, MAX_X_CORE_THEMES);
+  if (palette.length <= 1) {
+    return [
+      {
+        coordinates: [source, target],
+        color: palette[0] ?? "#76523d",
+      },
+    ];
+  }
+  // Two segments per colour so the repeating weave reads along the whole edge.
+  const segmentCount = palette.length * 2;
+  const segments: Array<{
+    coordinates: [[number, number], [number, number]];
+    color: string;
+  }> = [];
+  for (let index = 0; index < segmentCount; index += 1) {
+    const t0 = index / segmentCount;
+    const t1 = (index + 1) / segmentCount;
+    segments.push({
+      coordinates: [
+        [
+          source[0] + (target[0] - source[0]) * t0,
+          source[1] + (target[1] - source[1]) * t0,
+        ],
+        [
+          source[0] + (target[0] - source[0]) * t1,
+          source[1] + (target[1] - source[1]) * t1,
+        ],
+      ],
+      color: palette[index % palette.length],
+    });
+  }
+  return segments;
 }
 
 export function buildEdgeFeatures(
@@ -137,25 +186,45 @@ export function buildEdgeFeatures(
       continue;
     }
 
-    const themeColor = primaryThemeColor(target);
-    features.push({
-      type: "Feature",
-      geometry: {
-        type: "LineString",
-        coordinates: [
+    const themeColors = targetThemeColors(target);
+    const palette = themeColors ?? [];
+    const segments = themeColors
+      ? buildThemedLineSegments(
           [source.lon, source.lat],
           [target.lon, target.lat],
-        ],
-      },
-      properties: {
-        id: edge.id,
-        kind: edge.edge_kind,
-        fadenType: edge.faden_type ?? "legacy",
-        fadenSubjectId: edge.faden_subject_id ?? null,
-        ...(themeColor ? { themeColor } : {}),
-        opacity,
-      },
-    });
+          themeColors,
+        )
+      : [
+          {
+            coordinates: [
+              [source.lon, source.lat],
+              [target.lon, target.lat],
+            ] as [[number, number], [number, number]],
+            color: undefined as string | undefined,
+          },
+        ];
+
+    for (let strand = 0; strand < segments.length; strand += 1) {
+      const segment = segments[strand];
+      features.push({
+        type: "Feature",
+        geometry: {
+          type: "LineString",
+          coordinates: segment.coordinates,
+        },
+        properties: {
+          id: edge.id,
+          kind: edge.edge_kind,
+          fadenType: edge.faden_type ?? "legacy",
+          fadenSubjectId: edge.faden_subject_id ?? null,
+          ...(segment.color ? { themeColor: segment.color } : {}),
+          ...(palette.length ? { themeColors: palette } : {}),
+          themeStrand: strand,
+          themeStrandCount: segments.length,
+          opacity,
+        },
+      });
+    }
   }
 
   return features;

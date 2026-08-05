@@ -229,12 +229,17 @@ describe("resolveEdgeMotionInput", () => {
       },
     ] as MapEntityViewModel[];
 
-    expect(resolveEdgeMotionInput(edge, points)).toEqual({
+    const resolved = resolveEdgeMotionInput(edge, points);
+    expect(resolved).toMatchObject({
       id: "edge-center",
       source: [10, 53.5],
       target: [10.2, 53.6],
       kind: "membership",
+      fadenType: "legacy",
     });
+    expect(resolved?.themeColor).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(resolved?.themeColors?.length).toBeGreaterThan(0);
+    expect(resolved?.themeColors?.[0]).toBe(resolved?.themeColor);
   });
 });
 

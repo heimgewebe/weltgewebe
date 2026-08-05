@@ -4,7 +4,9 @@ import type {
   Map as MapLibreMap,
 } from "maplibre-gl";
 import { isValidMapCoordinate } from "$lib/map/coordinates";
-import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import type { FadenType, MapEdge, MapEntityViewModel } from "$lib/map/types";
+import { targetThemePalette } from "$lib/map/weaveModel";
+import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import { EDGE_THREAD_LAYER_IDS, EDGE_VISUAL_STYLE } from "./edges";
 
 export const EDGE_MOTION_SOURCE = "edge-motion-source";
@@ -22,6 +24,9 @@ export interface EdgeMotionInput {
   source: LngLatTuple;
   target: LngLatTuple;
   kind: string;
+  fadenType?: FadenType | "legacy";
+  themeColor?: string;
+  themeColors?: string[];
   opacity?: number;
 }
 
@@ -101,6 +106,22 @@ function buildPointMap(points: readonly MapEntityViewModel[]) {
   return pointMap;
 }
 
+function motionThemeFromTarget(target: MapEntityViewModel): {
+  themeColor?: string;
+  themeColors?: string[];
+} {
+  if (target.type !== "node" && target.type !== "webgemeindezentrum") {
+    return {};
+  }
+  const themeColors = target.weave
+    ? targetThemePalette(target.weave)
+    : [primaryWeaveColor(target)];
+  return {
+    themeColor: themeColors[0],
+    themeColors,
+  };
+}
+
 /** Resolve the already-authoritative edge and map projection into motion input. */
 export function resolveEdgeMotionInput(
   edge: MapEdge,
@@ -116,11 +137,14 @@ export function resolveEdgeMotionInput(
   ) {
     return null;
   }
+  const theme = motionThemeFromTarget(target);
   return {
     id: edge.id,
     source: [source.lon, source.lat],
     target: [target.lon, target.lat],
     kind: edge.edge_kind,
+    fadenType: edge.faden_type ?? "legacy",
+    ...theme,
   };
 }
 
@@ -381,6 +405,13 @@ export class EdgeMotionController {
           properties: {
             id: motion.input.id,
             kind: motion.input.kind,
+            fadenType: motion.input.fadenType ?? "legacy",
+            ...(motion.input.themeColor
+              ? { themeColor: motion.input.themeColor }
+              : {}),
+            ...(motion.input.themeColors?.length
+              ? { themeColors: motion.input.themeColors }
+              : {}),
             opacity: clamp01(motion.input.opacity ?? 1),
             phase: motion.phase,
             progress,
@@ -452,7 +483,11 @@ export class EdgeMotionController {
           source: EDGE_MOTION_SOURCE,
           layout: commonLayout,
           paint: {
-            "line-color": EDGE_VISUAL_STYLE.mainColor,
+            "line-color": [
+              "coalesce",
+              ["get", "themeColor"],
+              EDGE_VISUAL_STYLE.mainColor,
+            ],
             "line-width": EDGE_VISUAL_STYLE.mainWidth,
             "line-opacity": ["coalesce", ["to-number", ["get", "opacity"]], 0],
             "line-dasharray": EDGE_VISUAL_STYLE.dashArray,

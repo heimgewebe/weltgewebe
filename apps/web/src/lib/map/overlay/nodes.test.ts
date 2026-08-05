@@ -139,12 +139,39 @@ function makeWeave(overrides: Partial<MapEntityWeave> = {}): MapEntityWeave {
         id: "natur",
         label: "Natur",
         color: "#5f7a55",
-        startDeg: 0,
-        spanDeg: 360,
+        arm: "northwest",
       },
     ],
+    xCoreSegments: [
+      {
+        arm: "northwest",
+        themeId: "natur",
+        label: "Natur",
+        color: "#5f7a55",
+      },
+      {
+        arm: "northeast",
+        themeId: "natur",
+        label: "Natur",
+        color: "#5f7a55",
+      },
+      {
+        arm: "southeast",
+        themeId: "natur",
+        label: "Natur",
+        color: "#5f7a55",
+      },
+      {
+        arm: "southwest",
+        themeId: "natur",
+        label: "Natur",
+        color: "#5f7a55",
+      },
+    ],
+    armOverlays: [],
     primaryThemeColor: "#5f7a55",
     coreDensity: 0.55,
+    conversationRingThickness: 0.35,
     knottingThreadCount: 1,
     conversationThreadCount: 1,
     conversationOpacity: 0.8,
@@ -410,7 +437,7 @@ describe("NodesOverlay selection lifecycle", () => {
 });
 
 describe("NodesOverlay woven node marker", () => {
-  it("renders the core, conversation ring and separate proposal-bound vote wreaths", () => {
+  it("renders the diagonal X core, conversation ring and separate proposal-bound vote wreaths", () => {
     const overlay = makeOverlay();
     overlay.update(
       [
@@ -456,7 +483,15 @@ describe("NodesOverlay woven node marker", () => {
       | undefined;
     expect(root?.classList.contains("woven-node")).toBe(true);
     expect(root?.dataset.zoneOrder).toBe("knotting,conversation,proposal,vote");
+    expect(root?.dataset.xGeometry).toBe("diagonal");
     expect(root?.innerHTML).toContain('data-zone="knotting"');
+    expect(root?.innerHTML).toContain('data-x-geometry="diagonal"');
+    expect(root?.innerHTML).toContain('data-strand="a"');
+    expect(root?.innerHTML).toContain('data-strand="b"');
+    expect(root?.innerHTML).toContain('data-arm="northwest"');
+    expect(root?.innerHTML).toContain('data-arm="northeast"');
+    expect(root?.innerHTML).toContain('data-arm="southeast"');
+    expect(root?.innerHTML).toContain('data-arm="southwest"');
     expect(root?.innerHTML).toContain('data-zone="conversation"');
     expect(root?.innerHTML.match(/data-zone="proposal"/g)).toHaveLength(2);
     expect(root?.innerHTML.match(/data-zone="vote"/g)).toHaveLength(2);
