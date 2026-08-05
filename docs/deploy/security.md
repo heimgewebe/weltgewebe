@@ -58,27 +58,47 @@ URL-Pfade und Weiterleitungen werden zurückgewiesen. Eine Erweiterung der Liste
 ist daher eine eigene Sicherheitsentscheidung und kein gewöhnlicher
 Konfigurationswechsel.
 
+### Produktions-Bootstrap
+
+Der kanonische VPS-Deploypfad führt vor der ersten Containerwirkung
+`scripts/ops/ensure_web_push_vapid_env.py` aus. Der Bootstrap arbeitet
+fail-closed:
+
+- Sind alle drei Variablen leer oder nicht vorhanden, erzeugt er einmalig einen
+  kryptografisch zufälligen P-256-Schlüssel und schreibt das vollständige
+  Dreierpaket atomar in `/etc/weltgewebe/weltgewebe.env`.
+- Ist eine vollständige Konfiguration vorhanden, validiert und bewahrt er sie
+  bytegenau. Der Schlüssel wird insbesondere nicht bei jedem Deploy erneuert.
+- Teilkonfigurationen, Duplikate, ungültige Werte, Symlinks, fremde Eigentümer,
+  unsichere Dateirechte und übergroße Dateien brechen den Deploy vor der
+  Containerwirkung ab.
+- Der private Wert erscheint weder in der Konsolenausgabe noch in
+  Deployment-Receipts. Vor der ersten Änderung entsteht eine geschützte
+  Sicherung `weltgewebe.env.pre-web-push-v1`.
+
+Andere Zellen können die drei Werte weiterhin über ihren eigenen
+Secret-Speicher setzen. Der automatische Bootstrap ist an den privilegierten,
+exakt commitgebundenen VPS-Releasepfad gebunden.
+
 ### Sichere Aktivierungsreihenfolge
 
-1. Einen neuen VAPID-Schlüssel außerhalb des Repositorys erzeugen und den
-   privaten Wert im bestehenden Secret-Speicher ablegen.
-2. Kontaktadresse und Anbieter-Allowlist gemeinsam mit dem privaten Schlüssel
-   in die geschützte Produktionsumgebung eintragen.
-3. Die Migration `20260804000001_web_push_notifications` über den kanonischen
-   migrationssicheren API-Deploypfad anwenden.
-4. Die neue API-Version starten. Der Start muss entweder ausdrücklich
-   `Privacy-safe Web Push delivery configured` protokollieren oder vollständig
-   ohne Push-Konfiguration laufen; ein teilkonfigurierter Zustand ist unzulässig.
-5. Mit einer angemeldeten Sitzung `/api/push/config` lesen. Erst
+1. Der VPS-Releasepfad erzeugt oder validiert die vollständige
+   Web-Push-Konfiguration im geschützten Runtime-Env.
+2. Die Migration `20260804000001_web_push_notifications` läuft über den
+   kanonischen migrationssicheren API-Deploypfad.
+3. Die neue API-Version startet. Der Start muss
+   `Privacy-safe Web Push delivery configured` protokollieren; ein
+   teilkonfigurierter Zustand ist unzulässig.
+4. Mit einer angemeldeten Sitzung `/api/push/config` lesen. Erst
    `enabled: true` zusammen mit einem nicht leeren öffentlichen
    Anwendungsschlüssel belegt die betriebliche Aktivierung.
-6. Auf einem Testkonto die Kontofreigabe einschalten und genau ein Testgerät
+5. Auf einem Testkonto die Kontofreigabe einschalten und genau ein Testgerät
    registrieren. Die Browserberechtigung muss aus einer bewussten Nutzeraktion
    entstehen.
-7. Eine private Testnachricht senden und auf dem Gerät prüfen, dass der Hinweis
+6. Eine private Testnachricht senden und auf dem Gerät prüfen, dass der Hinweis
    weder Nachrichtentext noch Absendername oder Account-ID zeigt und nur zur
    gleichursprünglichen Weltgewebe-Unterhaltung führt.
-8. Das Gerät wieder deaktivieren und durch eine weitere Testnachricht belegen,
+7. Das Gerät wieder deaktivieren und durch eine weitere Testnachricht belegen,
    dass kein neuer Push-Hinweis entsteht, während beide Nachrichten weiterhin
    im Postfach vorhanden sind.
 
@@ -88,15 +108,22 @@ Provider- und Gerätebelege für die tatsächlich unterstützten Plattformen.
 
 ### Rückbau
 
-Für einen sofortigen Kanalausfall werden alle drei Web-Push-Variablen gemeinsam
-entfernt und ausschließlich die API über den migrationssicheren Deploypfad neu
-gestartet. Die Datenbankmigration wird nicht zurückgerollt: Einstellungen,
-Geräteabonnements und Zustellbelege bleiben für Diagnose und kontrollierte
-Wiederaktivierung erhalten, der Zustellarbeiter startet jedoch nicht.
+Für einen sofortigen Kanalausfall werden zuerst
+`WEB_PUSH_VAPID_BOOTSTRAP_MODE=disabled` gesetzt und danach alle drei
+Web-Push-Variablen gemeinsam entfernt. Anschließend wird ausschließlich die API
+über den migrationssicheren Deploypfad neu gestartet. Der nächste Release
+bewahrt den deaktivierten Zustand, statt eine neue VAPID-Identität zu erzeugen.
 
-Der Rückbau verändert weder gespeicherte Nachrichten noch das Postfach. Bereits
-von einem externen Anbieter angenommene Hinweise können technisch nicht
+Die Datenbankmigration wird nicht zurückgerollt: Einstellungen,
+Geräteabonnements und Zustellbelege bleiben für Diagnose und kontrollierte
+Wiederaktivierung erhalten, der Zustellarbeiter startet jedoch nicht. Der
+Rückbau verändert weder gespeicherte Nachrichten noch das Postfach. Bereits von
+einem externen Anbieter angenommene Hinweise können technisch nicht
 zurückgerufen werden.
+
+Das bloße Leeren der drei Variablen ohne den Bootstrap-Schalter ist absichtlich
+gleichbedeutend mit „erstmalige Einrichtung“ und würde eine neue Identität
+erzeugen.
 
 ### Schlüsselrotation
 
