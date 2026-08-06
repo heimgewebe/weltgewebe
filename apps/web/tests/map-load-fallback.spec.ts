@@ -74,12 +74,9 @@ test.describe("Map Loader Data Resilience", () => {
     await expect(partialBanner).not.toContainText("bewusst unvollständig");
   });
 
-  test("demo static-list transport rejects cursor-shaped node responses", async ({
+  test("empty API base keeps the cursor contract in the E2E proxy", async ({
     page,
   }) => {
-    // Empty PUBLIC_GEWEBE_API_BASE uses static-list against the same-origin
-    // demo API. Cursor incomplete/safety-limit semantics remain covered by
-    // cursorPagination unit tests for remote APIs.
     await mockApiResponses(page);
 
     await page.route("**/api/nodes*", async (route) => {
@@ -94,7 +91,7 @@ test.describe("Map Loader Data Resilience", () => {
               title: "Node 0",
               kind: "Event",
               location: { lat: 53.5, lon: 10 },
-              summary: "Cursor envelope is invalid for static-list",
+              summary: "Cursor envelope remains valid for the test proxy",
               tags: [],
               created_at: timestamp,
               updated_at: timestamp,
@@ -102,10 +99,44 @@ test.describe("Map Loader Data Resilience", () => {
           ],
           page: {
             limit: 1000,
-            next_cursor: "cursor-1",
-            has_more: true,
+            next_cursor: null,
+            has_more: false,
           },
         }),
+      });
+    });
+
+    await page.goto("/map");
+
+    await expect(page.locator("#map")).toBeVisible();
+    await expect(page.getByTestId("debug-badge")).toContainText("Nodes: 1");
+    await expect(page.getByTestId("load-state-partial")).toHaveCount(0);
+    await expect(page.getByTestId("load-state-failed")).toHaveCount(0);
+  });
+
+  test("empty API base rejects a bare-array node response as a cursor contract violation", async ({
+    page,
+  }) => {
+    // The E2E proxy always speaks the cursor contract for an empty API base
+    // (see mapResourceTransport). A bare array — the legacy static-list shape —
+    // is a mismatched envelope here and must fail closed instead of being
+    // silently reinterpreted, so the node resource is reported as failed
+    // rather than emptying the map without explanation.
+    await mockApiResponses(page);
+
+    await page.route("**/api/nodes*", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            id: "node-0",
+            title: "Node 0",
+            kind: "Event",
+            location: { lat: 53.5, lon: 10 },
+            summary: "Bare array is invalid for the cursor test proxy",
+          },
+        ]),
       });
     });
 
