@@ -124,9 +124,7 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         ).map((arm) => arm.style.getPropertyValue("--arm-color").trim()),
         typedFeatures:
           serialized?.data?.features
-            ?.filter(
-              (feature: any) => feature.properties.fadenType !== "legacy",
-            )
+            ?.filter((feature: any) => feature.properties.fadenType !== "out")
             .map((feature: any) => ({
               type: feature.properties.fadenType,
               themeColor: feature.properties.themeColor,
