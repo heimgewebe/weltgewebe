@@ -772,6 +772,122 @@ class KubernetesPlatformContractTests(unittest.TestCase):
                 with self.assertRaises(self.oci_mirror.IntegrityError):
                     self.oci_mirror._load_lock()
 
+    def _write_mutated_oci_lock(self, mutate) -> Path:
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        mutate(lock)
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        try:
+            json.dump(lock, handle)
+            handle.flush()
+        finally:
+            handle.close()
+        return Path(handle.name)
+
+    def test_oci_mirror_lock_rejects_unreachable_source_head(self) -> None:
+        """Network-independent: synthetic commit id is not a local object."""
+        path = self._write_mutated_oci_lock(
+            lambda lock: lock["generation"].__setitem__(
+                "source_head", "deadbeef" + "0" * 32
+            )
+        )
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "unreachable"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_oci_mirror_lock_rejects_source_head_outside_allowed_ancestry(self) -> None:
+        """Network-independent: reachable object that is not an ancestor of HEAD."""
+        # Orphan commit object in the object store, never linked into HEAD history.
+        empty_tree = subprocess.check_output(
+            ["git", "hash-object", "-t", "tree", "-w", "--stdin"],
+            cwd=ROOT,
+            input=b"",
+        ).decode().strip()
+        orphan_env = {
+            **os.environ,
+            "GIT_AUTHOR_NAME": "oci-ancestry-test",
+            "GIT_AUTHOR_EMAIL": "oci-ancestry-test@invalid",
+            "GIT_COMMITTER_NAME": "oci-ancestry-test",
+            "GIT_COMMITTER_EMAIL": "oci-ancestry-test@invalid",
+        }
+        orphan = subprocess.check_output(
+            [
+                "git",
+                "commit-tree",
+                empty_tree,
+                "-m",
+                "oci-ancestry-negative-orphan",
+            ],
+            cwd=ROOT,
+            text=True,
+            env=orphan_env,
+        ).strip()
+        self.assertRegex(orphan, r"^[0-9a-f]{40}$")
+        not_ancestor = subprocess.run(
+            ["git", "merge-base", "--is-ancestor", orphan, "HEAD"],
+            cwd=ROOT,
+            capture_output=True,
+        )
+        self.assertNotEqual(not_ancestor.returncode, 0)
+        path = self._write_mutated_oci_lock(
+            lambda lock: lock["generation"].__setitem__("source_head", orphan)
+        )
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "outside allowed ancestry"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_oci_mirror_lock_rejects_manipulated_seed_sha256(self) -> None:
+        """Network-independent: seed digest drift fails before full validation."""
+        path = self._write_mutated_oci_lock(
+            lambda lock: lock["generation"].__setitem__("seed_sha256", "a" * 64)
+        )
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "not bound to source_head"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
+    def test_oci_mirror_generation_ancestry_runs_before_inventory_checks(self) -> None:
+        """Ancestry failure must not require a complete images section."""
+        lock = json.loads(
+            (ROOT / "platform/oci-proof-mirror.lock.json").read_text(encoding="utf-8")
+        )
+        lock["generation"]["source_head"] = "deadbeef" + "0" * 32
+        lock["images"] = {}  # would fail inventory if ancestry were deferred
+        handle = tempfile.NamedTemporaryFile(
+            mode="w", suffix=".json", delete=False, encoding="utf-8"
+        )
+        try:
+            json.dump(lock, handle)
+            handle.flush()
+        finally:
+            handle.close()
+        path = Path(handle.name)
+        try:
+            with mock.patch.object(self.oci_mirror, "LOCK_PATH", path):
+                with self.assertRaisesRegex(
+                    self.oci_mirror.AncestryError, "unreachable"
+                ):
+                    self.oci_mirror._load_lock()
+        finally:
+            path.unlink(missing_ok=True)
+
     def test_strict_oci_rewrites_locked_digests_to_verified_runtime_tags(self) -> None:
         locked = "sha256:" + "a" * 64
         source = f"nats:2.10-alpine@{locked}"
@@ -1653,6 +1769,11 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(
             shlex.split(gitops["run"]),
             [
+                "uv",
+                "run",
+                "--project",
+                "tools/py",
+                "--locked",
                 "python",
                 "scripts/platform/kind_reference.py",
                 "proof",
@@ -1669,6 +1790,71 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertNotIn("github.event.pull_request", proof_text)
         self.assertNotIn("SOURCE_REF:", proof_text)
         self.assertNotIn("github.head_ref || github.ref_name", proof_text)
+
+    def test_platform_proof_jobs_share_locked_uv_tooling(self) -> None:
+        """All Python-executing jobs must share tools/py lock identity (not pip)."""
+        workflow_path = ROOT / ".github/workflows/kubernetes-platform-proof.yml"
+        workflow_text = workflow_path.read_text(encoding="utf-8")
+        workflow = yaml.safe_load(workflow_text)
+        self.assertNotIn('python-version: "3.10"', workflow_text)
+        self.assertNotRegex(
+            workflow_text,
+            r"pip install .*PyYAML|pip install .*pyyaml|pip install .*pytest",
+        )
+        self.assertNotIn("PyYAML==6.0.3", workflow_text)
+        python_jobs = (
+            "contract",
+            "trivy-rendered-security",
+            "kind-gitops-proof",
+            "kind-ha-recovery-proof",
+        )
+        for job_name in python_jobs:
+            job = workflow["jobs"][job_name]
+            steps = job["steps"]
+            setup_python = next(
+                step
+                for step in steps
+                if str(step.get("uses", "")).startswith("actions/setup-python@")
+            )
+            self.assertEqual(
+                setup_python["with"]["python-version-file"],
+                ".python-version",
+                job_name,
+            )
+            self.assertNotIn("python-version", setup_python.get("with", {}))
+            setup_uv = next(
+                step
+                for step in steps
+                if str(step.get("uses", "")).startswith("astral-sh/setup-uv@")
+            )
+            self.assertEqual(
+                setup_uv["with"]["version"],
+                "${{ steps.uv-version.outputs.uv_version }}",
+                job_name,
+            )
+            sync_step = next(
+                step
+                for step in steps
+                if step.get("run") == "uv sync --project tools/py --locked"
+            )
+            self.assertEqual(
+                sync_step["name"], "Sync hash-locked Python tooling", job_name
+            )
+            for step in steps:
+                run = step.get("run")
+                if not isinstance(run, str):
+                    continue
+                if "scripts/platform/" in run or "scripts/security/" in run:
+                    self.assertIn(
+                        "uv run --project tools/py --locked python",
+                        run,
+                        f"{job_name}: {step.get('name', run[:40])}",
+                    )
+                    self.assertNotRegex(
+                        run,
+                        r"(?m)^[ \t]*python[ \t]+scripts/",
+                        f"{job_name}: bare python remains",
+                    )
 
     def test_proof_identity_covers_all_api_image_inputs(self) -> None:
         for suite in ("kind-gitops", "ha-recovery"):

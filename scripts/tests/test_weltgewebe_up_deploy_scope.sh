@@ -210,7 +210,11 @@ out_plan="$(run_up "$repo_plan" "$state_plan" --deploy-scope api --plan-only 2>&
 plan_path="$repo_plan/.ops/deploy-plan-api.json"
 [[ -f "$plan_path" ]] || fail "plan-only did not create $plan_path"
 [[ ! -s "$state_plan/mutation.log" ]] || fail "plan-only mutated compose"
-python3 - "$plan_path" << 'PY'
+# Same repo-canonical tools/py environment as make validate / UV_RUN.
+if ! command -v uv > /dev/null 2>&1; then
+  fail "uv is required for deploy-scope plan assertions (tools/py/uv.lock)"
+fi
+uv run --project "$REPO_ROOT/tools/py" --locked python - "$plan_path" << 'PY'
 import json, sys
 p=json.load(open(sys.argv[1], encoding='utf-8'))
 assert p['scope']=='api'
@@ -256,7 +260,7 @@ second_call="$(sed -n '2p' "$state_migration/compose-up.log")"
 assert_contains "$first_call" "up -d --no-deps api"
 assert_contains "$second_call" "up -d --no-deps --force-recreate api"
 [[ "$(cat "$state_migration/api.mode")" == "verify-applied" ]] || fail "migration scope did not restore verify-applied"
-python3 - "$repo_migration/.ops/deploy-plan-migration.json" << 'PY'
+uv run --project "$REPO_ROOT/tools/py" --locked python - "$repo_migration/.ops/deploy-plan-migration.json" << 'PY'
 import json, sys
 p=json.load(open(sys.argv[1], encoding='utf-8'))
 assert p['scope']=='migration'

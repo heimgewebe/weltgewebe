@@ -77,6 +77,7 @@ check:     # quick hygiene check (no writes)
 	cargo deny check
 
 # Validate the canonical repository agent contract (strict JSON + projection parity).
+# Same uv-locked semantics as `make agent-contract-check` / full `make validate`.
 agent-contract-check:
 	uv run --project tools/py --locked python -m scripts.agent.validate_agent_tooling_lock
 	uv run --project tools/py --locked python -m scripts.agent.validate_repo_agent_contract

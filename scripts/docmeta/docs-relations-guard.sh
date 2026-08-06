@@ -6,10 +6,16 @@ echo "Checking docs relations..."
 
 FAIL=0
 
+# Same repo-canonical tools/py environment as make validate / UV_RUN.
+if ! command -v uv > /dev/null 2>&1; then
+  echo "ERROR: uv is required for docs-relations-guard (tools/py/uv.lock)."
+  exit 1
+fi
+
 # Dynamic check for required frontmatter fields using a python parser for robustness
 while IFS= read -r -d '' file; do
-  # Use python to extract frontmatter
-  python3 -c "
+  # Use locked tools/py python to extract frontmatter
+  uv run --project tools/py --locked python -c "
 import sys
 import os
 

@@ -39,6 +39,14 @@ verifies_with:
 - `infrastructure/gateway/` definiert Gateway API und HTTPRoute.
 - `clusters/local/` definiert die Flux-Abhängigkeitskette `data → migration → app → gateway`.
 - `toolchain.lock.json` bindet Werkzeuge, Clusterimage und Drittartefakte an SHA-256.
+- `oci-proof-mirror.seed.json` und `oci-proof-mirror.lock.json` binden den privaten
+  Proof-OCI-Mirror: Seed-Inventar, generierter Lock, Quellcommit (`generation.source_head`),
+  Seed-SHA-256 und Publisher-Evidenz. Erlaubte Abstammung ist ausschließlich ein in
+  diesem Clone erreichbarer Commit, der Vorfahre von `HEAD` ist und dessen Seed-Blob
+  dem gelockten `seed_sha256` entspricht; veraltete, fremde, manipulierte oder nicht
+  erreichbare Quellcommits scheitern vor der Inventar-Vollvalidierung
+  (`scripts/platform/oci_proof_mirror.py`). Lock-Updates müssen `source_head` und
+  `seed_sha256` gemeinsam mit der Publisher-Evidenz neu binden.
 - `cell-profile.contract.json` definiert das erste manuelle, nicht selbstbedienbare GewebeZelle-Pilotprofil.
 - `cell-pilot/two-operator-pilot.contract.json` definiert den fail-closed strukturellen Vorprüfvertrag für genau zwei unabhängige Betreiber; die `.invalid`-Vorlage bleibt nicht aktivierbar.
 - `apps/weltgewebe/cell-pilot/federation-delivery-egress.yaml` ist ein nicht eingebundenes, fail-closed Cilium-FQDN-Template für exakt benannte ausgehende Peerziele.
@@ -61,6 +69,9 @@ verifies_with:
 make platform-check
 make platform-render
 make platform-kind-proof
+# equivalent direct call (same uv-locked tools/py environment):
+uv run --project tools/py --locked python scripts/platform/validate_platform.py
+uv run --project tools/py --locked python scripts/platform/oci_proof_mirror.py validate
 ```
 
 Der unprivilegierte Workflow `kubernetes-platform` prüft Pull Requests gegen den exakt ausgecheckten Merge-Zustand, ohne Zugriff auf private OCI-Pakete. Der getrennte Workflow `kubernetes-platform-proof` läuft nach passenden Pushes auf `main` oder bei einem ausdrücklich an den vollständigen aktuellen Main-Commit gebundenen Handstart. Er prüft den privaten OCI-Mirror sowie die vollständige Flux-/GitOps- und HA-Wiederherstellungskette gegen eindeutig benannte, kurzlebige kind-Cluster. Wiederverwendete Beweise sind an Commit, Eingabemanifest, Werkzeug-Lock, OCI-Lock, Image- und Knotenbindungen sowie Registry-Sperren gebunden.

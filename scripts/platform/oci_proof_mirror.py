@@ -72,6 +72,12 @@ class IntegrityError(MirrorError):
     failure_class = "integrity_mismatch"
 
 
+class AncestryError(IntegrityError):
+    """Generation source commit is outside the allowed, reachable ancestry."""
+
+    failure_class = "ancestry_violation"
+
+
 class BudgetError(MirrorError):
     failure_class = "budget_exceeded"
 
@@ -176,6 +182,81 @@ def _git_bytes(argv: list[str]) -> bytes:
         raise IntegrityError(f"Git binding check failed for {argv}: {error}") from error
 
 
+def _validate_generation_ancestry(generation: dict[str, Any]) -> None:
+    """Fail closed on source commit, allowed ancestry, and seed binding.
+
+    Machine-checked generation contract (before inventory / full validation):
+
+    - ``source_head`` is a full lowercase 40-hex Git commit id
+    - that commit is reachable in this clone (``git cat-file -e``)
+    - that commit is an ancestor of ``HEAD`` (allowed ancestry for this checkout)
+    - ``seed_sha256`` is a 64-hex digest matching the seed blob at ``source_head``
+    - the working-tree seed matches the same digest (lock update required on seed change)
+
+    Lock updates must re-bind ``source_head`` and ``seed_sha256`` together with the
+    publisher evidence fields. Ancestry is never skipped or weakened.
+    """
+    source_head = str(generation.get("source_head", ""))
+    seed_sha256 = str(generation.get("seed_sha256", ""))
+    if not re.fullmatch(r"[0-9a-f]{40}", source_head):
+        raise AncestryError("OCI mirror generation source_head is invalid")
+    if not HEX64.fullmatch(seed_sha256):
+        raise AncestryError("OCI mirror generation seed_sha256 is invalid")
+
+    try:
+        subprocess.run(
+            ["git", "cat-file", "-e", f"{source_head}^{{commit}}"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise AncestryError(
+            f"OCI mirror source_head is unreachable in this clone: {source_head}"
+        ) from error
+
+    try:
+        subprocess.run(
+            ["git", "merge-base", "--is-ancestor", source_head, "HEAD"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            timeout=30,
+        )
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise AncestryError(
+            "OCI mirror source_head is outside allowed ancestry of HEAD: "
+            f"{source_head}"
+        ) from error
+
+    try:
+        seed_at_head = subprocess.run(
+            ["git", "show", f"{source_head}:platform/oci-proof-mirror.seed.json"],
+            cwd=ROOT,
+            check=True,
+            capture_output=True,
+            timeout=30,
+        ).stdout
+    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+        raise AncestryError(
+            f"OCI mirror seed is not present at source_head {source_head}"
+        ) from error
+    if hashlib.sha256(seed_at_head).hexdigest() != seed_sha256:
+        raise AncestryError(
+            "OCI mirror generation seed_sha256 is not bound to source_head"
+        )
+    current_seed = ROOT / "platform/oci-proof-mirror.seed.json"
+    try:
+        current_digest = hashlib.sha256(current_seed.read_bytes()).hexdigest()
+    except OSError as error:
+        raise AncestryError(f"current OCI mirror seed is unreadable: {error}") from error
+    if current_digest != seed_sha256:
+        raise AncestryError(
+            "current OCI mirror seed changed without a new lock generation"
+        )
+
+
 def _load_lock() -> dict[str, Any]:
     try:
         lock = json.loads(LOCK_PATH.read_text(encoding="utf-8"))
@@ -194,32 +275,8 @@ def _load_lock() -> dict[str, Any]:
     images = lock.get("images")
     if not all(isinstance(item, dict) for item in (generation, mirror, budgets, images)):
         raise IntegrityError("OCI mirror lock sections are incomplete")
-    source_head = str(generation.get("source_head", ""))
-    seed_sha256 = str(generation.get("seed_sha256", ""))
-    if not re.fullmatch(r"[0-9a-f]{40}", source_head):
-        raise IntegrityError("OCI mirror generation source head is invalid")
-    if not HEX64.fullmatch(seed_sha256):
-        raise IntegrityError("OCI mirror generation seed digest is invalid")
-    try:
-        subprocess.run(
-            ["git", "merge-base", "--is-ancestor", source_head, "HEAD"],
-            cwd=ROOT,
-            check=True,
-            capture_output=True,
-            timeout=30,
-        )
-    except (OSError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
-        raise IntegrityError(
-            "OCI mirror generation is not an ancestor of this checkout"
-        ) from error
-    seed_at_head = _git_bytes(
-        ["show", f"{source_head}:platform/oci-proof-mirror.seed.json"]
-    )
-    if hashlib.sha256(seed_at_head).hexdigest() != seed_sha256:
-        raise IntegrityError("OCI mirror generation seed is not bound to source head")
-    current_seed = ROOT / "platform/oci-proof-mirror.seed.json"
-    if hashlib.sha256(current_seed.read_bytes()).hexdigest() != seed_sha256:
-        raise IntegrityError("current OCI mirror seed changed without a new generation")
+    # Ancestry / seed binding fails closed before inventory and mirror section checks.
+    _validate_generation_ancestry(generation)
     if not str(generation.get("workflow_run_id", "")).isdigit():
         raise IntegrityError("OCI mirror workflow run ID is invalid")
     if not str(generation.get("workflow_run_attempt", "")).isdigit():
