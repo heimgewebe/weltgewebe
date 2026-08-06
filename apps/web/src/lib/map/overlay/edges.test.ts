@@ -8,6 +8,7 @@ import {
   EDGE_CURVE_MAX_HANDLE_M,
   EDGE_CURVE_MAX_SAMPLES,
   EDGE_CURVE_MERCATOR_RADIUS_M,
+  EDGE_CURVE_MIN_SAMPLES,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
@@ -20,6 +21,7 @@ import {
   clipThreadPathByProgress,
   degreeSpacePolylineArcState,
   getThreadPathBuildSerialForTests,
+  hashUnit,
   hasCompleteEdgeThreadStyle,
   pointAtArcProgress,
   projectedChord,
@@ -29,6 +31,7 @@ import {
   sampleThreadCurve,
   shortestLongitudeDelta,
   threadCorridorKey,
+  threadCurveAdaptiveBreakpoints,
   threadCurveControlPoints,
   threadCurveControlPointsProjected,
   threadCurveProfile,
@@ -345,12 +348,18 @@ describe("natural thread curves", () => {
   const source: [number, number] = [9.9, 53.5];
   const target: [number, number] = [10.1, 53.65];
 
+  // Arc-length midpoint, not the array's middle index: curvature-adaptive
+  // sampling concentrates points where the curve bends, so the *array*
+  // midpoint no longer sits at arc progress 0.5 in general (e.g. a nearly
+  // straight span stays at the 4-point floor, whose middle index lands at
+  // t≈0.667). `pointAtArcProgress` finds the true half-arc-length point
+  // regardless of how the underlying samples are distributed.
   function projectedMidDeflection(
     path: readonly [number, number][],
     from: [number, number],
     to: [number, number],
   ): number {
-    const mid = path[Math.floor(path.length / 2)];
+    const mid = pointAtArcProgress(path, 0.5);
     const { sourceXY, targetXY } = projectedChord(from, to);
     const midXY = projectLngLatToMercator(mid[0], mid[1]);
     const chordMid: [number, number] = [
@@ -908,5 +917,204 @@ describe("natural thread curves", () => {
     expect(half.length).toBeLessThanOrEqual(full.length);
     expect(half[0].color).toBe(full[0].color);
     expect(half[0].coordinates[0]).toEqual(full[0].coordinates[0]);
+  });
+
+  describe("curvature-adaptive sampling", () => {
+    it("grows breakpoint count with control-polygon curvature and stays hard bounded", () => {
+      // Fully collinear control points: zero tangent rotation anywhere — must
+      // stay at the minimum floor, never invent extra points for a straight line.
+      const straight = threadCurveAdaptiveBreakpoints(
+        [0, 0],
+        [10, 0],
+        [20, 0],
+        [30, 0],
+      );
+      expect(straight.length).toBe(EDGE_CURVE_MIN_SAMPLES);
+
+      // Wide, clearly-visible (km-scale) hump: real curvature spread across
+      // the whole span must pull the count above the minimum.
+      const curvy = threadCurveAdaptiveBreakpoints(
+        [0, 0],
+        [0, 1500],
+        [3000, 1500],
+        [3000, 0],
+      );
+      expect(curvy.length).toBeGreaterThan(straight.length);
+      expect(curvy.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+
+      // Sharp hook: last handle direction opposes the incoming chord — even
+      // higher local curvature — but the hard cap must still hold.
+      const hook = threadCurveAdaptiveBreakpoints(
+        [0, 0],
+        [1000, 200],
+        [900, -3000],
+        [1000, -2800],
+      );
+      expect(hook.length).toBeGreaterThan(straight.length);
+      expect(hook.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+
+      // Integration: the same relationship holds through the public
+      // distance+profile entry points, and sampleThreadCurve's length always
+      // matches what threadCurveSampleCount reports for the same geometry.
+      const straightPrivate = threadCurveSampleCount(source, target, {
+        fadenType: "vote",
+        threadId: "adaptive-straight",
+      });
+      const curvyPrivate = threadCurveSampleCount(source, target, {
+        fadenType: "conversation",
+        threadId: "adaptive-curvy",
+      });
+      expect(curvyPrivate).toBeGreaterThan(straightPrivate);
+      expect(curvyPrivate).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+      expect(
+        sampleThreadCurve(source, target, {
+          fadenType: "conversation",
+          threadId: "adaptive-curvy",
+        }).length,
+      ).toBe(curvyPrivate);
+    });
+
+    it("keeps consecutive sampled directions smooth even on corridor-hook approaches", () => {
+      // Regression for a found defect: a subject-bound target approach picks
+      // its final handle direction from subject+target only (see
+      // threadTargetLocalCorridorAxis), independent of the source chord. For
+      // some source/target/subject combinations that axis sits far from the
+      // natural chord direction, folding the curve back on itself right
+      // before the target. Deterministic across a fixed sweep of synthetic
+      // subject ids (via the exported hashUnit — no Math.random) so this
+      // reproduces the same way on every run.
+      const types = [
+        "proposal",
+        "vote",
+        "conversation",
+        "knotting",
+        "legacy",
+      ] as const;
+      let worstVisibleTurnDeg = 0;
+      let worstInfo = "";
+      for (let index = 0; index < 200; index += 1) {
+        const subject = `regression-hook-${index}`;
+        const target: [number, number] = [
+          -30 + hashUnit(`${subject}:lng`) * 60,
+          20 + hashUnit(`${subject}:lat`) * 40,
+        ];
+        const sourceAngle = hashUnit(`${subject}:angle`) * Math.PI * 2;
+        const distanceM = 2_000 + hashUnit(`${subject}:dist`) * 40_000;
+        const from: [number, number] = [
+          target[0] + (Math.cos(sourceAngle) * distanceM) / 111_320,
+          target[1] + (Math.sin(sourceAngle) * distanceM) / 110_540,
+        ];
+        const fadenType = types[index % types.length];
+        const options = {
+          fadenType,
+          threadId: `regression-hook-thread-${index}`,
+          subjectId: subject,
+        };
+        const path = sampleThreadCurve(from, target, options);
+        expect(path[0]).toEqual(from);
+        expect(path.at(-1)).toEqual(target);
+
+        const projected = path.map(([lng, lat]) =>
+          projectLngLatToMercator(lng, lat),
+        );
+        for (let s = 2; s < projected.length; s += 1) {
+          const a = projected[s - 2];
+          const b = projected[s - 1];
+          const c = projected[s];
+          const v1x = b[0] - a[0];
+          const v1y = b[1] - a[1];
+          const v2x = c[0] - b[0];
+          const v2y = c[1] - b[1];
+          const n1 = Math.hypot(v1x, v1y);
+          const n2 = Math.hypot(v2x, v2y);
+          // Sub-few-metre segments are indistinguishable from a point at any
+          // map zoom that ever renders a Faden; a residual angle confined to
+          // that scale is not a visible defect (see
+          // EDGE_CURVE_MIN_VISIBLE_SEGMENT_M).
+          if (n1 <= 5 || n2 <= 5) continue;
+          const cos = Math.max(
+            -1,
+            Math.min(1, (v1x * v2x + v1y * v2y) / (n1 * n2)),
+          );
+          const angleDeg = (Math.acos(cos) * 180) / Math.PI;
+          if (angleDeg > worstVisibleTurnDeg) {
+            worstVisibleTurnDeg = angleDeg;
+            worstInfo = `index=${index} type=${fadenType}`;
+          }
+        }
+      }
+      // Well inside the pre-existing 120° self-loop guard (see the
+      // multi-source corridor test) — the fix keeps a wide margin, not a
+      // borderline pass.
+      expect(worstVisibleTurnDeg, worstInfo).toBeLessThan(60);
+    });
+  });
+
+  describe("extreme projections", () => {
+    it("stays finite and keeps exact endpoints across the antimeridian seam", () => {
+      const west: [number, number] = [179.999, 12];
+      const east: [number, number] = [-179.999, -8];
+      const path = sampleThreadCurve(west, east, {
+        fadenType: "proposal",
+        threadId: "extreme-antimeridian",
+      });
+      expect(path[0]).toEqual(west);
+      expect(path.at(-1)).toEqual(east);
+      for (const [lng, lat] of path) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+        expect(lng === 0 && lat === 0).toBe(false);
+      }
+    });
+
+    it("stays finite and keeps exact endpoints at very high latitudes", () => {
+      const nearNorthPole: [number, number] = [5, 89.9];
+      const nearSouthPole: [number, number] = [-170, -89.9];
+      const path = sampleThreadCurve(nearNorthPole, nearSouthPole, {
+        fadenType: "knotting",
+        threadId: "extreme-pole-to-pole",
+      });
+      expect(path[0]).toEqual(nearNorthPole);
+      expect(path.at(-1)).toEqual(nearSouthPole);
+      for (const [lng, lat] of path) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+        expect(lng === 0 && lat === 0).toBe(false);
+      }
+
+      // Same-latitude high-lat pair (Mercator projection stresses the
+      // internal latitude clamp without a large N-S component too).
+      const highA: [number, number] = [10, 88.5];
+      const highB: [number, number] = [170, 88.5];
+      const highPath = sampleThreadCurve(highA, highB, {
+        fadenType: "conversation",
+        threadId: "extreme-high-lat-ew",
+      });
+      expect(highPath[0]).toEqual(highA);
+      expect(highPath.at(-1)).toEqual(highB);
+      for (const [lng, lat] of highPath) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+      }
+    });
+
+    it("stays finite and keeps exact endpoints for near-antipodal, very long threads", () => {
+      const source1: [number, number] = [10, 45];
+      // Nearly the antipodal point of source1.
+      const antipodal: [number, number] = [-169.5, -44.5];
+      const path = sampleThreadCurve(source1, antipodal, {
+        fadenType: "legacy",
+        threadId: "extreme-near-antipodal",
+      });
+      expect(path[0]).toEqual(source1);
+      expect(path.at(-1)).toEqual(antipodal);
+      expect(path.length).toBeGreaterThanOrEqual(EDGE_CURVE_MIN_SAMPLES);
+      expect(path.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+      for (const [lng, lat] of path) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+        expect(lng === 0 && lat === 0).toBe(false);
+      }
+    });
   });
 });

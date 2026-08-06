@@ -204,7 +204,15 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   `EDGE_CURVE_MAX_BULGE_M`). Biegungsseite und Mikrovariation entstehen stabil
   aus Fadenidentität (`threadId` / `faden_subject_id`), nicht aus Zufall,
   Wellen oder Physiksimulation. Die Abtastpunktzahl ist fest begrenzt
-  (`EDGE_CURVE_MAX_SAMPLES` ≤ 24). Es gibt keine Physiksimulation und keine
+  (`EDGE_CURVE_MAX_SAMPLES` ≤ 24) und krümmungs-/flachheitsadaptiv: Die
+  Bézier-Parameterstellen werden deterministisch anhand der analytischen
+  Tangentenrichtung der Kontrollpunkte verdichtet (`threadCurveAdaptiveBreakpoints`),
+  nicht allein anhand roher Chordlänge und Fadenart-Spannung. So bleiben
+  auch stark gekrümmte oder lange Fäden innerhalb der harten Obergrenze eine
+  glatt wirkende Kurve statt einer sichtbar eckigen Polygonfolge; Strecken
+  unterhalb `EDGE_CURVE_MIN_VISIBLE_SEGMENT_M` werden nicht weiter verfeinert,
+  da eine Richtungsänderung auf dieser Skala auf keinem Kartenzoom sichtbar
+  wäre. Es gibt keine Physiksimulation und keine
   Kollisionserkennung. Längenunterschiede am Antimeridian nutzen die kürzeste
   unwrapped Längendifferenz; Zwischenpunkte bleiben endlich (kein
   NaN/Infinity). Ungültige Unprojektion darf nicht als `[0, 0]` (Nullinsel)

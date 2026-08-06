@@ -462,6 +462,45 @@ function cubicBezierPoint2(
   ];
 }
 
+/** Analytic derivative of {@link cubicBezierPoint2} at `t` (projected metres/unit-t). */
+function cubicBezierTangent2(
+  p0: ProjectedPoint,
+  p1: ProjectedPoint,
+  p2: ProjectedPoint,
+  p3: ProjectedPoint,
+  t: number,
+): [number, number] {
+  const u = 1 - t;
+  return [
+    3 * u * u * (p1[0] - p0[0]) +
+      6 * u * t * (p2[0] - p1[0]) +
+      3 * t * t * (p3[0] - p2[0]),
+    3 * u * u * (p1[1] - p0[1]) +
+      6 * u * t * (p2[1] - p1[1]) +
+      3 * t * t * (p3[1] - p2[1]),
+  ];
+}
+
+/**
+ * Angle in degrees between two projected-plane vectors. A degenerate
+ * (near-zero-length) tangent reports the maximum (180°) rather than silently
+ * treating an ill-defined direction as flat — callers must not undersample a
+ * near-singular point just because a vector happened to collapse to ~0.
+ */
+function angleBetweenDeg(
+  a: readonly [number, number],
+  b: readonly [number, number],
+): number {
+  const na = Math.hypot(a[0], a[1]);
+  const nb = Math.hypot(b[0], b[1]);
+  if (!(na > 1e-9) || !(nb > 1e-9)) return 180;
+  const cos = Math.max(
+    -1,
+    Math.min(1, (a[0] * b[0] + a[1] * b[1]) / (na * nb)),
+  );
+  return (Math.acos(cos) * 180) / Math.PI;
+}
+
 /**
  * Map a projected sample back to lon/lat. Intermediate longitudes follow the
  * unwrapped short path (may leave [-180, 180] when the chord crosses the
@@ -747,8 +786,93 @@ export function threadTargetApproachVector(
 }
 
 /**
- * Bounded sample count from projected chord length and profile softness. Never
- * exceeds {@link EDGE_CURVE_MAX_SAMPLES}.
+ * Tangent-direction rotation (degrees) a sampled span may still cover before
+ * it is bisected again. A plain chord-deviation/"flatness" test is not
+ * enough here: a subject-bound target approach can have a last handle whose
+ * direction is independent of the incoming chord (by design — see
+ * {@link threadTargetLocalCorridorAxis}), which can fold the curve back on
+ * itself right before the target. That fold can sit almost exactly on the
+ * chord (near-zero perpendicular deviation) while still reversing direction
+ * close to 180° — flatness alone would call that span "flat". Comparing the
+ * analytic tangent at both ends of a span catches it regardless of position.
+ */
+export const EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG = 20;
+
+/**
+ * Below this projected span length (metres), a residual tangent-angle
+ * violation is no longer worth another bisection: a direction change
+ * confined to a sub-few-metre stretch cannot be told apart from a single
+ * point at any map zoom that ever renders a Faden. Without this floor,
+ * adaptive refinement would keep consuming the sample budget chasing an
+ * extreme but literally invisible corridor fold (observed on long
+ * subject-bound approaches) instead of leaving that budget for genuinely
+ * visible curvature elsewhere on the same thread.
+ */
+export const EDGE_CURVE_MIN_VISIBLE_SEGMENT_M = 5;
+
+/**
+ * Deterministic, curvature-adaptive Bezier parameter breakpoints for the
+ * canonical thread curve. Starts from `minSamples` uniform points (never
+ * fewer, so short curves still round-cap cleanly on a dead-straight chord),
+ * then greedily bisects the single span whose analytic tangent rotates the
+ * most across it — skipping spans already shorter than
+ * {@link EDGE_CURVE_MIN_VISIBLE_SEGMENT_M} — until every remaining span is
+ * within {@link EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG} or the hard
+ * `maxSamples` budget is spent. Pure function of the four control points:
+ * deterministic, no RNG, no physics, no per-frame work — called once per
+ * path build, same as the rest of this module. Bounded cost: at most
+ * `maxSamples - minSamples` bisection rounds, each `O(current length)`
+ * tangent evaluations.
+ */
+export function threadCurveAdaptiveBreakpoints(
+  p0: ProjectedPoint,
+  p1: ProjectedPoint,
+  p2: ProjectedPoint,
+  p3: ProjectedPoint,
+  minSamples: number = EDGE_CURVE_MIN_SAMPLES,
+  maxSamples: number = EDGE_CURVE_MAX_SAMPLES,
+  angleToleranceDeg: number = EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG,
+  minVisibleSegmentM: number = EDGE_CURVE_MIN_VISIBLE_SEGMENT_M,
+): number[] {
+  const bounded = Math.max(2, Math.min(minSamples, maxSamples));
+  const ts: number[] = new Array(bounded);
+  for (let index = 0; index < bounded; index += 1) {
+    ts[index] = index / (bounded - 1);
+  }
+  const pointAt = (t: number) => cubicBezierPoint2(p0, p1, p2, p3, t);
+  const tangentAt = (t: number) => cubicBezierTangent2(p0, p1, p2, p3, t);
+  while (ts.length < maxSamples) {
+    let worstIndex = -1;
+    let worstAngle = angleToleranceDeg;
+    for (let index = 0; index < ts.length - 1; index += 1) {
+      const a = ts[index];
+      const b = ts[index + 1];
+      const pointA = pointAt(a);
+      const pointB = pointAt(b);
+      const spanLength = Math.hypot(
+        pointB[0] - pointA[0],
+        pointB[1] - pointA[1],
+      );
+      // Already indistinguishable from a point on any real map — leave it,
+      // even if its residual tangent angle is large (see doc comment above).
+      if (spanLength <= minVisibleSegmentM) continue;
+      const angle = angleBetweenDeg(tangentAt(a), tangentAt(b));
+      if (angle > worstAngle) {
+        worstAngle = angle;
+        worstIndex = index;
+      }
+    }
+    if (worstIndex < 0) break;
+    ts.splice(worstIndex + 1, 0, (ts[worstIndex] + ts[worstIndex + 1]) / 2);
+  }
+  return ts;
+}
+
+/**
+ * Bounded sample count for the canonical thread curve. Curvature-adaptive
+ * (see {@link threadCurveAdaptiveBreakpoints}): a near-straight chord stays
+ * near {@link EDGE_CURVE_MIN_SAMPLES}, a sharply bent one grows toward
+ * {@link EDGE_CURVE_MAX_SAMPLES} — never beyond it.
  */
 export function threadCurveSampleCount(
   source: LngLatTuple,
@@ -757,16 +881,12 @@ export function threadCurveSampleCount(
 ): number {
   const { length } = projectedChord(source, target);
   if (!(length > 0) || !Number.isFinite(length)) return 2;
-  const profile = threadCurveProfile(options.fadenType);
-  const softness = 1 - clamp01(profile.tension);
-  const density =
-    EDGE_CURVE_MIN_SAMPLES +
-    Math.ceil((length / EDGE_CURVE_FULL_LENGTH_M) * 10) +
-    Math.ceil(softness * 6);
-  return Math.max(
-    EDGE_CURVE_MIN_SAMPLES,
-    Math.min(EDGE_CURVE_MAX_SAMPLES, density),
+  const { p0, p1, p2, p3 } = threadCurveControlPointsProjected(
+    source,
+    target,
+    options,
   );
+  return threadCurveAdaptiveBreakpoints(p0, p1, p2, p3).length;
 }
 
 /**
@@ -801,7 +921,11 @@ export function sampleThreadCurveWithProjected(
     target,
     options,
   );
-  const count = threadCurveSampleCount(source, target, options);
+  // Same curvature-adaptive breakpoints threadCurveSampleCount reports —
+  // computed directly from the control points already built above instead of
+  // calling that helper again, so the control points are solved exactly once.
+  const ts = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3);
+  const count = ts.length;
   const samples: LngLatTuple[] = new Array(count);
   const projected: [number, number][] = new Array(count);
   for (let index = 0; index < count; index += 1) {
@@ -816,7 +940,7 @@ export function sampleThreadCurveWithProjected(
       projected[index] = [p3[0], p3[1]];
       continue;
     }
-    const t = index / (count - 1);
+    const t = ts[index];
     const [x, y] = cubicBezierPoint2(p0, p1, p2, p3, t);
     if (!Number.isFinite(x) || !Number.isFinite(y)) {
       // Fail closed: linear in projected plane + unwrapped lon/lat.
