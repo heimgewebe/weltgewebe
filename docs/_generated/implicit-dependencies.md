@@ -1,34 +1,153 @@
 ---
 id: docs.generated.implicit-dependencies
-title: Implicit Dependencies
+title: Implicit Dependency Decisions
 doc_type: generated
 status: active
-summary: Heuristische Karte impliziter Abhängigkeiten.
+summary: Reproduzierbare Einzelentscheidungen zu Makefile-Ausführungskanten.
 ---
 
-## Weltgewebe Implicit Dependencies
+## Weltgewebe Dependency Decisions
 
 Generated automatically. Do not edit.
 
-> **Note:** This report uses Makefile-based heuristic inference to identify script execution dependencies. Documentation status validation is not yet fully automated here.
+> **Contract:** This report classifies direct Makefile execution edges. It is diagnostic evidence, not an overall architecture pass, runtime-health proof, deployment proof, or permission to mutate.
 
-| Source | Inferred Dependency | Evidence | Documented |
-| --- | --- | --- | --- |
-| Makefile (validate-guards) | scripts/docmeta/repo-structure-guard.sh | `bash scripts/docmeta/repo-structure-guard.sh` | *unclear* |
-| Makefile (validate-guards) | scripts/docmeta/docs-relations-guard.sh | `bash scripts/docmeta/docs-relations-guard.sh` | *unclear* |
-| Makefile (validate-guards) | scripts/docmeta/generated-files-guard.sh | `bash scripts/docmeta/generated-files-guard.sh` | *unclear* |
-| Makefile (validate-guards) | scripts/docmeta/coverage-guard.sh | `bash scripts/docmeta/coverage-guard.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_weltgewebe_up_git_branch.sh | `bash scripts/tests/test_weltgewebe_up_git_branch.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_weltgewebe_up_frontend_required.sh | `bash scripts/tests/test_weltgewebe_up_frontend_required.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_weltgewebe_up_deploy_scope.sh | `bash scripts/tests/test_weltgewebe_up_deploy_scope.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_version_guard.sh | `bash scripts/tests/test_version_guard.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_basemap_mode_guard.sh | `bash scripts/tests/test_basemap_mode_guard.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_basemap_runtime_proof_contract.sh | `bash scripts/tests/test_basemap_runtime_proof_contract.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_security_headers_guard.sh | `bash scripts/tests/test_security_headers_guard.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_repo_contract_guards.sh | `bash scripts/tests/test_repo_contract_guards.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_postgres_backup_restore_contract.sh | `bash scripts/tests/test_postgres_backup_restore_contract.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_offhost_backup_pull_contract.sh | `bash scripts/tests/test_offhost_backup_pull_contract.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_web_artifact_install_contract.sh | `bash scripts/tests/test_web_artifact_install_contract.sh` | *unclear* |
-| Makefile (validate-shell-tests) | scripts/tests/test_api_release_identity_contract.sh | `bash scripts/tests/test_api_release_identity_contract.sh` | *unclear* |
-| Makefile (generate) | scripts/docmeta/generate-doc-index.sh | `bash scripts/docmeta/generate-doc-index.sh` | *unclear* |
-| Makefile (generate) | scripts/docmeta/generate-impl-index.sh | `bash scripts/docmeta/generate-impl-index.sh` | *unclear* |
+## Historical audit closure
+
+- Source commit: `b043a86dbf4e0e0868feb5177745a0f32a3264c0`
+- Source path: `docs/_generated/implicit-dependencies.md`
+- Source SHA-256: `565bac2acc11b53528a2e0de755cccc9fd20c569206bbbc9c4896291a22f5327`
+- Findings decided: **51 / 51**
+- Allowed decisions: `explicit`, `accepted-coupling`, `remove`, `not-relevant`.
+- Classification counts: `accepted-coupling`=5, `explicit`=46, `not-relevant`=0, `remove`=0
+
+Each historical row remains individually addressable by a stable finding ID. A direct Makefile invocation is classified as `explicit`; standard or lock-bound tooling is an `accepted-coupling`; a historical edge absent from the current repository is `remove`.
+
+| ID | Target | Dependency | Evidence | Decision | Decision evidence |
+| --- | --- | --- | --- | --- | --- |
+| `ae804487d7bd` | validate-tests | `unittest` | `python3 -m unittest discover scripts/docmeta/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `c5d1e410b77c` | validate-tests | `unittest` | `python3 -m unittest discover scripts/agent/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `1e0157c6d2da` | validate-tests | `unittest` | `python3 -m unittest discover scripts/ci/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `a0dfbcb231ad` | validate-tests | `pytest` | `python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py` | accepted-coupling | repository tooling dependency locked by `tools/py/uv.lock` |
+| `672e31c6520d` | validate-tests | `scripts.docmeta.generate_claim_evidence_map` | `python3 -m scripts.docmeta.generate_claim_evidence_map --check` | explicit | current repository module resolves to `scripts/docmeta/generate_claim_evidence_map.py` and is invoked directly |
+| `661302376343` | platform-check | `unittest` | `python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `abff7b4ec9f9` | validate-core | `scripts.docmeta.validate_schema` | `python3 -m scripts.docmeta.validate_schema` | explicit | current repository module resolves to `scripts/docmeta/validate_schema.py` and is invoked directly |
+| `34fc72a7ef3c` | validate-core | `scripts.docmeta.validate_relations` | `python3 -m scripts.docmeta.validate_relations` | explicit | current repository module resolves to `scripts/docmeta/validate_relations.py` and is invoked directly |
+| `233227db7041` | validate-core | `scripts.docmeta.check_repo_index_consistency` | `python3 -m scripts.docmeta.check_repo_index_consistency` | explicit | current repository module resolves to `scripts/docmeta/check_repo_index_consistency.py` and is invoked directly |
+| `4164da23da51` | validate-core | `scripts.docmeta.check_doc_review_age` | `python3 -m scripts.docmeta.check_doc_review_age` | explicit | current repository module resolves to `scripts/docmeta/check_doc_review_age.py` and is invoked directly |
+| `3f5ae8d74a93` | validate-core | `scripts.docmeta.review_impact` | `python3 -m scripts.docmeta.review_impact` | explicit | current repository module resolves to `scripts/docmeta/review_impact.py` and is invoked directly |
+| `da2826701319` | validate-core | `scripts.docmeta.validate_opt_arc_001_db_proof_matrix` | `python3 -m scripts.docmeta.validate_opt_arc_001_db_proof_matrix` | explicit | current repository module resolves to `scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py` and is invoked directly |
+| `7e3058aff7c2` | validate-core | `scripts.docmeta.export_docs_index` | `python3 -m scripts.docmeta.export_docs_index` | explicit | current repository module resolves to `scripts/docmeta/export_docs_index.py` and is invoked directly |
+| `dd003ac58644` | validate-core | `scripts.docmeta.generate_audit_gaps` | `python3 -m scripts.docmeta.generate_audit_gaps` | explicit | current repository module resolves to `scripts/docmeta/generate_audit_gaps.py` and is invoked directly |
+| `48922ddc2c70` | validate-core | `scripts.docmeta.check_links` | `python3 -m scripts.docmeta.check_links` | explicit | current repository module resolves to `scripts/docmeta/check_links.py` and is invoked directly |
+| `1fc9dc478514` | validate-core | `scripts.search.validate_relevance_goldset` | `python3 -m scripts.search.validate_relevance_goldset` | explicit | current repository module resolves to `scripts/search/validate_relevance_goldset.py` and is invoked directly |
+| `7e277bd4dd1e` | generate-system-map | `scripts.docmeta.generate_system_map` | `python3 -m scripts.docmeta.generate_system_map` | explicit | current repository module resolves to `scripts/docmeta/generate_system_map.py` and is invoked directly |
+| `38a398f80379` | validate-guards | `scripts/docmeta/repo-structure-guard.sh` | `bash scripts/docmeta/repo-structure-guard.sh` | explicit | current repository file `scripts/docmeta/repo-structure-guard.sh` exists and is invoked directly |
+| `d9b061b1ed84` | validate-guards | `scripts/docmeta/docs-relations-guard.sh` | `bash scripts/docmeta/docs-relations-guard.sh` | explicit | current repository file `scripts/docmeta/docs-relations-guard.sh` exists and is invoked directly |
+| `c90cbbea3031` | validate-guards | `scripts/docmeta/generated-files-guard.sh` | `bash scripts/docmeta/generated-files-guard.sh` | explicit | current repository file `scripts/docmeta/generated-files-guard.sh` exists and is invoked directly |
+| `0a1c0d3145a5` | validate-guards | `scripts/docmeta/coverage-guard.sh` | `bash scripts/docmeta/coverage-guard.sh` | explicit | current repository file `scripts/docmeta/coverage-guard.sh` exists and is invoked directly |
+| `248590ef9575` | validate-shell-tests | `scripts/tests/test_weltgewebe_up_git_branch.sh` | `bash scripts/tests/test_weltgewebe_up_git_branch.sh` | explicit | current repository file `scripts/tests/test_weltgewebe_up_git_branch.sh` exists and is invoked directly |
+| `d85c2662a8d2` | validate-shell-tests | `scripts/tests/test_weltgewebe_up_frontend_required.sh` | `bash scripts/tests/test_weltgewebe_up_frontend_required.sh` | explicit | current repository file `scripts/tests/test_weltgewebe_up_frontend_required.sh` exists and is invoked directly |
+| `2a0a49ceaf45` | validate-shell-tests | `scripts/tests/test_weltgewebe_up_deploy_scope.sh` | `bash scripts/tests/test_weltgewebe_up_deploy_scope.sh` | explicit | current repository file `scripts/tests/test_weltgewebe_up_deploy_scope.sh` exists and is invoked directly |
+| `3813d6f0382d` | validate-shell-tests | `scripts/tests/test_version_guard.sh` | `bash scripts/tests/test_version_guard.sh` | explicit | current repository file `scripts/tests/test_version_guard.sh` exists and is invoked directly |
+| `6e04f750feb5` | validate-shell-tests | `scripts/tests/test_basemap_mode_guard.sh` | `bash scripts/tests/test_basemap_mode_guard.sh` | explicit | current repository file `scripts/tests/test_basemap_mode_guard.sh` exists and is invoked directly |
+| `73bc998b04bd` | validate-shell-tests | `scripts/tests/test_basemap_runtime_proof_contract.sh` | `bash scripts/tests/test_basemap_runtime_proof_contract.sh` | explicit | current repository file `scripts/tests/test_basemap_runtime_proof_contract.sh` exists and is invoked directly |
+| `0e7e5f5038b5` | validate-shell-tests | `scripts/tests/test_security_headers_guard.sh` | `bash scripts/tests/test_security_headers_guard.sh` | explicit | current repository file `scripts/tests/test_security_headers_guard.sh` exists and is invoked directly |
+| `eacb8bb55b41` | validate-shell-tests | `scripts/tests/test_repo_contract_guards.sh` | `bash scripts/tests/test_repo_contract_guards.sh` | explicit | current repository file `scripts/tests/test_repo_contract_guards.sh` exists and is invoked directly |
+| `e5340a0c84aa` | validate-shell-tests | `scripts/tests/test_postgres_backup_restore_contract.sh` | `bash scripts/tests/test_postgres_backup_restore_contract.sh` | explicit | current repository file `scripts/tests/test_postgres_backup_restore_contract.sh` exists and is invoked directly |
+| `e7cbe7003de3` | validate-shell-tests | `scripts/tests/test_offhost_backup_pull_contract.sh` | `bash scripts/tests/test_offhost_backup_pull_contract.sh` | explicit | current repository file `scripts/tests/test_offhost_backup_pull_contract.sh` exists and is invoked directly |
+| `3bc4b6b53b0c` | validate-shell-tests | `scripts/tests/test_web_artifact_install_contract.sh` | `bash scripts/tests/test_web_artifact_install_contract.sh` | explicit | current repository file `scripts/tests/test_web_artifact_install_contract.sh` exists and is invoked directly |
+| `8e8bb22c760c` | validate-shell-tests | `scripts/tests/test_api_release_identity_contract.sh` | `bash scripts/tests/test_api_release_identity_contract.sh` | explicit | current repository file `scripts/tests/test_api_release_identity_contract.sh` exists and is invoked directly |
+| `1eb7490b26a6` | generate | `scripts/docmeta/generate-doc-index.sh` | `bash scripts/docmeta/generate-doc-index.sh` | explicit | current repository file `scripts/docmeta/generate-doc-index.sh` exists and is invoked directly |
+| `58473728419f` | generate | `scripts.docmeta.generate_backlinks` | `python3 -m scripts.docmeta.generate_backlinks` | explicit | current repository module resolves to `scripts/docmeta/generate_backlinks.py` and is invoked directly |
+| `c90a1061567f` | generate | `scripts/docmeta/generate-impl-index.sh` | `bash scripts/docmeta/generate-impl-index.sh` | explicit | current repository file `scripts/docmeta/generate-impl-index.sh` exists and is invoked directly |
+| `76a230e16f37` | generate | `scripts.docmeta.generate_orphans` | `python3 -m scripts.docmeta.generate_orphans` | explicit | current repository module resolves to `scripts/docmeta/generate_orphans.py` and is invoked directly |
+| `bb585238ceed` | generate | `scripts.docmeta.generate_supersession_map` | `python3 -m scripts.docmeta.generate_supersession_map` | explicit | current repository module resolves to `scripts/docmeta/generate_supersession_map.py` and is invoked directly |
+| `1f37dacd5076` | generate | `scripts.docmeta.generate_system_map` | `python3 -m scripts.docmeta.generate_system_map` | explicit | current repository module resolves to `scripts/docmeta/generate_system_map.py` and is invoked directly |
+| `e2edecd71ffe` | generate | `scripts.docmeta.generate_architecture_drift` | `python3 -m scripts.docmeta.generate_architecture_drift` | explicit | current repository module resolves to `scripts/docmeta/generate_architecture_drift.py` and is invoked directly |
+| `47e2b93a6602` | generate | `scripts.docmeta.generate_doc_coverage` | `python3 -m scripts.docmeta.generate_doc_coverage` | explicit | current repository module resolves to `scripts/docmeta/generate_doc_coverage.py` and is invoked directly |
+| `b60618cec34f` | generate | `scripts.docmeta.generate_knowledge_gaps` | `python3 -m scripts.docmeta.generate_knowledge_gaps` | explicit | current repository module resolves to `scripts/docmeta/generate_knowledge_gaps.py` and is invoked directly |
+| `47defc89a0e7` | generate | `scripts.docmeta.generate_implicit_dependencies` | `python3 -m scripts.docmeta.generate_implicit_dependencies` | explicit | current repository module resolves to `scripts/docmeta/generate_implicit_dependencies.py` and is invoked directly |
+| `237e710c503f` | generate | `scripts.docmeta.generate_change_resonance` | `python3 -m scripts.docmeta.generate_change_resonance` | explicit | current repository module resolves to `scripts/docmeta/generate_change_resonance.py` and is invoked directly |
+| `f03ec2b0b5de` | generate | `scripts.docmeta.generate_staleness_report` | `python3 -m scripts.docmeta.generate_staleness_report` | explicit | current repository module resolves to `scripts/docmeta/generate_staleness_report.py` and is invoked directly |
+| `3d1f632c296f` | generate | `scripts.docmeta.generate_agent_readiness` | `python3 -m scripts.docmeta.generate_agent_readiness` | explicit | current repository module resolves to `scripts/docmeta/generate_agent_readiness.py` and is invoked directly |
+| `482f7f645739` | generate | `scripts.docmeta.generate_claim_evidence_map` | `python3 -m scripts.docmeta.generate_claim_evidence_map` | explicit | current repository module resolves to `scripts/docmeta/generate_claim_evidence_map.py` and is invoked directly |
+| `eac73c1b7622` | generate | `scripts.docmeta.generate_relations_analysis` | `python3 -m scripts.docmeta.generate_relations_analysis` | explicit | current repository module resolves to `scripts/docmeta/generate_relations_analysis.py` and is invoked directly |
+| `21040e5a4197` | generate | `scripts.docmeta.generate_relates_to_audit` | `python3 -m scripts.docmeta.generate_relates_to_audit` | explicit | current repository module resolves to `scripts/docmeta/generate_relates_to_audit.py` and is invoked directly |
+| `bf84458832ae` | generate | `scripts.docmeta.generate_report_lifecycle` | `python3 -m scripts.docmeta.generate_report_lifecycle` | explicit | current repository module resolves to `scripts/docmeta/generate_report_lifecycle.py` and is invoked directly |
+| `04e5dc18dd76` | generate | `scripts.docmeta.generate_report_lifecycle_inventory` | `python3 -m scripts.docmeta.generate_report_lifecycle_inventory` | explicit | current repository module resolves to `scripts/docmeta/generate_report_lifecycle_inventory.py` and is invoked directly |
+
+## Current Makefile snapshot
+
+- Makefile SHA-256: `6cb3afed2b09a10c78b96d5d017e0b7a15883870c1c147040bb4c4beb1b09b4d`
+- Current execution edges decided: **60 / 60**
+- Classification counts: `accepted-coupling`=6, `explicit`=54, `not-relevant`=0, `remove`=0
+- New Python-module, Python-script, or Bash-script edges without a resolvable decision make generation and `--check` fail closed.
+
+| ID | Target | Line | Dependency | Evidence | Decision | Decision evidence |
+| --- | --- | --- | --- | --- | --- | --- |
+| `30020e3e96a7` | agent-contract-check | 31 | `scripts.agent.validate_agent_tooling_lock` | `$(UV_RUN) python -m scripts.agent.validate_agent_tooling_lock` | explicit | current repository module resolves to `scripts/agent/validate_agent_tooling_lock.py` and is invoked directly |
+| `30b01ac25bff` | agent-contract-check | 32 | `scripts.agent.validate_repo_agent_contract` | `$(UV_RUN) python -m scripts.agent.validate_repo_agent_contract` | explicit | current repository module resolves to `scripts/agent/validate_repo_agent_contract.py` and is invoked directly |
+| `e4470aae94fd` | validate-tests | 35 | `unittest` | `$(UV_RUN) python -m unittest discover scripts/docmeta/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `66a9b64ea625` | validate-tests | 36 | `unittest` | `$(UV_RUN) python -m unittest discover scripts/agent/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `03aef30b84af` | validate-tests | 38 | `unittest` | `$(CI_TEST_GIT_ENV) $(UV_RUN) python -m unittest discover scripts/ci/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `9ae51b1590fb` | validate-tests | 39 | `pytest` | `$(UV_RUN) python -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py` | accepted-coupling | repository tooling dependency locked by `tools/py/uv.lock` |
+| `7005818926ab` | validate-tests | 40 | `scripts/docmeta/validate_claim_registry.py` | `$(UV_RUN) python scripts/docmeta/validate_claim_registry.py` | explicit | current repository file `scripts/docmeta/validate_claim_registry.py` exists and is invoked directly |
+| `4d007b1251ce` | validate-tests | 41 | `scripts/docmeta/validate_doc_freshness_registry.py` | `$(UV_RUN) python scripts/docmeta/validate_doc_freshness_registry.py` | explicit | current repository file `scripts/docmeta/validate_doc_freshness_registry.py` exists and is invoked directly |
+| `af4f8be2b990` | validate-tests | 42 | `scripts.docmeta.generate_claim_evidence_map` | `$(UV_RUN) python -m scripts.docmeta.generate_claim_evidence_map --check` | explicit | current repository module resolves to `scripts/docmeta/generate_claim_evidence_map.py` and is invoked directly |
+| `31a7b83bfff2` | cell-pilot-check | 45 | `scripts/platform/validate_two_operator_pilot.py` | `$(UV_RUN) python scripts/platform/validate_two_operator_pilot.py --mode example platform/cell-pilot/two-operator-pilot.example.invalid.json` | explicit | current repository file `scripts/platform/validate_two_operator_pilot.py` exists and is invoked directly |
+| `f849306da624` | cell-pilot-check | 46 | `unittest` | `$(UV_RUN) python -m unittest scripts.ci.tests.test_two_operator_cell_pilot` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `2df4378d26a5` | platform-check | 49 | `scripts/platform/validate_platform.py` | `$(UV_RUN) python scripts/platform/validate_platform.py` | explicit | current repository file `scripts/platform/validate_platform.py` exists and is invoked directly |
+| `4c836d1d73ba` | platform-check | 50 | `unittest` | `$(UV_RUN) python -m unittest scripts.ci.tests.test_kubernetes_platform_contract` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
+| `93151b9e8cf5` | platform-render | 53 | `scripts/platform/validate_platform.py` | `$(UV_RUN) python scripts/platform/validate_platform.py --render` | explicit | current repository file `scripts/platform/validate_platform.py` exists and is invoked directly |
+| `03f52b25315e` | platform-kind-proof | 56 | `scripts/platform/kind_reference.py` | `$(UV_RUN) python scripts/platform/kind_reference.py proof --mode direct` | explicit | current repository file `scripts/platform/kind_reference.py` exists and is invoked directly |
+| `5cda0dfaecaa` | validate-core | 59 | `scripts.docmeta.validate_schema` | `$(UV_RUN) python -m scripts.docmeta.validate_schema` | explicit | current repository module resolves to `scripts/docmeta/validate_schema.py` and is invoked directly |
+| `df19c4dc59b1` | validate-core | 60 | `scripts.docmeta.validate_relations` | `$(UV_RUN) python -m scripts.docmeta.validate_relations` | explicit | current repository module resolves to `scripts/docmeta/validate_relations.py` and is invoked directly |
+| `2e32efb65d8b` | validate-core | 61 | `scripts.docmeta.check_repo_index_consistency` | `$(UV_RUN) python -m scripts.docmeta.check_repo_index_consistency` | explicit | current repository module resolves to `scripts/docmeta/check_repo_index_consistency.py` and is invoked directly |
+| `a4b4416e2450` | validate-core | 62 | `scripts.docmeta.check_doc_review_age` | `$(UV_RUN) python -m scripts.docmeta.check_doc_review_age` | explicit | current repository module resolves to `scripts/docmeta/check_doc_review_age.py` and is invoked directly |
+| `18a52f20c0fa` | validate-core | 63 | `scripts.docmeta.review_impact` | `$(UV_RUN) python -m scripts.docmeta.review_impact` | explicit | current repository module resolves to `scripts/docmeta/review_impact.py` and is invoked directly |
+| `22c0f745229f` | validate-core | 64 | `scripts.docmeta.validate_opt_arc_001_db_proof_matrix` | `$(UV_RUN) python -m scripts.docmeta.validate_opt_arc_001_db_proof_matrix` | explicit | current repository module resolves to `scripts/docmeta/validate_opt_arc_001_db_proof_matrix.py` and is invoked directly |
+| `162e71a08919` | validate-core | 65 | `scripts.docmeta.export_docs_index` | `$(UV_RUN) python -m scripts.docmeta.export_docs_index` | explicit | current repository module resolves to `scripts/docmeta/export_docs_index.py` and is invoked directly |
+| `5c07746005af` | validate-core | 66 | `scripts.docmeta.generate_audit_gaps` | `$(UV_RUN) python -m scripts.docmeta.generate_audit_gaps` | explicit | current repository module resolves to `scripts/docmeta/generate_audit_gaps.py` and is invoked directly |
+| `daf22f541c62` | validate-core | 67 | `scripts.docmeta.check_links` | `$(UV_RUN) python -m scripts.docmeta.check_links` | explicit | current repository module resolves to `scripts/docmeta/check_links.py` and is invoked directly |
+| `1bfb8a74fb6a` | validate-core | 68 | `scripts.search.validate_relevance_goldset` | `$(UV_RUN) python -m scripts.search.validate_relevance_goldset` | explicit | current repository module resolves to `scripts/search/validate_relevance_goldset.py` and is invoked directly |
+| `85826a3b59e9` | generate-system-map | 71 | `scripts.docmeta.generate_system_map` | `$(UV_RUN) python -m scripts.docmeta.generate_system_map` | explicit | current repository module resolves to `scripts/docmeta/generate_system_map.py` and is invoked directly |
+| `38a398f80379` | validate-guards | 77 | `scripts/docmeta/repo-structure-guard.sh` | `bash scripts/docmeta/repo-structure-guard.sh` | explicit | current repository file `scripts/docmeta/repo-structure-guard.sh` exists and is invoked directly |
+| `d9b061b1ed84` | validate-guards | 78 | `scripts/docmeta/docs-relations-guard.sh` | `bash scripts/docmeta/docs-relations-guard.sh` | explicit | current repository file `scripts/docmeta/docs-relations-guard.sh` exists and is invoked directly |
+| `c90cbbea3031` | validate-guards | 79 | `scripts/docmeta/generated-files-guard.sh` | `bash scripts/docmeta/generated-files-guard.sh` | explicit | current repository file `scripts/docmeta/generated-files-guard.sh` exists and is invoked directly |
+| `0a1c0d3145a5` | validate-guards | 80 | `scripts/docmeta/coverage-guard.sh` | `bash scripts/docmeta/coverage-guard.sh` | explicit | current repository file `scripts/docmeta/coverage-guard.sh` exists and is invoked directly |
+| `248590ef9575` | validate-shell-tests | 83 | `scripts/tests/test_weltgewebe_up_git_branch.sh` | `bash scripts/tests/test_weltgewebe_up_git_branch.sh` | explicit | current repository file `scripts/tests/test_weltgewebe_up_git_branch.sh` exists and is invoked directly |
+| `d85c2662a8d2` | validate-shell-tests | 84 | `scripts/tests/test_weltgewebe_up_frontend_required.sh` | `bash scripts/tests/test_weltgewebe_up_frontend_required.sh` | explicit | current repository file `scripts/tests/test_weltgewebe_up_frontend_required.sh` exists and is invoked directly |
+| `2a0a49ceaf45` | validate-shell-tests | 85 | `scripts/tests/test_weltgewebe_up_deploy_scope.sh` | `bash scripts/tests/test_weltgewebe_up_deploy_scope.sh` | explicit | current repository file `scripts/tests/test_weltgewebe_up_deploy_scope.sh` exists and is invoked directly |
+| `3813d6f0382d` | validate-shell-tests | 86 | `scripts/tests/test_version_guard.sh` | `bash scripts/tests/test_version_guard.sh` | explicit | current repository file `scripts/tests/test_version_guard.sh` exists and is invoked directly |
+| `6e04f750feb5` | validate-shell-tests | 87 | `scripts/tests/test_basemap_mode_guard.sh` | `bash scripts/tests/test_basemap_mode_guard.sh` | explicit | current repository file `scripts/tests/test_basemap_mode_guard.sh` exists and is invoked directly |
+| `73bc998b04bd` | validate-shell-tests | 88 | `scripts/tests/test_basemap_runtime_proof_contract.sh` | `bash scripts/tests/test_basemap_runtime_proof_contract.sh` | explicit | current repository file `scripts/tests/test_basemap_runtime_proof_contract.sh` exists and is invoked directly |
+| `0e7e5f5038b5` | validate-shell-tests | 89 | `scripts/tests/test_security_headers_guard.sh` | `bash scripts/tests/test_security_headers_guard.sh` | explicit | current repository file `scripts/tests/test_security_headers_guard.sh` exists and is invoked directly |
+| `eacb8bb55b41` | validate-shell-tests | 90 | `scripts/tests/test_repo_contract_guards.sh` | `bash scripts/tests/test_repo_contract_guards.sh` | explicit | current repository file `scripts/tests/test_repo_contract_guards.sh` exists and is invoked directly |
+| `e5340a0c84aa` | validate-shell-tests | 91 | `scripts/tests/test_postgres_backup_restore_contract.sh` | `bash scripts/tests/test_postgres_backup_restore_contract.sh` | explicit | current repository file `scripts/tests/test_postgres_backup_restore_contract.sh` exists and is invoked directly |
+| `e7cbe7003de3` | validate-shell-tests | 92 | `scripts/tests/test_offhost_backup_pull_contract.sh` | `bash scripts/tests/test_offhost_backup_pull_contract.sh` | explicit | current repository file `scripts/tests/test_offhost_backup_pull_contract.sh` exists and is invoked directly |
+| `3bc4b6b53b0c` | validate-shell-tests | 93 | `scripts/tests/test_web_artifact_install_contract.sh` | `bash scripts/tests/test_web_artifact_install_contract.sh` | explicit | current repository file `scripts/tests/test_web_artifact_install_contract.sh` exists and is invoked directly |
+| `8e8bb22c760c` | validate-shell-tests | 94 | `scripts/tests/test_api_release_identity_contract.sh` | `bash scripts/tests/test_api_release_identity_contract.sh` | explicit | current repository file `scripts/tests/test_api_release_identity_contract.sh` exists and is invoked directly |
+| `1eb7490b26a6` | generate | 103 | `scripts/docmeta/generate-doc-index.sh` | `bash scripts/docmeta/generate-doc-index.sh` | explicit | current repository file `scripts/docmeta/generate-doc-index.sh` exists and is invoked directly |
+| `4aed6f8e48e9` | generate | 104 | `scripts.docmeta.generate_backlinks` | `$(UV_RUN) python -m scripts.docmeta.generate_backlinks` | explicit | current repository module resolves to `scripts/docmeta/generate_backlinks.py` and is invoked directly |
+| `c90a1061567f` | generate | 105 | `scripts/docmeta/generate-impl-index.sh` | `bash scripts/docmeta/generate-impl-index.sh` | explicit | current repository file `scripts/docmeta/generate-impl-index.sh` exists and is invoked directly |
+| `dcbb72b087c9` | generate | 106 | `scripts.docmeta.generate_orphans` | `$(UV_RUN) python -m scripts.docmeta.generate_orphans` | explicit | current repository module resolves to `scripts/docmeta/generate_orphans.py` and is invoked directly |
+| `d3848f0d2f4b` | generate | 107 | `scripts.docmeta.generate_supersession_map` | `$(UV_RUN) python -m scripts.docmeta.generate_supersession_map` | explicit | current repository module resolves to `scripts/docmeta/generate_supersession_map.py` and is invoked directly |
+| `b8a2756108db` | generate | 108 | `scripts.docmeta.generate_system_map` | `$(UV_RUN) python -m scripts.docmeta.generate_system_map` | explicit | current repository module resolves to `scripts/docmeta/generate_system_map.py` and is invoked directly |
+| `1be6c956ad35` | generate | 109 | `scripts.docmeta.generate_architecture_drift` | `$(UV_RUN) python -m scripts.docmeta.generate_architecture_drift` | explicit | current repository module resolves to `scripts/docmeta/generate_architecture_drift.py` and is invoked directly |
+| `af65dfb28750` | generate | 110 | `scripts.docmeta.generate_doc_coverage` | `$(UV_RUN) python -m scripts.docmeta.generate_doc_coverage` | explicit | current repository module resolves to `scripts/docmeta/generate_doc_coverage.py` and is invoked directly |
+| `99f33f30e2a0` | generate | 111 | `scripts.docmeta.generate_knowledge_gaps` | `$(UV_RUN) python -m scripts.docmeta.generate_knowledge_gaps` | explicit | current repository module resolves to `scripts/docmeta/generate_knowledge_gaps.py` and is invoked directly |
+| `f11e1c46e857` | generate | 112 | `scripts.docmeta.generate_implicit_dependencies` | `$(UV_RUN) python -m scripts.docmeta.generate_implicit_dependencies` | explicit | current repository module resolves to `scripts/docmeta/generate_implicit_dependencies.py` and is invoked directly |
+| `c50e0aef9868` | generate | 113 | `scripts.docmeta.generate_change_resonance` | `$(UV_RUN) python -m scripts.docmeta.generate_change_resonance` | explicit | current repository module resolves to `scripts/docmeta/generate_change_resonance.py` and is invoked directly |
+| `45313dc2583d` | generate | 114 | `scripts.docmeta.generate_staleness_report` | `$(UV_RUN) python -m scripts.docmeta.generate_staleness_report` | explicit | current repository module resolves to `scripts/docmeta/generate_staleness_report.py` and is invoked directly |
+| `3858cdc6c5da` | generate | 115 | `scripts.docmeta.generate_agent_readiness` | `$(UV_RUN) python -m scripts.docmeta.generate_agent_readiness` | explicit | current repository module resolves to `scripts/docmeta/generate_agent_readiness.py` and is invoked directly |
+| `787f31d26a36` | generate | 116 | `scripts.docmeta.generate_claim_evidence_map` | `$(UV_RUN) python -m scripts.docmeta.generate_claim_evidence_map` | explicit | current repository module resolves to `scripts/docmeta/generate_claim_evidence_map.py` and is invoked directly |
+| `d65433cf4dfb` | generate | 117 | `scripts.docmeta.generate_relations_analysis` | `$(UV_RUN) python -m scripts.docmeta.generate_relations_analysis` | explicit | current repository module resolves to `scripts/docmeta/generate_relations_analysis.py` and is invoked directly |
+| `8057cbe6809c` | generate | 118 | `scripts.docmeta.generate_relates_to_audit` | `$(UV_RUN) python -m scripts.docmeta.generate_relates_to_audit` | explicit | current repository module resolves to `scripts/docmeta/generate_relates_to_audit.py` and is invoked directly |
+| `86ae7c39f5a2` | generate | 119 | `scripts.docmeta.generate_report_lifecycle` | `$(UV_RUN) python -m scripts.docmeta.generate_report_lifecycle` | explicit | current repository module resolves to `scripts/docmeta/generate_report_lifecycle.py` and is invoked directly |
+| `768a67e15fd0` | generate | 120 | `scripts.docmeta.generate_report_lifecycle_inventory` | `$(UV_RUN) python -m scripts.docmeta.generate_report_lifecycle_inventory` | explicit | current repository module resolves to `scripts/docmeta/generate_report_lifecycle_inventory.py` and is invoked directly |
+
+## Interpretation boundary
+
+`explicit` means only that the Makefile names a current repository script or module directly. `accepted-coupling` means the invoked test/tooling runtime is standard-library or repository-lock bound. Neither decision proves semantic correctness, complete architecture coverage, successful execution, current production state, or safe deployment.
+

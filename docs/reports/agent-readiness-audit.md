@@ -21,6 +21,20 @@ summary: "Repository-Audit und Ausarbeitung des Agent-Readiness-Masterplans für
 > beschrieben. Der endgültige Cutover ist in
 > [`garnrolle-identity-cutover-proof.md`](garnrolle-identity-cutover-proof.md)
 > belegt.
+>
+> **Abschluss WELTGEWEBE-OS-V1-T054 – 6. August 2026:** Der Fließtext
+> dieses Dokuments bleibt ein historischer Audit-Snapshot vom 26. Juli 2026
+> und ist keine aktuelle Systemwahrheit. Der heutige Produkteinstieg steht in
+> [`docs/vision.md`](../vision.md); aktuelle Code-, CI-, Deployment- und
+> Runtimebelege schlagen historische Bestandsaufnahmen. Das frühere
+> „Docs-only“-Statuslabel ist für das aktive Repository ausdrücklich überholt.
+> Der an Commit `b043a86dbf4e0e0868feb5177745a0f32a3264c0` gebundene
+> F-005-Befund wurde mit **51 von 51** einzeln klassifizierten Makefile-Kanten
+> geschlossen. Der reproduzierbare Abschluss und die aktuelle Drift-Sperre
+> stehen in
+> [`implicit-dependencies.md`](../_generated/implicit-dependencies.md). Der
+> generierte Bericht ist Diagnoseevidenz, kein positiver Gesamtstatus für
+> Architektur, Laufzeit, Deployment oder Mutationssicherheit.
 
 ## Executive Summary
 
