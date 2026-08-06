@@ -8,6 +8,8 @@ import {
   EDGE_CURVE_MAX_HANDLE_M,
   EDGE_CURVE_MAX_SAMPLES,
   EDGE_CURVE_MERCATOR_RADIUS_M,
+  EDGE_CURVE_MIN_SAMPLES,
+  EDGE_CURVE_TARGET_APPROACH_CONE_DEG,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
@@ -20,6 +22,7 @@ import {
   clipThreadPathByProgress,
   degreeSpacePolylineArcState,
   getThreadPathBuildSerialForTests,
+  hashUnit,
   hasCompleteEdgeThreadStyle,
   pointAtArcProgress,
   projectedChord,
@@ -29,12 +32,14 @@ import {
   sampleThreadCurve,
   shortestLongitudeDelta,
   threadCorridorKey,
+  threadCurveAdaptiveBreakpoints,
   threadCurveControlPoints,
   threadCurveControlPointsProjected,
   threadCurveProfile,
   threadCurveSampleCount,
   threadTargetApproachVector,
   threadTargetLocalCorridorAxis,
+  unprojectMercatorToLngLat,
   updateEdges,
 } from "$lib/map/overlay/edges";
 import { LAYERS } from "$lib/map/overlay/layers";
@@ -345,12 +350,18 @@ describe("natural thread curves", () => {
   const source: [number, number] = [9.9, 53.5];
   const target: [number, number] = [10.1, 53.65];
 
+  // Arc-length midpoint, not the array's middle index: curvature-adaptive
+  // sampling concentrates points where the curve bends, so the *array*
+  // midpoint no longer sits at arc progress 0.5 in general (e.g. a nearly
+  // straight span stays at the 4-point floor, whose middle index lands at
+  // t≈0.667). `pointAtArcProgress` finds the true half-arc-length point
+  // regardless of how the underlying samples are distributed.
   function projectedMidDeflection(
     path: readonly [number, number][],
     from: [number, number],
     to: [number, number],
   ): number {
-    const mid = path[Math.floor(path.length / 2)];
+    const mid = pointAtArcProgress(path, 0.5);
     const { sourceXY, targetXY } = projectedChord(from, to);
     const midXY = projectLngLatToMercator(mid[0], mid[1]);
     const chordMid: [number, number] = [
@@ -601,105 +612,73 @@ describe("natural thread curves", () => {
     );
   });
 
-  it("shares a true multi-source target-local approach for one subject", () => {
+  // Local helpers for the corridor-cone tests below.
+  const dot = (a: [number, number], b: [number, number]) =>
+    a[0] * b[0] + a[1] * b[1];
+  const angleDeg = (a: [number, number], b: [number, number]) => {
+    const na = Math.hypot(a[0], a[1]);
+    const nb = Math.hypot(b[0], b[1]);
+    const cos = Math.max(-1, Math.min(1, dot(a, b) / (na * nb)));
+    return (Math.acos(cos) * 180) / Math.PI;
+  };
+  /** Places a source so its own natural entry direction (reverse chord from
+   * target) is exactly `axis`, at `distanceM` projected metres from target. */
+  const sourceAtNaturalAxis = (
+    target: [number, number],
+    axis: [number, number],
+    distanceM: number,
+  ): [number, number] => {
+    const targetXY = projectLngLatToMercator(target[0], target[1]);
+    return unprojectMercatorToLngLat(
+      targetXY[0] + axis[0] * distanceM,
+      targetXY[1] + axis[1] * distanceM,
+    );
+  };
+
+  it("shares the exact subject corridor axis when a source's own direction already agrees", () => {
+    // The common case: a source positioned so its natural entry direction
+    // (reverse chord) coincides with the deterministic subject+target axis.
+    // Geometry and corridor grouping agree completely, so the shared axis is
+    // used exactly — subject-bound threads still visually converge.
     const subject = "22222222-2222-5222-8222-222222222222";
     const sharedTarget: [number, number] = [10.05, 53.55];
-    // Three strongly different sources: W, N, and far SE of the target.
-    const sources: Array<[number, number]> = [
-      [8.5, 53.55],
-      [10.05, 54.4],
-      [12.2, 52.1],
-    ];
+    const preferredAxis = threadTargetLocalCorridorAxis(sharedTarget, subject);
     const types = ["proposal", "vote", "conversation"] as const;
-    const approaches = sources.map((src, index) =>
-      threadTargetApproachVector(src, sharedTarget, {
-        fadenType: types[index],
-        threadId: `multi-src-${index}`,
-        subjectId: subject,
-      }),
+    // Perturb each source a little within the safe cone so they are still
+    // distinct sources, not one single direction.
+    const perturbedAxis = (deg: number): [number, number] => {
+      const theta = (deg * Math.PI) / 180;
+      const cosT = Math.cos(theta);
+      const sinT = Math.sin(theta);
+      return [
+        preferredAxis[0] * cosT - preferredAxis[1] * sinT,
+        preferredAxis[0] * sinT + preferredAxis[1] * cosT,
+      ];
+    };
+    const sources = [
+      sourceAtNaturalAxis(sharedTarget, perturbedAxis(-10), 12_000),
+      sourceAtNaturalAxis(sharedTarget, perturbedAxis(0), 30_000),
+      sourceAtNaturalAxis(sharedTarget, perturbedAxis(15), 6_000),
+    ];
+    const axes = sources.map(
+      (src, index) =>
+        threadCurveControlPointsProjected(src, sharedTarget, {
+          fadenType: types[index],
+          threadId: `multi-src-${index}`,
+          subjectId: subject,
+        }).corridorAxis,
     );
-    const axis = threadTargetLocalCorridorAxis(sharedTarget, subject);
-    const expectedApproach: [number, number] = [-axis[0], -axis[1]];
-    const dot = (a: [number, number], b: [number, number]) =>
-      a[0] * b[0] + a[1] * b[1];
-    for (let i = 0; i < approaches.length; i += 1) {
-      expect(dot(approaches[i], expectedApproach)).toBeGreaterThan(0.999);
-      for (let j = i + 1; j < approaches.length; j += 1) {
-        expect(dot(approaches[i], approaches[j])).toBeGreaterThan(0.999);
+    for (const axis of axes) {
+      expect(dot(axis, preferredAxis)).toBeGreaterThan(0.999);
+    }
+    for (let i = 0; i < axes.length; i += 1) {
+      for (let j = i + 1; j < axes.length; j += 1) {
+        expect(dot(axes[i], axes[j])).toBeGreaterThan(0.999);
       }
     }
 
-    for (let i = 0; i < sources.length; i += 1) {
-      const path = sampleThreadCurve(sources[i], sharedTarget, {
-        fadenType: types[i],
-        threadId: `multi-src-${i}`,
-        subjectId: subject,
-      });
-      expect(path[0]).toEqual(sources[i]);
-      expect(path.at(-1)).toEqual(sharedTarget);
-      for (const point of path) {
-        expect(Number.isFinite(point[0])).toBe(true);
-        expect(Number.isFinite(point[1])).toBe(true);
-        // Never spike to null island unless that is a real endpoint.
-        if (
-          Math.abs(sources[i][0]) > 1 ||
-          Math.abs(sources[i][1]) > 1 ||
-          Math.abs(sharedTarget[0]) > 1 ||
-          Math.abs(sharedTarget[1]) > 1
-        ) {
-          expect(point[0] === 0 && point[1] === 0).toBe(false);
-        }
-      }
-
-      // Last control point lies on the target-local corridor axis.
-      const ctrl = threadCurveControlPointsProjected(sources[i], sharedTarget, {
-        fadenType: types[i],
-        threadId: `multi-src-${i}`,
-        subjectId: subject,
-      });
-      const { targetXY } = projectedChord(sources[i], sharedTarget);
-      const outX = ctrl.p2[0] - targetXY[0];
-      const outY = ctrl.p2[1] - targetXY[1];
-      const outLen = Math.hypot(outX, outY);
-      expect(outLen).toBeGreaterThan(0);
-      expect(outLen).toBeLessThanOrEqual(
-        Math.min(
-          ctrl.length * EDGE_CURVE_MAX_HANDLE_FRACTION + 1e-6,
-          EDGE_CURVE_MAX_HANDLE_M + 1e-6,
-        ),
-      );
-      const outUnit: [number, number] = [outX / outLen, outY / outLen];
-      expect(dot(outUnit, axis)).toBeGreaterThan(0.999);
-
-      // Monotone approach in the last quarter: distance to target non-increasing.
-      const lastQuarterFrom = Math.floor(path.length * 0.75);
-      let prevDist = Number.POSITIVE_INFINITY;
-      for (let s = lastQuarterFrom; s < path.length; s += 1) {
-        const xy = projectLngLatToMercator(path[s][0], path[s][1]);
-        const txy = projectLngLatToMercator(sharedTarget[0], sharedTarget[1]);
-        const dist = Math.hypot(xy[0] - txy[0], xy[1] - txy[1]);
-        expect(dist).toBeLessThanOrEqual(prevDist + 1e-6);
-        prevDist = dist;
-      }
-
-      // No self-loop: consecutive sample direction never reverses more than 120°.
-      for (let s = 2; s < path.length; s += 1) {
-        const a = projectLngLatToMercator(path[s - 2][0], path[s - 2][1]);
-        const b = projectLngLatToMercator(path[s - 1][0], path[s - 1][1]);
-        const c = projectLngLatToMercator(path[s][0], path[s][1]);
-        const v1x = b[0] - a[0];
-        const v1y = b[1] - a[1];
-        const v2x = c[0] - b[0];
-        const v2y = c[1] - b[1];
-        const n1 = Math.hypot(v1x, v1y);
-        const n2 = Math.hypot(v2x, v2y);
-        if (n1 < 1e-9 || n2 < 1e-9) continue;
-        const turn = (v1x * v2x + v1y * v2y) / (n1 * n2);
-        expect(turn).toBeGreaterThan(-0.5);
-      }
-    }
-
-    // Mid arcs may still differ by type/source; only the final approach is locked.
+    // Mid arcs may still differ by type/source; only the final approach axis
+    // is shared.
     const midDefl = sources.map((src, index) => {
       const { p0, p1, p2, p3 } = threadCurveControlPointsProjected(
         src,
@@ -715,6 +694,102 @@ describe("natural thread curves", () => {
       return Math.hypot(midX - (p0[0] + p3[0]) / 2, midY - (p0[1] + p3[1]) / 2);
     });
     expect(midDefl[2]).toBeGreaterThan(midDefl[1]);
+  });
+
+  it("clamps the subject corridor axis into a safe per-source entry cone instead of forcing an identical tangent", () => {
+    // Reproduces the real defect: a source whose own natural entry direction
+    // (reverse chord) is diametrically opposed to the deterministic
+    // subject+target corridor axis. Forcing the exact shared axis here (old
+    // behaviour) drives the last handle straight past the target and back —
+    // a visible hook. The honest contract is a shared *preferred* direction,
+    // clamped per source into a safe cone, not an identical tangent for any
+    // origin.
+    const subject = "33333333-3333-5333-8333-333333333333";
+    const sharedTarget: [number, number] = [10.05, 53.55];
+    const preferredAxis = threadTargetLocalCorridorAxis(sharedTarget, subject);
+    const naturalOpposite: [number, number] = [
+      -preferredAxis[0],
+      -preferredAxis[1],
+    ];
+    const oppositeSource = sourceAtNaturalAxis(
+      sharedTarget,
+      naturalOpposite,
+      20_000,
+    );
+    const options = {
+      fadenType: "proposal",
+      threadId: "cone-opposite",
+      subjectId: subject,
+    };
+    const ctrl = threadCurveControlPointsProjected(
+      oppositeSource,
+      sharedTarget,
+      options,
+    );
+
+    // The clamp actually engaged: the used axis is not the raw shared axis...
+    expect(dot(ctrl.corridorAxis, preferredAxis)).toBeLessThan(0.9);
+    // ...but stays within the documented safe cone of *this* source's own
+    // natural direction.
+    expect(angleDeg(ctrl.corridorAxis, naturalOpposite)).toBeLessThanOrEqual(
+      EDGE_CURVE_TARGET_APPROACH_CONE_DEG + 1e-6,
+    );
+    // Handle length stays bounded exactly as before (relative + absolute cap).
+    const targetXY = projectLngLatToMercator(sharedTarget[0], sharedTarget[1]);
+    const outLen = Math.hypot(
+      ctrl.p2[0] - targetXY[0],
+      ctrl.p2[1] - targetXY[1],
+    );
+    expect(outLen).toBeGreaterThan(0);
+    expect(outLen).toBeLessThanOrEqual(
+      Math.min(
+        ctrl.length * EDGE_CURVE_MAX_HANDLE_FRACTION + 1e-6,
+        EDGE_CURVE_MAX_HANDLE_M + 1e-6,
+      ),
+    );
+    // The target approach direction (p3 - p2) keeps a clearly positive
+    // forward component toward the target, not a sideways-or-backward one.
+    const { dx, dy, length } = projectedChord(oppositeSource, sharedTarget);
+    const along: [number, number] = [dx / length, dy / length];
+    expect(dot(ctrl.targetApproach, along)).toBeGreaterThan(
+      Math.cos((EDGE_CURVE_TARGET_APPROACH_CONE_DEG * Math.PI) / 180) - 1e-6,
+    );
+
+    // Hard invariant: control-point projections onto the chord axis are
+    // non-decreasing (0 <= proj(p1) <= proj(p2) <= length), which is
+    // sufficient for the Bezier derivative along that axis to never go
+    // negative — no fold, no reversal, by construction.
+    const sourceXY = projectLngLatToMercator(
+      oppositeSource[0],
+      oppositeSource[1],
+    );
+    const axialProjection = (p: readonly [number, number]) =>
+      (p[0] - sourceXY[0]) * along[0] + (p[1] - sourceXY[1]) * along[1];
+    const proj1 = axialProjection(ctrl.p1);
+    const proj2 = axialProjection(ctrl.p2);
+    expect(proj1).toBeGreaterThanOrEqual(-1e-6);
+    expect(proj2).toBeGreaterThanOrEqual(proj1 - 1e-6);
+    expect(proj2).toBeLessThanOrEqual(length + 1e-6);
+
+    // The sampled curve itself stays fold-free: exact endpoints, finite, and
+    // a clean, non-reversing final approach.
+    const path = sampleThreadCurve(oppositeSource, sharedTarget, options);
+    expect(path[0]).toEqual(oppositeSource);
+    expect(path.at(-1)).toEqual(sharedTarget);
+    for (const point of path) {
+      expect(Number.isFinite(point[0])).toBe(true);
+      expect(Number.isFinite(point[1])).toBe(true);
+      expect(point[0] === 0 && point[1] === 0).toBe(false);
+    }
+    let prevAxial = Number.NEGATIVE_INFINITY;
+    for (const [lng, lat] of path) {
+      const xy = projectLngLatToMercator(lng, lat);
+      const axial = axialProjection(xy);
+      // Sampled points never move backward along the source→target axis
+      // beyond floating-point noise.
+      expect(axial).toBeGreaterThanOrEqual(prevAxial - 1e-6);
+      prevAxial = axial;
+    }
   });
 
   it("projects geometry in Web Mercator with stable EW length across latitudes", () => {
@@ -908,5 +983,285 @@ describe("natural thread curves", () => {
     expect(half.length).toBeLessThanOrEqual(full.length);
     expect(half[0].color).toBe(full[0].color);
     expect(half[0].coordinates[0]).toEqual(full[0].coordinates[0]);
+  });
+
+  describe("curvature-adaptive sampling", () => {
+    it("grows breakpoint count with control-polygon curvature and stays hard bounded", () => {
+      // Fully collinear control points: zero tangent rotation anywhere — must
+      // stay at the minimum floor, never invent extra points for a straight line.
+      const straight = threadCurveAdaptiveBreakpoints(
+        [0, 0],
+        [10, 0],
+        [20, 0],
+        [30, 0],
+      );
+      expect(straight.length).toBe(EDGE_CURVE_MIN_SAMPLES);
+
+      // Wide, clearly-visible (km-scale) hump: real curvature spread across
+      // the whole span must pull the count above the minimum.
+      const curvy = threadCurveAdaptiveBreakpoints(
+        [0, 0],
+        [0, 1500],
+        [3000, 1500],
+        [3000, 0],
+      );
+      expect(curvy.length).toBeGreaterThan(straight.length);
+      expect(curvy.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+
+      // Sharp hook: last handle direction opposes the incoming chord — even
+      // higher local curvature — but the hard cap must still hold.
+      const hook = threadCurveAdaptiveBreakpoints(
+        [0, 0],
+        [1000, 200],
+        [900, -3000],
+        [1000, -2800],
+      );
+      expect(hook.length).toBeGreaterThan(straight.length);
+      expect(hook.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+
+      // Integration: the same relationship holds through the public
+      // distance+profile entry points, and sampleThreadCurve's length always
+      // matches what threadCurveSampleCount reports for the same geometry.
+      const straightPrivate = threadCurveSampleCount(source, target, {
+        fadenType: "vote",
+        threadId: "adaptive-straight",
+      });
+      const curvyPrivate = threadCurveSampleCount(source, target, {
+        fadenType: "conversation",
+        threadId: "adaptive-curvy",
+      });
+      expect(curvyPrivate).toBeGreaterThan(straightPrivate);
+      expect(curvyPrivate).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+      expect(
+        sampleThreadCurve(source, target, {
+          fadenType: "conversation",
+          threadId: "adaptive-curvy",
+        }).length,
+      ).toBe(curvyPrivate);
+    });
+
+    it("keeps a large deterministic sweep fold-free: monotone control points, non-backward samples, exact/finite endpoints", () => {
+      // Large deterministic sweep across sources/targets/subjects/types (via
+      // the exported hashUnit — no Math.random) so this reproduces identically
+      // on every run. Historically, a subject-bound target approach could pick
+      // its final handle direction from subject+target only (see
+      // threadTargetLocalCorridorAxis), independent of the source chord —
+      // for some combinations that folded the curve back on itself right
+      // before the target. The control-point invariant now makes that
+      // mathematically impossible; this sweep verifies it holds everywhere,
+      // not just in the specific case it was found in.
+      const types = [
+        "proposal",
+        "vote",
+        "conversation",
+        "knotting",
+        "legacy",
+      ] as const;
+      let worstVisibleTurnDeg = 0;
+      let worstInfo = "";
+      for (let index = 0; index < 200; index += 1) {
+        const subject = `regression-hook-${index}`;
+        const target: [number, number] = [
+          -30 + hashUnit(`${subject}:lng`) * 60,
+          20 + hashUnit(`${subject}:lat`) * 40,
+        ];
+        const sourceAngle = hashUnit(`${subject}:angle`) * Math.PI * 2;
+        const distanceM = 2_000 + hashUnit(`${subject}:dist`) * 40_000;
+        const from: [number, number] = [
+          target[0] + (Math.cos(sourceAngle) * distanceM) / 111_320,
+          target[1] + (Math.sin(sourceAngle) * distanceM) / 110_540,
+        ];
+        const fadenType = types[index % types.length];
+        // Half the sweep is a proven subject relationship (corridor path,
+        // the historically risky case); half stays private fallback.
+        const subjectId = index % 2 === 0 ? subject : null;
+        const options = {
+          fadenType,
+          threadId: `regression-hook-thread-${index}`,
+          subjectId,
+        };
+
+        // Control-point invariant: 0 <= proj(p1) <= proj(p2) <= length on the
+        // source→target chord axis, for every case in the sweep.
+        const ctrl = threadCurveControlPointsProjected(from, target, options);
+        const { dx, dy, length: chordLength } = projectedChord(from, target);
+        expect(chordLength).toBeGreaterThan(0);
+        const along: [number, number] = [dx / chordLength, dy / chordLength];
+        const sourceXY = projectLngLatToMercator(from[0], from[1]);
+        const axialProjection = (p: readonly [number, number]) =>
+          (p[0] - sourceXY[0]) * along[0] + (p[1] - sourceXY[1]) * along[1];
+        const proj1 = axialProjection(ctrl.p1);
+        const proj2 = axialProjection(ctrl.p2);
+        expect(proj1, `index=${index} proj1`).toBeGreaterThanOrEqual(-1e-6);
+        expect(proj2, `index=${index} proj2>=proj1`).toBeGreaterThanOrEqual(
+          proj1 - 1e-6,
+        );
+        expect(proj2, `index=${index} proj2<=length`).toBeLessThanOrEqual(
+          chordLength + 1e-6,
+        );
+
+        const path = sampleThreadCurve(from, target, options);
+        expect(path[0]).toEqual(from);
+        expect(path.at(-1)).toEqual(target);
+        expect(path.length).toBeGreaterThanOrEqual(2);
+        expect(path.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+
+        const projected = path.map(([lng, lat]) =>
+          projectLngLatToMercator(lng, lat),
+        );
+        let prevAxial = Number.NEGATIVE_INFINITY;
+        for (let s = 0; s < projected.length; s += 1) {
+          const [px, py] = projected[s];
+          expect(Number.isFinite(px), `index=${index} finite x`).toBe(true);
+          expect(Number.isFinite(py), `index=${index} finite y`).toBe(true);
+          expect(px === 0 && py === 0, `index=${index} not null-island`).toBe(
+            false,
+          );
+          // Sampled points never move backward along the chord axis — the
+          // direct, testable consequence of the control-point invariant.
+          const axial = axialProjection([px, py]);
+          expect(
+            axial,
+            `index=${index} sample ${s} axial monotonic`,
+          ).toBeGreaterThanOrEqual(prevAxial - 1e-6);
+          prevAxial = axial;
+        }
+
+        for (let s = 2; s < projected.length; s += 1) {
+          const a = projected[s - 2];
+          const b = projected[s - 1];
+          const c = projected[s];
+          const v1x = b[0] - a[0];
+          const v1y = b[1] - a[1];
+          const v2x = c[0] - b[0];
+          const v2y = c[1] - b[1];
+          const n1 = Math.hypot(v1x, v1y);
+          const n2 = Math.hypot(v2x, v2y);
+          // Sub-few-metre segments are indistinguishable from a point at any
+          // map zoom that ever renders a Faden; a residual angle confined to
+          // that scale is not a visible defect (see
+          // EDGE_CURVE_MIN_VISIBLE_SEGMENT_M).
+          if (n1 <= 5 || n2 <= 5) continue;
+          const cos = Math.max(
+            -1,
+            Math.min(1, (v1x * v2x + v1y * v2y) / (n1 * n2)),
+          );
+          const turnDeg = (Math.acos(cos) * 180) / Math.PI;
+          if (turnDeg > worstVisibleTurnDeg) {
+            worstVisibleTurnDeg = turnDeg;
+            worstInfo = `index=${index} type=${fadenType}`;
+          }
+        }
+      }
+      // Well inside the pre-existing 120° self-loop guard (see the
+      // multi-source corridor test) — the fix keeps a wide margin, not a
+      // borderline pass.
+      expect(worstVisibleTurnDeg, worstInfo).toBeLessThan(60);
+    });
+
+    it("catches an interior S-curve/cusp even when the span's two end tangents agree", () => {
+      // Synthetic cubic where B'(0) and B'(1) point the exact same direction
+      // (0, 3h) — a pure two-point endpoint-tangent comparison sees zero
+      // rotation across the whole span and would never refine it — while the
+      // curve actually loops down through p2 and back up, a real interior
+      // S-curve/cusp. See the derivation: B'(0) = 3(p1-p0) = (0, 3h);
+      // B'(1) = 3(p3-p2) = 3((w,0)-(w,-h)) = (0, 3h) for any h, w.
+      const h = 100;
+      const w = 100;
+      const p0: [number, number] = [0, 0];
+      const p1: [number, number] = [0, h];
+      const p2: [number, number] = [w, -h];
+      const p3: [number, number] = [w, 0];
+      // Isolate the whole-span behaviour: minSamples=2 means the only initial
+      // span is [0, 1], exactly the one whose end tangents coincide.
+      const breakpoints = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3, 2);
+      expect(breakpoints.length).toBeGreaterThan(2);
+      expect(breakpoints.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+    });
+
+    it("does not skip a span whose endpoints are close but whose interior arc is large", () => {
+      // p0/p3 sit within EDGE_CURVE_MIN_VISIBLE_SEGMENT_M of each other (a
+      // near-loop back to the start), but the control polygon bows out over a
+      // kilometre — a real, highly visible detour. The old endpoint-chord-only
+      // gate would call this span "invisible" and never refine it.
+      const p0: [number, number] = [0, 0];
+      const p1: [number, number] = [0, 2000];
+      const p2: [number, number] = [2000, 2000];
+      const p3: [number, number] = [3, 4]; // chord to p0 is exactly 5m.
+      expect(Math.hypot(p3[0] - p0[0], p3[1] - p0[1])).toBe(5);
+      // minSamples=2 isolates the single initial span [0, 1] so only the new
+      // arc-length-estimate gate (not a later, already-split span) is tested.
+      const breakpoints = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3, 2);
+      expect(breakpoints.length).toBeGreaterThan(2);
+      expect(breakpoints.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+    });
+  });
+
+  describe("extreme projections", () => {
+    it("stays finite and keeps exact endpoints across the antimeridian seam", () => {
+      const west: [number, number] = [179.999, 12];
+      const east: [number, number] = [-179.999, -8];
+      const path = sampleThreadCurve(west, east, {
+        fadenType: "proposal",
+        threadId: "extreme-antimeridian",
+      });
+      expect(path[0]).toEqual(west);
+      expect(path.at(-1)).toEqual(east);
+      for (const [lng, lat] of path) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+        expect(lng === 0 && lat === 0).toBe(false);
+      }
+    });
+
+    it("stays finite and keeps exact endpoints at very high latitudes", () => {
+      const nearNorthPole: [number, number] = [5, 89.9];
+      const nearSouthPole: [number, number] = [-170, -89.9];
+      const path = sampleThreadCurve(nearNorthPole, nearSouthPole, {
+        fadenType: "knotting",
+        threadId: "extreme-pole-to-pole",
+      });
+      expect(path[0]).toEqual(nearNorthPole);
+      expect(path.at(-1)).toEqual(nearSouthPole);
+      for (const [lng, lat] of path) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+        expect(lng === 0 && lat === 0).toBe(false);
+      }
+
+      // Same-latitude high-lat pair (Mercator projection stresses the
+      // internal latitude clamp without a large N-S component too).
+      const highA: [number, number] = [10, 88.5];
+      const highB: [number, number] = [170, 88.5];
+      const highPath = sampleThreadCurve(highA, highB, {
+        fadenType: "conversation",
+        threadId: "extreme-high-lat-ew",
+      });
+      expect(highPath[0]).toEqual(highA);
+      expect(highPath.at(-1)).toEqual(highB);
+      for (const [lng, lat] of highPath) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+      }
+    });
+
+    it("stays finite and keeps exact endpoints for near-antipodal, very long threads", () => {
+      const source1: [number, number] = [10, 45];
+      // Nearly the antipodal point of source1.
+      const antipodal: [number, number] = [-169.5, -44.5];
+      const path = sampleThreadCurve(source1, antipodal, {
+        fadenType: "legacy",
+        threadId: "extreme-near-antipodal",
+      });
+      expect(path[0]).toEqual(source1);
+      expect(path.at(-1)).toEqual(antipodal);
+      expect(path.length).toBeGreaterThanOrEqual(EDGE_CURVE_MIN_SAMPLES);
+      expect(path.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+      for (const [lng, lat] of path) {
+        expect(Number.isFinite(lng)).toBe(true);
+        expect(Number.isFinite(lat)).toBe(true);
+        expect(lng === 0 && lat === 0).toBe(false);
+      }
+    });
   });
 });
