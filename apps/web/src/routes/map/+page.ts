@@ -4,10 +4,13 @@ import { selectMapResourceTransport } from "$lib/map/mapResourceTransport";
 export const load: PageLoad = async ({ fetch, depends }) => {
   depends("weltgewebe:domain-data");
   const apiUrl = import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
+  const runtime = {
+    isDevelopment: import.meta.env.DEV,
+    isProduction: import.meta.env.PROD,
+    testProxyEnabled: import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === "true",
+  } as const;
   // Keep the cursor loader split from the initial map chunk; the build enforces this startup budget.
   const { loadMapResources } = await import("$lib/map/cursorPagination");
-  // Empty PUBLIC_GEWEBE_API_BASE is the prerendered same-origin demo API (bare arrays).
-  // Use static-list in the browser too; only a configured remote base stays on cursor.
-  const transport = selectMapResourceTransport(apiUrl);
+  const transport = selectMapResourceTransport(apiUrl, runtime);
   return loadMapResources((url) => fetch(url), apiUrl, transport);
 };
