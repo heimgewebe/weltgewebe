@@ -247,7 +247,7 @@ describe("resolveEdgeMotionInput", () => {
       source: [10, 53.5],
       target: [10.2, 53.6],
       kind: "membership",
-      fadenType: "legacy",
+      fadenType: "out",
     });
     expect(resolved?.themeColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(resolved?.themeColors?.length).toBeGreaterThan(0);
@@ -341,7 +341,7 @@ describe("EdgeMotionController", () => {
     // Progress clips the stable curve at arc-length halfway (exact endpoints preserved).
     expect(halfway.geometry.coordinates[0]).toEqual([0, 0]);
     const path = buildThreadPathState([0, 0], [10, 20], [], {
-      fadenType: "legacy",
+      fadenType: "out",
       threadId: input.id,
     });
     const expectedTip = pointAtArcProgress(path.samples, 0.5, {
@@ -502,13 +502,13 @@ describe("EdgeMotionController", () => {
         ),
       ).toBe(true);
       const main = map.getLayer(
-        fadenType === "legacy"
+        fadenType === "out"
           ? EDGE_MOTION_LAYER
           : `edge-motion-layer-${fadenType}`,
       ) as { paint?: Record<string, unknown> } | undefined;
       const highlight = map.getLayer(
-        fadenType === "legacy"
-          ? "edge-motion-highlight-layer-legacy"
+        fadenType === "out"
+          ? "edge-motion-highlight-layer-out"
           : `edge-motion-highlight-layer-${fadenType}`,
       ) as { paint?: Record<string, unknown> } | undefined;
       const expected = EDGE_THREAD_VARIANTS.find(
@@ -551,7 +551,7 @@ describe("EdgeMotionController", () => {
   });
 
   it("clips progress on fixed colour seams rather than walking them", () => {
-    const opts = { fadenType: "legacy", threadId: "edge-seams" };
+    const opts = { fadenType: "out", threadId: "edge-seams" };
     const full = buildProgressClippedThemeSegments(
       [0, 0],
       [8, 0],
@@ -590,20 +590,20 @@ describe("EdgeMotionController", () => {
 
     for (const variant of EDGE_THREAD_VARIANTS) {
       const staticBodyId =
-        variant.fadenType === "legacy"
+        variant.fadenType === "out"
           ? "edges-layer"
           : `edges-${variant.fadenType}-layer`;
       const staticHighlightId =
-        variant.fadenType === "legacy"
+        variant.fadenType === "out"
           ? "edges-highlight-layer"
           : `edges-${variant.fadenType}-highlight-layer`;
       const motionBodyId =
-        variant.fadenType === "legacy"
+        variant.fadenType === "out"
           ? EDGE_MOTION_LAYER
           : `edge-motion-layer-${variant.fadenType}`;
       const motionHighlightId =
-        variant.fadenType === "legacy"
-          ? "edge-motion-highlight-layer-legacy"
+        variant.fadenType === "out"
+          ? "edge-motion-highlight-layer-out"
           : `edge-motion-highlight-layer-${variant.fadenType}`;
       const staticBody = staticSpecs.find((spec) => spec.id === staticBodyId);
       const staticHighlight = staticSpecs.find(
@@ -663,7 +663,7 @@ describe("EdgeMotionController", () => {
     expect(features.length).toBeGreaterThan(0);
     const expectedTip = pointAtArcProgress(
       sampleThreadCurve([0, 0], [10, 20], {
-        fadenType: "legacy",
+        fadenType: "out",
         threadId: input.id,
       }),
       0.5,

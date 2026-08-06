@@ -6,7 +6,7 @@ import type {
 } from "maplibre-gl";
 import { isValidMapCoordinate } from "$lib/map/coordinates";
 import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
-import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+import type { FadenType, MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { MAX_X_CORE_THEMES, targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import { LAYERS } from "./layers";
@@ -32,35 +32,35 @@ export const EDGE_VISUAL_STYLE = {
   highlightColor: "rgba(250, 239, 218, 0.48)",
   highlightWidthFactor: 0.3,
   highlightOpacityFactor: 0.62,
-  /** Yarn braid rhythm for untyped/legacy highlight (body continuous). */
+  /** Yarn braid rhythm for the single untyped Faden-out lane. */
   dashArray: [1.55, 0.72] as [number, number],
   byType: {
-    // Soft conversational yarn: thinner body; open braid on highlight.
+    // Gespräch: feinster, weichster und am stärksten ausschwingender Faden.
     conversation: {
-      width: 2.2,
-      dashArray: [1.55, 0.85] as [number, number],
+      width: 1.75,
+      dashArray: [1.1, 0.9] as [number, number],
       bodyContinuous: true,
       shadowContinuous: true,
     },
-    // Proposal: broader strand; longer weave units on highlight.
+    // Antrag: deutlichster Handlungsfaden, nur der Knüpffaden ist kräftiger.
     proposal: {
-      width: 3.1,
-      dashArray: [2.55, 0.38] as [number, number],
+      width: 3.55,
+      dashArray: [3.2, 0.32] as [number, number],
       bodyContinuous: true,
       shadowContinuous: true,
     },
-    // Knotting: denser, almost continuous twist on highlight only.
+    // Knüpfung: tragender, dichtester und stabilster Faden.
     knotting: {
-      width: 2.85,
-      dashArray: [2.95, 0.28] as [number, number],
+      width: 4.15,
+      dashArray: [4.2, 0.18] as [number, number],
       bodyContinuous: true,
       shadowContinuous: true,
     },
-    // Votes: short outer stitches on body+highlight; continuous shadow link.
+    // Stimme: mit dem Antrag verwandt, aber schlanker und enger gerippt.
     vote: {
-      width: 1.9,
-      dashArray: [0.42, 0.9] as [number, number],
-      bodyContinuous: false,
+      width: 3.05,
+      dashArray: [0.78, 0.5] as [number, number],
+      bodyContinuous: true,
       shadowContinuous: true,
     },
   },
@@ -74,9 +74,9 @@ export const EDGE_VISUAL_STYLE = {
 } as const;
 
 /** Hard cap on sampled curve points (no unbounded polylines). */
-export const EDGE_CURVE_MAX_SAMPLES = 24;
-/** Minimum samples so short curves still round-cap cleanly. */
-export const EDGE_CURVE_MIN_SAMPLES = 4;
+export const EDGE_CURVE_MAX_SAMPLES = 96;
+/** Minimum samples so even short curves retain a visually round silhouette. */
+export const EDGE_CURVE_MIN_SAMPLES = 6;
 /**
  * Spherical Web Mercator radius (EPSG:3857 convention). Geometry (chord,
  * normal, bulge, sampling) is computed in this projected plane — not in raw
@@ -115,6 +115,10 @@ export const EDGE_CURVE_MAX_HANDLE_M = 3_200;
  */
 export const EDGE_CURVE_TARGET_APPROACH_CONE_DEG = 60;
 
+/** Internal rendering lane for an untyped outgoing Faden; not a Fadenart. */
+export const FADEN_OUT_RENDER_KIND = "out" as const;
+export type ThreadRenderKind = FadenType | typeof FADEN_OUT_RENDER_KIND;
+
 /**
  * Tension / material profile per Fadenart. Geometry only — paint width lives
  * in {@link EDGE_VISUAL_STYLE}. Higher tension → straighter mid arc.
@@ -135,46 +139,48 @@ export type ThreadCurveProfile = {
   corridorBound: boolean;
 };
 
-export const THREAD_CURVE_PROFILES: Record<string, ThreadCurveProfile> = {
-  // Knüpffaden: taut, lightly curved, sturdy.
+export const THREAD_CURVE_PROFILES: Record<FadenType, ThreadCurveProfile> = {
+  // Knüpfung: höchste Spannung, kleinste Auslenkung, tragende Direktheit.
   knotting: {
-    tension: 0.84,
-    maxBulgeFraction: 0.075,
-    asymmetry: 0.06,
-    approachStraightness: 0.9,
+    tension: 0.95,
+    maxBulgeFraction: 0.028,
+    asymmetry: 0.02,
+    approachStraightness: 0.98,
     corridorBound: false,
   },
-  // Gespräch: soft, wide, lightly asymmetric.
+  // Gespräch: weichste Spannung und größte kontrollierte Auslenkung.
   conversation: {
-    tension: 0.42,
-    maxBulgeFraction: 0.2,
+    tension: 0.26,
+    maxBulgeFraction: 0.28,
     asymmetry: 0.24,
-    approachStraightness: 0.72,
+    approachStraightness: 0.62,
     corridorBound: false,
   },
-  // Antrag: calm, medium tension.
+  // Antrag: klarer, ruhiger und visuell betonter Handlungsbogen.
   proposal: {
-    tension: 0.64,
-    maxBulgeFraction: 0.12,
-    asymmetry: 0.1,
+    tension: 0.56,
+    maxBulgeFraction: 0.17,
+    asymmetry: 0.08,
     approachStraightness: 0.82,
     corridorBound: true,
   },
-  // Stimme: no independent large curve; shares proposal corridor when bound.
+  // Stimme: gleiche Familie wie Antrag, etwas straffer und asymmetrischer.
   vote: {
-    tension: 0.9,
-    maxBulgeFraction: 0.045,
-    asymmetry: 0.05,
-    approachStraightness: 0.93,
+    tension: 0.64,
+    maxBulgeFraction: 0.14,
+    asymmetry: 0.27,
+    approachStraightness: 0.87,
     corridorBound: true,
   },
-  legacy: {
-    tension: 0.66,
-    maxBulgeFraction: 0.11,
-    asymmetry: 0.1,
-    approachStraightness: 0.8,
-    corridorBound: false,
-  },
+};
+
+/** Neutraler Pfad für genau eine untypisierte Faden-out-Darstellung. */
+export const FADEN_OUT_CURVE_PROFILE: ThreadCurveProfile = {
+  tension: 0.68,
+  maxBulgeFraction: 0.1,
+  asymmetry: 0.1,
+  approachStraightness: 0.82,
+  corridorBound: false,
 };
 
 export type ThreadCurveOptions = {
@@ -217,7 +223,7 @@ export function themeSegmentSeamOverlapProgress(segmentCount: number): number {
 
 const EDGE_LAYER_VARIANTS = [
   {
-    fadenType: "legacy",
+    fadenType: FADEN_OUT_RENDER_KIND,
     shadowLayerId: LAYERS.EDGES_SHADOW_LAYER,
     layerId: LAYERS.EDGES_LAYER,
     highlightLayerId: LAYERS.EDGES_HIGHLIGHT_LAYER,
@@ -281,7 +287,7 @@ export type EdgeStyleProbe = {
 
 /**
  * The edge style counts as fully rehydrated only when the shared source and
- * *every* canonical yarn layer exists. Checking the source plus two legacy
+ * *every* canonical yarn layer exists. Checking the source plus two old generic
  * layers would call a half-restored style ready and silently drop typed threads.
  */
 export function hasCompleteEdgeThreadStyle(
@@ -380,10 +386,13 @@ export function hashUnit(input: string): number {
 export function threadCurveProfile(
   fadenType: string | undefined,
 ): ThreadCurveProfile {
-  if (fadenType && fadenType in THREAD_CURVE_PROFILES) {
-    return THREAD_CURVE_PROFILES[fadenType];
+  if (
+    fadenType &&
+    Object.prototype.hasOwnProperty.call(THREAD_CURVE_PROFILES, fadenType)
+  ) {
+    return THREAD_CURVE_PROFILES[fadenType as FadenType];
   }
-  return THREAD_CURVE_PROFILES.legacy;
+  return FADEN_OUT_CURVE_PROFILE;
 }
 
 /**
@@ -396,7 +405,7 @@ export function threadCorridorKey(options: ThreadCurveOptions): string {
   if (subject) return `subject:${subject}`;
   const thread = options.threadId?.trim();
   if (thread) return `thread:${thread}`;
-  const faden = options.fadenType?.trim() || "legacy";
+  const faden = options.fadenType?.trim() || FADEN_OUT_RENDER_KIND;
   return `thread:anon:${faden}`;
 }
 
@@ -920,7 +929,7 @@ export function threadTargetApproachVector(
  * that alone). {@link spanCurvatureMetrics} therefore compares tangents at
  * several interior points, not just the two ends.
  */
-export const EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG = 20;
+export const EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG = 3;
 
 /**
  * Below this projected span length (metres), a residual tangent-angle
@@ -932,7 +941,7 @@ export const EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG = 20;
  * sit close together can still enclose a real, visible detour (e.g. a tight
  * loop), and the endpoint chord alone would wrongly call that invisible.
  */
-export const EDGE_CURVE_MIN_VISIBLE_SEGMENT_M = 5;
+export const EDGE_CURVE_MIN_VISIBLE_SEGMENT_M = 1;
 
 /** Interior fractions sampled across a span for curvature/length estimation. */
 const SPAN_CURVATURE_SAMPLE_FRACTIONS = [0, 0.25, 0.5, 0.75, 1] as const;
@@ -1606,7 +1615,7 @@ export function buildEndpointIndex(
 
 function curveOptionsForEdge(edge: MapEdge): ThreadCurveOptions {
   return {
-    fadenType: edge.faden_type ?? "legacy",
+    fadenType: edge.faden_type ?? FADEN_OUT_RENDER_KIND,
     threadId: edge.id,
     subjectId: edge.faden_subject_id ?? null,
   };
@@ -1672,7 +1681,7 @@ export function buildEdgeFeatures(
         properties: {
           id: edge.id,
           kind: edge.edge_kind,
-          fadenType: edge.faden_type ?? "legacy",
+          fadenType: edge.faden_type ?? FADEN_OUT_RENDER_KIND,
           fadenSubjectId: edge.faden_subject_id ?? null,
           ...(segment.color ? { themeColor: segment.color } : {}),
           ...(palette.length ? { themeColors: palette } : {}),

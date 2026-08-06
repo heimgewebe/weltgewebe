@@ -15,6 +15,7 @@ import {
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
+  THREAD_CURVE_PROFILES,
   buildEdgeFeatures,
   buildEdgeLayerSpecifications,
   buildEndpointIndex,
@@ -283,7 +284,7 @@ describe("hasCompleteEdgeThreadStyle", () => {
     expect(EDGE_THREAD_LAYER_IDS).toEqual(
       buildEdgeLayerSpecifications().map((specification) => specification.id),
     );
-    // Shadow + body + highlight for legacy and the four typed thread kinds.
+    // Shadow + body + highlight for the Faden-out lane and the four typed thread kinds.
     expect(EDGE_THREAD_LAYER_IDS).toHaveLength(15);
   });
 
@@ -297,7 +298,7 @@ describe("hasCompleteEdgeThreadStyle", () => {
     ).toBe(false);
   });
 
-  it("rejects the old partial check of source plus two legacy layers", () => {
+  it("rejects the old partial check of source plus two old generic layers", () => {
     expect(
       hasCompleteEdgeThreadStyle(
         probe([
@@ -379,7 +380,7 @@ describe("natural thread curves", () => {
       "conversation",
       "proposal",
       "vote",
-      "legacy",
+      "out",
     ] as const) {
       const path = sampleThreadCurve(source, target, {
         fadenType,
@@ -447,6 +448,18 @@ describe("natural thread curves", () => {
     expect(shortDeflect).toBeLessThan(25);
   });
 
+  it("keeps exactly the four canonical Fadenarten", () => {
+    expect(Object.keys(THREAD_CURVE_PROFILES).sort()).toEqual([
+      "conversation",
+      "knotting",
+      "proposal",
+      "vote",
+    ]);
+    expect("legacy" in THREAD_CURVE_PROFILES).toBe(false);
+    expect("out" in THREAD_CURVE_PROFILES).toBe(false);
+    expect(threadCurveProfile("toString")).toBe(threadCurveProfile("out"));
+  });
+
   it("applies distinct tension profiles per Fadenart", () => {
     /**
      * Lateral offset of the projected Bezier at t=0.5 from the projected chord.
@@ -475,14 +488,15 @@ describe("natural thread curves", () => {
     const talk = midDeflection("conversation", null);
     const proposal = midDeflection("proposal", null);
     const vote = midDeflection("vote", null);
-    // Knotting taut; conversation soft/wide; vote no independent large curve.
+    // Knüpfung ist am geradesten; Gespräch schwingt am stärksten.
+    // Antrag und Stimme bleiben verwandt, aber nicht deckungsgleich.
     expect(talk).toBeGreaterThan(knot);
     expect(talk).toBeGreaterThan(proposal);
     expect(talk).toBeGreaterThan(vote);
     // Proposal mid arc must clearly exceed vote's near-linear stitch — not a
     // weak half-margin that would still pass if the profiles collapsed.
     expect(proposal).toBeGreaterThan(vote);
-    expect(proposal / vote).toBeGreaterThan(1.35);
+    expect(proposal / vote).toBeGreaterThan(1.08);
     expect(threadCurveProfile("proposal").tension).toBeLessThan(
       threadCurveProfile("vote").tension,
     );
@@ -497,8 +511,17 @@ describe("natural thread curves", () => {
     expect(EDGE_VISUAL_STYLE.byType.knotting.width).toBeGreaterThan(
       EDGE_VISUAL_STYLE.byType.conversation.width,
     );
+    expect(EDGE_VISUAL_STYLE.byType.knotting.width).toBeGreaterThan(
+      EDGE_VISUAL_STYLE.byType.proposal.width,
+    );
     expect(EDGE_VISUAL_STYLE.byType.proposal.width).toBeGreaterThan(
       EDGE_VISUAL_STYLE.byType.vote.width,
+    );
+    expect(EDGE_VISUAL_STYLE.byType.vote.width).toBeGreaterThan(
+      EDGE_VISUAL_STYLE.byType.conversation.width,
+    );
+    expect(threadCurveProfile("knotting").maxBulgeFraction).toBeLessThan(
+      threadCurveProfile("vote").maxBulgeFraction,
     );
   });
 
@@ -955,15 +978,10 @@ describe("natural thread curves", () => {
     expect(tip[1]).toBeCloseTo(expected[1], 10);
   });
 
-  it("projects continuous body/shadow layers vs highlight braid rhythm", () => {
+  it("keeps every yarn body continuous and differentiates types on the highlight", () => {
     for (const variant of EDGE_THREAD_VARIANTS) {
-      if (variant.fadenType === "vote") {
-        expect(variant.bodyContinuous).toBe(false);
-        expect(variant.shadowContinuous).toBe(true);
-      } else {
-        expect(variant.bodyContinuous).toBe(true);
-        expect(variant.shadowContinuous).toBe(true);
-      }
+      expect(variant.bodyContinuous).toBe(true);
+      expect(variant.shadowContinuous).toBe(true);
       expect(variant.dashArray[0]).toBeGreaterThan(0);
     }
   });
@@ -1057,7 +1075,7 @@ describe("natural thread curves", () => {
         "vote",
         "conversation",
         "knotting",
-        "legacy",
+        "out",
       ] as const;
       let worstVisibleTurnDeg = 0;
       let worstInfo = "";
@@ -1256,7 +1274,7 @@ describe("natural thread curves", () => {
       }
     });
 
-    it("strictly respects the 24-sample budget even under extreme curvature and multiple kinks", () => {
+    it("strictly respects the configured sample budget under extreme curvature and multiple kinks", () => {
       const p0: [number, number] = [0, 0];
       const p1: [number, number] = [5000, -2000];
       const p2: [number, number] = [5200, 3000];
@@ -1299,7 +1317,7 @@ describe("natural thread curves", () => {
         "proposal",
         "vote",
         "knotting",
-        "legacy",
+        "out",
       ] as const) {
         const { p0, p1, p2, p3 } = threadCurveControlPointsProjected(src, tgt, {
           fadenType,
@@ -1367,7 +1385,7 @@ describe("natural thread curves", () => {
       // Nearly the antipodal point of source1.
       const antipodal: [number, number] = [-169.5, -44.5];
       const path = sampleThreadCurve(source1, antipodal, {
-        fadenType: "legacy",
+        fadenType: "out",
         threadId: "extreme-near-antipodal",
       });
       expect(path[0]).toEqual(source1);

@@ -8,7 +8,7 @@ const NODE_ID = "b52be17c-4ab7-4434-98ce-520f86290cf0";
 const MULTI_EDGE_ID = "motion-multi-theme-edge";
 const MULTI_NODE_ID = demoNodes[0].id;
 const MULTI_ACCOUNT_ID = demoAccounts[0].id;
-const LEGACY_EDGE_FILTER = ["==", ["get", "fadenType"], "legacy"];
+const FADEN_OUT_FILTER = ["==", ["get", "fadenType"], "out"];
 const IPAD_PRO_11_LANDSCAPE = {
   userAgent: devices["iPad Pro 11 landscape"].userAgent,
   viewport: devices["iPad Pro 11 landscape"].viewport,
@@ -152,7 +152,7 @@ test.describe("event-bound Faden motion", () => {
     expect(during.phase).toBe("creating");
     // Natural thread curves are bounded polylines (not two-point capsules).
     expect(during.coordinateCount).toBeGreaterThanOrEqual(2);
-    expect(during.coordinateCount).toBeLessThanOrEqual(24);
+    expect(during.coordinateCount).toBeLessThanOrEqual(96);
     expect(during.filter).not.toBeNull();
 
     await expect
@@ -164,7 +164,7 @@ test.describe("event-bound Faden motion", () => {
     expect(await motionFeatures(page)).toEqual([]);
     expect(
       await page.evaluate(() => window.__TEST_MAP__?.getFilter("edges-layer")),
-    ).toEqual(LEGACY_EDGE_FILTER);
+    ).toEqual(FADEN_OUT_FILTER);
   });
 
   test("retracts, survives style reload and remains hidden until canonical removal", async ({
@@ -185,7 +185,7 @@ test.describe("event-bound Faden motion", () => {
       const map = window.__TEST_MAP__;
       return Boolean(
         map?.getLayer("edges-layer") &&
-        map.getLayer("edge-motion-layer-legacy") &&
+        map.getLayer("edge-motion-layer-out") &&
         map.getLayer("edge-motion-layer-proposal") &&
         map.getLayer("edge-motion-layer-conversation") &&
         map.getLayer("edge-motion-layer-knotting") &&
@@ -207,7 +207,7 @@ test.describe("event-bound Faden motion", () => {
     expect((await snapshot(page))?.suppressedIds).toEqual([]);
     expect(
       await page.evaluate(() => window.__TEST_MAP__?.getFilter("edges-layer")),
-    ).toEqual(LEGACY_EDGE_FILTER);
+    ).toEqual(FADEN_OUT_FILTER);
   });
 
   test("filter changes never create motion and only control transition visibility", async ({

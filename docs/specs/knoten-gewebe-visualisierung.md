@@ -184,10 +184,13 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   pro Fadenart: subtiler Schatten/Unterzug, farbiger Garnkörper, feiner
   Licht-/Faserakzent. Static- und Motion-Pfad teilen exakt dieselbe
   Stildefinition (`EDGE_VISUAL_STYLE` / `EDGE_THREAD_VARIANTS`) und dieselbe
-  Kurvengeometrie. Typen `knotting`, `conversation`, `proposal`, `vote` und
-  `legacy` bleiben über Breite, Spannungsprofil und sinnvolle
-  Flecht-/Dash-Rhythmen unterscheidbar — keine Straßenmarkierungs- und keine
-  Perlenoptik.
+  Kurvengeometrie. Es gibt genau vier Fadenarten: `knotting` ist der
+  stabilste, dickste und geradeste Faden; `conversation` der dünnste, weichste
+  und am stärksten ausschwingende; `proposal` der deutlichste Handlungsfaden;
+  `vote` bleibt mit `proposal` verwandt, ist aber schlanker, straffer und über
+  eine eigene Flechtrhythmik unterscheidbar. Untypisierte ausgehende Fäden
+  nutzen genau eine interne `out`-Darstellung; `out` ist keine fünfte
+  Fadenart. Keine Straßenmarkierungs- und keine Perlenoptik.
 - **Kurvengeometrie:** Kanonische Fadenlinien sind deterministische, begrenzt
   abgetastete kubische Bézier-Pfade (oder gleichwertig), keine geraden
   technischen Linien und keine Kapselketten. Quelle und Ziel bleiben im
@@ -202,9 +205,10 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   natürlichen Bogen. Kurze Wege bleiben fast gerade; die laterale Auslenkung
   ist nach projizierter Chordlänge begrenzt (`EDGE_CURVE_FULL_LENGTH_M`,
   `EDGE_CURVE_MAX_BULGE_M`). Biegungsseite und Mikrovariation entstehen stabil
-  aus Fadenidentität (`threadId` / `faden_subject_id`), nicht aus Zufall,
-  Wellen oder Physiksimulation. Die Abtastpunktzahl ist fest begrenzt
-  (`EDGE_CURVE_MAX_SAMPLES` ≤ 24) und krümmungs-/flachheitsadaptiv: Für jede
+  aus Fadenidentität (`threadId` / `faden_subject_id`), nicht aus Zufall oder
+  Physiksimulation. Die Abtastpunktzahl ist fest auf höchstens 96 Punkte
+  begrenzt und mit einer maximalen sichtbaren Richtungsabweichung von 3 Grad
+  krümmungs-/flachheitsadaptiv: Für jede
   zu prüfende Spanne werden mehrere innere Stützstellen ausgewertet (nicht nur
   die zwei Span-Enden), und die stärkste Tangentenrotation **zwischen einem
   beliebigen Paar** dieser Stützstellen entscheidet über eine weitere
