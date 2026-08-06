@@ -103,6 +103,19 @@ def _module_candidate(module: str) -> Path:
     return Path(REPO_ROOT) / (module.replace(".", "/") + ".py")
 
 
+def _tooling_lock_contains(package_name: str) -> bool:
+    if re.fullmatch(r"[A-Za-z0-9_.-]+", package_name) is None:
+        raise DependencyDecisionError(f"invalid package name: {package_name!r}")
+    lock_path = Path(REPO_ROOT) / "tools" / "py" / "uv.lock"
+    if not lock_path.is_file():
+        return False
+    package_line = re.compile(
+        rf'^name = "{re.escape(package_name)}"\s*$',
+        re.MULTILINE,
+    )
+    return package_line.search(lock_path.read_text(encoding="utf-8")) is not None
+
+
 def _classify_dependency(dep: dict[str, Any], *, historical: bool) -> dict[str, str]:
     dependency = str(dep["dependency"])
     kind = str(dep.get("kind") or (_extract_dependency(str(dep["evidence"])) or ("unknown", ""))[0])
@@ -120,13 +133,11 @@ def _classify_dependency(dep: dict[str, Any], *, historical: bool) -> dict[str, 
                 "decision": "accepted-coupling",
                 "decision_evidence": "Python standard-library test runner, invoked explicitly by the Makefile",
             }
-        if dependency == "pytest":
-            lock_path = Path(REPO_ROOT) / "tools" / "py" / "uv.lock"
-            if lock_path.is_file():
-                return {
-                    "decision": "accepted-coupling",
-                    "decision_evidence": "repository tooling dependency locked by `tools/py/uv.lock`",
-                }
+        if dependency == "pytest" and _tooling_lock_contains("pytest"):
+            return {
+                "decision": "accepted-coupling",
+                "decision_evidence": "repository tooling dependency locked by `tools/py/uv.lock`",
+            }
         module_path = _module_candidate(dependency)
         package_path = Path(REPO_ROOT) / dependency.replace(".", "/") / "__init__.py"
         if module_path.is_file() or package_path.is_file():
@@ -269,14 +280,14 @@ def render() -> str:
         "title: Implicit Dependency Decisions",
         "doc_type: generated",
         "status: active",
-        "summary: Reproduzierbare Einzelentscheidungen zu Makefile-Ausführungskanten.",
+        "summary: Reproduzierbare Einzelentscheidungen zu Python- und Bash-Ausführungskanten im Makefile.",
         "---",
         "",
         "## Weltgewebe Dependency Decisions",
         "",
         "Generated automatically. Do not edit.",
         "",
-        "> **Contract:** This report classifies direct Makefile execution edges. It is diagnostic evidence, not an overall architecture pass, runtime-health proof, deployment proof, or permission to mutate.",
+        "> **Contract:** This report classifies only Makefile commands shaped as Python modules, Python scripts, or Bash scripts. It is diagnostic evidence, not a complete Makefile dependency inventory, not an overall architecture pass, and not runtime-health proof, deployment proof, or permission to mutate.",
         "",
         "## Historical audit closure",
         "",
@@ -293,23 +304,23 @@ def render() -> str:
         "",
         *_render_table(historical_decisions, include_line=False),
         "",
-        "## Current Makefile snapshot",
+        "## Current tracked Makefile snapshot",
         "",
         f"- Makefile SHA-256: `{makefile_sha256}`",
-        f"- Current execution edges decided: **{len(current_decisions)} / {len(current_decisions)}**",
+        f"- Current tracked execution edges decided: **{len(current_decisions)} / {len(current_decisions)}**",
         "- Classification counts: " + ", ".join(
             f"`{key}`={value}" for key, value in current_counts.items()
         ),
-        "- New Python-module, Python-script, or Bash-script edges without a resolvable decision make generation and `--check` fail closed.",
+        "- New tracked Python-module, Python-script, or Bash-script edges without a resolvable decision make generation and `--check` fail closed.",
         "",
         *_render_table(current_decisions, include_line=True),
         "",
         "## Interpretation boundary",
         "",
-        "`explicit` means only that the Makefile names a current repository script or module directly. `accepted-coupling` means the invoked test/tooling runtime is standard-library or repository-lock bound. Neither decision proves semantic correctness, complete architecture coverage, successful execution, current production state, or safe deployment.",
+        "`explicit` means only that the historical or current tracked command names a repository script or module directly. `accepted-coupling` means the invoked test/tooling runtime is standard-library or repository-lock bound. Untracked Makefile command shapes remain outside this report. Neither decision proves semantic correctness, complete dependency or architecture coverage, successful execution, current production state, or safe deployment.",
         "",
     ]
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines).rstrip("\n") + "\n"
 
 
 def main(argv: list[str] | None = None) -> int:

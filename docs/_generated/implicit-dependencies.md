@@ -3,14 +3,14 @@ id: docs.generated.implicit-dependencies
 title: Implicit Dependency Decisions
 doc_type: generated
 status: active
-summary: Reproduzierbare Einzelentscheidungen zu Makefile-Ausführungskanten.
+summary: Reproduzierbare Einzelentscheidungen zu Python- und Bash-Ausführungskanten im Makefile.
 ---
 
 ## Weltgewebe Dependency Decisions
 
 Generated automatically. Do not edit.
 
-> **Contract:** This report classifies direct Makefile execution edges. It is diagnostic evidence, not an overall architecture pass, runtime-health proof, deployment proof, or permission to mutate.
+> **Contract:** This report classifies only Makefile commands shaped as Python modules, Python scripts, or Bash scripts. It is diagnostic evidence, not a complete Makefile dependency inventory, not an overall architecture pass, and not runtime-health proof, deployment proof, or permission to mutate.
 
 ## Historical audit closure
 
@@ -77,12 +77,12 @@ Each historical row remains individually addressable by a stable finding ID. A d
 | `bf84458832ae` | generate | `scripts.docmeta.generate_report_lifecycle` | `python3 -m scripts.docmeta.generate_report_lifecycle` | explicit | current repository module resolves to `scripts/docmeta/generate_report_lifecycle.py` and is invoked directly |
 | `04e5dc18dd76` | generate | `scripts.docmeta.generate_report_lifecycle_inventory` | `python3 -m scripts.docmeta.generate_report_lifecycle_inventory` | explicit | current repository module resolves to `scripts/docmeta/generate_report_lifecycle_inventory.py` and is invoked directly |
 
-## Current Makefile snapshot
+## Current tracked Makefile snapshot
 
 - Makefile SHA-256: `6cb3afed2b09a10c78b96d5d017e0b7a15883870c1c147040bb4c4beb1b09b4d`
-- Current execution edges decided: **60 / 60**
+- Current tracked execution edges decided: **60 / 60**
 - Classification counts: `accepted-coupling`=6, `explicit`=54, `not-relevant`=0, `remove`=0
-- New Python-module, Python-script, or Bash-script edges without a resolvable decision make generation and `--check` fail closed.
+- New tracked Python-module, Python-script, or Bash-script edges without a resolvable decision make generation and `--check` fail closed.
 
 | ID | Target | Line | Dependency | Evidence | Decision | Decision evidence |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -149,5 +149,4 @@ Each historical row remains individually addressable by a stable finding ID. A d
 
 ## Interpretation boundary
 
-`explicit` means only that the Makefile names a current repository script or module directly. `accepted-coupling` means the invoked test/tooling runtime is standard-library or repository-lock bound. Neither decision proves semantic correctness, complete architecture coverage, successful execution, current production state, or safe deployment.
-
+`explicit` means only that the historical or current tracked command names a repository script or module directly. `accepted-coupling` means the invoked test/tooling runtime is standard-library or repository-lock bound. Untracked Makefile command shapes remain outside this report. Neither decision proves semantic correctness, complete dependency or architecture coverage, successful execution, current production state, or safe deployment.
