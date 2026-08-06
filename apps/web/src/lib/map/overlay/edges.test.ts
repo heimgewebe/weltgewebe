@@ -9,6 +9,8 @@ import {
   EDGE_CURVE_MAX_SAMPLES,
   EDGE_CURVE_MERCATOR_RADIUS_M,
   EDGE_CURVE_MIN_SAMPLES,
+  EDGE_CURVE_MIN_VISIBLE_SEGMENT_M,
+  EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG,
   EDGE_CURVE_TARGET_APPROACH_CONE_DEG,
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
@@ -1194,6 +1196,121 @@ describe("natural thread curves", () => {
       const breakpoints = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3, 2);
       expect(breakpoints.length).toBeGreaterThan(2);
       expect(breakpoints.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+    });
+
+    it("refines the deterministic 179-degree base counterexample below the hard cap", () => {
+      function cubicBezierPoint2(
+        p0: [number, number],
+        p1: [number, number],
+        p2: [number, number],
+        p3: [number, number],
+        t: number,
+      ): [number, number] {
+        const u = 1 - t;
+        return [
+          u * u * u * p0[0] +
+            3 * u * u * t * p1[0] +
+            3 * u * t * t * p2[0] +
+            t * t * t * p3[0],
+          u * u * u * p0[1] +
+            3 * u * u * t * p1[1] +
+            3 * u * t * t * p2[1] +
+            t * t * t * p3[1],
+        ];
+      }
+      // Extracted from a fixed-seed 100,000-case sweep against the base
+      // implementation. It stopped at five samples and left a 179.994°
+      // junction between a 3.34m segment and a 24.13m visible segment.
+      const p0: [number, number] = [-1.290023703291153, 0.6678560138576546];
+      const p1: [number, number] = [1.7066032000908127, -11.70957249949549];
+      const p2: [number, number] = [-2.4536575258202595, -57.983649109594765];
+      const p3: [number, number] = [0.7909150758655675, -6.038544293336091];
+      const ts = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3);
+      expect(ts.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+      const points = ts.map((t) => cubicBezierPoint2(p0, p1, p2, p3, t));
+
+      for (let i = 1; i < points.length - 1; i += 1) {
+        const v1 = [
+          points[i][0] - points[i - 1][0],
+          points[i][1] - points[i - 1][1],
+        ];
+        const v2 = [
+          points[i + 1][0] - points[i][0],
+          points[i + 1][1] - points[i][1],
+        ];
+        const l1 = Math.hypot(v1[0], v1[1]);
+        const l2 = Math.hypot(v2[0], v2[1]);
+        if (
+          l1 > EDGE_CURVE_MIN_VISIBLE_SEGMENT_M ||
+          l2 > EDGE_CURVE_MIN_VISIBLE_SEGMENT_M
+        ) {
+          const cos = Math.max(
+            -1,
+            Math.min(1, (v1[0] * v2[0] + v1[1] * v2[1]) / (l1 * l2)),
+          );
+          const turnDeg = (Math.acos(cos) * 180) / Math.PI;
+          expect(turnDeg).toBeLessThanOrEqual(
+            EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG,
+          );
+        }
+      }
+    });
+
+    it("strictly respects the 24-sample budget even under extreme curvature and multiple kinks", () => {
+      const p0: [number, number] = [0, 0];
+      const p1: [number, number] = [5000, -2000];
+      const p2: [number, number] = [5200, 3000];
+      const p3: [number, number] = [4800, 100];
+      const ts = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3);
+      expect(ts.length).toBeGreaterThan(EDGE_CURVE_MIN_SAMPLES);
+      expect(ts.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+      for (let i = 0; i < ts.length; i += 1) {
+        expect(Number.isFinite(ts[i])).toBe(true);
+        if (i > 0) {
+          expect(ts[i]).toBeGreaterThan(ts[i - 1]);
+        }
+      }
+    });
+
+    it("handles degenerate control points with zero tangents cleanly and deterministically", () => {
+      const p0: [number, number] = [123.4, 567.8];
+      const p1: [number, number] = [123.4, 567.8];
+      const p2: [number, number] = [123.4, 567.8];
+      const p3: [number, number] = [123.4, 567.8];
+      const ts = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3);
+      expect(ts).toHaveLength(EDGE_CURVE_MIN_SAMPLES);
+      expect(ts[0]).toBe(0);
+      expect(ts.at(-1)).toBe(1);
+
+      const q0: [number, number] = [0, 0];
+      const q1: [number, number] = [0, 0];
+      const q2: [number, number] = [1000, 500];
+      const q3: [number, number] = [1000, 500];
+      const ts2 = threadCurveAdaptiveBreakpoints(q0, q1, q2, q3);
+      expect(ts2.length).toBeGreaterThanOrEqual(EDGE_CURVE_MIN_SAMPLES);
+      expect(ts2.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+    });
+
+    it("preserves sampling bounds and exact endpoints for normal production profiles", () => {
+      const src: [number, number] = [9.9, 53.5];
+      const tgt: [number, number] = [10.1, 53.65];
+      for (const fadenType of [
+        "conversation",
+        "proposal",
+        "vote",
+        "knotting",
+        "legacy",
+      ] as const) {
+        const { p0, p1, p2, p3 } = threadCurveControlPointsProjected(src, tgt, {
+          fadenType,
+          threadId: `normal-prod-${fadenType}`,
+        });
+        const ts = threadCurveAdaptiveBreakpoints(p0, p1, p2, p3);
+        expect(ts.length).toBeGreaterThanOrEqual(EDGE_CURVE_MIN_SAMPLES);
+        expect(ts.length).toBeLessThanOrEqual(EDGE_CURVE_MAX_SAMPLES);
+        expect(ts[0]).toBe(0);
+        expect(ts.at(-1)).toBe(1);
+      }
     });
   });
 

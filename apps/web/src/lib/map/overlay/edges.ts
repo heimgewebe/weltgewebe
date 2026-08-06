@@ -993,19 +993,54 @@ function spanCurvatureMetrics(
 }
 
 /**
+ * Conservative control-polygon length of the sub-Bézier over `[a, b]`.
+ * Sum of sub-control polygon edges `||q1-q0|| + ||q2-q1|| + ||q3-q2||`.
+ * Gives an upper bound on sub-curve arc length and spatial excursion.
+ */
+function spanControlPolygonLength(
+  p0: ProjectedPoint,
+  p1: ProjectedPoint,
+  p2: ProjectedPoint,
+  p3: ProjectedPoint,
+  a: number,
+  b: number,
+): number {
+  const span = b - a;
+  const q0 = cubicBezierPoint2(p0, p1, p2, p3, a);
+  const q3 = cubicBezierPoint2(p0, p1, p2, p3, b);
+  const tanA = cubicBezierTangent2(p0, p1, p2, p3, a);
+  const tanB = cubicBezierTangent2(p0, p1, p2, p3, b);
+  const q1: [number, number] = [
+    q0[0] + (span / 3) * tanA[0],
+    q0[1] + (span / 3) * tanA[1],
+  ];
+  const q2: [number, number] = [
+    q3[0] - (span / 3) * tanB[0],
+    q3[1] - (span / 3) * tanB[1],
+  ];
+  return (
+    Math.hypot(q1[0] - q0[0], q1[1] - q0[1]) +
+    Math.hypot(q2[0] - q1[0], q2[1] - q1[1]) +
+    Math.hypot(q3[0] - q2[0], q3[1] - q2[1])
+  );
+}
+
+/**
  * Deterministic, curvature-adaptive Bezier parameter breakpoints for the
  * canonical thread curve. Starts from `minSamples` uniform points (never
  * fewer, so short curves still round-cap cleanly on a dead-straight chord),
  * then greedily bisects the single span whose {@link spanCurvatureMetrics}
- * reports the worst interior tangent rotation — skipping spans whose sampled
- * sub-curve length estimate is already below
- * {@link EDGE_CURVE_MIN_VISIBLE_SEGMENT_M} — until every remaining span is
- * within {@link EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG} or the hard
- * `maxSamples` budget is spent. Pure function of the four control points:
- * deterministic, no RNG, no physics, no per-frame work — called once per
- * path build, same as the rest of this module. Bounded cost: at most
- * `maxSamples - minSamples` bisection rounds, each `O(current length)` spans
- * with a constant number of Bezier evaluations per span.
+ * and junction kink metrics report the worst interior or junction tangent
+ * rotation — skipping spans whose sampled sub-curve length estimate and
+ * sub-control polygon length are both below
+ * {@link EDGE_CURVE_MIN_VISIBLE_SEGMENT_M} unless adjacent to a visible segment
+ * with an unrefined kink — until every remaining span is within
+ * {@link EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG} or the hard `maxSamples`
+ * budget is spent. Pure function of the four control points: deterministic,
+ * no RNG, no physics, no per-frame work — called once per path build, same as
+ * the rest of this module. Bounded cost: at most `maxSamples - minSamples`
+ * bisection rounds, each `O(current length)` spans with a constant number of
+ * Bezier evaluations per span.
  */
 export function threadCurveAdaptiveBreakpoints(
   p0: ProjectedPoint,
@@ -1025,6 +1060,21 @@ export function threadCurveAdaptiveBreakpoints(
   while (ts.length < maxSamples) {
     let worstIndex = -1;
     let worstAngle = angleToleranceDeg;
+
+    const count = ts.length;
+    const pts: [number, number][] = new Array(count);
+    const segmentLens: number[] = new Array(count - 1);
+    const segmentVecs: [number, number][] = new Array(count - 1);
+    for (let index = 0; index < count; index += 1) {
+      pts[index] = cubicBezierPoint2(p0, p1, p2, p3, ts[index]);
+    }
+    for (let index = 0; index < count - 1; index += 1) {
+      const dx = pts[index + 1][0] - pts[index][0];
+      const dy = pts[index + 1][1] - pts[index][1];
+      segmentLens[index] = Math.hypot(dx, dy);
+      segmentVecs[index] = [dx, dy];
+    }
+
     for (let index = 0; index < ts.length - 1; index += 1) {
       const a = ts[index];
       const b = ts[index + 1];
@@ -1036,11 +1086,35 @@ export function threadCurveAdaptiveBreakpoints(
         a,
         b,
       );
-      // Already indistinguishable from a point on any real map — leave it,
-      // even if its residual tangent angle is large (see doc comment above).
-      if (arcLengthEstimateM <= minVisibleSegmentM) continue;
-      if (worstAngleDeg > worstAngle) {
-        worstAngle = worstAngleDeg;
+      const cpLenM = spanControlPolygonLength(p0, p1, p2, p3, a, b);
+
+      let kinkAngleDeg = 0;
+      const prevLen = index > 0 ? segmentLens[index - 1] : 0;
+      const nextLen = index < count - 2 ? segmentLens[index + 1] : 0;
+      const hasAdjacentVisible =
+        prevLen > minVisibleSegmentM || nextLen > minVisibleSegmentM;
+
+      if (index > 0 && prevLen > minVisibleSegmentM) {
+        const k1 = angleBetweenDeg(segmentVecs[index - 1], segmentVecs[index]);
+        if (k1 > kinkAngleDeg) kinkAngleDeg = k1;
+      }
+      if (index < count - 2 && nextLen > minVisibleSegmentM) {
+        const k2 = angleBetweenDeg(segmentVecs[index], segmentVecs[index + 1]);
+        if (k2 > kinkAngleDeg) kinkAngleDeg = k2;
+      }
+
+      const effectiveAngleDeg = Math.max(worstAngleDeg, kinkAngleDeg);
+      const isSubVisible =
+        arcLengthEstimateM <= minVisibleSegmentM &&
+        cpLenM <= minVisibleSegmentM;
+
+      if (isSubVisible) {
+        if (!hasAdjacentVisible) continue;
+        if (effectiveAngleDeg <= angleToleranceDeg) continue;
+      }
+
+      if (effectiveAngleDeg > worstAngle) {
+        worstAngle = effectiveAngleDeg;
         worstIndex = index;
       }
     }
