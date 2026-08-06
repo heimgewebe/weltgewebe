@@ -70,6 +70,33 @@ class GenerateImplicitDependenciesTests(unittest.TestCase):
 
         self.assertEqual(historical["decision"], "remove")
 
+    def test_pytest_coupling_requires_locked_package(self) -> None:
+        dependency = {
+            "source": "Makefile",
+            "target": "validate-tests",
+            "dependency": "pytest",
+            "evidence": "python -m pytest -q tests",
+            "kind": "python-module",
+            "line": 2,
+        }
+        with tempfile.TemporaryDirectory() as raw_root:
+            lock_path = Path(raw_root) / "tools" / "py" / "uv.lock"
+            lock_path.parent.mkdir(parents=True)
+            lock_path.write_text('[[package]]\nname = "other"\n', encoding="utf-8")
+            with mock.patch.object(generator, "REPO_ROOT", raw_root):
+                with self.assertRaises(generator.DependencyDecisionError):
+                    generator._classify_dependency(dependency, historical=False)
+                lock_path.write_text(
+                    '[[package]]\nname = "pytest"\n',
+                    encoding="utf-8",
+                )
+                decision = generator._classify_dependency(
+                    dependency,
+                    historical=False,
+                )
+
+        self.assertEqual(decision["decision"], "accepted-coupling")
+
     def test_historical_audit_is_digest_bound_and_complete(self) -> None:
         audit = generator.load_historical_audit()
         self.assertEqual(audit["source_commit"], generator.HISTORICAL_SOURCE_COMMIT)
@@ -101,12 +128,16 @@ class GenerateImplicitDependenciesTests(unittest.TestCase):
 
         self.assertIn("Findings decided: **51 / 51**", rendered)
         self.assertIn(
-            f"Current execution edges decided: **{current_count} / {current_count}**",
+            f"Current tracked execution edges decided: **{current_count} / {current_count}**",
             rendered,
         )
         self.assertNotIn("*unclear*", rendered)
+        self.assertIn("not a complete Makefile dependency inventory", rendered)
         self.assertIn("not an overall architecture pass", rendered)
+        self.assertIn("Untracked Makefile command shapes remain outside this report", rendered)
         self.assertIn("fail closed", rendered)
+        self.assertTrue(rendered.endswith("\n"))
+        self.assertFalse(rendered.endswith("\n\n"))
 
 
 if __name__ == "__main__":
