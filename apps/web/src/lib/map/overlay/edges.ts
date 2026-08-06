@@ -16,6 +16,11 @@ import { LAYERS } from "./layers";
  * Three bounded MapLibre layers per type: shadow underlay, coloured body,
  * fine light/fiber accent. Width and braid/dash rhythms distinguish types —
  * not road-marking or pearl optics.
+ *
+ * Shadow/body stay largely continuous for knotting/conversation/proposal;
+ * the braid/fiber rhythm lives primarily on the narrow highlight. Vote body
+ * may stay stitch-like; its shadow remains continuous for a fine connective
+ * underlay.
  */
 export const EDGE_VISUAL_STYLE = {
   shadowColor: "rgba(36, 22, 15, 0.42)",
@@ -27,17 +32,37 @@ export const EDGE_VISUAL_STYLE = {
   highlightColor: "rgba(250, 239, 218, 0.48)",
   highlightWidthFactor: 0.3,
   highlightOpacityFactor: 0.62,
-  /** Yarn braid rhythm for untyped/legacy threads. */
+  /** Yarn braid rhythm for untyped/legacy highlight (body continuous). */
   dashArray: [1.55, 0.72] as [number, number],
   byType: {
-    // Soft conversational yarn: slightly thinner, open braid.
-    conversation: { width: 2.2, dashArray: [1.55, 0.85] as [number, number] },
-    // Proposal: broader strand with longer weave units.
-    proposal: { width: 3.1, dashArray: [2.55, 0.38] as [number, number] },
-    // Knotting: denser, almost continuous twist.
-    knotting: { width: 2.85, dashArray: [2.95, 0.28] as [number, number] },
-    // Votes: short outer stitches, never a solid road dash.
-    vote: { width: 1.9, dashArray: [0.42, 0.9] as [number, number] },
+    // Soft conversational yarn: thinner body; open braid on highlight.
+    conversation: {
+      width: 2.2,
+      dashArray: [1.55, 0.85] as [number, number],
+      bodyContinuous: true,
+      shadowContinuous: true,
+    },
+    // Proposal: broader strand; longer weave units on highlight.
+    proposal: {
+      width: 3.1,
+      dashArray: [2.55, 0.38] as [number, number],
+      bodyContinuous: true,
+      shadowContinuous: true,
+    },
+    // Knotting: denser, almost continuous twist on highlight only.
+    knotting: {
+      width: 2.85,
+      dashArray: [2.95, 0.28] as [number, number],
+      bodyContinuous: true,
+      shadowContinuous: true,
+    },
+    // Votes: short outer stitches on body+highlight; continuous shadow link.
+    vote: {
+      width: 1.9,
+      dashArray: [0.42, 0.9] as [number, number],
+      bodyContinuous: false,
+      shadowContinuous: true,
+    },
   },
   // Back-compat aliases used by older call sites/tests.
   haloColor: "rgba(36, 22, 15, 0.42)",
@@ -47,6 +72,106 @@ export const EDGE_VISUAL_STYLE = {
   mainColor: "#76523d",
   mainWidth: 2.35,
 } as const;
+
+/** Hard cap on sampled curve points (no unbounded polylines). */
+export const EDGE_CURVE_MAX_SAMPLES = 24;
+/** Minimum samples so short curves still round-cap cleanly. */
+export const EDGE_CURVE_MIN_SAMPLES = 4;
+/**
+ * Spherical Web Mercator radius (EPSG:3857 convention). Geometry (chord,
+ * normal, bulge, sampling) is computed in this projected plane — not in raw
+ * lon/lat degrees and not in MapLibre CSS pixels.
+ */
+export const EDGE_CURVE_MERCATOR_RADIUS_M = 6378137;
+/** Web Mercator latitude clamp (degrees); only internal projection. */
+export const EDGE_CURVE_MERCATOR_MAX_LAT = 85.05112878;
+/**
+ * Projected chord length (metres) at which length scaling reaches full bulge.
+ * Shorter paths scale down toward nearly straight.
+ */
+export const EDGE_CURVE_FULL_LENGTH_M = 12_000;
+/** Absolute lateral bulge cap in projected Web-Mercator metres. */
+export const EDGE_CURVE_MAX_BULGE_M = 5_000;
+/** Max Bezier handle length as a fraction of projected chord (no loops). */
+export const EDGE_CURVE_MAX_HANDLE_FRACTION = 0.32;
+/**
+ * Absolute Bezier handle cap in projected Web-Mercator metres. Prevents long
+ * multi-source approaches from overshooting or looping at the target.
+ */
+export const EDGE_CURVE_MAX_HANDLE_M = 3_200;
+
+/**
+ * Tension / material profile per Fadenart. Geometry only — paint width lives
+ * in {@link EDGE_VISUAL_STYLE}. Higher tension → straighter mid arc.
+ */
+export type ThreadCurveProfile = {
+  /** 0 = soft wide arc, 1 = taut nearly straight. */
+  tension: number;
+  /** Max lateral bulge as fraction of chord before length/tension scaling. */
+  maxBulgeFraction: number;
+  /** 0 = symmetric; positive biases the mid arc slightly toward the target. */
+  asymmetry: number;
+  /** 0.5–1: how tightly exit/entry hug the chord direction. */
+  approachStraightness: number;
+  /**
+   * When true, large independent curves are suppressed without a shared
+   * subject corridor (`faden_subject_id`).
+   */
+  corridorBound: boolean;
+};
+
+export const THREAD_CURVE_PROFILES: Record<string, ThreadCurveProfile> = {
+  // Knüpffaden: taut, lightly curved, sturdy.
+  knotting: {
+    tension: 0.84,
+    maxBulgeFraction: 0.075,
+    asymmetry: 0.06,
+    approachStraightness: 0.9,
+    corridorBound: false,
+  },
+  // Gespräch: soft, wide, lightly asymmetric.
+  conversation: {
+    tension: 0.42,
+    maxBulgeFraction: 0.2,
+    asymmetry: 0.24,
+    approachStraightness: 0.72,
+    corridorBound: false,
+  },
+  // Antrag: calm, medium tension.
+  proposal: {
+    tension: 0.64,
+    maxBulgeFraction: 0.12,
+    asymmetry: 0.1,
+    approachStraightness: 0.82,
+    corridorBound: true,
+  },
+  // Stimme: no independent large curve; shares proposal corridor when bound.
+  vote: {
+    tension: 0.9,
+    maxBulgeFraction: 0.045,
+    asymmetry: 0.05,
+    approachStraightness: 0.93,
+    corridorBound: true,
+  },
+  legacy: {
+    tension: 0.66,
+    maxBulgeFraction: 0.11,
+    asymmetry: 0.1,
+    approachStraightness: 0.8,
+    corridorBound: false,
+  },
+};
+
+export type ThreadCurveOptions = {
+  fadenType?: string;
+  /** Stable thread identity (edge id) for micro-variation. */
+  threadId?: string;
+  /**
+   * Shared approach corridor key from `faden_subject_id` (proposal/vote).
+   * Absent → safe per-thread fallback, never invents a relationship.
+   */
+  subjectId?: string | null;
+};
 
 /**
  * Multi-colour WebGL line segments share exact endpoints. Round caps leave a
@@ -84,6 +209,8 @@ const EDGE_LAYER_VARIANTS = [
     fallbackColor: EDGE_VISUAL_STYLE.bodyColor,
     width: EDGE_VISUAL_STYLE.bodyWidth,
     dashArray: EDGE_VISUAL_STYLE.dashArray,
+    bodyContinuous: true,
+    shadowContinuous: true,
   },
   {
     fadenType: "conversation",
@@ -161,126 +288,882 @@ function targetThemeColors(point: MapEntityViewModel): string[] | undefined {
   return [primaryWeaveColor(point)];
 }
 
+export type LngLatTuple = [number, number];
+/** Projected plane point (Web Mercator metres). */
+export type ProjectedPoint = readonly [number, number];
+
+/**
+ * One coloured strand along the shared curve. Coordinates are a bounded
+ * polyline on the canonical path (not a straight capsule pair).
+ */
 export type ThemedLineSegment = {
-  coordinates: [[number, number], [number, number]];
+  coordinates: LngLatTuple[];
   color: string;
 };
 
-function interpolateLngLat(
-  source: [number, number],
-  target: [number, number],
-  progress: number,
+/**
+ * Fixed multi-colour segment metadata in arc-progress space [0, 1].
+ * Built once with the path; motion never recomputes colour seams.
+ */
+export type ThreadPathSegmentMeta = {
+  readonly color: string;
+  /** Arc progress at painted start (includes one-sided seam pullback). */
+  readonly startProgress: number;
+  /** Arc progress at painted end (nominal colour boundary). */
+  readonly endProgress: number;
+};
+
+/**
+ * Immutable canonical thread path. Built once per static feature or
+ * ActiveMotion; frames only clip progress and wrap GeoJSON shells.
+ *
+ * Arc metrics (`cumulative`, `totalLength`) are Web-Mercator metres from
+ * {@link projectedSamples}. GeoJSON {@link samples} keep exact source/target
+ * lon/lat; progress/clipping/motion tip share this single prebuilt state.
+ */
+export type ThreadPathState = {
+  /** GeoJSON polyline (exact delivered endpoints; intermediates may unwrap). */
+  readonly samples: readonly LngLatTuple[];
+  /**
+   * Projected Web-Mercator samples aligned 1:1 with {@link samples}. Used for
+   * cumulative arc length, progress, and tip interpolation — never recomputed
+   * in RAF.
+   */
+  readonly projectedSamples: readonly ProjectedPoint[];
+  /** Cumulative arc length along {@link projectedSamples} (metres). */
+  readonly cumulative: readonly number[];
+  /** Total path length in projected metres. */
+  readonly totalLength: number;
+  readonly segments: readonly ThreadPathSegmentMeta[];
+  /** Monotonic build counter for cache instrumentation. */
+  readonly buildSerial: number;
+};
+
+// ─── Deterministic thread curve geometry ────────────────────────────────────
+
+function clamp01(value: number): number {
+  return Math.max(0, Math.min(1, value));
+}
+
+/** Smoothstep from 0→1 over [edge0, edge1]. */
+function smoothstep(edge0: number, edge1: number, x: number): number {
+  if (edge1 <= edge0) return x >= edge1 ? 1 : 0;
+  const t = clamp01((x - edge0) / (edge1 - edge0));
+  return t * t * (3 - 2 * t);
+}
+
+/** FNV-1a style hash → unit interval in [0, 1). Deterministic, no RNG. */
+export function hashUnit(input: string): number {
+  let hash = 2166136261;
+  for (let index = 0; index < input.length; index += 1) {
+    hash ^= input.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return (hash >>> 0) / 4294967296;
+}
+
+export function threadCurveProfile(
+  fadenType: string | undefined,
+): ThreadCurveProfile {
+  if (fadenType && fadenType in THREAD_CURVE_PROFILES) {
+    return THREAD_CURVE_PROFILES[fadenType];
+  }
+  return THREAD_CURVE_PROFILES.legacy;
+}
+
+/**
+ * Shared approach corridor key. A real `faden_subject_id` groups antrag-related
+ * threads into one corridor; otherwise each thread keeps a typed private
+ * fallback. Never invents a subject relationship.
+ */
+export function threadCorridorKey(options: ThreadCurveOptions): string {
+  const subject = options.subjectId?.trim();
+  if (subject) return `subject:${subject}`;
+  const thread = options.threadId?.trim();
+  if (thread) return `thread:${thread}`;
+  const faden = options.fadenType?.trim() || "legacy";
+  return `thread:anon:${faden}`;
+}
+
+/** Shortest signed longitude delta in (-180, 180]. Avoids the 340° long way. */
+export function shortestLongitudeDelta(fromLng: number, toLng: number): number {
+  if (!Number.isFinite(fromLng) || !Number.isFinite(toLng)) return 0;
+  let delta = toLng - fromLng;
+  delta = ((((delta + 180) % 360) + 360) % 360) - 180;
+  // Map exact -180 onto +180 so the unwrap side stays stable for 180° ties.
+  return delta === -180 ? 180 : delta;
+}
+
+/** Project lon/lat into spherical Web Mercator metres (lat clamped internally). */
+export function projectLngLatToMercator(
+  lng: number,
+  lat: number,
 ): [number, number] {
-  const bounded = Math.max(0, Math.min(1, progress));
+  const clampedLat = Math.max(
+    -EDGE_CURVE_MERCATOR_MAX_LAT,
+    Math.min(EDGE_CURVE_MERCATOR_MAX_LAT, lat),
+  );
+  const x = (lng * Math.PI * EDGE_CURVE_MERCATOR_RADIUS_M) / 180;
+  const latRad = (clampedLat * Math.PI) / 180;
+  const y =
+    Math.log(Math.tan(Math.PI / 4 + latRad / 2)) * EDGE_CURVE_MERCATOR_RADIUS_M;
+  return [x, y];
+}
+
+/** Inverse of {@link projectLngLatToMercator}. */
+export function unprojectMercatorToLngLat(x: number, y: number): LngLatTuple {
+  const lng = (x / EDGE_CURVE_MERCATOR_RADIUS_M) * (180 / Math.PI);
+  const lat =
+    (2 * Math.atan(Math.exp(y / EDGE_CURVE_MERCATOR_RADIUS_M)) - Math.PI / 2) *
+    (180 / Math.PI);
+  return [lng, lat];
+}
+
+/**
+ * Projected chord using the shortest unwrapped longitude path. Endpoints stay
+ * the caller's lon/lat; only the internal target longitude is unwrapped.
+ */
+export function projectedChord(
+  source: LngLatTuple,
+  target: LngLatTuple,
+): {
+  sourceXY: [number, number];
+  targetXY: [number, number];
+  dx: number;
+  dy: number;
+  length: number;
+  unwrappedTargetLng: number;
+} {
+  const unwrappedTargetLng =
+    source[0] + shortestLongitudeDelta(source[0], target[0]);
+  const sourceXY = projectLngLatToMercator(source[0], source[1]);
+  const targetXY = projectLngLatToMercator(unwrappedTargetLng, target[1]);
+  const dx = targetXY[0] - sourceXY[0];
+  const dy = targetXY[1] - sourceXY[1];
+  const length = Math.hypot(dx, dy);
+  return { sourceXY, targetXY, dx, dy, length, unwrappedTargetLng };
+}
+
+function cubicBezierPoint2(
+  p0: ProjectedPoint,
+  p1: ProjectedPoint,
+  p2: ProjectedPoint,
+  p3: ProjectedPoint,
+  t: number,
+): [number, number] {
+  const u = 1 - t;
+  const tt = t * t;
+  const uu = u * u;
+  const uuu = uu * u;
+  const ttt = tt * t;
   return [
-    source[0] + (target[0] - source[0]) * bounded,
-    source[1] + (target[1] - source[1]) * bounded,
+    uuu * p0[0] + 3 * uu * t * p1[0] + 3 * u * tt * p2[0] + ttt * p3[0],
+    uuu * p0[1] + 3 * uu * t * p1[1] + 3 * u * tt * p2[1] + ttt * p3[1],
   ];
 }
 
 /**
- * Controlled multi-theme braid: the line is subdivided into a bounded number of
- * equal segments whose colours cycle through the target palette (max four).
- * One theme stays a single solid feature. No rainbow blend and no extra layers.
- * Segment boundaries are fixed along the full path so motion clipping never
- * walks colour seams frame-by-frame. Adjacent multi-colour segments overlap by
- * {@link themeSegmentSeamOverlapProgress} (fraction of local segment length,
- * trailing/start side only) to close proven WebGL hairline joins under round
- * line-caps without growing colour bands with full path length.
+ * Map a projected sample back to lon/lat. Intermediate longitudes follow the
+ * unwrapped short path (may leave [-180, 180] when the chord crosses the
+ * antimeridian). Delivered endpoints are forced exact separately.
+ *
+ * Returns `null` when the projection is non-finite — never masks failure as
+ * `[0, 0]` (null-island spike). Callers use safe linear unwrapped fallback.
+ * MapLibre may still need a LineString split for world-wrapping display; this
+ * path only guarantees finite, short-path-internal geometry without NaN/Infinity.
  */
-export function buildThemedLineSegments(
-  source: [number, number],
-  target: [number, number],
-  colors: readonly string[],
-): ThemedLineSegment[] {
+export function projectedSampleToLngLat(
+  x: number,
+  y: number,
+): LngLatTuple | null {
+  if (!Number.isFinite(x) || !Number.isFinite(y)) {
+    return null;
+  }
+  const lng = (x / EDGE_CURVE_MERCATOR_RADIUS_M) * (180 / Math.PI);
+  const lat =
+    (2 * Math.atan(Math.exp(y / EDGE_CURVE_MERCATOR_RADIUS_M)) - Math.PI / 2) *
+    (180 / Math.PI);
+  if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
+    return null;
+  }
+  return [lng, lat];
+}
+
+/**
+ * Linear unwrapped lon/lat interpolation on the short longitude path.
+ * Safe finite fallback when unprojection fails — never null-island.
+ */
+export function interpolateLngLatUnwrapped(
+  a: LngLatTuple,
+  b: LngLatTuple,
+  t: number,
+): LngLatTuple {
+  const bounded = clamp01(t);
+  const dLng = shortestLongitudeDelta(a[0], b[0]);
+  return [a[0] + dLng * bounded, a[1] + (b[1] - a[1]) * bounded];
+}
+
+/**
+ * Deterministic target-local unit axis in projected metres from subject id and
+ * target position only — independent of any source chord. Direction is outward
+ * from the target toward the last Bezier handle (p2). The final approach unit
+ * is the opposite; same subject + same target ⇒ same approach for all sources.
+ */
+export function threadTargetLocalCorridorAxis(
+  target: LngLatTuple,
+  subjectId: string,
+): [number, number] {
+  const subject = subjectId.trim();
+  // Micro-degree quantisation so floating noise does not flip the axis.
+  const lngKey = Math.round(target[0] * 1e6) / 1e6;
+  const latKey = Math.round(target[1] * 1e6) / 1e6;
+  const seed = `subject-corridor:${subject}@${lngKey},${latKey}`;
+  const angle = hashUnit(seed) * Math.PI * 2;
+  return [Math.cos(angle), Math.sin(angle)];
+}
+
+/** Clamp Bezier handle length: relative chord fraction and absolute metres. */
+function clampHandleLength(chordLength: number, desired: number): number {
+  if (!(chordLength > 0) || !Number.isFinite(chordLength)) return 0;
+  if (!Number.isFinite(desired) || desired <= 0) return 0;
+  return Math.min(
+    desired,
+    chordLength * EDGE_CURVE_MAX_HANDLE_FRACTION,
+    EDGE_CURVE_MAX_HANDLE_M,
+  );
+}
+
+/**
+ * Deterministic cubic Bezier control points in lon/lat. Geometry is solved in
+ * the projected plane; source/target endpoints stay exact. Same subject id
+ * shares bend side and a target-local approach axis (independent of source);
+ * mid tension and private mid handles may still differ. No waves, physics, or
+ * per-frame RNG.
+ */
+export function threadCurveControlPoints(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  options: ThreadCurveOptions = {},
+): { p0: LngLatTuple; p1: LngLatTuple; p2: LngLatTuple; p3: LngLatTuple } {
+  const projected = threadCurveControlPointsProjected(source, target, options);
+  const p1 =
+    projectedSampleToLngLat(projected.p1[0], projected.p1[1]) ??
+    interpolateLngLatUnwrapped(source, target, 0.25);
+  const p2 =
+    projectedSampleToLngLat(projected.p2[0], projected.p2[1]) ??
+    interpolateLngLatUnwrapped(source, target, 0.75);
+  return {
+    p0: source,
+    p1,
+    p2,
+    p3: target,
+  };
+}
+
+/**
+ * Projected-plane control points and the shared target approach unit vector.
+ * Subject-bound stacks use a target-local corridor (subject + target only);
+ * tests measure multi-source alignment here.
+ */
+export function threadCurveControlPointsProjected(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  options: ThreadCurveOptions = {},
+): {
+  p0: [number, number];
+  p1: [number, number];
+  p2: [number, number];
+  p3: [number, number];
+  /** Unit vector of the target-side approach (from p2 toward p3) in projected m. */
+  targetApproach: [number, number];
+  /**
+   * Outward corridor axis from target toward p2 (unit). Subject-bound: pure
+   * target-local; private fallback: chord-relative.
+   */
+  corridorAxis: [number, number];
+  length: number;
+} {
+  const profile = threadCurveProfile(options.fadenType);
+  const { sourceXY, targetXY, dx, dy, length } = projectedChord(source, target);
+
+  if (!(length > 0) || !Number.isFinite(length)) {
+    return {
+      p0: sourceXY,
+      p1: sourceXY,
+      p2: targetXY,
+      p3: targetXY,
+      targetApproach: [1, 0],
+      corridorAxis: [1, 0],
+      length: 0,
+    };
+  }
+
+  const alongX = dx / length;
+  const alongY = dy / length;
+  const corridor = threadCorridorKey(options);
+  const subjectRaw = options.subjectId?.trim() ?? "";
+  const subjectBound = subjectRaw.length > 0;
+  const bendSide = hashUnit(`${corridor}:side`) < 0.5 ? -1 : 1;
+  // Chord-normal for mid bulge / source handle (may differ per source).
+  const perpX = -alongY * bendSide;
+  const perpY = alongX * bendSide;
+
+  // Micro variation from thread id. Subject-bound stacks share only the target
+  // approach axis; mid arc may still use small per-thread micro.
+  const variationSeed = options.threadId?.trim() || corridor;
+  const micro = (hashUnit(`${variationSeed}:var`) - 0.5) * 2;
+  const microScale = subjectBound ? 0.08 : 0.28;
+
+  const lengthScale = smoothstep(0, EDGE_CURVE_FULL_LENGTH_M, length);
+  const tensionScale = 1 - clamp01(profile.tension);
+  let bulge = profile.maxBulgeFraction * length * tensionScale * lengthScale;
+  bulge = Math.min(bulge, EDGE_CURVE_MAX_BULGE_M);
+  // Corridor-bound types without a proven subject stay near-linear (private
+  // fallback must not invent a full shared approach arc).
+  if (profile.corridorBound && !subjectBound) {
+    bulge *= 0.28;
+  }
+  bulge *= 1 + micro * microScale * 0.18;
+
+  // Handle length: approach straightness + relative/absolute caps (no loops).
+  // Subject-bound: keep target handles short and nearly uniform so mid-arc
+  // type tension (bulge/p1) still differentiates without approach overshoot.
+  const handleFraction = subjectBound
+    ? 0.12 + 0.05 * clamp01(profile.approachStraightness)
+    : 0.18 + 0.12 * clamp01(profile.approachStraightness);
+  const baseHandle = clampHandleLength(length, length * handleFraction);
+  const lateralAtHandle =
+    0.28 + 0.4 * (1 - clamp01(profile.approachStraightness));
+  const asym = clamp01(profile.asymmetry);
+
+  // ── Target-side corridor axis ────────────────────────────────────────────
+  // Subject-bound: deterministic target-local unit from subject + target only
+  // (not from the source chord). Private fallback: chord-relative with micro.
+  let axisX: number;
+  let axisY: number;
+  if (subjectBound) {
+    const local = threadTargetLocalCorridorAxis(target, subjectRaw);
+    axisX = local[0];
+    axisY = local[1];
+  } else {
+    const corridorSkew = (hashUnit(`${corridor}:approach`) - 0.5) * 0.22 * 0.35;
+    axisX = -alongX + perpX * corridorSkew;
+    axisY = -alongY + perpY * corridorSkew;
+    const axisLen = Math.hypot(axisX, axisY);
+    if (axisLen > 0) {
+      axisX /= axisLen;
+      axisY /= axisLen;
+    } else {
+      axisX = -alongX;
+      axisY = -alongY;
+    }
+    // Private only: blend toward reverse-chord if orientation would reverse.
+    const alignment = axisX * -alongX + axisY * -alongY;
+    if (alignment < 0.35) {
+      axisX = -alongX * 0.85 + axisX * 0.15;
+      axisY = -alongY * 0.85 + axisY * 0.15;
+      const n = Math.hypot(axisX, axisY) || 1;
+      axisX /= n;
+      axisY /= n;
+    }
+  }
+
+  // Source-side handle: type tension + micro (mid arcs may differ by source).
+  const h1Lateral =
+    bulge * lateralAtHandle * (1 - asym * 0.35) * (1 + micro * 0.08);
+  const p1: [number, number] = [
+    sourceXY[0] + alongX * baseHandle + perpX * h1Lateral,
+    sourceXY[1] + alongY * baseHandle + perpY * h1Lateral,
+  ];
+
+  // Target-side handle: last control point on the corridor axis through target.
+  // Direction is locked for subject stacks; length stays tightly bounded.
+  const typeHandleScale = subjectBound
+    ? 0.97 + 0.03 * (1 - clamp01(profile.tension))
+    : 0.92 + 0.1 * (1 - clamp01(profile.tension)) + micro * 0.04;
+  const sharedHandle = clampHandleLength(length, baseHandle * typeHandleScale);
+
+  let p2: [number, number];
+  if (subjectBound) {
+    // Strictly on the target-local axis — no perpendicular material offset so
+    // the normalised approach is identical for every source.
+    p2 = [
+      targetXY[0] + axisX * sharedHandle,
+      targetXY[1] + axisY * sharedHandle,
+    ];
+  } else {
+    // Private fallback: small material/asymmetry on the chord normal.
+    const materialSeed = hashUnit(`${variationSeed}:material`);
+    const materialOffset = (materialSeed - 0.5) * 2;
+    const materialMetres =
+      0.12 * Math.min(bulge, EDGE_CURVE_MAX_BULGE_M) * materialOffset;
+    const residual = bulge * lateralAtHandle * asym * 0.12;
+    p2 = [
+      targetXY[0] +
+        axisX * sharedHandle +
+        perpX * materialMetres +
+        perpX * residual,
+      targetXY[1] +
+        axisY * sharedHandle +
+        perpY * materialMetres +
+        perpY * residual,
+    ];
+  }
+
+  // Target approach unit (p3 - p2). Subject-bound: exact -axis.
+  let approachX = targetXY[0] - p2[0];
+  let approachY = targetXY[1] - p2[1];
+  const approachLen = Math.hypot(approachX, approachY);
+  if (approachLen > 0) {
+    approachX /= approachLen;
+    approachY /= approachLen;
+  } else {
+    approachX = -axisX;
+    approachY = -axisY;
+  }
+
+  return {
+    p0: sourceXY,
+    p1,
+    p2,
+    p3: targetXY,
+    targetApproach: [approachX, approachY],
+    corridorAxis: [axisX, axisY],
+    length,
+  };
+}
+
+/**
+ * Unit target-side approach vector in projected metres (from last handle toward
+ * the target). Same subject id → nearly identical vectors.
+ */
+export function threadTargetApproachVector(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  options: ThreadCurveOptions = {},
+): [number, number] {
+  return threadCurveControlPointsProjected(source, target, options)
+    .targetApproach;
+}
+
+/**
+ * Bounded sample count from projected chord length and profile softness. Never
+ * exceeds {@link EDGE_CURVE_MAX_SAMPLES}.
+ */
+export function threadCurveSampleCount(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  options: ThreadCurveOptions = {},
+): number {
+  const { length } = projectedChord(source, target);
+  if (!(length > 0) || !Number.isFinite(length)) return 2;
+  const profile = threadCurveProfile(options.fadenType);
+  const softness = 1 - clamp01(profile.tension);
+  const density =
+    EDGE_CURVE_MIN_SAMPLES +
+    Math.ceil((length / EDGE_CURVE_FULL_LENGTH_M) * 10) +
+    Math.ceil(softness * 6);
+  return Math.max(
+    EDGE_CURVE_MIN_SAMPLES,
+    Math.min(EDGE_CURVE_MAX_SAMPLES, density),
+  );
+}
+
+/**
+ * Sample the canonical thread curve in both lon/lat and projected metres.
+ * First and last GeoJSON points are exactly source and target. Projected
+ * samples share antimeridian unwrap continuity with the Bezier plane.
+ */
+export function sampleThreadCurveWithProjected(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  options: ThreadCurveOptions = {},
+): {
+  samples: LngLatTuple[];
+  projected: [number, number][];
+} {
+  const chord = projectedChord(source, target);
+  const { length, sourceXY, targetXY } = chord;
+  if (!(length > 0) || !Number.isFinite(length)) {
+    return {
+      samples: [
+        [source[0], source[1]],
+        [target[0], target[1]],
+      ],
+      projected: [
+        [sourceXY[0], sourceXY[1]],
+        [targetXY[0], targetXY[1]],
+      ],
+    };
+  }
+  const { p0, p1, p2, p3 } = threadCurveControlPointsProjected(
+    source,
+    target,
+    options,
+  );
+  const count = threadCurveSampleCount(source, target, options);
+  const samples: LngLatTuple[] = new Array(count);
+  const projected: [number, number][] = new Array(count);
+  for (let index = 0; index < count; index += 1) {
+    if (index === 0) {
+      samples[index] = [source[0], source[1]];
+      projected[index] = [p0[0], p0[1]];
+      continue;
+    }
+    if (index === count - 1) {
+      samples[index] = [target[0], target[1]];
+      // Use exact projected target (unwrapped) for arc continuity.
+      projected[index] = [p3[0], p3[1]];
+      continue;
+    }
+    const t = index / (count - 1);
+    const [x, y] = cubicBezierPoint2(p0, p1, p2, p3, t);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) {
+      // Fail closed: linear in projected plane + unwrapped lon/lat.
+      projected[index] = [
+        p0[0] + (p3[0] - p0[0]) * t,
+        p0[1] + (p3[1] - p0[1]) * t,
+      ];
+      samples[index] = interpolateLngLatUnwrapped(source, target, t);
+      continue;
+    }
+    projected[index] = [x, y];
+    const lngLat = projectedSampleToLngLat(x, y);
+    samples[index] = lngLat ?? interpolateLngLatUnwrapped(source, target, t);
+  }
+  return { samples, projected };
+}
+
+/**
+ * Sample the canonical thread curve. First and last points are exactly source
+ * and target (no float drift on endpoints). Intermediates come from projected
+ * Bezier sampling on the short unwrapped longitude path.
+ */
+export function sampleThreadCurve(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  options: ThreadCurveOptions = {},
+): LngLatTuple[] {
+  return sampleThreadCurveWithProjected(source, target, options).samples;
+}
+
+/**
+ * Cumulative arc lengths in projected Web-Mercator metres along aligned
+ * projected samples. Degree-space hypot is intentionally not used.
+ */
+export function projectedPolylineArcState(
+  projected: readonly ProjectedPoint[],
+): { cumulative: number[]; total: number } {
+  const cumulative = new Array(projected.length);
+  cumulative[0] = 0;
+  for (let index = 1; index < projected.length; index += 1) {
+    const prev = projected[index - 1];
+    const curr = projected[index];
+    const dx = curr[0] - prev[0];
+    const dy = curr[1] - prev[1];
+    const step =
+      Number.isFinite(dx) && Number.isFinite(dy) ? Math.hypot(dx, dy) : 0;
+    cumulative[index] = cumulative[index - 1] + step;
+  }
+  return { cumulative, total: cumulative[cumulative.length - 1] ?? 0 };
+}
+
+/**
+ * Degree-space arc fallback only when projected samples are unavailable.
+ * Prefer {@link projectedPolylineArcState} / prebuilt {@link ThreadPathState}.
+ * Exposed so tests can detect accidental degree-space regression at high lat / N-S.
+ */
+export function degreeSpacePolylineArcState(points: readonly LngLatTuple[]): {
+  cumulative: number[];
+  total: number;
+} {
+  const cumulative = new Array(points.length);
+  cumulative[0] = 0;
+  for (let index = 1; index < points.length; index += 1) {
+    const prev = points[index - 1];
+    const curr = points[index];
+    const dLng = shortestLongitudeDelta(prev[0], curr[0]);
+    const dLat = curr[1] - prev[1];
+    cumulative[index] = cumulative[index - 1] + Math.hypot(dLng, dLat);
+  }
+  return { cumulative, total: cumulative[cumulative.length - 1] ?? 0 };
+}
+
+function polylineArcStateFromLngLat(points: readonly LngLatTuple[]): {
+  cumulative: number[];
+  total: number;
+  projected: [number, number][];
+} {
+  // Project with unwrap continuity from the first point so antimeridian paths
+  // stay short-path; arc metrics stay in metres even without a prebuilt state.
+  const projected: [number, number][] = new Array(points.length);
+  let unwrapBaseLng = points[0]?.[0] ?? 0;
+  for (let index = 0; index < points.length; index += 1) {
+    const [lng, lat] = points[index];
+    const unwrapped =
+      index === 0
+        ? lng
+        : unwrapBaseLng + shortestLongitudeDelta(unwrapBaseLng, lng);
+    unwrapBaseLng = unwrapped;
+    projected[index] = projectLngLatToMercator(unwrapped, lat);
+  }
+  const { cumulative, total } = projectedPolylineArcState(projected);
+  return { cumulative, total, projected };
+}
+
+type ArcProgressState = {
+  cumulative: readonly number[];
+  total: number;
+  projected?: readonly ProjectedPoint[];
+};
+
+function interpolateProjected(
+  a: ProjectedPoint,
+  b: ProjectedPoint,
+  t: number,
+): [number, number] {
+  const bounded = clamp01(t);
+  return [a[0] + (b[0] - a[0]) * bounded, a[1] + (b[1] - a[1]) * bounded];
+}
+
+/**
+ * Point at arc-length progress in [0, 1] on a sampled polyline.
+ * When `arc` carries projected metres (from {@link ThreadPathState}), progress
+ * and tip interpolation use that prebuilt state — no degree-space hypot.
+ */
+export function pointAtArcProgress(
+  points: readonly LngLatTuple[],
+  progress: number,
+  arc?: ArcProgressState,
+): LngLatTuple {
+  if (points.length === 0) {
+    // No geometry: explicit empty guard (not a null-island sample).
+    return [Number.NaN, Number.NaN];
+  }
+  if (points.length === 1) return [points[0][0], points[0][1]];
+  const bounded = clamp01(progress);
+  if (bounded <= 0) return [points[0][0], points[0][1]];
+  if (bounded >= 1) {
+    const last = points[points.length - 1];
+    return [last[0], last[1]];
+  }
+  const state: ArcProgressState = arc ?? polylineArcStateFromLngLat(points);
+  const { cumulative, total } = state;
+  if (!(total > 0)) return [points[0][0], points[0][1]];
+  const targetDist = bounded * total;
+  for (let index = 1; index < points.length; index += 1) {
+    if (cumulative[index] + 1e-15 < targetDist) continue;
+    const span = cumulative[index] - cumulative[index - 1];
+    const local = span > 0 ? (targetDist - cumulative[index - 1]) / span : 0;
+    const projected = state.projected;
+    if (projected && projected.length === points.length) {
+      const xy = interpolateProjected(
+        projected[index - 1],
+        projected[index],
+        local,
+      );
+      const ll = projectedSampleToLngLat(xy[0], xy[1]);
+      if (ll) return ll;
+    }
+    return interpolateLngLatUnwrapped(points[index - 1], points[index], local);
+  }
+  const last = points[points.length - 1];
+  return [last[0], last[1]];
+}
+
+/**
+ * Extract the sub-polyline covering arc progress [start, end] on the shared
+ * sample. Endpoints are interpolated exactly; interior samples retained.
+ */
+export function subPolylineByArcProgress(
+  points: readonly LngLatTuple[],
+  startProgress: number,
+  endProgress: number,
+  arc?: ArcProgressState,
+): LngLatTuple[] {
+  const start = clamp01(startProgress);
+  const end = clamp01(endProgress);
+  if (!(start < end) || points.length === 0) return [];
+  if (points.length === 1) return [[points[0][0], points[0][1]]];
+
+  const state: ArcProgressState = arc ?? polylineArcStateFromLngLat(points);
+  const { cumulative, total } = state;
+  if (!(total > 0)) {
+    return [
+      [points[0][0], points[0][1]],
+      [points[points.length - 1][0], points[points.length - 1][1]],
+    ];
+  }
+
+  const startDist = start * total;
+  const endDist = end * total;
+  const result: LngLatTuple[] = [];
+  result.push(pointAtArcProgress(points, start, state));
+
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const d = cumulative[index];
+    if (d > startDist + 1e-12 && d < endDist - 1e-12) {
+      result.push([points[index][0], points[index][1]]);
+    }
+  }
+
+  const tip = pointAtArcProgress(points, end, state);
+  const last = result[result.length - 1];
+  if (
+    !last ||
+    Math.hypot(shortestLongitudeDelta(last[0], tip[0]), tip[1] - last[1]) >
+      1e-12 ||
+    result.length === 1
+  ) {
+    result.push(tip);
+  }
+  return result;
+}
+
+/** Instrumentation: how many canonical path states were built. */
+let threadPathBuildSerial = 0;
+
+/** Test-only: reset path-build instrumentation counter. */
+export function resetThreadPathBuildSerialForTests(): void {
+  threadPathBuildSerial = 0;
+}
+
+/** Test-only: read path-build instrumentation counter. */
+export function getThreadPathBuildSerialForTests(): number {
+  return threadPathBuildSerial;
+}
+
+function themeSegmentMetas(colors: readonly string[]): ThreadPathSegmentMeta[] {
   const palette = colors.slice(0, MAX_X_CORE_THEMES);
   if (palette.length <= 1) {
     return [
       {
-        coordinates: [source, target],
         color: palette[0] ?? "#76523d",
+        startProgress: 0,
+        endProgress: 1,
       },
     ];
   }
-  // Two segments per colour so the repeating weave reads along the whole edge.
   const segmentCount = palette.length * 2;
   const seamOverlap = themeSegmentSeamOverlapProgress(segmentCount);
-  const segments: ThemedLineSegment[] = [];
+  const metas: ThreadPathSegmentMeta[] = [];
   for (let index = 0; index < segmentCount; index += 1) {
     const t0 = index / segmentCount;
     const t1 = (index + 1) / segmentCount;
-    // One-sided: pull the start of each non-first segment back over the prior
-    // join only. Nominal ends stay exact so later paint order does not get a
-    // second, full-path-scaled invasion into the next colour.
     const start =
       index === 0 ? t0 : Math.max(0, Math.min(t1, t0 - seamOverlap));
     const end = t1;
     if (!(start < end)) continue;
-    segments.push({
-      coordinates: [
-        interpolateLngLat(source, target, start),
-        interpolateLngLat(source, target, end),
-      ],
+    metas.push({
       color: palette[index % palette.length],
+      startProgress: start,
+      endProgress: end,
     });
   }
-  return segments;
+  return metas;
 }
 
 /**
- * Same stable full-path segments as {@link buildThemedLineSegments}, clipped to
- * the draw progress in [0, 1] measured from source toward target. Colour
- * boundaries stay fixed; only the visible length changes.
+ * Build the immutable canonical path once (samples, projected arc lengths,
+ * colour seams). Static projection and motion share this pure builder and the
+ * same identity. Progress/clip/tip all read this prebuilt metre-space state.
  */
-export function buildProgressClippedThemeSegments(
-  source: [number, number],
-  target: [number, number],
-  colors: readonly string[],
+export function buildThreadPathState(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  colors: readonly string[] = [],
+  options: ThreadCurveOptions = {},
+): ThreadPathState {
+  threadPathBuildSerial += 1;
+  const { samples, projected } = sampleThreadCurveWithProjected(
+    source,
+    target,
+    options,
+  );
+  const { cumulative, total } = projectedPolylineArcState(projected);
+  const segments = themeSegmentMetas(colors);
+  return {
+    samples,
+    projectedSamples: projected,
+    cumulative,
+    totalLength: total,
+    segments,
+    buildSerial: threadPathBuildSerial,
+  };
+}
+
+/**
+ * Clip a prebuilt path to arc progress [0, progress]. Does not resample Bezier
+ * controls, does not recompute seams — only extracts visible polylines from the
+ * shared projected arc state.
+ */
+export function clipThreadPathByProgress(
+  path: ThreadPathState,
   progress: number,
 ): ThemedLineSegment[] {
-  const bounded = Math.max(0, Math.min(1, progress));
+  const bounded = clamp01(progress);
   if (bounded <= 0) return [];
-  const full = buildThemedLineSegments(source, target, colors);
-  if (bounded >= 1) return full;
-
-  const palette = colors.slice(0, MAX_X_CORE_THEMES);
-  if (palette.length <= 1) {
-    return [
-      {
-        coordinates: [source, interpolateLngLat(source, target, bounded)],
-        color: full[0]?.color ?? palette[0] ?? "#76523d",
-      },
-    ];
-  }
-
-  const segmentCount = full.length;
-  const seamOverlap = themeSegmentSeamOverlapProgress(segmentCount);
+  const arc: ArcProgressState = {
+    cumulative: path.cumulative,
+    total: path.totalLength,
+    projected: path.projectedSamples,
+  };
   const clipped: ThemedLineSegment[] = [];
-  for (let index = 0; index < segmentCount; index += 1) {
-    const t0 = index / segmentCount;
-    const t1 = (index + 1) / segmentCount;
-    if (bounded <= t0) break;
-    // One-sided backward overlap closes the prior join; never draw past
-    // `bounded` and never extend the nominal end into the next colour.
-    const start =
-      index === 0 ? t0 : Math.max(0, Math.min(t1, t0 - seamOverlap));
-    const end = Math.min(bounded, t1);
+  for (const meta of path.segments) {
+    // Segments are ordered by progress; stop once the tip has not reached this
+    // segment's painted start (after seam pullback).
+    if (bounded <= meta.startProgress) break;
+    const start = meta.startProgress;
+    const end = Math.min(bounded, meta.endProgress);
     if (!(start < end)) continue;
-    clipped.push({
-      coordinates: [
-        interpolateLngLat(source, target, start),
-        interpolateLngLat(source, target, end),
-      ],
-      color: full[index].color,
-    });
+    const coordinates = subPolylineByArcProgress(path.samples, start, end, arc);
+    if (coordinates.length < 2) continue;
+    clipped.push({ coordinates, color: meta.color });
   }
   return clipped;
+}
+
+/**
+ * Controlled multi-theme braid along the *actual curve length*. Segment colour
+ * boundaries are fixed in arc-length progress space so motion clipping never
+ * walks seams. Adjacent multi-colour segments overlap by
+ * {@link themeSegmentSeamOverlapProgress} (fraction of local segment length).
+ * Samples the curve exactly once.
+ */
+export function buildThemedLineSegments(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  colors: readonly string[],
+  options: ThreadCurveOptions = {},
+): ThemedLineSegment[] {
+  const path = buildThreadPathState(source, target, colors, options);
+  return clipThreadPathByProgress(path, 1);
+}
+
+/**
+ * Same stable full-path arc-length segments as {@link buildThemedLineSegments},
+ * clipped to draw progress in [0, 1]. Prefer caching {@link buildThreadPathState}
+ * across frames; this helper still samples only once per call.
+ */
+export function buildProgressClippedThemeSegments(
+  source: LngLatTuple,
+  target: LngLatTuple,
+  colors: readonly string[],
+  progress: number,
+  options: ThreadCurveOptions = {},
+): ThemedLineSegment[] {
+  const bounded = clamp01(progress);
+  if (bounded <= 0) return [];
+  const path = buildThreadPathState(source, target, colors, options);
+  return clipThreadPathByProgress(path, bounded);
 }
 
 /** Structural paint values shared by static threads and edge motion. */
 export function edgeThreadVisual(fadenType: string | undefined): {
   width: number;
   dashArray: [number, number];
+  bodyContinuous: boolean;
+  shadowContinuous: boolean;
 } {
   if (fadenType && fadenType in EDGE_VISUAL_STYLE.byType) {
     const style =
@@ -290,28 +1173,36 @@ export function edgeThreadVisual(fadenType: string | undefined): {
     return {
       width: style.width,
       dashArray: [...style.dashArray] as [number, number],
+      bodyContinuous: style.bodyContinuous,
+      shadowContinuous: style.shadowContinuous,
     };
   }
   return {
     width: EDGE_VISUAL_STYLE.bodyWidth,
     dashArray: [...EDGE_VISUAL_STYLE.dashArray] as [number, number],
+    bodyContinuous: true,
+    shadowContinuous: true,
   };
 }
 
 /**
  * Canonical thread variants used by both static projection and motion overlay.
- * Layer ids remain source-specific; structure (type, width, dash) is shared so
- * the two paths cannot drift.
+ * Layer ids remain source-specific; structure (type, width, dash, continuity)
+ * is shared so the two paths cannot drift.
  */
 export const EDGE_THREAD_VARIANTS = EDGE_LAYER_VARIANTS.map((variant) => ({
   fadenType: variant.fadenType,
   width: variant.width,
   dashArray: [...variant.dashArray] as [number, number],
+  bodyContinuous: variant.bodyContinuous,
+  shadowContinuous: variant.shadowContinuous,
   fallbackColor: variant.fallbackColor,
 })) as ReadonlyArray<{
   fadenType: (typeof EDGE_LAYER_VARIANTS)[number]["fadenType"];
   width: number;
   dashArray: [number, number];
+  bodyContinuous: boolean;
+  shadowContinuous: boolean;
   fallbackColor: string;
 }>;
 
@@ -331,6 +1222,14 @@ export function buildEndpointIndex(
     }
   }
   return pointMap;
+}
+
+function curveOptionsForEdge(edge: MapEdge): ThreadCurveOptions {
+  return {
+    fadenType: edge.faden_type ?? "legacy",
+    threadId: edge.id,
+    subjectId: edge.faden_subject_id ?? null,
+  };
 }
 
 export function buildEdgeFeatures(
@@ -360,26 +1259,30 @@ export function buildEdgeFeatures(
       continue;
     }
 
+    const sourceLngLat: LngLatTuple = [source.lon, source.lat];
+    const targetLngLat: LngLatTuple = [target.lon, target.lat];
+    const curveOptions = curveOptionsForEdge(edge);
     const themeColors = targetThemeColors(target);
     const palette = themeColors ?? [];
+    // One pure path build per edge: samples + seams once, then feature shells.
+    const pathState = buildThreadPathState(
+      sourceLngLat,
+      targetLngLat,
+      palette,
+      curveOptions,
+    );
     const segments = themeColors
-      ? buildThemedLineSegments(
-          [source.lon, source.lat],
-          [target.lon, target.lat],
-          themeColors,
-        )
+      ? clipThreadPathByProgress(pathState, 1)
       : [
           {
-            coordinates: [
-              [source.lon, source.lat],
-              [target.lon, target.lat],
-            ] as [[number, number], [number, number]],
+            coordinates: pathState.samples as LngLatTuple[],
             color: undefined as string | undefined,
           },
         ];
 
     for (let strand = 0; strand < segments.length; strand += 1) {
       const segment = segments[strand];
+      if (segment.coordinates.length < 2) continue;
       features.push({
         type: "Feature",
         geometry: {
@@ -402,6 +1305,15 @@ export function buildEdgeFeatures(
   }
 
   return features;
+}
+
+function applyDashPaint(
+  paint: LineLayerSpecification["paint"],
+  continuous: boolean,
+  dashArray: [number, number],
+): LineLayerSpecification["paint"] {
+  if (continuous || !paint) return paint;
+  return { ...paint, "line-dasharray": dashArray };
 }
 
 export function buildEdgeLayerSpecifications(
@@ -441,13 +1353,16 @@ export function buildEdgeLayerSpecifications(
       source: sourceId,
       filter,
       layout: commonLayout,
-      paint: {
-        "line-color": EDGE_VISUAL_STYLE.shadowColor,
-        "line-width": bodyWidth + EDGE_VISUAL_STYLE.shadowWidthExtra,
-        "line-blur": EDGE_VISUAL_STYLE.shadowBlur,
-        "line-opacity": shadowOpacity,
-        "line-dasharray": dashArray,
-      },
+      paint: applyDashPaint(
+        {
+          "line-color": EDGE_VISUAL_STYLE.shadowColor,
+          "line-width": bodyWidth + EDGE_VISUAL_STYLE.shadowWidthExtra,
+          "line-blur": EDGE_VISUAL_STYLE.shadowBlur,
+          "line-opacity": shadowOpacity,
+        },
+        variant.shadowContinuous,
+        dashArray,
+      ),
     };
     const bodyLayer: LineLayerSpecification = {
       id: variant.layerId,
@@ -455,17 +1370,21 @@ export function buildEdgeLayerSpecifications(
       source: sourceId,
       filter,
       layout: commonLayout,
-      paint: {
-        "line-color": [
-          "coalesce",
-          ["get", "themeColor"],
-          variant.fallbackColor,
-        ],
-        "line-width": bodyWidth,
-        "line-opacity": opacity,
-        "line-dasharray": dashArray,
-      },
+      paint: applyDashPaint(
+        {
+          "line-color": [
+            "coalesce",
+            ["get", "themeColor"],
+            variant.fallbackColor,
+          ],
+          "line-width": bodyWidth,
+          "line-opacity": opacity,
+        },
+        variant.bodyContinuous,
+        dashArray,
+      ),
     };
+    // Highlight always carries the braid/fiber rhythm.
     const highlightLayer: LineLayerSpecification = {
       id: variant.highlightLayerId,
       type: "line",

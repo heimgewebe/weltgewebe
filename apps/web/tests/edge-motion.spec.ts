@@ -150,7 +150,9 @@ test.describe("event-bound Faden motion", () => {
       };
     });
     expect(during.phase).toBe("creating");
-    expect(during.coordinateCount).toBe(2);
+    // Natural thread curves are bounded polylines (not two-point capsules).
+    expect(during.coordinateCount).toBeGreaterThanOrEqual(2);
+    expect(during.coordinateCount).toBeLessThanOrEqual(24);
     expect(during.filter).not.toBeNull();
 
     await expect

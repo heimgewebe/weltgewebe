@@ -33,25 +33,37 @@ Erweiterungen sich anbieten.
   im Devcontainer bereitgestellt wird und dass Lockfiles (`uv.lock`) eingecheckt
   werden sollen.
 - **Python-Tooling-Workspace:** Unter `tools/py` liegt das zentrale
-  `pyproject.toml` für Repository-Helfer. `PyYAML==6.0.2` ist dort als erste
-  Tooling-Abhängigkeit deklariert; `tools/py/uv.lock` bindet die zugelassenen
+  `pyproject.toml` für Repository-Helfer. Gebundene Abhängigkeiten sind
+  `PyYAML==6.0.2` und `pytest==8.3.4`; `tools/py/uv.lock` bindet die zugelassenen
   Distributionsartefakte an SHA-256-Hashes.
-- **Agent-Contract-Ausführung:** `just agent-contract-check` nutzt
-  `uv run --project tools/py --locked`. Lokal und in CI gilt damit dieselbe
-  Abhängigkeitsauflösung; ein veraltetes oder manipuliertes Lockfile blockiert.
+- **Agent-Contract-Ausführung:** `just agent-contract-check` und
+  `make agent-contract-check` / der volle `make validate`-Pfad nutzen
+  `uv run --project tools/py --locked`. Das schließt `scripts/ci/tests`
+  (unittest discover) und den expliziten Pytest-Lauf ein — ohne Host-`python3`.
+  Direkte Teilaufrufe und Make teilen dieselbe Abhängigkeitsauflösung;
+  fehlendes `uv`, Lock- oder Interpreterdrift sowie fehlende gebundene
+  Abhängigkeiten enden fail-closed.
+- **Plattform- und Policy-Checks:** `make platform-check` sowie die Workflows
+  `kubernetes-platform`, `kubernetes-platform-proof`, `kubernetes-proof-oci-mirror`,
+  `policycheck` und `docs-guard` binden Python-Tooling über dasselbe
+  `tools/py/uv.lock` (nicht über ungebundene `pip install`-Versionen für diese
+  Prüfungen).
 
-Damit ist `uv` der reproduzierbare Dependency-Pfad für das Agent-Contract-Tooling.
+Damit ist `uv` der einzige reproduzierbare Dependency-Pfad für den vollständigen
+Python-Validierungspfad (Agent, Vertrag, Plattform, CI-Tests) im Make- und CI-Pfad.
 
 ## Potenzial für Verbesserungen
 
 1. **Dependency-Update:** Den Pin in `tools/py/pyproject.toml` ändern und mit der
    in `toolchain.versions.yml` gepinnten uv-Version `uv lock --project tools/py`
    ausführen. Danach den vollständigen PyYAML-Artefaktsatz und seine SHA-256-Hashes
-   reviewen; nie ein ungebundenes `pip install` ergänzen.
+   sowie die pytest-Bindung reviewen; nie ein ungebundenes `pip install` für den
+   Make-Validierungspfad ergänzen.
 2. **Lock-Beweis:** `uv sync --project tools/py --locked` sowie die negativen
-   Lock-Fixtures aus `scripts/agent/tests/test_agent_tooling_lock.py` ausführen.
-   Falsche oder fehlende Hashes und eine vom Lock abweichende Version müssen
-   fail-closed enden.
+   Lock-Fixtures und den bare-`python3`-Negativtest aus
+   `scripts/agent/tests/test_agent_tooling_lock.py` ausführen. Falsche oder
+   fehlende Hashes, Host-Python im Make-Pfad und vom Lock abweichende Versionen
+   müssen fail-closed enden.
 3. **Weitere Tooling-Abhängigkeiten:** Nur in demselben Workspace ergänzen und das
    Lockfile im gleichen Commit aktualisieren. Separate Workflow-Pins würden wieder
    konkurrierende Dependency-Wahrheiten erzeugen.

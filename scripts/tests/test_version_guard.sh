@@ -13,11 +13,18 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 PARSE_HELPER="$REPO_ROOT/scripts/lib/parse-version-json.py"
+# Same repo-canonical tools/py environment as make validate / UV_RUN.
+run_locked_python() { uv run --project "$REPO_ROOT/tools/py" --locked python "$@"; }
 
 fail() {
   echo "FAIL: $*" >&2
   exit 1
 }
+
+if ! command -v uv > /dev/null 2>&1; then
+  echo "ERROR: uv is required for version-guard tests (tools/py/uv.lock)." >&2
+  exit 1
+fi
 
 # ---------------------------------------------------------------------------
 # Wrappers — thin shells around the shared helper so tests stay readable.
@@ -32,7 +39,7 @@ run_guard() {
 
   local out rc
   set +e
-  out=$(python3 "$PARSE_HELPER" "$tmpfile" 2> /dev/null)
+  out=$(run_locked_python "$PARSE_HELPER" "$tmpfile" 2> /dev/null)
   rc=$?
   set -e
 
@@ -42,9 +49,10 @@ run_guard() {
 
 # _read_version_json: mirrors the helper wrapper used in weltgewebe-up.
 # Returns the version string (line 1 of parser output), or empty on any error.
+# Validation-path tests use the locked tools/py interpreter (not host python3).
 _read_version_json() {
   local json_file="$1"
-  python3 "$PARSE_HELPER" "$json_file" 2> /dev/null | head -n1 || true
+  run_locked_python "$PARSE_HELPER" "$json_file" 2> /dev/null | head -n1 || true
 }
 
 # ===========================================================================

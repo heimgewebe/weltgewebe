@@ -186,12 +186,13 @@ test.describe("Edge visibility on load", () => {
       edgeState.mainOpacity,
       EDGE_VISUAL_STYLE.shadowOpacityFactor,
     ]);
-    // Structural invariant: yarn layers share the same braid dasharray so
-    // shadow/body/highlight stay one thread instead of three mismatched strokes.
-    expect(edgeState.mainDasharray).toBeDefined();
-    expect(edgeState.mainDasharray).not.toBeNull();
-    expect(edgeState.shadowDasharray).toEqual(edgeState.mainDasharray);
-    expect(edgeState.highlightDasharray).toEqual(edgeState.mainDasharray);
+    // Structural invariant: legacy shadow/body stay continuous yarn; braid
+    // rhythm lives on the narrow highlight (not three mismatched strokes).
+    expect(edgeState.shadowDasharray == null).toBe(true);
+    expect(edgeState.mainDasharray == null).toBe(true);
+    expect(edgeState.highlightDasharray).toEqual([
+      ...EDGE_VISUAL_STYLE.dashArray,
+    ]);
 
     expect(edgeState.isUnderMain).toBe(true);
     expect(edgeState.highlightAboveMain).toBe(true);

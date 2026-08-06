@@ -8,6 +8,7 @@ name: agent-safety-preflight
       - "tools/py/pyproject.toml"
       - "tools/py/uv.lock"
       - "toolchain.versions.yml"
+      - ".python-version"
       - "scripts/contracts-agent-check.sh"
       - "scripts/docmeta/generate_agent_readiness.py"
       - "scripts/docmeta/tests/test_generate_agent_readiness.py"
@@ -76,11 +77,11 @@ jobs:
         with:
           version: ${{ steps.uv-version.outputs.uv_version }}
 
-      - name: Validate reviewed agent dependency lock
-        run: python -m scripts.agent.validate_agent_tooling_lock
-
       - name: Sync hash-locked agent dependencies
         run: uv sync --project tools/py --locked
+
+      - name: Validate reviewed agent dependency lock
+        run: uv run --project tools/py --locked python -m scripts.agent.validate_agent_tooling_lock
 
       - name: Run agent unit and CLI contract tests
         run: uv run --project tools/py --locked python -m unittest discover scripts/agent/tests/ -v

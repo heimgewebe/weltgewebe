@@ -19,6 +19,10 @@ LOCK_REL = "tools/py/uv.lock"
 EXPECTED_PACKAGE = "pyyaml"
 EXPECTED_VERSION = "6.0.2"
 EXPECTED_DEPENDENCY = "PyYAML==6.0.2"
+EXPECTED_PYTEST_PACKAGE = "pytest"
+EXPECTED_PYTEST_VERSION = "8.3.4"
+EXPECTED_PYTEST_DEPENDENCY = "pytest==8.3.4"
+EXPECTED_DEPENDENCIES = (EXPECTED_DEPENDENCY, EXPECTED_PYTEST_DEPENDENCY)
 EXPECTED_LOCK_VERSION = 1
 EXPECTED_LOCK_REVISION = 3
 EXPECTED_ARTIFACT_COUNT = 28
@@ -78,14 +82,24 @@ def validate_tooling_lock(repo_root: Path) -> list[dict[str, str]]:
 
     project = pyproject.get("project")
     dependencies = project.get("dependencies") if isinstance(project, dict) else None
-    if not isinstance(dependencies, list) or EXPECTED_DEPENDENCY not in dependencies:
+    if not isinstance(dependencies, list):
         findings.append(
             _finding(
                 "AGENT_TOOLING_DEPENDENCY_PIN",
                 f"{PYPROJECT_REL}:project.dependencies",
-                f"required exact dependency is missing: {EXPECTED_DEPENDENCY}",
+                "project.dependencies must be a list",
             )
         )
+        dependencies = []
+    for required in EXPECTED_DEPENDENCIES:
+        if required not in dependencies:
+            findings.append(
+                _finding(
+                    "AGENT_TOOLING_DEPENDENCY_PIN",
+                    f"{PYPROJECT_REL}:project.dependencies",
+                    f"required exact dependency is missing: {required}",
+                )
+            )
 
     if lock.get("version") != EXPECTED_LOCK_VERSION:
         findings.append(
@@ -137,6 +151,28 @@ def validate_tooling_lock(repo_root: Path) -> list[dict[str, str]]:
                 "AGENT_TOOLING_LOCK_VERSION",
                 f"{LOCK_REL}:package.{EXPECTED_PACKAGE}.version",
                 f"expected {EXPECTED_PACKAGE} {EXPECTED_VERSION}",
+            )
+        )
+
+    pytest_matching = [
+        entry
+        for entry in packages
+        if isinstance(entry, dict) and entry.get("name") == EXPECTED_PYTEST_PACKAGE
+    ]
+    if len(pytest_matching) != 1:
+        findings.append(
+            _finding(
+                "AGENT_TOOLING_LOCK_PACKAGE",
+                f"{LOCK_REL}:package",
+                f"expected exactly one {EXPECTED_PYTEST_PACKAGE} package entry",
+            )
+        )
+    elif pytest_matching[0].get("version") != EXPECTED_PYTEST_VERSION:
+        findings.append(
+            _finding(
+                "AGENT_TOOLING_LOCK_VERSION",
+                f"{LOCK_REL}:package.{EXPECTED_PYTEST_PACKAGE}.version",
+                f"expected {EXPECTED_PYTEST_PACKAGE} {EXPECTED_PYTEST_VERSION}",
             )
         )
 
@@ -211,14 +247,18 @@ def validate_tooling_lock(repo_root: Path) -> list[dict[str, str]]:
         metadata = project_packages[0].get("metadata")
         requires_dist = metadata.get("requires-dist") if isinstance(metadata, dict) else None
         expected_requires_dist = [
-            {"name": EXPECTED_PACKAGE, "specifier": f"=={EXPECTED_VERSION}"}
+            {
+                "name": EXPECTED_PYTEST_PACKAGE,
+                "specifier": f"=={EXPECTED_PYTEST_VERSION}",
+            },
+            {"name": EXPECTED_PACKAGE, "specifier": f"=={EXPECTED_VERSION}"},
         ]
         if requires_dist != expected_requires_dist:
             findings.append(
                 _finding(
                     "AGENT_TOOLING_LOCK_PROJECT",
                     f"{LOCK_REL}:package.weltgewebe-tools.metadata.requires-dist",
-                    "project metadata must bind the exact PyYAML version",
+                    "project metadata must bind exact pytest and PyYAML versions",
                 )
             )
 
@@ -240,6 +280,10 @@ def main(argv: list[str] | None = None) -> int:
         "pyproject": PYPROJECT_REL,
         "lock": LOCK_REL,
         "package": f"{EXPECTED_PACKAGE}=={EXPECTED_VERSION}",
+        "packages": [
+            f"{EXPECTED_PACKAGE}=={EXPECTED_VERSION}",
+            f"{EXPECTED_PYTEST_PACKAGE}=={EXPECTED_PYTEST_VERSION}",
+        ],
         "artifact_set_sha256": EXPECTED_ARTIFACT_SET_SHA256,
         "findings_count": len(findings),
         "findings": findings,

@@ -257,4 +257,7 @@ def test_projection_privacy_contract_is_generation_bound() -> None:
 
 def test_privacy_contract_is_wired_into_make_ci_validate() -> None:
     makefile = (REPO / "Makefile").read_text(encoding="utf-8")
-    assert "python3 -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py" in makefile
+    assert (
+        "$(UV_RUN) python -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py"
+        in makefile
+    )

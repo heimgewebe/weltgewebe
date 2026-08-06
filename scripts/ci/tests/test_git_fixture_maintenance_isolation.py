@@ -29,12 +29,14 @@ class GitFixtureMaintenanceIsolationTests(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
 
-        python_command = "python3 -m unittest discover scripts/ci/tests/"
+        # make validate-tests runs scripts/ci discover via uv-locked tools/py.
+        python_command = "python -m unittest discover scripts/ci/tests/"
         command = next(
             (
                 line.strip()
                 for line in result.stdout.splitlines()
                 if line.strip().endswith(python_command)
+                and "uv run --project tools/py --locked" in line
             ),
             None,
         )
