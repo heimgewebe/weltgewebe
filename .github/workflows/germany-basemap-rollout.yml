@@ -17,6 +17,7 @@ name: Germany Basemap Rollout
       - "apps/web/src/lib/map/config/basemap.current.ts"
       - "apps/web/src/lib/map/config/basemap.current.test.ts"
       - "map-style/style-germany.json"
+      - "map-style/style-germany-dark.json"
       - "scripts/basemap/build-germany-pmtiles.sh"
       - "scripts/basemap/build-hamburg-pmtiles.sh"
       - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
@@ -46,6 +47,7 @@ name: Germany Basemap Rollout
       - "apps/web/src/lib/map/config/basemap.current.ts"
       - "apps/web/src/lib/map/config/basemap.current.test.ts"
       - "map-style/style-germany.json"
+      - "map-style/style-germany-dark.json"
       - "scripts/basemap/build-germany-pmtiles.sh"
       - "scripts/basemap/build-hamburg-pmtiles.sh"
       - "scripts/basemap/build-schleswig-holstein-pmtiles.sh"
@@ -147,8 +149,10 @@ jobs:
           pnpm build
           expected_source_commit="$(git -C ../.. rev-parse HEAD)"
           expected_style_sha256="$(sha256sum ../../map-style/style-germany.json | awk '{print $1}')"
+          expected_style_dark_sha256="$(sha256sum ../../map-style/style-germany-dark.json | awk '{print $1}')"
           EXPECTED_SOURCE_COMMIT="${expected_source_commit}" \
             EXPECTED_STYLE_SHA256="${expected_style_sha256}" \
+            EXPECTED_STYLE_DARK_SHA256="${expected_style_dark_sha256}" \
             python3 - <<'PY'
           import json
           import os
@@ -156,6 +160,13 @@ jobs:
 
           identity = json.loads(
               Path("build/_app/basemap-build.json").read_text(encoding="utf-8")
+          )
+          light_style = json.loads(
+              Path("../../map-style/style-germany.json").read_text(encoding="utf-8")
+          )
+          assert (
+              light_style["metadata"]["weltgewebe:darkStyleSha256"]
+              == os.environ["EXPECTED_STYLE_DARK_SHA256"]
           )
           assert identity == {
               "schema_version": 1,

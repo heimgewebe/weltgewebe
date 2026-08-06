@@ -1,5 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { rewritePmtilesUrl, resolveBasemapStyle } from "./basemap";
+import {
+  rewritePmtilesUrl,
+  resolveBasemapStyle,
+  REMOTE_VOYAGER_STYLE_URL,
+  REMOTE_DARK_MATTER_STYLE_URL,
+} from "./basemap";
 
 describe("rewritePmtilesUrl", () => {
   it("rewrites bare pmtiles alias to local dev proxy", () => {
@@ -34,24 +39,101 @@ describe("rewritePmtilesUrl", () => {
 });
 
 describe("resolveBasemapStyle", () => {
-  it("returns styleUrl for remote-style mode", () => {
-    const result = resolveBasemapStyle({
-      mode: "remote-style",
-      styleUrl: "https://example.com/style.json",
-    } as any);
+  it("returns styleUrl for remote-style light mode", () => {
+    const result = resolveBasemapStyle(
+      {
+        mode: "remote-style",
+        styleUrl: "https://example.com/style.json",
+      } as any,
+      "light",
+    );
     expect(result).toBe("https://example.com/style.json");
   });
 
-  it("throws when remote-style has no styleUrl", () => {
-    expect(() => resolveBasemapStyle({ mode: "remote-style" } as any)).toThrow(
-      "styleUrl required",
+  it("returns explicit darkStyleUrl for remote-style dark mode", () => {
+    const result = resolveBasemapStyle(
+      {
+        mode: "remote-style",
+        styleUrl: REMOTE_VOYAGER_STYLE_URL,
+        darkStyleUrl: "https://example.com/dark.json",
+      } as any,
+      "dark",
     );
+    expect(result).toBe("https://example.com/dark.json");
   });
 
-  it("returns local path for local-sovereign mode", () => {
-    const result = resolveBasemapStyle({ mode: "local-sovereign" } as any);
-    expect(result).toMatch(
-      /^\/local-basemap\/style\.json\?v=0\.3\.1&build=[^&]+$/,
+  it("maps Voyager to Dark Matter when no darkStyleUrl is set", () => {
+    const result = resolveBasemapStyle(
+      {
+        mode: "remote-style",
+        styleUrl: REMOTE_VOYAGER_STYLE_URL,
+      } as any,
+      "dark",
     );
+    expect(result).toBe(REMOTE_DARK_MATTER_STYLE_URL);
+  });
+
+  it("keeps a custom remote light URL for dark when no darkStyleUrl is set", () => {
+    const result = resolveBasemapStyle(
+      {
+        mode: "remote-style",
+        styleUrl: "https://tiles.example.org/custom-style.json",
+      } as any,
+      "dark",
+    );
+    expect(result).toBe("https://tiles.example.org/custom-style.json");
+  });
+
+  it("throws when remote-style has no styleUrl in light mode", () => {
+    expect(() =>
+      resolveBasemapStyle({ mode: "remote-style" } as any, "light"),
+    ).toThrow("styleUrl required");
+  });
+
+  it("throws when remote-style has no styleUrl in dark mode", () => {
+    expect(() =>
+      resolveBasemapStyle({ mode: "remote-style" } as any, "dark"),
+    ).toThrow("styleUrl required");
+  });
+
+  it("returns local light path for local-sovereign regional", () => {
+    const result = resolveBasemapStyle(
+      { mode: "local-sovereign" } as any,
+      "light",
+    );
+    expect(result).toMatch(
+      /^\/local-basemap\/style\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+    expect(result).not.toContain("cartocdn");
+  });
+
+  it("returns local dark path for local-sovereign regional", () => {
+    const result = resolveBasemapStyle(
+      { mode: "local-sovereign", variant: "regional" } as any,
+      "dark",
+    );
+    expect(result).toMatch(
+      /^\/local-basemap\/style-dark\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+    expect(result).not.toContain("cartocdn");
+  });
+
+  it("returns Germany light and dark local paths without remote hosts", () => {
+    const light = resolveBasemapStyle(
+      { mode: "local-sovereign", variant: "germany" } as any,
+      "light",
+    );
+    const dark = resolveBasemapStyle(
+      { mode: "local-sovereign", variant: "germany" } as any,
+      "dark",
+    );
+    expect(light).toMatch(
+      /^\/local-basemap\/style-germany\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+    expect(dark).toMatch(
+      /^\/local-basemap\/style-germany-dark\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+    expect(light).not.toContain("cartocdn");
+    expect(dark).not.toContain("cartocdn");
   });
 });

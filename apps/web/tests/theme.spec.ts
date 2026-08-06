@@ -1,4 +1,5 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import { mockApiResponses } from "./fixtures/mockApi";
 
 const themeRoot = (page: Page) => page.locator("html");
 
@@ -108,8 +109,22 @@ test.describe("Farbschema", () => {
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
     await expect(page.getByTestId("theme-select")).toHaveValue("dark");
 
+    const basemapStyleUrls: string[] = [];
+    page.on("request", (request) => {
+      const url = request.url();
+      if (url.includes("/local-basemap/style")) {
+        basemapStyleUrls.push(url);
+      }
+    });
+
     await page.goto("/map");
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "dark");
+    await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "dark");
+    await expect
+      .poll(() =>
+        basemapStyleUrls.some((url) => url.includes("style-dark.json")),
+      )
+      .toBe(true);
     await expect(
       page.getByRole("link", { name: "Einstellungen öffnen" }),
     ).toBeVisible();
@@ -118,6 +133,122 @@ test.describe("Farbschema", () => {
     await page.goto("/settings");
     await page.getByTestId("theme-select").selectOption("light");
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
+  });
+
+  test("wechselt den Kartenstil live und rehydriert die Fadenebenen", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("weltgewebe.theme", "light");
+    });
+    await mockApiResponses(page);
+
+    const styleRequests: string[] = [];
+    page.on("request", (request) => {
+      const url = request.url();
+      if (url.includes("/local-basemap/style")) styleRequests.push(url);
+    });
+
+    await page.goto("/map");
+    await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "light");
+    await page.waitForFunction(() => {
+      const map = (window as any).__TEST_MAP__;
+      return Boolean(
+        map?.isStyleLoaded() && map.getLayer("edges-vote-highlight-layer"),
+      );
+    });
+
+    const before = await page.evaluate(() => {
+      const map = (window as any).__TEST_MAP__;
+      const center = map.getCenter();
+      return {
+        lng: center.lng,
+        lat: center.lat,
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      };
+    });
+
+    const lightRequestsBeforeRapidSwitch = styleRequests.filter((url) =>
+      /\/style\.json(?:\?|$)/.test(url),
+    ).length;
+    await page.evaluate(async () => {
+      const root = document.documentElement;
+      const nextTask = () =>
+        new Promise<void>((resolve) => window.setTimeout(resolve, 0));
+      root.dataset.colorScheme = "dark";
+      await nextTask();
+      root.dataset.colorScheme = "light";
+      await nextTask();
+      root.dataset.colorScheme = "dark";
+    });
+    await expect
+      .poll(() => styleRequests.some((url) => url.includes("style-dark.json")))
+      .toBe(true);
+    await expect
+      .poll(
+        () =>
+          styleRequests.filter((url) => /\/style\.json(?:\?|$)/.test(url))
+            .length,
+      )
+      .toBeGreaterThan(lightRequestsBeforeRapidSwitch);
+    await page.waitForFunction(() => {
+      const map = (window as any).__TEST_MAP__;
+      const layers = map?.getStyle()?.layers ?? [];
+      const edgeLayerIds = layers
+        .map((layer: { id: string }) => layer.id)
+        .filter((id: string) => id.startsWith("edges-"));
+      return (
+        map?.isStyleLoaded() &&
+        Boolean(map.getSource("edges-source")) &&
+        edgeLayerIds.length === 15 &&
+        new Set(edgeLayerIds).size === 15
+      );
+    });
+
+    const afterDark = await page.evaluate(() => {
+      const map = (window as any).__TEST_MAP__;
+      const center = map.getCenter();
+      return {
+        lng: center.lng,
+        lat: center.lat,
+        zoom: map.getZoom(),
+        bearing: map.getBearing(),
+        pitch: map.getPitch(),
+      };
+    });
+    expect(afterDark.lng).toBeCloseTo(before.lng, 7);
+    expect(afterDark.lat).toBeCloseTo(before.lat, 7);
+    expect(afterDark.zoom).toBeCloseTo(before.zoom, 7);
+    expect(afterDark.bearing).toBeCloseTo(before.bearing, 7);
+    expect(afterDark.pitch).toBeCloseTo(before.pitch, 7);
+
+    const lightRequestsBeforeSwitchBack = styleRequests.filter((url) =>
+      /\/style\.json(?:\?|$)/.test(url),
+    ).length;
+    await page.evaluate(() => {
+      document.documentElement.dataset.colorScheme = "light";
+    });
+    await expect
+      .poll(
+        () =>
+          styleRequests.filter((url) => /\/style\.json(?:\?|$)/.test(url))
+            .length,
+      )
+      .toBeGreaterThan(lightRequestsBeforeSwitchBack);
+    await page.waitForFunction(() => {
+      const map = (window as any).__TEST_MAP__;
+      const edgeLayerIds = (map?.getStyle()?.layers ?? [])
+        .map((layer: { id: string }) => layer.id)
+        .filter((id: string) => id.startsWith("edges-"));
+      return (
+        map?.isStyleLoaded() &&
+        Boolean(map.getSource("edges-source")) &&
+        edgeLayerIds.length === 15 &&
+        new Set(edgeLayerIds).size === 15
+      );
+    });
   });
 
   test("hält Einstellungen und Anmeldung bei 320 Pixeln frei berührbar", async ({

@@ -27,6 +27,8 @@ type BaseBasemapConfig = {
 export type RemoteStyleBasemapConfig = BaseBasemapConfig & {
   mode: "remote-style";
   styleUrl: string;
+  /** Optional dark basemap style; when absent the resolver maps Voyager → Dark Matter. */
+  darkStyleUrl?: string;
 };
 
 export type LocalSovereignBasemapConfig = BaseBasemapConfig & {
@@ -35,6 +37,7 @@ export type LocalSovereignBasemapConfig = BaseBasemapConfig & {
   // variant existed. The resolver treats absence as the regional rollback path.
   variant?: LocalBasemapVariant;
   styleUrl?: never;
+  darkStyleUrl?: never;
 };
 
 export type BasemapConfig =
@@ -69,6 +72,9 @@ export const currentBasemap: BasemapConfig =
         ...baseConfig,
         mode: "remote-style",
         styleUrl: BUILD_BASEMAP_CONFIG.styleUrl,
+        ...(BUILD_BASEMAP_CONFIG.darkStyleUrl
+          ? { darkStyleUrl: BUILD_BASEMAP_CONFIG.darkStyleUrl }
+          : {}),
       }
     : {
         ...baseConfig,

@@ -1,12 +1,11 @@
 {
   "version": 8,
-  "name": "Weltgewebe Sovereign Basemap — Germany",
+  "name": "Weltgewebe Sovereign Basemap \u2014 Germany \u2014 Dark",
   "metadata": {
     "weltgewebe:version": "0.4.0",
     "weltgewebe:variant": "germany",
-    "weltgewebe:note": "Opt-in nationwide PMTiles source; production activation requires artifact and live runtime proof",
-    "weltgewebe:colorScheme": "light",
-    "weltgewebe:darkStyleSha256": "253bbbbdb0fadc932675585f48d27c86f9e41f421c5454a9e924e010b8e4fdf7"
+    "weltgewebe:note": "Opt-in nationwide PMTiles source; production activation requires artifact and live runtime proof; dark basemap palette",
+    "weltgewebe:colorScheme": "dark"
   },
   "sources": {
     "basemap-germany": {
@@ -20,7 +19,7 @@
       "id": "background",
       "type": "background",
       "paint": {
-        "background-color": "#e0e0e0"
+        "background-color": "#12181a"
       }
     },
     {
@@ -34,16 +33,16 @@
           "match",
           ["get", "class"],
           "farmland",
-          "#e7e0cf",
+          "#2a2e24",
           "grass",
-          "#d9e5d3",
+          "#243028",
           "wood",
-          "#c9d9c4",
+          "#1e2a22",
           "wetland",
-          "#d6e4de",
+          "#1f2a2a",
           "sand",
-          "#eee2c8",
-          "#dedfd8"
+          "#2e2c24",
+          "#242a28"
         ],
         "fill-opacity": 0.92
       }
@@ -59,28 +58,28 @@
           "match",
           ["get", "class"],
           "residential",
-          "#ddd9d2",
+          "#2a2f30",
           "industrial",
-          "#d6d0cc",
+          "#2c2a2a",
           "commercial",
-          "#e1d5d0",
+          "#302a2a",
           "retail",
-          "#e4d7d2",
+          "#322c2a",
           "cemetery",
-          "#d3dfd0",
+          "#273028",
           "school",
-          "#dedbd0",
+          "#2c2c28",
           "university",
-          "#dedbd0",
+          "#2c2c28",
           "hospital",
-          "#e2d6d4",
+          "#302a2c",
           "military",
-          "#d8d1c7",
+          "#2c2a26",
           "quarry",
-          "#d2cec5",
+          "#2a2a26",
           "pitch",
-          "#d2e0ce",
-          "#dedbd4"
+          "#243028",
+          "#2a2c2a"
         ],
         "fill-opacity": 0.72
       }
@@ -91,7 +90,7 @@
       "source": "basemap-germany",
       "source-layer": "water",
       "paint": {
-        "fill-color": "#a0c8f0"
+        "fill-color": "#1a3348"
       }
     },
     {
@@ -100,7 +99,7 @@
       "source": "basemap-germany",
       "source-layer": "transportation",
       "paint": {
-        "line-color": "#ffffff",
+        "line-color": "#4a585c",
         "line-width": 1.5
       }
     },
@@ -110,7 +109,7 @@
       "source": "basemap-germany",
       "source-layer": "building",
       "paint": {
-        "fill-color": "#d0d0d0",
+        "fill-color": "#2a3336",
         "fill-opacity": 0.5
       }
     },
@@ -125,8 +124,8 @@
         "text-size": 14
       },
       "paint": {
-        "text-color": "#333333",
-        "text-halo-color": "#ffffff",
+        "text-color": "#d5e0dc",
+        "text-halo-color": "#0e1517",
         "text-halo-width": 1
       }
     }

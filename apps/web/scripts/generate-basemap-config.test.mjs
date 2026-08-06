@@ -103,6 +103,7 @@ test("emits the Germany variant only when explicitly selected", () => {
 test("emits a remote identity without a sovereign variant", () => {
   const result = runGenerator({ PUBLIC_BASEMAP_MODE: "remote-style" });
   assert.equal(result.status, 0, result.stderr);
+  assert.match(generatedConfig(), /darkStyleUrl:/);
   assert.deepEqual(buildIdentity(), {
     schema_version: 1,
     mode: "remote-style",
@@ -183,12 +184,19 @@ test("on Vercel without explicit mode selects remote-style", () => {
   });
 });
 
-test("explicit local-sovereign on Vercel remains local when style is delivered", () => {
+test("explicit local-sovereign on Vercel remains local when light and dark styles are delivered", () => {
   const deliveredDir = path.join(webRoot, "static", "local-basemap");
   const deliveredStyle = path.join(deliveredDir, "style.json");
+  const deliveredDarkStyle = path.join(deliveredDir, "style-dark.json");
   fs.mkdirSync(deliveredDir, { recursive: true });
-  const sourceStyle = path.join(repoRoot, "map-style", "style.json");
-  fs.copyFileSync(sourceStyle, deliveredStyle);
+  fs.copyFileSync(
+    path.join(repoRoot, "map-style", "style.json"),
+    deliveredStyle,
+  );
+  fs.copyFileSync(
+    path.join(repoRoot, "map-style", "style-dark.json"),
+    deliveredDarkStyle,
+  );
   try {
     const result = runGenerator({
       VERCEL: "1",
@@ -199,6 +207,7 @@ test("explicit local-sovereign on Vercel remains local when style is delivered",
     assert.match(generatedConfig(), /variant: "regional"/);
   } finally {
     fs.rmSync(deliveredStyle, { force: true });
+    fs.rmSync(deliveredDarkStyle, { force: true });
     try {
       fs.rmdirSync(deliveredDir);
     } catch {
@@ -214,7 +223,14 @@ test("explicit local-sovereign on Vercel fails closed without delivered style", 
     "local-basemap",
     "style.json",
   );
+  const deliveredDarkStyle = path.join(
+    webRoot,
+    "static",
+    "local-basemap",
+    "style-dark.json",
+  );
   fs.rmSync(deliveredStyle, { force: true });
+  fs.rmSync(deliveredDarkStyle, { force: true });
   const result = runGenerator({
     VERCEL: "1",
     PUBLIC_BASEMAP_MODE: "local-sovereign",

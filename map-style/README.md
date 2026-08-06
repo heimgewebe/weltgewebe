@@ -12,13 +12,16 @@ To ensure total visual sovereignty and compliance (no silent vendor dependencies
 * `pmtiles://` URLs require a protocol handler in the MapLibre runtime (not part of this configuration)
 * The current configuration is wired for the local-sovereign runtime route `/local-basemap/`
 * The style composes two independent regional PMTiles sources: `basemap-hamburg.pmtiles` and `basemap-schleswig-holstein.pmtiles`. Each source carries the same OpenMapTiles layer schema; the style repeats the visual layers for both regions.
-* Style version `0.3.0` renders `landcover` and `landuse` before water, roads, buildings and labels. Rural areas therefore remain recognizable instead of collapsing into the uniform background.
-* The web runtime requests the mutable style with its declared version as a query parameter. A style change must bump both `weltgewebe:version` and `LOCAL_BASEMAP_STYLE_VERSION`; CI rejects drift between them.
+* Style version `0.4.0` renders `landcover` and `landuse` before water, roads, buildings and labels. Rural areas therefore remain recognizable instead of collapsing into the uniform background.
+* Light and dark basemaps are separate MapLibre style documents with the same sources and layer ids. Dark mode is a real palette, not a CSS filter. Semantic node/edge colours live in the overlay and are not part of these styles.
+* The web runtime requests the mutable style with its declared version as a query parameter and selects light/dark from `document.documentElement.dataset.colorScheme`. A style change must bump both `weltgewebe:version` and `LOCAL_BASEMAP_STYLE_VERSION`; CI rejects drift between them.
+* Each light style embeds the exact SHA-256 of its dark counterpart. The existing build identity hashes the light style, thereby transitively binding both style byte streams without changing the published identity schema; the generator fails closed on any mismatch.
 
 ## Structure
 
-* `style.json`: The standard MapLibre style document.
-* `colors.json`: High-level color definitions and palette.
+* `style.json` / `style-dark.json`: Regional MapLibre styles (Hamburg + Schleswig-Holstein).
+* `style-germany.json` / `style-germany-dark.json`: Opt-in nationwide styles.
+* `colors.json`: High-level light (`theme`) and dark (`theme_dark`) palettes.
 * `glyphs/`: Local, self-hosted font stacks in PBF format to prevent external font service dependencies. (Fetched via `scripts/basemap/fetch-glyphs.sh`)
 
 > **Note on Sprites:** To maintain a visually calmed infrastructure basemap, sprites (icons/patterns) are intentionally omitted from this map style MVP. Visual semantics belong in the Weltgewebe overlay.
