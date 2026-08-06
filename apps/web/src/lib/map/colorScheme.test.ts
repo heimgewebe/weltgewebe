@@ -18,6 +18,10 @@ describe("normalizeColorScheme", () => {
 });
 
 describe("readDocumentColorScheme", () => {
+  it("falls back to light when no document exists", () => {
+    expect(readDocumentColorScheme()).toBe("light");
+  });
+
   it("reads dataset.colorScheme through the normalizer", () => {
     expect(readDocumentColorScheme({ dataset: { colorScheme: "dark" } })).toBe(
       "dark",
@@ -30,6 +34,14 @@ describe("readDocumentColorScheme", () => {
 });
 
 describe("observeDocumentColorScheme", () => {
+  it("returns a no-op cleanup when no document exists", () => {
+    const observerFactory = vi.fn();
+    const stop = observeDocumentColorScheme(vi.fn(), undefined, observerFactory);
+
+    expect(observerFactory).not.toHaveBeenCalled();
+    expect(() => stop()).not.toThrow();
+  });
+
   it("notifies only on actual transitions and disconnects cleanly", () => {
     const root = {
       dataset: { colorScheme: "light" },
