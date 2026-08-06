@@ -204,15 +204,25 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   `EDGE_CURVE_MAX_BULGE_M`). Biegungsseite und Mikrovariation entstehen stabil
   aus Fadenidentität (`threadId` / `faden_subject_id`), nicht aus Zufall,
   Wellen oder Physiksimulation. Die Abtastpunktzahl ist fest begrenzt
-  (`EDGE_CURVE_MAX_SAMPLES` ≤ 24) und krümmungs-/flachheitsadaptiv: Die
-  Bézier-Parameterstellen werden deterministisch anhand der analytischen
-  Tangentenrichtung der Kontrollpunkte verdichtet (`threadCurveAdaptiveBreakpoints`),
-  nicht allein anhand roher Chordlänge und Fadenart-Spannung. So bleiben
-  auch stark gekrümmte oder lange Fäden innerhalb der harten Obergrenze eine
-  glatt wirkende Kurve statt einer sichtbar eckigen Polygonfolge; Strecken
-  unterhalb `EDGE_CURVE_MIN_VISIBLE_SEGMENT_M` werden nicht weiter verfeinert,
-  da eine Richtungsänderung auf dieser Skala auf keinem Kartenzoom sichtbar
-  wäre. Es gibt keine Physiksimulation und keine
+  (`EDGE_CURVE_MAX_SAMPLES` ≤ 24) und krümmungs-/flachheitsadaptiv: Für jede
+  zu prüfende Spanne werden mehrere innere Stützstellen ausgewertet (nicht nur
+  die zwei Span-Enden), und die stärkste Tangentenrotation **zwischen einem
+  beliebigen Paar** dieser Stützstellen entscheidet über eine weitere
+  Unterteilung (`threadCurveAdaptiveBreakpoints` / `spanCurvatureMetrics`).
+  Ein reiner Zwei-Punkt-Vergleich an den Span-Enden würde eine innere
+  S-Kurve oder einen Spitzenknick übersehen, deren Endtangenten zufällig
+  ähnlich sind; der Mehrpunktvergleich deckt diesen Fall zusätzlich ab, ohne
+  die bestehende Empfindlichkeit für glatte, monoton rotierende Krümmung zu
+  schwächen. So bleiben auch stark gekrümmte oder lange Fäden innerhalb der
+  harten Obergrenze eine glatt wirkende Kurve statt einer sichtbar eckigen
+  Polygonfolge. Der Sichtbarkeits-Schwellwert `EDGE_CURVE_MIN_VISIBLE_SEGMENT_M`
+  vergleicht dabei eine echte, aus denselben Stützstellen summierte
+  Teilkurvenlängen-Schätzung, nicht die reine Endpunkt-zu-Endpunkt-Sehne einer
+  Spanne — eine Spanne mit nahe beieinanderliegenden Endpunkten, aber einem
+  weit ausholenden inneren Bogen, gilt damit nicht fälschlich als unsichtbar
+  und wird weiter verfeinert. Unterhalb dieser Teilkurvenlängen-Schätzung wird
+  nicht weiter verfeinert, da eine Richtungsänderung auf dieser Skala auf
+  keinem Kartenzoom sichtbar wäre. Es gibt keine Physiksimulation und keine
   Kollisionserkennung. Längenunterschiede am Antimeridian nutzen die kürzeste
   unwrapped Längendifferenz; Zwischenpunkte bleiben endlich (kein
   NaN/Infinity). Ungültige Unprojektion darf nicht als `[0, 0]` (Nullinsel)
@@ -238,15 +248,33 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   leicht asymmetrisch und dünner; Antrag ruhig, mittlere Spannung und breiter;
   Stimme schmal, antragsbezogen und ohne unabhängige Großkurve. Belegte
   `faden_subject_id` bindet Antrag, antragsbezogenes Gespräch und Stimme in
-  einen **echten target-lokalen Multi-Source-Korridor**: gleiche Biegungsseite
-  und ein deterministischer Anflugvektor aus Subject-ID plus Zielidentität/
-  -lage — **nicht** aus der jeweiligen Quell-Sehne. Der letzte Bézier-
-  Kontrollpunkt liegt auf dieser Achse; Handle-Längen sind relativ
-  (`EDGE_CURVE_MAX_HANDLE_FRACTION`) und absolut (`EDGE_CURVE_MAX_HANDLE_M`)
-  begrenzt, ohne Schleifen, Überschwingen oder Umkehr. Mittlere Bögen und
-  Typenspannungen dürfen differieren. Ohne belegte Subject-ID gilt der
-  bestehende fadenbezogene private Fallback ohne erfundene Beziehung
-  (sehnenrelativer Ansatz).
+  ein **gemeinsames deterministisches Ordnungsfeld**: gleiche Biegungsseite
+  und ein bevorzugter deterministischer Anflugvektor aus Subject-ID plus
+  Zielidentität/-lage (`threadTargetLocalCorridorAxis`) — unabhängig von der
+  jeweiligen Quell-Sehne berechnet. Dieser bevorzugte Vektor gilt jedoch
+  **nicht ungeprüft für jede Quelle**: Er wird pro Quelle in einen sicheren
+  Ziel-Einlaufkegel um die jeweils eigene natürliche Anflugrichtung (die
+  umgekehrte Quell-Ziel-Sehne) geklemmt (`EDGE_CURVE_TARGET_APPROACH_CONE_DEG`,
+  60°). Liegt die natürliche Richtung einer Quelle bereits innerhalb dieses
+  Kegels, erhält sie den exakt gemeinsamen Vektor — der sichtbare
+  Korridor-Zusammenschluss bleibt für den Normalfall erhalten. Liegt sie
+  außerhalb (z. B. eine Quelle aus entgegengesetzter Richtung), wird der
+  Vektor auf den Kegelrand geklemmt: derselbe Subject bedeutet dieselbe
+  Biegungsseite und eine eng benachbarte Korridorfamilie, **nicht** mehr eine
+  für jede Quellrichtung identische Endtangente — eine identische Tangente
+  wäre mit rückfaltungsfreiem Einlauf aus beliebigen Richtungen geometrisch
+  nicht vereinbar. Zusätzlich zu diesem Kegel erzwingt eine harte, von der
+  Kegellogik unabhängige Invariante (`enforceMonotoneChordProjection`) eine
+  nicht fallende Projektion der Kontrollpunkte `p0, p1, p2, p3` auf die
+  Quelle→Ziel-Sehnenachse (`0 <= proj(p1) <= proj(p2) <= Länge`); daraus folgt
+  mathematisch, dass die Bézier-Ableitung entlang dieser Achse nie negativ
+  wird — keine Schleifen, kein Überschwingen, keine Umkehr, unabhängig davon,
+  aus welcher Richtung eine Quelle kommt. Handle-Längen bleiben zusätzlich
+  relativ (`EDGE_CURVE_MAX_HANDLE_FRACTION`) und absolut
+  (`EDGE_CURVE_MAX_HANDLE_M`) begrenzt. Mittlere Bögen und Typenspannungen
+  dürfen differieren. Ohne belegte Subject-ID gilt der bestehende
+  fadenbezogene private Fallback ohne erfundene Beziehung (sehnenrelativer
+  Ansatz), ebenfalls durch dieselbe Monotonie-Invariante abgesichert.
 - **Schatten und Garnkörper** sind bei Knüpfen, Gespräch und Antrag weitgehend
   kontinuierlich; der Flecht-/Faserrhythmus lebt primär im schmalen Highlight.
   Stimme darf am Körper stichartiger bleiben, behält aber einen feinen

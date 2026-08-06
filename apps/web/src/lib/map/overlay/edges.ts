@@ -99,6 +99,21 @@ export const EDGE_CURVE_MAX_HANDLE_FRACTION = 0.32;
  * multi-source approaches from overshooting or looping at the target.
  */
 export const EDGE_CURVE_MAX_HANDLE_M = 3_200;
+/**
+ * Safe target-entry cone half-angle (degrees). A subject-bound corridor's
+ * preferred target-local axis ({@link threadTargetLocalCorridorAxis}) is
+ * subject+target-only, by design independent of any one source's chord. For
+ * a source approaching from a direction the preferred axis does not cover,
+ * using it unmodified can fold the curve back on itself right before the
+ * target (found via Monte Carlo sweep — see edges.test.ts). Clamping the
+ * axis to within this many degrees of the source's own natural entry
+ * direction (the reverse chord) guarantees the target-side handle always has
+ * a clearly positive component toward the target: cos(60°) = 0.5, so the
+ * approach direction keeps at least half its length pointed forward. Sources
+ * whose natural direction already sits inside the cone still get the exact
+ * shared axis — the corridor grouping is unchanged for the common case.
+ */
+export const EDGE_CURVE_TARGET_APPROACH_CONE_DEG = 60;
 
 /**
  * Tension / material profile per Fadenart. Geometry only — paint width lives
@@ -573,11 +588,88 @@ function clampHandleLength(chordLength: number, desired: number): number {
 }
 
 /**
+ * Clamp unit vector `preferred` to within `maxAngleDeg` of unit vector
+ * `natural`, rotating `natural` toward `preferred`'s side when it exceeds the
+ * cone. Returns `preferred` unchanged when already inside the cone. The
+ * rotation direction (shorter way round) is chosen by the sign of the 2-D
+ * cross product, so the result is a pure deterministic function of the two
+ * inputs — no RNG, no hidden state.
+ */
+function clampAxisToCone(
+  preferred: readonly [number, number],
+  natural: readonly [number, number],
+  maxAngleDeg: number,
+): [number, number] {
+  const cos = Math.max(
+    -1,
+    Math.min(1, preferred[0] * natural[0] + preferred[1] * natural[1]),
+  );
+  const angleDeg = (Math.acos(cos) * 180) / Math.PI;
+  if (angleDeg <= maxAngleDeg) return [preferred[0], preferred[1]];
+  const cross = natural[0] * preferred[1] - natural[1] * preferred[0];
+  const sign = cross >= 0 ? 1 : -1;
+  const theta = ((maxAngleDeg * Math.PI) / 180) * sign;
+  const cosT = Math.cos(theta);
+  const sinT = Math.sin(theta);
+  return [
+    natural[0] * cosT - natural[1] * sinT,
+    natural[0] * sinT + natural[1] * cosT,
+  ];
+}
+
+/**
+ * Clamp `p1`/`p2` so their projections onto the source→target chord axis are
+ * non-decreasing: `0 <= proj(p1) <= proj(p2) <= length`. That is sufficient
+ * for the cubic Bezier derivative dotted with the chord axis to stay
+ * non-negative everywhere on `[0, 1]` — the derivative is a Bernstein (i.e.
+ * non-negative-weighted) combination of the three control differences
+ * `p1-p0`, `p2-p1`, `p3-p2`, so if each has a non-negative axial component
+ * the sum does too. This is the hard mathematical backstop behind "no fold,
+ * no reversal": every upstream branch (subject-bound cone clamp, private
+ * fallback) still passes through this before the curve is built. Only the
+ * axial (along-chord) component is touched; the lateral (perpendicular)
+ * offset is preserved exactly, so bulge/tension differences between Fadenart
+ * profiles survive unchanged.
+ */
+function enforceMonotoneChordProjection(
+  sourceXY: ProjectedPoint,
+  p1: readonly [number, number],
+  p2: readonly [number, number],
+  alongX: number,
+  alongY: number,
+  length: number,
+): { p1: [number, number]; p2: [number, number] } {
+  const perpX = -alongY;
+  const perpY = alongX;
+  const axial = (p: readonly [number, number]) =>
+    (p[0] - sourceXY[0]) * alongX + (p[1] - sourceXY[1]) * alongY;
+  const lateral = (p: readonly [number, number]) =>
+    (p[0] - sourceXY[0]) * perpX + (p[1] - sourceXY[1]) * perpY;
+  const a1 = Math.min(Math.max(axial(p1), 0), length);
+  const a2 = Math.min(Math.max(axial(p2), a1), length);
+  const l1 = lateral(p1);
+  const l2 = lateral(p2);
+  return {
+    p1: [
+      sourceXY[0] + alongX * a1 + perpX * l1,
+      sourceXY[1] + alongY * a1 + perpY * l1,
+    ],
+    p2: [
+      sourceXY[0] + alongX * a2 + perpX * l2,
+      sourceXY[1] + alongY * a2 + perpY * l2,
+    ],
+  };
+}
+
+/**
  * Deterministic cubic Bezier control points in lon/lat. Geometry is solved in
  * the projected plane; source/target endpoints stay exact. Same subject id
- * shares bend side and a target-local approach axis (independent of source);
- * mid tension and private mid handles may still differ. No waves, physics, or
- * per-frame RNG.
+ * shares bend side and, when the source's own direction allows it, an exact
+ * target-local approach axis; sources whose natural entry direction disagrees
+ * are clamped into a safe per-source entry cone instead (see
+ * {@link EDGE_CURVE_TARGET_APPROACH_CONE_DEG}) so a shared corridor can never
+ * fold the curve back on itself. Mid tension and private mid handles may
+ * still differ. No waves, physics, or per-frame RNG.
  */
 export function threadCurveControlPoints(
   source: LngLatTuple,
@@ -601,8 +693,12 @@ export function threadCurveControlPoints(
 
 /**
  * Projected-plane control points and the shared target approach unit vector.
- * Subject-bound stacks use a target-local corridor (subject + target only);
- * tests measure multi-source alignment here.
+ * Subject-bound stacks prefer a target-local corridor (subject + target
+ * only), clamped into a safe per-source entry cone
+ * ({@link EDGE_CURVE_TARGET_APPROACH_CONE_DEG}) and finished with a hard
+ * monotone-projection backstop ({@link enforceMonotoneChordProjection}) so no
+ * source direction can fold the curve; tests measure multi-source alignment
+ * and fold-freedom here.
  */
 export function threadCurveControlPointsProjected(
   source: LngLatTuple,
@@ -676,14 +772,24 @@ export function threadCurveControlPointsProjected(
   const asym = clamp01(profile.asymmetry);
 
   // ── Target-side corridor axis ────────────────────────────────────────────
-  // Subject-bound: deterministic target-local unit from subject + target only
-  // (not from the source chord). Private fallback: chord-relative with micro.
+  // Subject-bound: prefer the deterministic target-local unit from subject +
+  // target only (not the source chord) — that is the shared ordering field
+  // grouping proposal/vote/subject-conversation together. But clamp it into a
+  // safe cone around *this* source's own natural entry direction (the
+  // reverse chord) so a source the shared axis does not cover cannot fold the
+  // curve back on itself. Private fallback: chord-relative with micro.
   let axisX: number;
   let axisY: number;
   if (subjectBound) {
-    const local = threadTargetLocalCorridorAxis(target, subjectRaw);
-    axisX = local[0];
-    axisY = local[1];
+    const preferred = threadTargetLocalCorridorAxis(target, subjectRaw);
+    const natural: [number, number] = [-alongX, -alongY];
+    const clamped = clampAxisToCone(
+      preferred,
+      natural,
+      EDGE_CURVE_TARGET_APPROACH_CONE_DEG,
+    );
+    axisX = clamped[0];
+    axisY = clamped[1];
   } else {
     const corridorSkew = (hashUnit(`${corridor}:approach`) - 0.5) * 0.22 * 0.35;
     axisX = -alongX + perpX * corridorSkew;
@@ -710,7 +816,7 @@ export function threadCurveControlPointsProjected(
   // Source-side handle: type tension + micro (mid arcs may differ by source).
   const h1Lateral =
     bulge * lateralAtHandle * (1 - asym * 0.35) * (1 + micro * 0.08);
-  const p1: [number, number] = [
+  let p1: [number, number] = [
     sourceXY[0] + alongX * baseHandle + perpX * h1Lateral,
     sourceXY[1] + alongY * baseHandle + perpY * h1Lateral,
   ];
@@ -749,7 +855,24 @@ export function threadCurveControlPointsProjected(
     ];
   }
 
-  // Target approach unit (p3 - p2). Subject-bound: exact -axis.
+  // Hard backstop: clamp both handles' axial (chord-parallel) projections to
+  // be non-decreasing regardless of which branch produced them. Lateral
+  // offsets are untouched, so this only removes a possible fold — it cannot
+  // introduce one, and it cannot change the visible bulge/tension profile.
+  const monotone = enforceMonotoneChordProjection(
+    sourceXY,
+    p1,
+    p2,
+    alongX,
+    alongY,
+    length,
+  );
+  p1 = monotone.p1;
+  p2 = monotone.p2;
+
+  // Target approach unit (p3 - p2). Subject-bound: exact -axis unless the
+  // monotonicity backstop nudged p2 (rare; only ever moves it closer to the
+  // target along the chord).
   let approachX = targetXY[0] - p2[0];
   let approachY = targetXY[1] - p2[1];
   const approachLen = Math.hypot(approachX, approachY);
@@ -787,14 +910,15 @@ export function threadTargetApproachVector(
 
 /**
  * Tangent-direction rotation (degrees) a sampled span may still cover before
- * it is bisected again. A plain chord-deviation/"flatness" test is not
- * enough here: a subject-bound target approach can have a last handle whose
- * direction is independent of the incoming chord (by design — see
- * {@link threadTargetLocalCorridorAxis}), which can fold the curve back on
- * itself right before the target. That fold can sit almost exactly on the
- * chord (near-zero perpendicular deviation) while still reversing direction
- * close to 180° — flatness alone would call that span "flat". Comparing the
- * analytic tangent at both ends of a span catches it regardless of position.
+ * it is bisected again. A plain two-point chord-deviation/"flatness" test is
+ * not enough here: an inner S-curve or cusp can leave the tangents at a
+ * span's two *ends* nearly identical while the interior swings through a
+ * wide arc (or, historically, a subject-bound target approach could fold the
+ * curve back on itself right before the target — control-point geometry now
+ * prevents that case outright, see {@link EDGE_CURVE_TARGET_APPROACH_CONE_DEG}
+ * and {@link enforceMonotoneChordProjection}, but the sampler must not rely on
+ * that alone). {@link spanCurvatureMetrics} therefore compares tangents at
+ * several interior points, not just the two ends.
  */
 export const EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG = 20;
 
@@ -802,27 +926,86 @@ export const EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG = 20;
  * Below this projected span length (metres), a residual tangent-angle
  * violation is no longer worth another bisection: a direction change
  * confined to a sub-few-metre stretch cannot be told apart from a single
- * point at any map zoom that ever renders a Faden. Without this floor,
- * adaptive refinement would keep consuming the sample budget chasing an
- * extreme but literally invisible corridor fold (observed on long
- * subject-bound approaches) instead of leaving that budget for genuinely
- * visible curvature elsewhere on the same thread.
+ * point at any map zoom that ever renders a Faden. Compared against the
+ * *sampled sub-curve length estimate* from {@link spanCurvatureMetrics}, not
+ * the direct endpoint-to-endpoint chord — a span whose endpoints happen to
+ * sit close together can still enclose a real, visible detour (e.g. a tight
+ * loop), and the endpoint chord alone would wrongly call that invisible.
  */
 export const EDGE_CURVE_MIN_VISIBLE_SEGMENT_M = 5;
+
+/** Interior fractions sampled across a span for curvature/length estimation. */
+const SPAN_CURVATURE_SAMPLE_FRACTIONS = [0, 0.25, 0.5, 0.75, 1] as const;
+
+/**
+ * Curvature/length signal for the Bezier parameter span `[a, b]`. Samples
+ * five points across the span and takes:
+ *
+ * - `worstAngleDeg`: the worst tangent-direction rotation between *any two*
+ *   of those samples, not just the two span ends. The endpoint pair alone
+ *   (the pre-existing check) already catches smooth, monotonically-rotating
+ *   curvature — for that case it *is* the worst pair, since rotation only
+ *   accumulates across the span. But it misses an inner S-curve or cusp
+ *   whose end tangents happen to roughly agree while the interior swings
+ *   through a wide arc and back; checking all pairs catches that too,
+ *   without weakening the original signal.
+ * - `arcLengthEstimateM`: sum of the four sampled sub-chords, always >= the
+ *   direct endpoint-to-endpoint chord (triangle inequality) — a real
+ *   sub-curve length estimate for the visibility gate, so a span whose
+ *   endpoints sit close together but whose interior bows out is not wrongly
+ *   treated as invisible.
+ *
+ * Five samples / ten pairs is enough to catch a single interior inflection
+ * deterministically while staying `O(1)` per span.
+ */
+function spanCurvatureMetrics(
+  p0: ProjectedPoint,
+  p1: ProjectedPoint,
+  p2: ProjectedPoint,
+  p3: ProjectedPoint,
+  a: number,
+  b: number,
+): { worstAngleDeg: number; arcLengthEstimateM: number } {
+  const span = b - a;
+  const count = SPAN_CURVATURE_SAMPLE_FRACTIONS.length;
+  const points: [number, number][] = new Array(count);
+  const tangents: [number, number][] = new Array(count);
+  for (let index = 0; index < count; index += 1) {
+    const t = a + span * SPAN_CURVATURE_SAMPLE_FRACTIONS[index];
+    points[index] = cubicBezierPoint2(p0, p1, p2, p3, t);
+    tangents[index] = cubicBezierTangent2(p0, p1, p2, p3, t);
+  }
+  let arcLengthEstimateM = 0;
+  for (let index = 1; index < count; index += 1) {
+    arcLengthEstimateM += Math.hypot(
+      points[index][0] - points[index - 1][0],
+      points[index][1] - points[index - 1][1],
+    );
+  }
+  let worstAngleDeg = 0;
+  for (let i = 0; i < count; i += 1) {
+    for (let j = i + 1; j < count; j += 1) {
+      const angle = angleBetweenDeg(tangents[i], tangents[j]);
+      if (angle > worstAngleDeg) worstAngleDeg = angle;
+    }
+  }
+  return { worstAngleDeg, arcLengthEstimateM };
+}
 
 /**
  * Deterministic, curvature-adaptive Bezier parameter breakpoints for the
  * canonical thread curve. Starts from `minSamples` uniform points (never
  * fewer, so short curves still round-cap cleanly on a dead-straight chord),
- * then greedily bisects the single span whose analytic tangent rotates the
- * most across it — skipping spans already shorter than
+ * then greedily bisects the single span whose {@link spanCurvatureMetrics}
+ * reports the worst interior tangent rotation — skipping spans whose sampled
+ * sub-curve length estimate is already below
  * {@link EDGE_CURVE_MIN_VISIBLE_SEGMENT_M} — until every remaining span is
  * within {@link EDGE_CURVE_TANGENT_ANGLE_TOLERANCE_DEG} or the hard
  * `maxSamples` budget is spent. Pure function of the four control points:
  * deterministic, no RNG, no physics, no per-frame work — called once per
  * path build, same as the rest of this module. Bounded cost: at most
- * `maxSamples - minSamples` bisection rounds, each `O(current length)`
- * tangent evaluations.
+ * `maxSamples - minSamples` bisection rounds, each `O(current length)` spans
+ * with a constant number of Bezier evaluations per span.
  */
 export function threadCurveAdaptiveBreakpoints(
   p0: ProjectedPoint,
@@ -839,26 +1022,25 @@ export function threadCurveAdaptiveBreakpoints(
   for (let index = 0; index < bounded; index += 1) {
     ts[index] = index / (bounded - 1);
   }
-  const pointAt = (t: number) => cubicBezierPoint2(p0, p1, p2, p3, t);
-  const tangentAt = (t: number) => cubicBezierTangent2(p0, p1, p2, p3, t);
   while (ts.length < maxSamples) {
     let worstIndex = -1;
     let worstAngle = angleToleranceDeg;
     for (let index = 0; index < ts.length - 1; index += 1) {
       const a = ts[index];
       const b = ts[index + 1];
-      const pointA = pointAt(a);
-      const pointB = pointAt(b);
-      const spanLength = Math.hypot(
-        pointB[0] - pointA[0],
-        pointB[1] - pointA[1],
+      const { worstAngleDeg, arcLengthEstimateM } = spanCurvatureMetrics(
+        p0,
+        p1,
+        p2,
+        p3,
+        a,
+        b,
       );
       // Already indistinguishable from a point on any real map — leave it,
       // even if its residual tangent angle is large (see doc comment above).
-      if (spanLength <= minVisibleSegmentM) continue;
-      const angle = angleBetweenDeg(tangentAt(a), tangentAt(b));
-      if (angle > worstAngle) {
-        worstAngle = angle;
+      if (arcLengthEstimateM <= minVisibleSegmentM) continue;
+      if (worstAngleDeg > worstAngle) {
+        worstAngle = worstAngleDeg;
         worstIndex = index;
       }
     }
