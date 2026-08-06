@@ -4,7 +4,7 @@ import type {
   Map as MapLibreMap,
 } from "maplibre-gl";
 import { isValidMapCoordinate } from "$lib/map/coordinates";
-import type { FadenType, MapEdge, MapEntityViewModel } from "$lib/map/types";
+import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
 import {
@@ -14,14 +14,16 @@ import {
   EDGE_THREAD_LAYER_IDS,
   EDGE_THREAD_VARIANTS,
   EDGE_VISUAL_STYLE,
+  FADEN_OUT_RENDER_KIND,
   type ThreadPathState,
+  type ThreadRenderKind,
 } from "./edges";
 
 export const EDGE_MOTION_SOURCE = "edge-motion-source";
-/** Legacy aliases kept for tests that probe one representative typed triple. */
-export const EDGE_MOTION_LAYER = "edge-motion-layer-legacy";
-export const EDGE_MOTION_SHADOW_LAYER = "edge-motion-shadow-layer-legacy";
-export const EDGE_MOTION_HIGHLIGHT_LAYER = "edge-motion-highlight-layer-legacy";
+/** Canonical layer triple for the single untyped Faden-out lane. */
+export const EDGE_MOTION_LAYER = "edge-motion-layer-out";
+export const EDGE_MOTION_SHADOW_LAYER = "edge-motion-shadow-layer-out";
+export const EDGE_MOTION_HIGHLIGHT_LAYER = "edge-motion-highlight-layer-out";
 /** @deprecated Prefer EDGE_MOTION_SHADOW_LAYER. */
 export const EDGE_MOTION_HALO_LAYER = EDGE_MOTION_SHADOW_LAYER;
 export const EDGE_MOTION_DURATION_MS = 720;
@@ -48,7 +50,7 @@ export interface EdgeMotionInput {
   source: LngLatTuple;
   target: LngLatTuple;
   kind: string;
-  fadenType?: FadenType | "legacy";
+  fadenType?: ThreadRenderKind;
   /** Shared approach corridor (`faden_subject_id`); null/absent = private fallback. */
   fadenSubjectId?: string | null;
   themeColor?: string;
@@ -96,19 +98,19 @@ export interface EdgeMotionSnapshot {
 }
 
 function motionMainLayerId(fadenType: string): string {
-  return fadenType === "legacy"
+  return fadenType === FADEN_OUT_RENDER_KIND
     ? EDGE_MOTION_LAYER
     : `edge-motion-layer-${fadenType}`;
 }
 
 function motionShadowLayerId(fadenType: string): string {
-  return fadenType === "legacy"
+  return fadenType === FADEN_OUT_RENDER_KIND
     ? EDGE_MOTION_SHADOW_LAYER
     : `edge-motion-shadow-layer-${fadenType}`;
 }
 
 function motionHighlightLayerId(fadenType: string): string {
-  return fadenType === "legacy"
+  return fadenType === FADEN_OUT_RENDER_KIND
     ? EDGE_MOTION_HIGHLIGHT_LAYER
     : `edge-motion-highlight-layer-${fadenType}`;
 }
@@ -172,7 +174,7 @@ export function resolveEdgeMotionInput(
     source: [source.lon, source.lat],
     target: [target.lon, target.lat],
     kind: edge.edge_kind,
-    fadenType: edge.faden_type ?? "legacy",
+    fadenType: edge.faden_type ?? FADEN_OUT_RENDER_KIND,
     fadenSubjectId: edge.faden_subject_id ?? null,
     ...theme,
   };
@@ -360,7 +362,7 @@ export class EdgeMotionController {
       input.source[1],
       input.target[0],
       input.target[1],
-      input.fadenType ?? "legacy",
+      input.fadenType ?? FADEN_OUT_RENDER_KIND,
       input.fadenSubjectId ?? "",
       input.id,
       palette,
@@ -378,7 +380,7 @@ export class EdgeMotionController {
       return existing.pathState;
     }
     const palette = this.motionPalette(input);
-    const fadenType = input.fadenType ?? "legacy";
+    const fadenType = input.fadenType ?? FADEN_OUT_RENDER_KIND;
     this.pathBuilds += 1;
     return buildThreadPathState(input.source, input.target, palette, {
       fadenType,
@@ -466,7 +468,7 @@ export class EdgeMotionController {
         const progress = this.progressAt(motion, now);
         if (progress <= 0) continue;
         const palette = this.motionPalette(motion.input);
-        const fadenType = motion.input.fadenType ?? "legacy";
+        const fadenType = motion.input.fadenType ?? FADEN_OUT_RENDER_KIND;
         // Path (controls, samples, arcs, seams) is immutable on ActiveMotion.
         // Per frame: progress clip + GeoJSON feature shells only.
         const segments = clipThreadPathByProgress(motion.pathState, progress);

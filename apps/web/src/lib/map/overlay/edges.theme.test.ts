@@ -24,7 +24,7 @@ const rawEdge: Edge = {
 };
 
 const curveOpts = {
-  fadenType: "legacy",
+  fadenType: "out",
   threadId: "edge-theme",
 } as const;
 
@@ -137,7 +137,7 @@ describe("edge theme fallback", () => {
     for (const feature of features) {
       expect(palette).toContain(feature.properties?.themeColor);
       expect(feature.properties?.themeColors).toEqual(palette);
-      expect(feature.properties?.fadenType).toBe("legacy");
+      expect(feature.properties?.fadenType).toBe("out");
       expect(feature.geometry.coordinates.length).toBeGreaterThanOrEqual(2);
     }
     expect(features[0].geometry.coordinates[0]).toEqual([9.9, 53.5]);
