@@ -109,6 +109,22 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         self.assertNotIn("try_files {path} {path}.html /index.html", production)
         self.assertIn("Unknown paths must remain real 404 responses", production)
 
+    def test_production_caddyfile_canonicalizes_legacy_map_html_once(self) -> None:
+        production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
+        block = (
+            "@legacyMapHtml path /map.html\n"
+            "\tredir @legacyMapHtml /map{?query} 308"
+        )
+        self.assertEqual(production.count(block), 1)
+        self.assertLess(
+            production.index(block),
+            production.index("@trailingSlash path_regexp ^/.+/$"),
+        )
+        self.assertLess(
+            production.index(block),
+            production.index("try_files {path} {path}.html {path}/index.html"),
+        )
+
     def test_production_caddyfile_keeps_prometheus_metrics_private(self) -> None:
         production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
         self.assertEqual(

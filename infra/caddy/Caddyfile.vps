@@ -79,6 +79,13 @@
 		file_server
 	}
 
+	# Legacy static filenames must never reach the SvelteKit document. The
+	# generated map.html bootstraps the canonical /map route and otherwise
+	# reloads itself forever. Redirect only this exact path and preserve its
+	# query string verbatim.
+	@legacyMapHtml path /map.html
+	redir @legacyMapHtml /map{?query} 308
+
 	# Canonicalize a trailing slash only when the slashless path has a real
 	# prerendered HTML artifact. Unknown slash paths remain direct 404 responses.
 	@trailingSlash path_regexp ^/.+/$

@@ -78,6 +78,17 @@ def directive_map(policy: str) -> dict[str, tuple[str, ...]]:
 
 @unittest.skipUnless(shutil.which("caddy"), "caddy binary required")
 class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
+    def test_legacy_map_html_redirect_adapts_on_vps_and_container_edges(self) -> None:
+        for relative in ("infra/caddy/Caddyfile.vps", "apps/web/Caddyfile.container"):
+            with self.subTest(caddyfile=relative):
+                source = (REPO / relative).read_text(encoding="utf-8")
+                self.assertEqual(source.count("@legacyMapHtml path /map.html"), 1)
+                self.assertEqual(source.count("redir @legacyMapHtml /map{?query} 308"), 1)
+                adapted = json.dumps(adapt(relative), sort_keys=True)
+                self.assertIn('"path": ["/map.html"]', adapted)
+                self.assertIn('/map{http.request.uri.prefixed_query}', adapted)
+                self.assertIn('"status_code": 308', adapted)
+
     def test_adapted_app_route_has_exact_matchers_and_canonical_edge_csp(self) -> None:
         for relative, host, protected_paths in CASES:
             with self.subTest(caddyfile=relative):
