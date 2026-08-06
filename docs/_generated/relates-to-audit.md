@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 706 |
+| Relationen gesamt | 709 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 651 |
+| — relates_to | 654 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | relates_to Anteil | 92% |
@@ -32,7 +32,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (274 Dokumente):
+**Cluster 1** (276 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -56,6 +56,7 @@ _Keine Lücken erkannt._
 - `apps/api/tests/db_domain_account_write_path.rs`
 - `apps/api/tests/db_domain_backfill.rs`
 - `apps/api/tests/db_multi_instance_foundation.rs`
+- `apps/web/Caddyfile.container`
 - `apps/web/src/lib/components/governance/ProposalDetail.svelte`
 - `architecture/overview.md`
 - `architecture/security.md`
@@ -120,6 +121,7 @@ _Keine Lücken erkannt._
 - `docs/deploy/heim-first-phase0.md`
 - `docs/deploy/heimserver.deployment.md`
 - `docs/deploy/heimserver.integration.md`
+- `docs/deploy/map-html-canonical-route.md`
 - `docs/deploy/merge-to-live.md`
 - `docs/deploy/public-app-base-url.md`
 - `docs/deploy/public-metrics-boundary.md`
