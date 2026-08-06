@@ -216,13 +216,15 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   schwächen. So bleiben auch stark gekrümmte oder lange Fäden innerhalb der
   harten Obergrenze eine glatt wirkende Kurve statt einer sichtbar eckigen
   Polygonfolge. Der Sichtbarkeits-Schwellwert `EDGE_CURVE_MIN_VISIBLE_SEGMENT_M`
-  vergleicht dabei eine echte, aus denselben Stützstellen summierte
-  Teilkurvenlängen-Schätzung, nicht die reine Endpunkt-zu-Endpunkt-Sehne einer
-  Spanne — eine Spanne mit nahe beieinanderliegenden Endpunkten, aber einem
-  weit ausholenden inneren Bogen, gilt damit nicht fälschlich als unsichtbar
-  und wird weiter verfeinert. Unterhalb dieser Teilkurvenlängen-Schätzung wird
-  nicht weiter verfeinert, da eine Richtungsänderung auf dieser Skala auf
-  keinem Kartenzoom sichtbar wäre. Es gibt keine Physiksimulation und keine
+  vergleicht dabei sowohl die Fünf-Punkt-Subbogen-Schätzung als auch eine
+  konservative Sub-Kontrollpolygon-Längenschranke (`spanControlPolygonLength`).
+  Eine Spanne unterhalb dieser Schranke wird nur dann übersprungen, wenn sie
+  nicht an ein sichtbares Segment mit einer unverfeinerten Tangenten-
+  oder Knickabweichung angrenzt — so werden lokalisierte Rückläufe oder Cusps
+  auch bei direkter Verwendung mit extremen Kontrollpunkten nicht wegen eines
+  kurzen Endsegments übergangen. Unterhalb dieser Schwellwerte ohne angrenzenden
+  Knick wird nicht weiter verfeinert, da eine Richtungsänderung auf dieser Skala
+  auf keinem Kartenzoom sichtbar wäre. Es gibt keine Physiksimulation und keine
   Kollisionserkennung. Längenunterschiede am Antimeridian nutzen die kürzeste
   unwrapped Längendifferenz; Zwischenpunkte bleiben endlich (kein
   NaN/Infinity). Ungültige Unprojektion darf nicht als `[0, 0]` (Nullinsel)
