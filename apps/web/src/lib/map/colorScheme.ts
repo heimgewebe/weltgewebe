@@ -16,9 +16,12 @@ export function normalizeColorScheme(value: unknown): ColorScheme {
 
 /** Read the current resolved scheme from a document root element. */
 export function readDocumentColorScheme(
-  root: Pick<HTMLElement, "dataset"> = document.documentElement,
+  root?: Pick<HTMLElement, "dataset">,
 ): ColorScheme {
-  return normalizeColorScheme(root.dataset.colorScheme);
+  const target =
+    root ??
+    (typeof document !== "undefined" ? document.documentElement : undefined);
+  return normalizeColorScheme(target?.dataset.colorScheme);
 }
 
 /**
@@ -36,17 +39,22 @@ const createMutationObserver: MutationObserverFactory = (callback) =>
 
 export function observeDocumentColorScheme(
   onChange: (scheme: ColorScheme) => void,
-  root: HTMLElement = document.documentElement,
+  root?: HTMLElement,
   observerFactory: MutationObserverFactory = createMutationObserver,
 ): () => void {
-  let current = readDocumentColorScheme(root);
+  const target =
+    root ??
+    (typeof document !== "undefined" ? document.documentElement : undefined);
+  if (!target) return () => {};
+
+  let current = readDocumentColorScheme(target);
   const observer = observerFactory(() => {
-    const next = readDocumentColorScheme(root);
+    const next = readDocumentColorScheme(target);
     if (next === current) return;
     current = next;
     onChange(next);
   });
-  observer.observe(root, {
+  observer.observe(target, {
     attributes: true,
     attributeFilter: ["data-color-scheme"],
   });
