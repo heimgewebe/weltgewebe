@@ -34,7 +34,7 @@ Erweiterungen sich anbieten.
   werden sollen.
 - **Python-Tooling-Workspace:** Unter `tools/py` liegt das zentrale
   `pyproject.toml` für Repository-Helfer. Gebundene Abhängigkeiten sind
-  `PyYAML==6.0.2` und `pytest==8.3.4`; `tools/py/uv.lock` bindet die zugelassenen
+  `PyYAML==6.0.2` und `pytest==9.0.3`; `tools/py/uv.lock` bindet die zugelassenen
   Distributionsartefakte an SHA-256-Hashes.
 - **Agent-Contract-Ausführung:** `just agent-contract-check` und
   `make agent-contract-check` / der volle `make validate`-Pfad nutzen

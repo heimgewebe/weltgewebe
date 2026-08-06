@@ -20,8 +20,8 @@ require-uv-tooling:
 		echo "Install the version pinned in toolchain.versions.yml (see docs/runbooks/uv-tooling.md)." >&2; \
 		exit 1; \
 	}
-	@$(UV_RUN) python -c "import sys, yaml, pytest; assert sys.version_info >= (3, 11), sys.version; assert yaml.__version__ == '6.0.2', yaml.__version__; assert pytest.__version__ == '8.3.4', pytest.__version__" || { \
-		echo "ERROR: tools/py environment drifted (need Python >=3.11, PyYAML==6.0.2, pytest==8.3.4)." >&2; \
+	@$(UV_RUN) python -c "import sys, yaml, pytest; assert sys.version_info >= (3, 11), sys.version; assert yaml.__version__ == '6.0.2', yaml.__version__; assert pytest.__version__ == '9.0.3', pytest.__version__" || { \
+		echo "ERROR: tools/py environment drifted (need Python >=3.11, PyYAML==6.0.2, pytest==9.0.3)." >&2; \
 		echo "Run: uv sync --project tools/py --locked" >&2; \
 		exit 1; \
 	}

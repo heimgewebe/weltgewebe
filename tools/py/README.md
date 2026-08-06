@@ -29,7 +29,7 @@ uv add <paket>
 Gebundene Tooling-Abhängigkeiten:
 
 - `PyYAML==6.0.2`
-- `pytest==8.3.4`
+- `pytest==9.0.3`
 
 Das Lockfile bindet die zugelassenen Distributionsartefakte an SHA-256-Hashes.
 Änderungen werden mit der in `toolchain.versions.yml` gepinnten uv-Version
