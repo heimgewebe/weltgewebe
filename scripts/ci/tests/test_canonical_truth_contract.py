@@ -41,9 +41,9 @@ class CanonicalTruthContractTests(unittest.TestCase):
             r"pip install .*pytest|pip install .*PyYAML|pip install .*pyyaml",
         )
         self.assertIn("PyYAML==6.0.2", pyproject)
-        self.assertIn("pytest==8.3.4", pyproject)
+        self.assertIn("pytest==9.0.3", pyproject)
         # Remaining host-path jobs outside make validate still pin the same versions.
-        self.assertIn("pytest==8.3.4 pyyaml==6.0.2", main_workflow)
+        self.assertIn("pytest==9.0.3 pyyaml==6.0.2", main_workflow)
 
     def test_required_check_catalog_is_strict_and_matches_trusted_producers(
         self,
