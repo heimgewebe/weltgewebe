@@ -36,7 +36,11 @@ describe("readDocumentColorScheme", () => {
 describe("observeDocumentColorScheme", () => {
   it("returns a no-op cleanup when no document exists", () => {
     const observerFactory = vi.fn();
-    const stop = observeDocumentColorScheme(vi.fn(), undefined, observerFactory);
+    const stop = observeDocumentColorScheme(
+      vi.fn(),
+      undefined,
+      observerFactory,
+    );
 
     expect(observerFactory).not.toHaveBeenCalled();
     expect(() => stop()).not.toThrow();
