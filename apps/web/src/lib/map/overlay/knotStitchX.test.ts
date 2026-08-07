@@ -213,8 +213,8 @@ describe("No separate circle/symbol feature is needed for a node", () => {
   });
 });
 
-describe("The X arms are the incoming knotting thread, not an independent palette", () => {
-  it("injects terminalThreadColor once on the root for CSS inheritance", () => {
+describe("The X arms keep the knotting thread gauge while preserving target topics", () => {
+  it("keeps terminalThreadColor as the root fallback and paints arms from xCoreSegments", () => {
     installDom();
     // kind "Knoten" is ignored as a theme, so the three tags alone (three
     // distinct, non-colliding hash colours) determine the palette.
@@ -229,15 +229,26 @@ describe("The X arms are the incoming knotting thread, not an independent palett
     const host = root as unknown as DomElement;
     const arms = host.querySelectorAll(".woven-node__arm");
     expect(arms).toHaveLength(4);
-    // Sole colour injection point: root --weave-thread-color. Arms must not
-    // re-set --arm-color inline; markers.css inherits via
-    // --arm-color: var(--weave-thread-color).
+    // The root keeps the incoming edge's terminal colour as a fallback, while
+    // the four arms expose the modelled topic palette explicitly.
     expect(host.style.getPropertyValue("--weave-thread-color").trim()).toBe(
       expectedColor,
     );
+    const expectedByArm = new Map(
+      weave.xCoreSegments.map((segment) => [segment.arm, segment]),
+    );
+    const renderedColours = new Set<string>();
     for (const arm of arms) {
-      expect(arm.style.getPropertyValue("--arm-color")).toBe("");
+      const armId = arm.getAttribute("data-arm");
+      const expected = expectedByArm.get(
+        armId as (typeof weave.xCoreSegments)[number]["arm"],
+      );
+      expect(expected).toBeDefined();
+      expect(arm.style.getPropertyValue("--arm-color")).toBe(expected?.color);
+      expect(arm.getAttribute("data-theme-id")).toBe(expected?.themeId);
+      if (expected) renderedColours.add(expected.color);
     }
+    expect(renderedColours.size).toBeGreaterThan(1);
     // Sanity: with three distinct topics this is not trivially the primary
     // colour — the terminal colour genuinely differs from it.
     expect(expectedColor).not.toBe(weave.primaryThemeColor);
@@ -303,10 +314,23 @@ describe("The X arms are the incoming knotting thread, not an independent palett
     expect(host.style.getPropertyValue("--weave-thread-color").trim()).toBe(
       terminalColor,
     );
-    // No redundant per-arm colour injection — inheritance only.
+    // The terminal edge colour remains represented in the knot, but the other
+    // target-topic colours are not collapsed into it.
+    const expectedByArm = new Map(
+      weave.xCoreSegments.map((segment) => [segment.arm, segment]),
+    );
+    const renderedColours: string[] = [];
     for (const arm of host.querySelectorAll(".woven-node__arm")) {
-      expect(arm.style.getPropertyValue("--arm-color")).toBe("");
+      const armId = arm.getAttribute("data-arm");
+      const expected = expectedByArm.get(
+        armId as (typeof weave.xCoreSegments)[number]["arm"],
+      );
+      expect(expected).toBeDefined();
+      expect(arm.style.getPropertyValue("--arm-color")).toBe(expected?.color);
+      renderedColours.push(arm.style.getPropertyValue("--arm-color"));
     }
+    expect(renderedColours).toContain(terminalColor);
+    expect(new Set(renderedColours).size).toBeGreaterThan(1);
   });
 
   it("falls back to the same fallback colour the edge itself uses when no theme palette exists", () => {

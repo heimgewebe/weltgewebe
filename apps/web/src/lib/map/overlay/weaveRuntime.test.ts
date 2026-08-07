@@ -112,6 +112,43 @@ describe("weaveRuntime DOM safety and budget", () => {
     expect(serializedAttrs).not.toMatch(/onerror|javascript:|<script/i);
   });
 
+  it("keeps the modelled topic palette on the four stitched arms", () => {
+    installDom();
+    const weave = maximalWeave();
+    const { root } = weaveRuntime.createRoot(
+      {
+        type: "node",
+        id: "n-palette",
+        title: "Palette",
+        kind: "Knoten",
+        tags: ["A", "B", "C", "D"],
+        created_at: "2026-08-01T00:00:00Z",
+        lat: 53.5,
+        lon: 10,
+        weave,
+      },
+      "node",
+    );
+    const host = root as unknown as DomElement;
+    const expectedByArm = new Map(
+      weave.xCoreSegments.map((segment) => [segment.arm, segment]),
+    );
+    const arms = host.querySelectorAll(".woven-node__arm");
+    expect(arms).toHaveLength(4);
+    expect(
+      new Set(arms.map((arm) => arm.style.props.get("--arm-color"))).size,
+    ).toBe(4);
+    for (const arm of arms) {
+      const armId = arm.getAttribute("data-arm");
+      const expected = expectedByArm.get(
+        armId as (typeof weave.xCoreSegments)[number]["arm"],
+      );
+      expect(expected).toBeDefined();
+      expect(arm.style.props.get("--arm-color")).toBe(expected?.color);
+      expect(arm.getAttribute("data-theme-id")).toBe(expected?.themeId);
+    }
+  });
+
   it("counts a maximal real weave against the documented DOM budget", () => {
     installDom();
     const weave = maximalWeave();

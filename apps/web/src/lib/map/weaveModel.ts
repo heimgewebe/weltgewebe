@@ -59,8 +59,8 @@ type Group = {
  * One theme colours the whole X; two themes each take one strand; three leave
  * the remaining arm on strand A with the first theme; four map 1:1; more than
  * four keep full identities in themeSegments while only the first four paint.
- * Per-arm segment colours remain model data for primaryThemeColor contracts;
- * X DOM rendering no longer consumes them (root --weave-thread-color only).
+ * Per-arm segment colours are the canonical X palette consumed by the DOM
+ * renderer. Thread width remains independent and shared across all four arms.
  */
 export function assignXCoreSegments(
   topicLabels: readonly string[],
@@ -375,12 +375,11 @@ export function targetThemePalette(
  * {@link targetThemePalette} across the thread in `palette.length * 2`
  * segments cycling through the palette, so the final segment — the one
  * touching the centre — always lands on the palette's last colour. The
- * stitched X is the same thread continuing past that point, so every arm
- * must resolve its colour through this one helper rather than an independent
- * per-arm topic palette; that is what keeps the thread and the X from ever
- * picking two different colours for the same node. Falls back to the same
- * {@link WEAVE_FALLBACK_COLOR} the edge itself falls back to when no theme
- * palette exists.
+ * stitched X keeps this value as its fallback colour, while its individual
+ * arms are painted from {@link MapEntityWeave.xCoreSegments} so all target
+ * topics remain visible in the knot. Falls back to the same
+ * {@link WEAVE_FALLBACK_COLOR} the edge itself uses when no theme palette
+ * exists.
  */
 export function terminalThreadColor(
   entity:
