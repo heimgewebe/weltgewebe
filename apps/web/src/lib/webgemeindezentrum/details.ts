@@ -21,13 +21,8 @@ export interface WebgemeindezentrumLocationHistoryEvent {
   decided_at: string;
 }
 
-export type WebgemeindezentrumDetails = Omit<
-  Webgemeindezentrum,
-  "faden_endpoint_id" | "conversation_id"
-> & {
-  faden_endpoint_id?: string;
-  conversation_id?: string;
-  governance?: WebgemeindezentrumGovernanceSummary;
+export type WebgemeindezentrumDetails = Webgemeindezentrum & {
+  governance: WebgemeindezentrumGovernanceSummary;
   location_history?: WebgemeindezentrumLocationHistoryEvent[];
 };
 
