@@ -139,15 +139,18 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     "--weave-conversation-thickness",
     String(weave.conversationRingThickness),
   );
-  // The X is the incoming knotting thread continuing past the centre, so
-  // every arm shares one colour and one width with that thread — never a
-  // per-topic palette and never a duplicated width constant. Colour is
-  // injected once on the root (--weave-thread-color); arms inherit via CSS
-  // (--arm-color: var(--weave-thread-color)). See terminalThreadColor and
-  // KNOTTING_THREAD_WIDTH_PX.
+  // The incoming knotting thread and all four stitched arms are one physical
+  // yarn, so width has exactly one source of truth. Colour is different: the
+  // incoming edge may braid several topic colours, and the X must keep that
+  // palette visible instead of collapsing to the terminal colour. The root
+  // terminal colour remains a safe fallback; each arm receives its modelled
+  // topic colour below.
   const threadColor = terminalThreadColor(weave);
   root.style.setProperty("--weave-thread-color", threadColor);
   root.style.setProperty("--weave-arm-width", `${KNOTTING_THREAD_WIDTH_PX}px`);
+  const coreSegmentByArm = new Map(
+    weave.xCoreSegments.map((segment) => [segment.arm, segment]),
+  );
 
   // Clear previous structure without parsing untrusted HTML.
   while (root.firstChild) root.removeChild(root.firstChild);
@@ -173,13 +176,21 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     },
   );
   for (const arm of WEAVE_UNDER_ARMS) {
-    strandUnder.append(createSpan("woven-node__arm", { "data-arm": arm }));
+    const armElement = createSpan("woven-node__arm", { "data-arm": arm });
+    const segment = coreSegmentByArm.get(arm);
+    armElement.style.setProperty("--arm-color", segment?.color ?? threadColor);
+    if (segment) armElement.setAttribute("data-theme-id", segment.themeId);
+    strandUnder.append(armElement);
   }
   const strandOver = createSpan("woven-node__strand woven-node__strand--over", {
     "data-strand": "b",
   });
   for (const arm of WEAVE_OVER_ARMS) {
-    strandOver.append(createSpan("woven-node__arm", { "data-arm": arm }));
+    const armElement = createSpan("woven-node__arm", { "data-arm": arm });
+    const segment = coreSegmentByArm.get(arm);
+    armElement.style.setProperty("--arm-color", segment?.color ?? threadColor);
+    if (segment) armElement.setAttribute("data-theme-id", segment.themeId);
+    strandOver.append(armElement);
   }
   xCore.append(strandUnder, strandOver);
   for (const overlay of weave.armOverlays) {

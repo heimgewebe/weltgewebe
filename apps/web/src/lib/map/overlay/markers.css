@@ -52,13 +52,12 @@
   --weave-conversation-thickness: 0;
   /*
    * Terminal colour of the incoming knotting thread (see
-   * terminalThreadColor in weaveModel.ts). weaveRuntime.ts always writes
-   * --weave-thread-color and --weave-arm-width as inline custom properties
-   * on every render. Arm width is intentionally NOT given a CSS numeric
-   * fallback: the single canonical value lives in weaveVisualTokens.ts
-   * (KNOTTING_THREAD_WIDTH_PX) and is shared with edges.ts line paint. A
-   * second hard-coded px value here would re-introduce a drift risk the
-   * knot-stitch contract forbids. Markers without JS never render.
+   * terminalThreadColor in weaveModel.ts). It is the fallback for an arm;
+   * weaveRuntime.ts overrides --arm-color per arm from xCoreSegments so a
+   * multi-topic knot stays multi-coloured. --weave-arm-width remains the one
+   * physical width token shared with edges.ts. A second hard-coded px value
+   * here would re-introduce drift between thread and knot. Markers without JS
+   * never render.
    */
   --weave-thread-color: var(--weave-primary);
   position: absolute;
@@ -146,9 +145,9 @@
  * thread past the node centre — narrow, uniform-width strokes, not tapered
  * patches. Width comes from --weave-arm-width (KNOTTING_THREAD_WIDTH_PX in
  * weaveVisualTokens.ts, the exact token edges.ts uses for the knotting
- * Faden's line-width), and colour from --arm-color (terminalThreadColor in
- * weaveModel.ts, the same colour the thread already has at this point) — so
- * the thread can never visibly change width or colour as it enters the X.
+ * Faden's line-width). Colour comes from the arm's xCoreSegment, with the
+ * incoming terminal colour only as fallback. Thus a multi-topic thread stays
+ * multi-coloured in the knot while its physical thickness remains invariant.
  */
 .woven-node__arm {
   --arm-color: var(--weave-thread-color);
@@ -190,36 +189,12 @@
 }
 
 /*
- * Under strand: passes beneath the crossing. A z-index alone would only hide
- * it behind the over strand right at the junction, so the inner end (the
- * strand's own bottom, anchored at the centre before rotation) also fades
- * and dims — it reads as briefly dipping into the map surface, not merely
- * as "drawn later".
+ * Crossing depth is encoded only by strand stacking. Do not mask, dim or add
+ * strand-specific shadows here: those effects alter the visible silhouette
+ * and make two arms look thinner or thicker even though their CSS width is
+ * identical. The over strand still covers the under strand at the centre via
+ * z-index, so the woven crossing remains legible without changing yarn gauge.
  */
-.woven-node__strand--under .woven-node__arm {
-  -webkit-mask-image: linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.4) 0%,
-    rgba(0, 0, 0, 0.52) 16%,
-    #000 40%,
-    #000 100%
-  );
-  mask-image: linear-gradient(
-    0deg,
-    rgba(0, 0, 0, 0.4) 0%,
-    rgba(0, 0, 0, 0.52) 16%,
-    #000 40%,
-    #000 100%
-  );
-  filter: drop-shadow(0 0.3px 0.3px rgba(34, 21, 14, 0.2)) saturate(0.92)
-    brightness(0.93);
-}
-
-/* Over strand: slightly proud of the under strand at the junction — a
- * restrained highlight and a firmer shadow, full-length and undimmed. */
-.woven-node__strand--over .woven-node__arm {
-  filter: drop-shadow(0 1.1px 0.6px rgba(34, 21, 14, 0.36)) brightness(1.04);
-}
 
 .woven-node__arm-overlay {
   position: absolute;

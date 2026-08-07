@@ -553,11 +553,15 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         return {
           arm: arm.dataset.arm,
           inlineArmColor: arm.style.getPropertyValue("--arm-color").trim(),
+          resolvedArmColor: armStyle.getPropertyValue("--arm-color").trim(),
           inheritedThreadColor: armStyle
             .getPropertyValue("--weave-thread-color")
             .trim(),
           width: armStyle.width,
           transform: armStyle.transform,
+          filter: armStyle.filter,
+          maskImage: armStyle.maskImage,
+          boxShadow: armStyle.boxShadow,
         };
       });
       const box = root.getBoundingClientRect();
@@ -579,13 +583,27 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       geometry.background === "rgba(0, 0, 0, 0)" ||
         geometry.background === "transparent",
     ).toBe(true);
-    // The X is one continuous knotting thread past the centre — root colour
-    // is the sole injection; all four arms inherit it.
+    // One physical thread gauge, but the target's topic palette remains visible
+    // in the X. The terminal incoming colour is only a fallback; each arm has
+    // an explicit model-derived topic colour.
     expect(geometry.threadColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(geometry.arms).toHaveLength(4);
+    const armColors = geometry.arms.map((arm) => arm.inlineArmColor);
+    expect(armColors.every((color) => /^#[0-9a-f]{6}$/i.test(color))).toBe(
+      true,
+    );
+    // Topic colours come from a bounded deterministic palette, so different
+    // topic identities may legitimately collide. The regression contract is
+    // that a multi-colour target must not collapse back to one terminal colour.
+    expect(new Set(armColors).size).toBeGreaterThan(1);
+    const armBoxShadow = geometry.arms[0].boxShadow;
     for (const arm of geometry.arms) {
-      expect(arm.inlineArmColor).toBe("");
+      expect(arm.resolvedArmColor).toBe(arm.inlineArmColor);
       expect(arm.inheritedThreadColor).toBe(geometry.threadColor);
+      // No strand-specific mask/filter/shadow may change apparent gauge.
+      expect(arm.filter).toBe("none");
+      expect(arm.maskImage).toBe("none");
+      expect(arm.boxShadow).toBe(armBoxShadow);
     }
     expect(geometry.hostWidth).toBeGreaterThanOrEqual(44);
     expect(geometry.hostHeight).toBeGreaterThanOrEqual(44);
@@ -688,6 +706,12 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await marker.click();
     await expect(marker).toHaveClass(/is-selected/);
     await expect(marker).toHaveAttribute("data-selected", "true");
+    const selectedArmColors = await woven.evaluate((root) =>
+      Array.from(root.querySelectorAll<HTMLElement>(".woven-node__arm")).map(
+        (arm) => arm.style.getPropertyValue("--arm-color").trim(),
+      ),
+    );
+    expect(selectedArmColors).toEqual(armColors);
     await capture("desktop-selected");
 
     // Drive the real T006 search path with a fixture that returns this node.
