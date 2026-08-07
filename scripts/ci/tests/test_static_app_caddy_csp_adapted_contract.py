@@ -83,7 +83,12 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
             with self.subTest(caddyfile=relative):
                 source = (REPO / relative).read_text(encoding="utf-8")
                 self.assertEqual(source.count("@legacyMapHtml path /map.html"), 1)
-                self.assertEqual(source.count("route @legacyMapHtml {"), 1)
+                if relative == "infra/caddy/Caddyfile.vps":
+                    self.assertEqual(source.count("handle @legacyMapHtml {"), 1)
+                    self.assertEqual(source.count("\n\t\troute {\n\t\t\turi replace /map.html /map"), 1)
+                    self.assertNotIn("\n\troute @legacyMapHtml {", source)
+                else:
+                    self.assertEqual(source.count("route @legacyMapHtml {"), 1)
                 self.assertEqual(source.count("uri replace /map.html /map"), 1)
                 self.assertEqual(source.count("redir {uri} 308"), 1)
                 adapted = json.dumps(adapt(relative), sort_keys=True)
@@ -92,6 +97,28 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
                 self.assertIn('"replace": "/map"', adapted)
                 self.assertIn('"Location": ["{http.request.uri}"]', adapted)
                 self.assertIn('"status_code": 308', adapted)
+
+    def test_vps_legacy_redirect_precedes_catchall_static_handle_after_adapt(self) -> None:
+        routes = app_routes(adapt("infra/caddy/Caddyfile.vps"), "weltgewebe.net")
+
+        legacy_index = next(
+            index
+            for index, route in enumerate(routes)
+            if route.get("match") == [{"path": ["/map.html"]}]
+            and '"status_code": 308' in json.dumps(route, sort_keys=True)
+        )
+        fallback_index = next(
+            index
+            for index, route in enumerate(routes)
+            if not route.get("match")
+            and '"file_server"' in json.dumps(route, sort_keys=True)
+        )
+
+        self.assertLess(
+            legacy_index,
+            fallback_index,
+            "the catch-all static handle would otherwise serve map.html before the redirect",
+        )
 
     def test_adapted_app_route_has_exact_matchers_and_canonical_edge_csp(self) -> None:
         for relative, host, protected_paths in CASES:

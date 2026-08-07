@@ -113,12 +113,15 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
         block = (
             "@legacyMapHtml path /map.html\n"
-            "\troute @legacyMapHtml {\n"
-            "\t\turi replace /map.html /map\n"
-            "\t\tredir {uri} 308\n"
+            "\thandle @legacyMapHtml {\n"
+            "\t\troute {\n"
+            "\t\t\turi replace /map.html /map\n"
+            "\t\t\tredir {uri} 308\n"
+            "\t\t}\n"
             "\t}"
         )
         self.assertEqual(production.count(block), 1)
+        self.assertNotIn("\n\troute @legacyMapHtml {", production)
         self.assertLess(
             production.index(block),
             production.index("@trailingSlash path_regexp ^/.+/$"),
