@@ -280,6 +280,33 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
     );
   });
 
+  test("does not present missing detail data as zero activity", async ({
+    page,
+  }) => {
+    await page.route(
+      "**/api/webgemeindezentren/webgemeindezentrum-hammer-park",
+      async (route) => {
+        await route.fulfill({ status: 503, body: "detail unavailable" });
+      },
+    );
+    await page.goto(
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park&view=webgemeindezentrum",
+    );
+
+    await expect(
+      page.getByTestId("webgemeindezentrum-details-error"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("webgemeindezentrum-activity-summary"),
+    ).toHaveCount(0);
+    await expect(
+      page.getByTestId("webgemeindezentrum-full-location-state"),
+    ).toContainText("Gewünschter Treffort");
+    await expect(
+      page.getByTestId("webgemeindezentrum-details-error"),
+    ).toContainText("konnten nicht geladen werden");
+  });
+
   test("opens from the map with a real keyboard action", async ({ page }) => {
     await page.goto("/map");
     const marker = page.getByTestId(

@@ -17,11 +17,19 @@
   } from "$lib/webgemeindezentrum/details";
 
   let heading: HTMLHeadingElement;
+  let detailsLoadFailed = false;
   const detailsLoader = createPanelDetailsLoader<WebgemeindezentrumDetails>(
     selection,
     {
       buildEndpoint: (id) => buildPanelEndpoint("webgemeindezentrum", id),
       resourceLabel: "Webgemeindezentrum",
+      onSelectionChange: () => {
+        detailsLoadFailed = false;
+      },
+      onError: (error) => {
+        console.error(error);
+        detailsLoadFailed = true;
+      },
     },
   );
   const detailsStore = detailsLoader.details;
@@ -120,31 +128,42 @@
       </header>
 
       {#if $loadingStore && !details}
-        <p class="quiet-state" role="status">Lade Standortverlauf…</p>
+        <p class="quiet-state" role="status">Lade aktuelle Zentrumdaten…</p>
+      {:else if detailsLoadFailed}
+        <p
+          class="detail-error"
+          role="alert"
+          data-testid="webgemeindezentrum-details-error"
+        >
+          Aktuelle Aktivitäts- und Verlaufsdaten konnten nicht geladen werden.
+          Die Treffortangaben stammen weiterhin aus der Kartenprojektion.
+        </p>
       {/if}
 
-      <section
-        class="activity-strip"
-        aria-label="Aktivität im Webgemeindezentrum"
-        data-testid="webgemeindezentrum-activity-summary"
-      >
-        <div>
-          <strong>{governance.proposal_count}</strong><span>Anträge</span>
-        </div>
-        <div>
-          <strong>{governance.open_proposal_count}</strong><span>offen</span>
-        </div>
-        <div>
-          <strong>{governance.voting_proposal_count}</strong><span
-            >in Abstimmung</span
-          >
-        </div>
-        <div>
-          <strong>{governance.conversation_message_count}</strong><span
-            >Gesprächsbeiträge</span
-          >
-        </div>
-      </section>
+      {#if details}
+        <section
+          class="activity-strip"
+          aria-label="Aktivität im Webgemeindezentrum"
+          data-testid="webgemeindezentrum-activity-summary"
+        >
+          <div>
+            <strong>{governance.proposal_count}</strong><span>Anträge</span>
+          </div>
+          <div>
+            <strong>{governance.open_proposal_count}</strong><span>offen</span>
+          </div>
+          <div>
+            <strong>{governance.voting_proposal_count}</strong><span
+              >in Abstimmung</span
+            >
+          </div>
+          <div>
+            <strong>{governance.conversation_message_count}</strong><span
+              >Gesprächsbeiträge</span
+            >
+          </div>
+        </section>
+      {/if}
 
       <section class="work-grid" aria-label="Gemeinsame Arbeit">
         <div class="workspace-card governance-workspace">
@@ -207,6 +226,10 @@
                 </li>
               {/each}
             </ol>
+          {:else if detailsLoadFailed}
+            <p class="quiet-state">
+              Der Standortverlauf konnte nicht geladen werden.
+            </p>
           {:else if !$loadingStore}
             <p class="quiet-state">
               Der erste veröffentlichte Standort ist im kanonischen Datensatz
@@ -260,6 +283,14 @@
 
     {#if $loadingStore && !details}
       <p class="ghost" role="status">Lade Standortverlauf…</p>
+    {:else if detailsLoadFailed}
+      <p
+        class="ghost"
+        role="alert"
+        data-testid="webgemeindezentrum-details-error"
+      >
+        Aktuelle Detaildaten konnten nicht geladen werden.
+      </p>
     {/if}
 
     <div class="full-content">
@@ -326,6 +357,8 @@
               </li>
             {/each}
           </ol>
+        {:else if detailsLoadFailed}
+          <p class="ghost">Der Standortverlauf ist gerade nicht verfügbar.</p>
         {:else if !$loadingStore}
           <p class="ghost">
             Der erste gewünschte Standort ist im kanonischen Datensatz
