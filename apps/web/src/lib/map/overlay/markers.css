@@ -50,10 +50,17 @@
   --weave-core-density: 0.5;
   --weave-conversation-opacity: 0;
   --weave-conversation-thickness: 0;
-  --weave-arm-northwest: var(--weave-primary);
-  --weave-arm-northeast: var(--weave-primary);
-  --weave-arm-southeast: var(--weave-primary);
-  --weave-arm-southwest: var(--weave-primary);
+  /*
+   * Terminal colour of the incoming knotting thread (see
+   * terminalThreadColor in weaveModel.ts). weaveRuntime.ts always writes
+   * --weave-thread-color and --weave-arm-width as inline custom properties
+   * on every render. Arm width is intentionally NOT given a CSS numeric
+   * fallback: the single canonical value lives in weaveVisualTokens.ts
+   * (KNOTTING_THREAD_WIDTH_PX) and is shared with edges.ts line paint. A
+   * second hard-coded px value here would re-introduce a drift risk the
+   * knot-stitch contract forbids. Markers without JS never render.
+   */
+  --weave-thread-color: var(--weave-primary);
   position: absolute;
   inset: 0;
   border-radius: 0;
@@ -63,31 +70,13 @@
   background: transparent;
 }
 
-/* Inner layers: crossing → conversation → X arms → proposals → votes. */
-/* Soft yarn knot at the over/under junction — not a bullseye or black hole. */
-.woven-node__crossing {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  z-index: 1;
-  width: 7px;
-  height: 7px;
-  margin: -3.5px 0 0 -3.5px;
-  border-radius: 45%;
-  background:
-    linear-gradient(135deg, rgba(250, 238, 214, 0.42) 0 28%, transparent 42%),
-    linear-gradient(315deg, rgba(32, 20, 14, 0.35) 0 30%, transparent 48%),
-    radial-gradient(
-      circle at 40% 35%,
-      color-mix(in srgb, var(--weave-primary), #f3e4c8 34%) 0 48%,
-      color-mix(in srgb, var(--weave-primary), #2a1a12 28%) 70%,
-      transparent 76%
-    );
-  box-shadow:
-    0 0 0 0.6px rgba(34, 21, 14, 0.5),
-    inset 0 0 calc(2px * var(--weave-core-density)) rgba(30, 18, 12, 0.35);
-  pointer-events: none;
-}
+/*
+ * Inner layers: conversation ring → X arms → proposals → votes. There is no
+ * separate crossing/knot element — the knotting thread itself continues
+ * straight through the centre and becomes the X; adding a circle or patch on
+ * top of it would turn the thread into a symbol, which the knot-stitch
+ * contract forbids.
+ */
 
 .woven-node__conversation {
   position: absolute;
@@ -153,58 +142,35 @@
 }
 
 /*
- * Diagonal yarn arms: slightly tapered toward the knot center, dark rim,
- * narrow light edge, and fine braid/fiber texture. Not pill/capsule patches.
+ * Diagonal yarn arms: the literal continuation of the incoming knotting
+ * thread past the node centre — narrow, uniform-width strokes, not tapered
+ * patches. Width comes from --weave-arm-width (KNOTTING_THREAD_WIDTH_PX in
+ * weaveVisualTokens.ts, the exact token edges.ts uses for the knotting
+ * Faden's line-width), and colour from --arm-color (terminalThreadColor in
+ * weaveModel.ts, the same colour the thread already has at this point) — so
+ * the thread can never visibly change width or colour as it enters the X.
  */
 .woven-node__arm {
-  --arm-color: var(--weave-primary);
+  --arm-color: var(--weave-thread-color);
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 10px;
+  width: var(--weave-arm-width);
   height: 49%;
-  margin-left: -5px;
+  margin-left: calc(var(--weave-arm-width) / -2);
   margin-top: -49%;
-  /* Outer tip wider, strongly tapered into the knot — not a pill/capsule. */
-  border-radius: 55% 55% 40% 40% / 22% 22% 48% 48%;
-  clip-path: polygon(6% 0%, 94% 0%, 58% 96%, 42% 96%);
+  /* Rounded outer tip only; the inner end stays straight so it reads as
+   * disappearing into the crossing, not as a separate rounded bead. */
+  border-radius: 999px 999px 0 0;
   transform-origin: center bottom;
-  background:
-    /* Narrow light fiber ridge. */
-    linear-gradient(
-      90deg,
-      transparent 0%,
-      rgba(255, 246, 224, 0.5) 12%,
-      transparent 26%,
-      transparent 74%,
-      rgba(255, 246, 224, 0.28) 88%,
-      transparent 100%
-    ),
-    /* Longitudinal braid / fiber rhythm. */
-    repeating-linear-gradient(
-        180deg,
-        color-mix(in srgb, var(--arm-color), #1a100b 28%) 0 1.1px,
-        var(--arm-color) 1.1px 2.3px,
-        color-mix(in srgb, var(--arm-color), #f6ead0 36%) 2.3px 3.1px,
-        var(--arm-color) 3.1px 4.4px,
-        color-mix(in srgb, var(--arm-color), #3a261c 20%) 4.4px 5.5px
-      ),
-    /* Soft cylindrical yarn body. */
-    linear-gradient(
-        90deg,
-        color-mix(in srgb, var(--arm-color), #140d09 34%) 0%,
-        color-mix(in srgb, var(--arm-color), #2a1a12 12%) 18%,
-        var(--arm-color) 40%,
-        color-mix(in srgb, var(--arm-color), #f3e4c8 22%) 54%,
-        var(--arm-color) 72%,
-        color-mix(in srgb, var(--arm-color), #140d09 28%) 100%
-      );
-  box-shadow:
-    0 0 0 0.85px rgba(22, 13, 9, 0.7),
-    inset 0.85px 0 0 rgba(255, 246, 224, 0.38),
-    inset -0.85px 0 0 rgba(18, 11, 8, 0.34),
-    0 1.2px 1.6px rgba(22, 13, 9, 0.38);
-  filter: drop-shadow(0 1px 0.5px rgba(34, 21, 14, 0.3));
+  background: linear-gradient(
+    180deg,
+    color-mix(in srgb, var(--arm-color), #140d09 24%) 0%,
+    var(--arm-color) 20%,
+    color-mix(in srgb, var(--arm-color), #f3e4c8 22%) 46%,
+    var(--arm-color) 100%
+  );
+  box-shadow: 0 0 0 0.55px rgba(22, 13, 9, 0.48);
 }
 
 .woven-node__arm[data-arm="northwest"] {
@@ -223,13 +189,36 @@
   transform: rotate(-135deg);
 }
 
-/* Over strand reads slightly proud of the under strand at the junction. */
-.woven-node__strand--over .woven-node__arm {
-  filter: drop-shadow(0 1.2px 0.6px rgba(34, 21, 14, 0.36));
+/*
+ * Under strand: passes beneath the crossing. A z-index alone would only hide
+ * it behind the over strand right at the junction, so the inner end (the
+ * strand's own bottom, anchored at the centre before rotation) also fades
+ * and dims — it reads as briefly dipping into the map surface, not merely
+ * as "drawn later".
+ */
+.woven-node__strand--under .woven-node__arm {
+  -webkit-mask-image: linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.4) 0%,
+    rgba(0, 0, 0, 0.52) 16%,
+    #000 40%,
+    #000 100%
+  );
+  mask-image: linear-gradient(
+    0deg,
+    rgba(0, 0, 0, 0.4) 0%,
+    rgba(0, 0, 0, 0.52) 16%,
+    #000 40%,
+    #000 100%
+  );
+  filter: drop-shadow(0 0.3px 0.3px rgba(34, 21, 14, 0.2)) saturate(0.92)
+    brightness(0.93);
 }
 
-.woven-node__strand--under .woven-node__arm {
-  filter: drop-shadow(0 0.4px 0.4px rgba(34, 21, 14, 0.22));
+/* Over strand: slightly proud of the under strand at the junction — a
+ * restrained highlight and a firmer shadow, full-length and undimmed. */
+.woven-node__strand--over .woven-node__arm {
+  filter: drop-shadow(0 1.1px 0.6px rgba(34, 21, 14, 0.36)) brightness(1.04);
 }
 
 .woven-node__arm-overlay {
@@ -345,7 +334,8 @@
 }
 
 .woven-node--compact .woven-node__arm {
-  /* Compact: solid arm colours without the fine weave texture. */
+  /* Compact: flat thread colour, no gradient — same colour and width, just
+   * without the light/dark ridge shading. */
   background: var(--arm-color);
   box-shadow:
     0 0 0 0.7px rgba(28, 17, 12, 0.55),

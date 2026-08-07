@@ -1,10 +1,20 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import type { MapEntityViewModel, WeaveArm } from "$lib/map/types";
 import { WEAVE_ARMS } from "$lib/map/types";
-import { assignXCoreSegments } from "$lib/map/weaveModel";
+import {
+  assignXCoreSegments,
+  deriveEntityWeave,
+  targetThemePalette,
+  terminalThreadColor,
+} from "$lib/map/weaveModel";
+import { KNOTTING_THREAD_WIDTH_PX } from "$lib/map/weaveVisualTokens";
 import {
   buildEdgeFeatures,
   buildEndpointIndex,
+  EDGE_VISUAL_STYLE,
   sampleThreadCurve,
 } from "./edges";
 import {
@@ -13,6 +23,8 @@ import {
 } from "$lib/map/edgeLifecycle";
 import { weaveRuntime } from "./weaveRuntime";
 import type { WeaveEntity } from "$lib/map/weaveTheme";
+
+const OVERLAY_DIR = dirname(fileURLToPath(import.meta.url));
 
 /**
  * Focused proof suite for the "Knoten ist kein Symbol, sondern ein
@@ -23,10 +35,17 @@ import type { WeaveEntity } from "$lib/map/weaveTheme";
  *   2. The woven X body always has exactly four arms / two diagonals.
  *   3. Over/under alternation is deterministic: walking the four arms in
  *      compass order (NW, NE, SE, SW) strictly alternates under/over.
- *   4. No separate circle/icon feature is required to render a node — the
- *      woven X *is* the whole visible body (no <img>/icon child, no
- *      rounded/filled background on the marker visual).
- *   5. (Covered together with existing suites) existing thread/node cases
+ *   4. No separate woven-node crossing/circle/icon element exists — the
+ *      knotting thread continues straight through the centre and *becomes*
+ *      the X; there is nothing else to render a node's visual body.
+ *   5. All four arms resolve their colour through the same pure
+ *      `terminalThreadColor` helper `edges.ts` uses for the incoming
+ *      knotting thread's terminal (target-side) segment, and their width
+ *      through the same `KNOTTING_THREAD_WIDTH_PX` token `edges.ts` uses for
+ *      that thread's line-width — so neither can silently drift from the
+ *      thread it continues.
+ *   6. Governance overlays (arm overlays) still render on top of the X.
+ *   7. (Covered together with existing suites) existing thread/node cases
  *      stay green — see edges.test.ts / weaveRuntime.test.ts / nodes.test.ts.
  */
 
@@ -255,19 +274,173 @@ describe("No separate circle/symbol feature is needed for a node", () => {
     const { root } = weaveRuntime.createRoot(testEntity(), "node");
     const host = root as unknown as DomElement;
     // Only garnrolle markers get an <img> icon; a node's visual is entirely
-    // the woven-node structure (crossing + conversation ring + X + overlays).
+    // the woven-node structure (conversation ring + X + overlays) — no
+    // separate crossing/circle patch layered on top.
     expect(host.querySelectorAll("img")).toHaveLength(0);
     expect(host.className).toContain("woven-node");
     expect(host.querySelectorAll(".woven-node__x")).toHaveLength(1);
   });
 
-  it("keeps the crossing a small yarn nexus, not a separate iconographic circle", () => {
+  it("never renders a woven-node crossing element: the thread itself is the whole knot", () => {
     installDom();
     const { root } = weaveRuntime.createRoot(testEntity(), "node");
     const host = root as unknown as DomElement;
-    const crossing = host.querySelectorAll(".woven-node__crossing");
-    // Exactly one crossing point (the X's own junction), never an additional
-    // symbol layered on top of it.
-    expect(crossing).toHaveLength(1);
+    // The corrected contract: no separate circle/blob at the junction, under
+    // any class name. The X's own arms (over/under weave) are the entire
+    // visible knot.
+    expect(host.querySelectorAll(".woven-node__crossing")).toHaveLength(0);
+    expect(host.querySelectorAll(".woven-node__cross")).toHaveLength(0);
+  });
+});
+
+describe("The X arms are the incoming knotting thread, not an independent palette", () => {
+  it("gives every arm the exact same colour, resolved through terminalThreadColor", () => {
+    installDom();
+    // kind "Knoten" is ignored as a theme, so the three tags alone (three
+    // distinct, non-colliding hash colours) determine the palette.
+    const entity = testEntity({
+      kind: "Knoten",
+      tags: ["Bildung", "Nachbarschaft", "Wasser"],
+    });
+    const weave = deriveEntityWeave(entity, [], 0);
+    const expectedColor = terminalThreadColor(weave);
+
+    const { root } = weaveRuntime.createRoot({ ...entity, weave }, "node");
+    const host = root as unknown as DomElement;
+    const arms = host.querySelectorAll(".woven-node__arm");
+    expect(arms).toHaveLength(4);
+    const colors = arms.map((arm) =>
+      arm.style.getPropertyValue("--arm-color").trim(),
+    );
+    // All four arms — under and over alike — share one colour: there is no
+    // per-topic arm palette any more, only the one thread colour.
+    expect(new Set(colors).size).toBe(1);
+    expect(colors[0]).toBe(expectedColor);
+    // Sanity: with three distinct topics this is not trivially the primary
+    // colour — the terminal colour genuinely differs from it.
+    expect(expectedColor).not.toBe(weave.primaryThemeColor);
+  });
+
+  it("matches the exact colour edges.ts paints for the incoming thread's segment nearest the target", () => {
+    installDom();
+    const createdAt = Date.parse("2026-08-01T00:00:00Z");
+    const entity = testEntity({
+      id: "target-node",
+      kind: "Knoten",
+      tags: ["Bildung", "Nachbarschaft", "Wasser"],
+    });
+    const weave = deriveEntityWeave(entity, [], 0);
+    const palette = targetThemePalette(weave);
+    expect(palette.length).toBeGreaterThan(1);
+    const target: MapEntityViewModel = {
+      ...entity,
+      weave,
+    } as unknown as MapEntityViewModel;
+    const source = {
+      id: "source-account",
+      type: "garnrolle",
+      lat: 53.4,
+      lon: 9.9,
+    } as unknown as MapEntityViewModel;
+    const knottingEdge = normalizeEdgeLifecycle({
+      id: "knotting-terminal-color-proof",
+      source_id: "source-account",
+      target_id: "target-node",
+      edge_kind: "reference",
+      faden_type: "knotting",
+      created_at: new Date(createdAt).toISOString(),
+      expires_at: new Date(createdAt + FADEN_LIFETIME_MS).toISOString(),
+    });
+
+    const features = buildEdgeFeatures(
+      [knottingEdge],
+      [source, target],
+      true,
+      createdAt,
+    );
+    expect(features.length).toBe(palette.length * 2);
+    // Prefer the highest themeStrand (closest to the target), not mere array
+    // position — that is the segment edges.ts actually paints at the centre.
+    const terminalFeature = features.reduce((best, feature) => {
+      const strand = Number(feature.properties?.themeStrand ?? -1);
+      const bestStrand = Number(best?.properties?.themeStrand ?? -1);
+      return strand >= bestStrand ? feature : best;
+    }, features[0]);
+    const terminalColor = terminalFeature.properties?.themeColor;
+    expect(terminalColor).toBe(palette[palette.length - 1]);
+    expect(terminalColor).toBe(terminalThreadColor(weave));
+    // The painted terminal geometry still ends on the exact node centre.
+    expect(terminalFeature.geometry.coordinates.at(-1)).toEqual([
+      target.lon,
+      target.lat,
+    ]);
+
+    const { root } = weaveRuntime.createRoot(target as WeaveEntity, "node");
+    const host = root as unknown as DomElement;
+    const armColors = host
+      .querySelectorAll(".woven-node__arm")
+      .map((arm) => arm.style.getPropertyValue("--arm-color").trim());
+    expect(new Set(armColors).size).toBe(1);
+    expect(armColors[0]).toBe(terminalColor);
+    expect(host.style.getPropertyValue("--weave-thread-color").trim()).toBe(
+      terminalColor,
+    );
+  });
+
+  it("falls back to the same fallback colour the edge itself uses when no theme palette exists", () => {
+    installDom();
+    const weave = deriveEntityWeave(testEntity({ tags: [] }), [], 0);
+    const { root } = weaveRuntime.createRoot(
+      { ...testEntity({ tags: [] }), weave },
+      "node",
+    );
+    const host = root as unknown as DomElement;
+    const colors = host
+      .querySelectorAll(".woven-node__arm")
+      .map((arm) => arm.style.getPropertyValue("--arm-color").trim());
+    expect(new Set(colors).size).toBe(1);
+    expect(colors[0]).toBe(terminalThreadColor(weave));
+  });
+
+  it("derives the arm width from the single shared knotting-thread token, not a duplicated magic number", () => {
+    installDom();
+    const { root } = weaveRuntime.createRoot(testEntity(), "node");
+    const host = root as unknown as DomElement;
+    expect(host.style.getPropertyValue("--weave-arm-width").trim()).toBe(
+      `${KNOTTING_THREAD_WIDTH_PX}px`,
+    );
+    // Edge paint and DOM arms must resolve the same numeric width token.
+    expect(EDGE_VISUAL_STYLE.byType.knotting.width).toBe(
+      KNOTTING_THREAD_WIDTH_PX,
+    );
+  });
+
+  it("keeps markers.css free of a hard-coded knotting width fallback", () => {
+    const css = readFileSync(join(OVERLAY_DIR, "markers.css"), "utf8");
+    // The width token must not reappear as a CSS magic number; only
+    // weaveRuntime's inline --weave-arm-width from KNOTTING_THREAD_WIDTH_PX
+    // may set arm thickness.
+    expect(css).not.toMatch(/4\.15/);
+    expect(css).toMatch(/var\(--weave-arm-width\)/);
+    expect(css).not.toMatch(/--weave-arm-width:\s*[\d.]+px/);
+  });
+});
+
+describe("Governance overlays keep rendering on top of the stitched X", () => {
+  it("still renders arm overlay elements alongside the narrowed arms", () => {
+    installDom();
+    const entity = testEntity();
+    const weave = {
+      ...deriveEntityWeave(entity, [], 0),
+      armOverlays: [
+        { arm: "northwest" as WeaveArm, id: "overlay-1", label: "Notiz" },
+      ],
+    };
+    const { root } = weaveRuntime.createRoot({ ...entity, weave }, "node");
+    const host = root as unknown as DomElement;
+    const overlays = host.querySelectorAll(".woven-node__arm-overlay");
+    expect(overlays).toHaveLength(1);
+    expect(overlays[0].dataset.arm).toBe("northwest");
+    expect(overlays[0].title).toBe("Notiz");
   });
 });

@@ -107,7 +107,8 @@ test.describe("Garnrolle marker rendering", () => {
     expect(under && over).toBeTruthy();
     expect((over?.zIndex ?? 0) > (under?.zIndex ?? 0)).toBe(true);
 
-    await expect(body.locator(".woven-node__crossing")).toHaveCount(1);
+    // No separate crossing blob: the four-arm X is the whole knot.
+    await expect(body.locator(".woven-node__crossing")).toHaveCount(0);
     await expect(body.locator(".woven-node__cross")).toHaveCount(0);
 
     const halo = marker.locator(".map-marker__halo");

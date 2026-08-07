@@ -2,16 +2,16 @@ import type {
   MapEdge,
   MapEntityViewModel,
   MapEntityWeave,
-  WeaveArm,
-  WeaveXCoreSegment,
 } from "$lib/map/types";
 import type { WeaveEntity } from "$lib/map/weaveTheme";
 import {
   deriveEntityWeave,
   MAX_VISIBLE_VOTE_STITCHES,
   projectEntityWeaves,
+  terminalThreadColor,
   voteStitchConicGradient,
 } from "$lib/map/weaveModel";
+import { KNOTTING_THREAD_WIDTH_PX } from "$lib/map/weaveVisualTokens";
 
 export type WeaveRootState = {
   root: HTMLElement;
@@ -106,10 +106,6 @@ export function applyWeaveDynamicProperties(
   }
 }
 
-function armColor(arms: readonly WeaveXCoreSegment[], arm: WeaveArm): string {
-  return arms.find((segment) => segment.arm === arm)?.color ?? "#76523d";
-}
-
 function createSpan(
   className: string,
   attributes: Record<string, string> = {},
@@ -142,17 +138,17 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     "--weave-conversation-thickness",
     String(weave.conversationRingThickness),
   );
-  for (const segment of weave.xCoreSegments) {
-    root.style.setProperty(`--weave-arm-${segment.arm}`, segment.color);
-  }
+  // The X is the incoming knotting thread continuing past the centre, so
+  // every arm shares one colour and one width with that thread — never a
+  // per-topic palette and never a duplicated width constant. See
+  // terminalThreadColor and KNOTTING_THREAD_WIDTH_PX.
+  const threadColor = terminalThreadColor(weave);
+  root.style.setProperty("--weave-thread-color", threadColor);
+  root.style.setProperty("--weave-arm-width", `${KNOTTING_THREAD_WIDTH_PX}px`);
 
   // Clear previous structure without parsing untrusted HTML.
   while (root.firstChild) root.removeChild(root.firstChild);
 
-  const arms = weave.xCoreSegments;
-  const crossing = createSpan("woven-node__crossing", {
-    "data-zone": "crossing",
-  });
   const conversationClass = weave.conversationThreadCount
     ? "woven-node__conversation"
     : "woven-node__conversation is-empty";
@@ -160,6 +156,9 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     "data-zone": "conversation",
   });
 
+  // No separate crossing/knot element: the X's own visual body (arms +
+  // over/under weave in markers.css) is the entire visible knot — there is
+  // no additional circle/patch layered on top of it.
   const xCore = createSpan("woven-node__x", {
     "data-zone": "knotting",
     "data-x-geometry": "diagonal",
@@ -172,7 +171,7 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   );
   for (const arm of ["northwest", "southeast"] as const) {
     const armEl = createSpan("woven-node__arm", { "data-arm": arm });
-    armEl.style.setProperty("--arm-color", armColor(arms, arm));
+    armEl.style.setProperty("--arm-color", threadColor);
     strandUnder.append(armEl);
   }
   const strandOver = createSpan("woven-node__strand woven-node__strand--over", {
@@ -180,7 +179,7 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   });
   for (const arm of ["northeast", "southwest"] as const) {
     const armEl = createSpan("woven-node__arm", { "data-arm": arm });
-    armEl.style.setProperty("--arm-color", armColor(arms, arm));
+    armEl.style.setProperty("--arm-color", threadColor);
     strandOver.append(armEl);
   }
   xCore.append(strandUnder, strandOver);
@@ -193,7 +192,7 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
     xCore.append(overlayEl);
   }
 
-  root.append(crossing, conversation, xCore);
+  root.append(conversation, xCore);
 
   for (let index = 0; index < weave.proposalArcs.length; index += 1) {
     const arc = weave.proposalArcs[index];

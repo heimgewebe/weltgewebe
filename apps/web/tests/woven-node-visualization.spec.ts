@@ -101,14 +101,11 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         }),
       ),
     );
-    expect(new Set(armColors.map((entry) => entry.color)).size).toBe(2);
-    const nw = armColors.find((entry) => entry.arm === "northwest")?.color;
-    const se = armColors.find((entry) => entry.arm === "southeast")?.color;
-    const ne = armColors.find((entry) => entry.arm === "northeast")?.color;
-    const sw = armColors.find((entry) => entry.arm === "southwest")?.color;
-    expect(nw).toBe(se);
-    expect(ne).toBe(sw);
-    expect(nw).not.toBe(ne);
+    // The X is the incoming knotting thread continuing past the centre —
+    // every arm (under and over alike) shares the exact same colour, not a
+    // per-topic palette.
+    expect(new Set(armColors.map((entry) => entry.color)).size).toBe(1);
+    expect(armColors[0]?.color).toMatch(/^#[0-9a-f]{6}$/i);
 
     const rendered = await page.evaluate((nodeId) => {
       const map = (window as any).__TEST_MAP__;
@@ -140,11 +137,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       rendered.typedFeatures.map((feature: any) => feature.id),
     );
     expect(edgeIds.size).toBe(edges.length);
+    expect(new Set(rendered.armColors).size).toBe(1);
+    const [threadColor] = rendered.armColors;
     for (const feature of rendered.typedFeatures) {
       expect(feature.themeColors?.length).toBeGreaterThan(1);
-      expect(feature.themeColors).toEqual(
-        expect.arrayContaining(rendered.armColors),
-      );
+      // The X arms' shared colour is exactly the terminal (target-side)
+      // colour of the incoming thread's theme palette — see
+      // terminalThreadColor in weaveModel.ts.
+      expect(feature.themeColors.at(-1)).toBe(threadColor);
       expect(feature.themeColors).toContain(feature.themeColor);
     }
     expect(
@@ -177,14 +177,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
           10,
         );
       return {
-        crossing: z(".woven-node__crossing"),
         conversation: z(".woven-node__conversation"),
         x: z(".woven-node__x"),
         proposal: z('[data-zone="proposal"]'),
         vote: z('[data-zone="vote"]'),
       };
     });
-    expect(layerOrder.crossing).toBeLessThan(layerOrder.conversation);
+    // No crossing/knot layer: conversation ring sits under the stitched X;
+    // proposal and vote overlays remain above both.
     expect(layerOrder.conversation).toBeLessThan(layerOrder.x);
     expect(layerOrder.x).toBeLessThan(layerOrder.proposal);
     expect(layerOrder.proposal).toBeLessThan(layerOrder.vote);
@@ -559,8 +559,9 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       geometry.background === "rgba(0, 0, 0, 0)" ||
         geometry.background === "transparent",
     ).toBe(true);
-    expect(geometry.distinctArmColors).toBeGreaterThan(1);
-    expect(geometry.distinctArmColors).toBeLessThanOrEqual(4);
+    // The X is one continuous knotting thread past the centre — all four
+    // arms share that terminal thread colour, never a per-topic palette.
+    expect(geometry.distinctArmColors).toBe(1);
     expect(geometry.hostWidth).toBeGreaterThanOrEqual(44);
     expect(geometry.hostHeight).toBeGreaterThanOrEqual(44);
     // Diagonal X: both strands are rotated; no axis-aligned plus arms.
@@ -645,20 +646,21 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     expect(mobileTouch.height).toBeGreaterThanOrEqual(44);
     await capture("mobile-narrow");
 
-    // Geographic center anchor: marker, visual and X-crossing share one midpoint.
+    // Geographic center anchor: marker, visual and stitched X share one midpoint.
+    // There is no separate crossing element — the X body is the knot.
     const anchor = await marker.evaluate((element) => {
       const visual = element.querySelector(
         ".map-marker__visual",
       ) as HTMLElement | null;
-      const crossing = element.querySelector(
-        ".woven-node__crossing",
+      const xCore = element.querySelector(
+        ".woven-node__x",
       ) as HTMLElement | null;
-      if (!visual || !crossing) {
-        throw new Error("marker visual or crossing missing");
+      if (!visual || !xCore) {
+        throw new Error("marker visual or woven X missing");
       }
       const markerBox = element.getBoundingClientRect();
       const visualBox = visual.getBoundingClientRect();
-      const crossingBox = crossing.getBoundingClientRect();
+      const xBox = xCore.getBoundingClientRect();
       const style = getComputedStyle(visual);
       return {
         transformOrigin: style.transformOrigin,
@@ -666,18 +668,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         markerCy: markerBox.top + markerBox.height / 2,
         visualCx: visualBox.left + visualBox.width / 2,
         visualCy: visualBox.top + visualBox.height / 2,
-        crossingCx: crossingBox.left + crossingBox.width / 2,
-        crossingCy: crossingBox.top + crossingBox.height / 2,
+        xCx: xBox.left + xBox.width / 2,
+        xCy: xBox.top + xBox.height / 2,
       };
     });
     expect(Math.abs(anchor.visualCx - anchor.markerCx)).toBeLessThanOrEqual(2);
     expect(Math.abs(anchor.visualCy - anchor.markerCy)).toBeLessThanOrEqual(2);
-    expect(Math.abs(anchor.crossingCx - anchor.markerCx)).toBeLessThanOrEqual(
-      3,
-    );
-    expect(Math.abs(anchor.crossingCy - anchor.markerCy)).toBeLessThanOrEqual(
-      3,
-    );
+    expect(Math.abs(anchor.xCx - anchor.markerCx)).toBeLessThanOrEqual(3);
+    expect(Math.abs(anchor.xCy - anchor.markerCy)).toBeLessThanOrEqual(3);
     // transform-origin is center: keyword, percent, or resolved px near mid-box.
     const originParts = anchor.transformOrigin
       .split(/\s+/)

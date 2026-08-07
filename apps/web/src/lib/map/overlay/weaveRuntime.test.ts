@@ -204,11 +204,10 @@ describe("weaveRuntime DOM safety and budget", () => {
     const rendered = countRenderedWeaveDomNodes(weave);
     const budget = maxWeaveDomNodeBudget();
     expect(rendered).toBeLessThanOrEqual(budget);
-    // crossing + conversation + x + 2 strands + 4 arms + 4 overlays
-    // + 8 proposals + 8 vote siblings + overflow = 30
+    // conversation + x + 2 strands + 4 arms + 4 overlays
+    // + 8 proposals + 8 vote siblings + overflow = 29
     expect(rendered).toBe(
       1 +
-        1 +
         1 +
         2 +
         4 +
