@@ -162,7 +162,7 @@ jobs:
         working-directory: apps/web
 
       - name: Cache Playwright browsers
-        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
