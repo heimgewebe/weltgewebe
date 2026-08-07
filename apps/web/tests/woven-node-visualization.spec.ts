@@ -101,7 +101,6 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         root.querySelectorAll<HTMLElement>(".woven-node__arm"),
       ).map((arm) => ({
         arm: arm.dataset.arm,
-        // No per-arm inline colour; inheritance is via CSS custom properties.
         inlineArmColor: arm.style.getPropertyValue("--arm-color").trim(),
         inheritedThreadColor: getComputedStyle(arm)
           .getPropertyValue("--weave-thread-color")
@@ -109,12 +108,16 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       }));
       return { threadColor, arms };
     });
-    // The X is the incoming knotting thread continuing past the centre —
-    // root --weave-thread-color is the sole injection; arms inherit it.
+    // One physical knotting yarn keeps the shared terminal colour as fallback,
+    // while the four stitched arms retain the target's multi-topic palette.
     expect(armColorProof.threadColor).toMatch(/^#[0-9a-f]{6}$/i);
     expect(armColorProof.arms).toHaveLength(4);
+    const armColors = armColorProof.arms.map((arm) => arm.inlineArmColor);
+    expect(armColors.every((color) => /^#[0-9a-f]{6}$/i.test(color))).toBe(
+      true,
+    );
+    expect(new Set(armColors).size).toBeGreaterThan(1);
     for (const arm of armColorProof.arms) {
-      expect(arm.inlineArmColor).toBe("");
       expect(arm.inheritedThreadColor).toBe(armColorProof.threadColor);
     }
 
