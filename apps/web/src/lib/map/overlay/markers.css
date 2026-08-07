@@ -50,6 +50,7 @@
   --weave-core-density: 0.5;
   --weave-conversation-opacity: 0;
   --weave-conversation-thickness: 0;
+  --weave-conversation-scale: 0;
   /*
    * Terminal colour of the incoming knotting thread (see
    * terminalThreadColor in weaveModel.ts). It is the fallback for an arm;
@@ -83,6 +84,11 @@
   z-index: 2;
   border-radius: 50%;
   opacity: var(--weave-conversation-opacity);
+  transform: scale(var(--weave-conversation-scale));
+  transform-origin: center center;
+  transition:
+    transform 0.18s ease-out,
+    opacity 0.18s ease-out;
   /* Thickness grows with log1p saturation via the CSS variable [0, 1]. */
   --conversation-band: calc(2px + var(--weave-conversation-thickness) * 5px);
   background:
@@ -474,6 +480,7 @@
 @media (prefers-reduced-motion: reduce) {
   .map-marker__visual,
   .map-marker__halo,
+  .woven-node__conversation,
   .marker-account__icon {
     transition: none;
   }

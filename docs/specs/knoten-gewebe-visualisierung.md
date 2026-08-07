@@ -67,9 +67,13 @@ Lage, Breite, Bindung und Rhythmus unterscheiden können.
    aber leer, solange die öffentliche Kartenprojektion keine dem Knoten
    hinzugefügten Inhalte liefert (Wahrheitsgrenze).
 2. **Gesprächsring** — aktive Gesprächsfäden liegen unmittelbar um die Kreuzung.
-   Die Ringdicke wächst gesättigt (`log1p` oder gleichwertig) bis zu einer festen
-   Maximaldicke; bei null Gesprächen ist der Ring unsichtbar. Rein zeitliche
-   Alterungsopazität aktualisiert CSS/Style am bestehenden DOM.
+   Die Anzahl der aktuell am Ziel anknüpfenden aktiven Gesprächsfäden steuert
+   sichtbar den Ringdurchmesser: wenige Gespräche ergeben einen kleinen, engen
+   Ring, mehr Gespräche einen größeren Ring. Durchmesser und Banddicke wachsen
+   gesättigt (`log1p` oder gleichwertig) innerhalb fester Grenzen, sodass der
+   Gesprächsring nicht in den äußeren Antragsring hineinwächst. Bei null
+   Gesprächen ist der Ring unsichtbar. Rein zeitliche Alterungsopazität
+   aktualisiert CSS/Style am bestehenden DOM.
 3. **Antragsring** — jeder aktive Antrag erhält einen getrennten äußeren
    Antragsbogen. Bis zu sieben aktuelle Bögen bleiben einzeln sichtbar; eine
    achte Darstellung bündelt zusätzlichen Überlauf wahrheitsgetreu und nennt

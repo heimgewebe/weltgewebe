@@ -93,6 +93,31 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven.locator('[data-zone="vote"]')).toHaveCount(2);
     await expect(woven.locator(".woven-node__cross")).toHaveCount(0);
 
+    const conversationScaleProof = await woven.evaluate((root) => {
+      const ring = root.querySelector<HTMLElement>(".woven-node__conversation");
+      if (!ring) throw new Error("conversation ring missing");
+      const requestedScale = Number(
+        (root as HTMLElement).style
+          .getPropertyValue("--weave-conversation-scale")
+          .trim(),
+      );
+      const transform = new DOMMatrixReadOnly(getComputedStyle(ring).transform);
+      return {
+        requestedScale,
+        appliedScaleX: transform.a,
+        appliedScaleY: transform.d,
+      };
+    });
+    expect(conversationScaleProof.requestedScale).toBeGreaterThan(0);
+    expect(conversationScaleProof.appliedScaleX).toBeCloseTo(
+      conversationScaleProof.requestedScale,
+      3,
+    );
+    expect(conversationScaleProof.appliedScaleY).toBeCloseTo(
+      conversationScaleProof.requestedScale,
+      3,
+    );
+
     const armColorProof = await woven.evaluate((root) => {
       const threadColor = root.style
         .getPropertyValue("--weave-thread-color")

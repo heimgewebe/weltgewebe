@@ -232,6 +232,12 @@ export interface MapEntityWeave {
    * 0 means no ring (invisible); grows with log1p of active conversations.
    */
   conversationRingThickness: number;
+  /**
+   * Bounded diameter scale for the conversation ring. Zero means no ring;
+   * every active conversation maps monotonically into the fixed visual range,
+   * so more currently attached conversation threads produce a larger ring.
+   */
+  conversationRingScale: number;
   knottingThreadCount: number;
   conversationThreadCount: number;
   conversationOpacity: number;

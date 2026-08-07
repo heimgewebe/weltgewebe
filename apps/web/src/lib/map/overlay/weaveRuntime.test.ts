@@ -64,6 +64,7 @@ function maximalWeave(): MapEntityWeave {
     primaryThemeColor: "#5f7a55",
     coreDensity: 1,
     conversationRingThickness: 1,
+    conversationRingScale: 1.25,
     knottingThreadCount: 4,
     conversationThreadCount: 20,
     conversationOpacity: 0.9,
@@ -190,12 +191,13 @@ describe("weaveRuntime DOM safety and budget", () => {
     expect(weaveRenderSignature(renamed)).not.toBe(weaveRenderSignature(base));
   });
 
-  it("applies conversation thickness and opacity as dynamic CSS properties", () => {
+  it("applies conversation size, thickness and opacity as dynamic CSS properties", () => {
     installDom();
     const weave = {
       ...maximalWeave(),
       conversationOpacity: 0.42,
       conversationRingThickness: 1.75,
+      conversationRingScale: 1.12,
       proposalArcs: [
         {
           ...maximalWeave().proposalArcs[0],
@@ -220,16 +222,19 @@ describe("weaveRuntime DOM safety and budget", () => {
     const host = root as unknown as DomElement;
     expect(host.style.props.get("--weave-conversation-opacity")).toBe("0.42");
     expect(host.style.props.get("--weave-conversation-thickness")).toBe("1.75");
+    expect(host.style.props.get("--weave-conversation-scale")).toBe("1.12");
 
     const aged = {
       ...weave,
       conversationOpacity: 0.11,
       conversationRingThickness: 0.5,
+      conversationRingScale: 0.84,
       proposalArcs: [{ ...weave.proposalArcs[0], opacity: 0.2 }],
     };
     applyWeaveDynamicProperties(root as HTMLElement, aged);
     expect(host.style.props.get("--weave-conversation-opacity")).toBe("0.11");
     expect(host.style.props.get("--weave-conversation-thickness")).toBe("0.5");
+    expect(host.style.props.get("--weave-conversation-scale")).toBe("0.84");
     const slot = host.querySelectorAll("[data-proposal-slot]")[0];
     expect(slot.style.opacity).toBe("0.2");
   });

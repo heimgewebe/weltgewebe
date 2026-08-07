@@ -82,8 +82,8 @@ export function weaveRenderSignature(weave: MapEntityWeave): string {
 
 /**
  * DOM-preserving dynamic CSS state written onto an already-rendered weave body.
- * Covers conversation opacity, conversation-ring thickness, and per-slot
- * proposal/vote opacities — not a structural rebuild.
+ * Covers conversation opacity, ring thickness and ring diameter scale, plus
+ * per-slot proposal/vote opacities — not a structural rebuild.
  */
 export function applyWeaveDynamicProperties(
   root: HTMLElement,
@@ -96,6 +96,10 @@ export function applyWeaveDynamicProperties(
   root.style.setProperty(
     "--weave-conversation-thickness",
     String(weave.conversationRingThickness),
+  );
+  root.style.setProperty(
+    "--weave-conversation-scale",
+    String(weave.conversationRingScale),
   );
   if (!weave.proposalArcs.length) return;
   // One query for the whole body: an arc and its vote stitches share a slot.
@@ -138,6 +142,10 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   root.style.setProperty(
     "--weave-conversation-thickness",
     String(weave.conversationRingThickness),
+  );
+  root.style.setProperty(
+    "--weave-conversation-scale",
+    String(weave.conversationRingScale),
   );
   // The incoming knotting thread and all four stitched arms are one physical
   // yarn, so width has exactly one source of truth. Colour is different: the
