@@ -26,15 +26,6 @@ export type WebgemeindezentrumDetails = Webgemeindezentrum & {
   location_history?: WebgemeindezentrumLocationHistoryEvent[];
 };
 
-export function emptyWebgemeindezentrumGovernance(): WebgemeindezentrumGovernanceSummary {
-  return {
-    proposal_count: 0,
-    open_proposal_count: 0,
-    voting_proposal_count: 0,
-    conversation_message_count: 0,
-  };
-}
-
 export function webgemeindezentrumTruthHeading(
   state: WebgemeindezentrumLocationState | undefined,
 ): string {

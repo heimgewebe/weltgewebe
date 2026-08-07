@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy, onMount } from "svelte";
+  import { onDestroy } from "svelte";
   import { page } from "$app/stores";
   import CenterGovernance from "$lib/components/governance/CenterGovernance.svelte";
   import NodeConversation from "$lib/components/panels/NodeConversation.svelte";
@@ -11,13 +11,14 @@
   import { formatDate } from "$lib/utils/formatDate";
   import type { MapEntityWebgemeindezentrum } from "$lib/map/types";
   import {
-    emptyWebgemeindezentrumGovernance,
     webgemeindezentrumTruthHeading,
     type WebgemeindezentrumDetails,
   } from "$lib/webgemeindezentrum/details";
 
-  let heading: HTMLHeadingElement;
   let detailsLoadFailed = false;
+  function focusHeading(node: HTMLHeadingElement): void {
+    node.focus();
+  }
   const detailsLoader = createPanelDetailsLoader<WebgemeindezentrumDetails>(
     selection,
     {
@@ -35,7 +36,6 @@
   const detailsStore = detailsLoader.details;
   const loadingStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
-  onMount(() => heading?.focus());
 
   $: fallback = $selection?.data as MapEntityWebgemeindezentrum | undefined;
   $: details = $detailsStore;
@@ -53,7 +53,6 @@
   $: history = details?.location_history || [];
   $: centerId = details?.id || fallback?.id;
   $: conversationId = details?.conversation_id || fallback?.conversation_id;
-  $: governance = details?.governance ?? emptyWebgemeindezentrumGovernance();
   $: truthHeading = webgemeindezentrumTruthHeading(locationState);
   $: fullViewMode = $page.url.searchParams.get("view") === "webgemeindezentrum";
   $: mapHref = centerId
@@ -81,7 +80,7 @@
             {#if ortsweberei}<p class="eyebrow">{ortsweberei.name}</p>{/if}
             <h1
               id="webgemeindezentrum-full-heading"
-              bind:this={heading}
+              use:focusHeading
               tabindex="-1"
             >
               {title}
@@ -147,20 +146,23 @@
           data-testid="webgemeindezentrum-activity-summary"
         >
           <div>
-            <strong>{governance.proposal_count}</strong><span>Anträge</span>
+            <strong>{details.governance.proposal_count}</strong><span
+              >Anträge</span
+            >
           </div>
           <div>
-            <strong>{governance.open_proposal_count}</strong><span>offen</span>
+            <strong>{details.governance.open_proposal_count}</strong><span
+              >offen</span
+            >
           </div>
           <div>
-            <strong>{governance.voting_proposal_count}</strong><span
+            <strong>{details.governance.voting_proposal_count}</strong><span
               >in Abstimmung</span
             >
           </div>
           <div>
-            <strong>{governance.conversation_message_count}</strong><span
-              >Gesprächsbeiträge</span
-            >
+            <strong>{details.governance.conversation_message_count}</strong
+            ><span>Gesprächsbeiträge</span>
           </div>
         </section>
       {/if}
@@ -170,9 +172,11 @@
           {#if centerId}
             <CenterGovernance
               {centerId}
-              proposalCount={governance.proposal_count}
-              openProposalCount={governance.open_proposal_count}
-              votingProposalCount={governance.voting_proposal_count}
+              proposalCount={details?.governance.proposal_count ?? null}
+              openProposalCount={details?.governance.open_proposal_count ??
+                null}
+              votingProposalCount={details?.governance.voting_proposal_count ??
+                null}
             />
           {/if}
         </div>
@@ -244,7 +248,7 @@
   <section class="center-mode" aria-labelledby="webgemeindezentrum-heading">
     <h3
       id="webgemeindezentrum-heading"
-      bind:this={heading}
+      use:focusHeading
       tabindex="-1"
       data-testid="webgemeindezentrum-heading"
     >
@@ -297,9 +301,10 @@
       {#if centerId}
         <CenterGovernance
           {centerId}
-          proposalCount={governance.proposal_count}
-          openProposalCount={governance.open_proposal_count}
-          votingProposalCount={governance.voting_proposal_count}
+          proposalCount={details?.governance.proposal_count ?? null}
+          openProposalCount={details?.governance.open_proposal_count ?? null}
+          votingProposalCount={details?.governance.voting_proposal_count ??
+            null}
         />
       {/if}
 

@@ -257,6 +257,12 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
         name: "Webgemeindezentrum Hammer Park",
       }),
     ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Webgemeindezentrum Hammer Park",
+      }),
+    ).toBeFocused();
 
     const locationState = page.getByTestId(
       "webgemeindezentrum-full-location-state",
@@ -289,6 +295,9 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
         await route.fulfill({ status: 503, body: "detail unavailable" });
       },
     );
+    await page.route("**/api/proposals", async (route) =>
+      route.fulfill({ status: 503, body: "proposals unavailable" }),
+    );
     await page.goto(
       "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park&view=webgemeindezentrum",
     );
@@ -299,6 +308,11 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
     await expect(
       page.getByTestId("webgemeindezentrum-activity-summary"),
     ).toHaveCount(0);
+    const governance = page.getByTestId("center-governance");
+    await expect(governance.getByRole("alert")).toContainText(
+      "Anträge können gerade nicht geladen werden.",
+    );
+    await expect(governance.locator(".counts dd")).toHaveText(["—", "—", "—"]);
     await expect(
       page.getByTestId("webgemeindezentrum-full-location-state"),
     ).toContainText("Gewünschter Treffort");
