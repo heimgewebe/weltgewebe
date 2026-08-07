@@ -84,9 +84,11 @@
 	# reloads itself forever. Redirect only this exact path and preserve its
 	# query string verbatim.
 	@legacyMapHtml path /map.html
-	route @legacyMapHtml {
-		uri replace /map.html /map
-		redir {uri} 308
+	handle @legacyMapHtml {
+		route {
+			uri replace /map.html /map
+			redir {uri} 308
+		}
 	}
 
 	# Canonicalize a trailing slash only when the slashless path has a real
