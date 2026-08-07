@@ -73,7 +73,9 @@ Lage, Breite, Bindung und Rhythmus unterscheiden können.
    gesättigt (`log1p` oder gleichwertig) innerhalb fester Grenzen, sodass der
    Gesprächsring nicht in den äußeren Antragsring hineinwächst. Bei null
    Gesprächen ist der Ring unsichtbar. Rein zeitliche Alterungsopazität
-   aktualisiert CSS/Style am bestehenden DOM.
+   aktualisiert CSS/Style am bestehenden DOM. Auch Mengenänderungen eines
+   bereits vorhandenen Gesprächsrings aktualisieren Durchmesser, Banddicke und
+   Zähler am bestehenden DOM statt den gesamten Gewebekörper neu aufzubauen.
 3. **Antragsring** — jeder aktive Antrag erhält einen getrennten äußeren
    Antragsbogen. Bis zu sieben aktuelle Bögen bleiben einzeln sichtbar; eine
    achte Darstellung bündelt zusätzlichen Überlauf wahrheitsgetreu und nennt

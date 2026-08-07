@@ -191,7 +191,7 @@ describe("weaveRuntime DOM safety and budget", () => {
     expect(weaveRenderSignature(renamed)).not.toBe(weaveRenderSignature(base));
   });
 
-  it("applies conversation size, thickness and opacity as dynamic CSS properties", () => {
+  it("updates conversation count and ring geometry without rebuilding the weave body", () => {
     installDom();
     const weave = {
       ...maximalWeave(),
@@ -223,6 +223,40 @@ describe("weaveRuntime DOM safety and budget", () => {
     expect(host.style.props.get("--weave-conversation-opacity")).toBe("0.42");
     expect(host.style.props.get("--weave-conversation-thickness")).toBe("1.75");
     expect(host.style.props.get("--weave-conversation-scale")).toBe("1.12");
+    expect(host.dataset.conversationThreads).toBe("20");
+
+    const conversationBefore = host.querySelectorAll(
+      ".woven-node__conversation",
+    )[0];
+    const previousSignature = weaveRenderSignature(weave);
+    const resized = {
+      ...weave,
+      conversationThreadCount: 12,
+      conversationOpacity: 0.77,
+      conversationRingThickness: 0.8,
+      conversationRingScale: 1.16,
+    };
+    const nextSignature = weaveRuntime.syncRoot(
+      root,
+      {
+        type: "node",
+        id: "n-dyn",
+        title: "Dyn",
+        kind: "Garten",
+        tags: ["Natur"],
+        created_at: "2026-08-01T00:00:00Z",
+        lat: 53.5,
+        lon: 10,
+        weave: resized,
+      },
+      previousSignature,
+    );
+    expect(nextSignature).toBe(previousSignature);
+    expect(host.querySelectorAll(".woven-node__conversation")[0]).toBe(
+      conversationBefore,
+    );
+    expect(host.dataset.conversationThreads).toBe("12");
+    expect(host.style.props.get("--weave-conversation-scale")).toBe("1.16");
 
     const aged = {
       ...weave,
@@ -237,5 +271,15 @@ describe("weaveRuntime DOM safety and budget", () => {
     expect(host.style.props.get("--weave-conversation-scale")).toBe("0.84");
     const slot = host.querySelectorAll("[data-proposal-slot]")[0];
     expect(slot.style.opacity).toBe("0.2");
+
+    applyWeaveDynamicProperties(root as HTMLElement, {
+      ...aged,
+      conversationThreadCount: 0,
+      conversationOpacity: 0,
+      conversationRingThickness: 0,
+      conversationRingScale: 0,
+    });
+    expect(host.dataset.conversationThreads).toBe("0");
+    expect(conversationBefore.className).toContain("is-empty");
   });
 });

@@ -55,7 +55,7 @@ export function projectMarkersForWeave(
  * overlay id with a changed title still rebuilds.
  */
 export function weaveRenderSignature(weave: MapEntityWeave): string {
-  let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.conversationRingThickness}|${weave.knottingThreadCount}|${weave.conversationThreadCount}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}|${weave.armOverlays.length}`;
+  let signature = `${weave.primaryThemeColor}|${weave.coreDensity}|${weave.knottingThreadCount}|${weave.proposalCount}|${weave.proposalOverflowCount}|${weave.voteThreadCount}|${weave.armOverlays.length}`;
   for (const { id, color, arm, label } of weave.themeSegments) {
     signature += `|${id}:${color}:${arm ?? "-"}:${label}`;
   }
@@ -72,10 +72,9 @@ export function weaveRenderSignature(weave: MapEntityWeave): string {
     spanDeg,
     voteThreadCount,
     proposalThreadCount,
-    conversationThreadCount,
     bundledSubjectCount,
   } of weave.proposalArcs) {
-    signature += `|${subjectId}:${color}:${startDeg}:${spanDeg}:${voteThreadCount}:${proposalThreadCount}:${conversationThreadCount}:${bundledSubjectCount}`;
+    signature += `|${subjectId}:${color}:${startDeg}:${spanDeg}:${voteThreadCount}:${proposalThreadCount}:${bundledSubjectCount}`;
   }
   return signature;
 }
@@ -89,6 +88,7 @@ export function applyWeaveDynamicProperties(
   root: HTMLElement,
   weave: MapEntityWeave,
 ) {
+  root.dataset.conversationThreads = String(weave.conversationThreadCount);
   root.style.setProperty(
     "--weave-conversation-opacity",
     String(weave.conversationOpacity),
@@ -101,6 +101,11 @@ export function applyWeaveDynamicProperties(
     "--weave-conversation-scale",
     String(weave.conversationRingScale),
   );
+  const conversation = root.querySelectorAll<HTMLElement>(
+    ".woven-node__conversation",
+  )[0];
+  if (conversation)
+    conversation.className = `woven-node__conversation${weave.conversationThreadCount ? "" : " is-empty"}`;
   if (!weave.proposalArcs.length) return;
   // One query for the whole body: an arc and its vote stitches share a slot.
   for (const element of root.querySelectorAll<HTMLElement>(
@@ -131,7 +136,6 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   Object.assign(root.dataset, {
     zoneOrder: "knotting,conversation,proposal,vote",
     knottingThreads: String(weave.knottingThreadCount),
-    conversationThreads: String(weave.conversationThreadCount),
     proposalCount: String(weave.proposalCount),
     voteThreads: String(weave.voteThreadCount),
     xGeometry: "diagonal",
@@ -139,14 +143,6 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   });
   root.style.setProperty("--weave-primary", weave.primaryThemeColor);
   root.style.setProperty("--weave-core-density", String(weave.coreDensity));
-  root.style.setProperty(
-    "--weave-conversation-thickness",
-    String(weave.conversationRingThickness),
-  );
-  root.style.setProperty(
-    "--weave-conversation-scale",
-    String(weave.conversationRingScale),
-  );
   // The incoming knotting thread and all four stitched arms are one physical
   // yarn, so width has exactly one source of truth. Colour is different: the
   // incoming edge may braid several topic colours, and the X must keep that
@@ -163,10 +159,7 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   // Clear previous structure without parsing untrusted HTML.
   while (root.firstChild) root.removeChild(root.firstChild);
 
-  const conversationClass = weave.conversationThreadCount
-    ? "woven-node__conversation"
-    : "woven-node__conversation is-empty";
-  const conversation = createSpan(conversationClass, {
+  const conversation = createSpan("woven-node__conversation", {
     "data-zone": "conversation",
   });
 

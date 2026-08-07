@@ -9,6 +9,7 @@ import type {
   MapEntityWebgemeindezentrum,
 } from "$lib/map/types";
 import {
+  CONVERSATION_RING_MIN_SCALE,
   CONVERSATION_RING_MAX_SCALE,
   MAX_VISIBLE_PROPOSAL_ARCS,
   MAX_VISIBLE_VOTE_STITCHES,
@@ -437,9 +438,12 @@ describe("woven node projection", () => {
     const oneScale = conversationRingScale(1);
     const fewScale = conversationRingScale(4);
     const manyScale = conversationRingScale(40);
-    expect(oneScale).toBeGreaterThan(0);
+    expect(oneScale).toBe(CONVERSATION_RING_MIN_SCALE);
     expect(fewScale).toBeGreaterThan(oneScale);
     expect(manyScale).toBe(CONVERSATION_RING_MAX_SCALE);
+    expect(conversationRingScale(20)).toBe(CONVERSATION_RING_MAX_SCALE);
+    expect(conversationRingScale(21)).toBe(CONVERSATION_RING_MAX_SCALE);
+    expect(conversationRingScale(Number.POSITIVE_INFINITY)).toBe(0);
 
     const one = deriveEntityWeave(
       node(),

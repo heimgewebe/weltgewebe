@@ -163,10 +163,17 @@ export function conversationRingThickness(count: number): number {
 /**
  * Saturated ring-diameter scale. Zero stays invisible; active counts map from
  * the fixed minimum to maximum scale so diameter directly encodes participation.
+ * One active thread is the exact visual minimum; the saturation count is the
+ * exact maximum. This uses the full declared range for real integer counts.
  */
 export function conversationRingScale(count: number): number {
-  const activity = conversationRingActivity(count);
-  if (activity === 0) return 0;
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  const boundedCount = Math.min(
+    CONVERSATION_RING_SATURATION_COUNT,
+    Math.max(1, count),
+  );
+  const activity =
+    Math.log(boundedCount) / Math.log(CONVERSATION_RING_SATURATION_COUNT);
   return (
     CONVERSATION_RING_MIN_SCALE +
     activity * (CONVERSATION_RING_MAX_SCALE - CONVERSATION_RING_MIN_SCALE)
