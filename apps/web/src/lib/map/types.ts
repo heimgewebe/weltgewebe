@@ -228,11 +228,6 @@ export interface MapEntityWeave {
   primaryThemeColor: string;
   coreDensity: number;
   /**
-   * Saturated conversation-ring thickness in relative units [0, 1].
-   * 0 means no ring (invisible); grows with log1p of active conversations.
-   */
-  conversationRingThickness: number;
-  /**
    * Bounded diameter scale for the conversation ring. Zero means no ring;
    * every active conversation maps monotonically into the fixed visual range,
    * so more currently attached conversation threads produce a larger ring.

@@ -1,16 +1,21 @@
 /**
- * Shared knotting-thread visual tokens.
+ * Shared typed-Faden visual tokens.
  *
- * The knotting Faden (rendered as a MapLibre line layer in `overlay/edges.ts`)
- * and the stitched X at a node's centre (rendered as DOM in
- * `overlay/weaveRuntime.ts` / `overlay/markers.css`) must read as one
- * continuous physical thread, not as a line feeding into a separately
- * dimensioned patch. Both sides import the same numeric token instead of
- * keeping their own copy that could silently drift apart.
+ * Whenever one Fadenart continues from the MapLibre canvas into DOM geometry,
+ * both renderers must use the same numeric gauge. The conversation Faden and
+ * its node ring therefore share one width token; the knotting Faden and the
+ * stitched X share another. This prevents count- or renderer-specific widths
+ * from silently drifting apart.
  *
  * This module has no imports of its own so it can be safely imported by both
  * `edges.ts` and `weaveRuntime.ts` without risking a circular dependency.
  */
+
+/** Conversation Faden and conversation-ring yarn gauge, in screen pixels. */
+export const CONVERSATION_THREAD_WIDTH_PX = 1.75;
+
+/** Base conversation-ring diameter before count scaling, as a root percentage. */
+export const CONVERSATION_RING_BASE_DIAMETER_PERCENT = 48;
 
 /** Knotting Faden line width, in CSS/canvas pixels. Same unit space as the
  * MapLibre `line-width` paint property and the marker DOM's CSS `width`, so
