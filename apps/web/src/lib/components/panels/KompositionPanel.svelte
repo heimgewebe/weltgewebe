@@ -9,12 +9,15 @@
   } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
   import { createNode, ApiRequestError } from "$lib/api/domainWrites";
+  import { combineKnottingTags, type KnottingTopic } from "$lib/knottingTopics";
+  import KnottingTopicsSelector from "$lib/components/KnottingTopicsSelector.svelte";
   import { onMount, tick } from "svelte";
 
   let title = "";
   let description = "";
   let address = "";
   let nodeType = "standard";
+  let topics: KnottingTopic[] = [];
   let isSubmitting = false;
   let titleInput: HTMLInputElement | null = null;
 
@@ -44,6 +47,7 @@
     address: string;
     location: { lat: number; lon: number };
     summary?: string;
+    tags: string[];
   }): string {
     const signature = JSON.stringify(payload);
     if (!nodeOperationId || nodeOperationSignature !== signature) {
@@ -121,6 +125,7 @@
         address: address.trim(),
         location: { lat, lon },
         summary: description.trim() || undefined,
+        tags: combineKnottingTags(topics, []),
       };
       const node = await createNode({
         ...nodePayload,
@@ -251,6 +256,12 @@
           <span id="title-error" class="error-msg">Name ist erforderlich</span>
         {/if}
       </div>
+
+      <KnottingTopicsSelector
+        id="create-knot-topics"
+        bind:value={topics}
+        disabled={isSubmitting}
+      />
 
       <div class="form-group">
         <label for="address">Adresse *</label>

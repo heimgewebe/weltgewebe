@@ -166,6 +166,52 @@ describe("woven node projection", () => {
     expect(new Set(four.map((segment) => segment.themeId)).size).toBe(4);
   });
 
+  it("deduplicates normalized identities before the four-arm visual cap", () => {
+    const arms = assignXCoreSegments([
+      "Natur",
+      " Natur ",
+      "Bildung",
+      "Kunst",
+      "Handwerk",
+    ]);
+    expect(arms.map((segment) => segment.themeId)).toEqual([
+      weaveTopicIdentity("Natur"),
+      weaveTopicIdentity("Bildung"),
+      weaveTopicIdentity("Kunst"),
+      weaveTopicIdentity("Handwerk"),
+    ]);
+  });
+
+  it("prioritizes controlled knotting topics for the four visible X arms", () => {
+    const weave = deriveEntityWeave(
+      node({
+        tags: [
+          "Werkstatt",
+          "thema:natur",
+          "thema:kunst",
+          "thema:wohnen",
+          "offen",
+        ],
+        kind: "Garten",
+      }),
+      [],
+      nowMs,
+    );
+
+    expect(weave.xCoreSegments.map((segment) => segment.themeId)).toEqual([
+      "thema:wohnen",
+      "thema:natur",
+      "thema:kunst",
+      "Werkstatt",
+    ]);
+    expect(weave.xCoreSegments.map((segment) => segment.label)).toEqual([
+      "Wohnen",
+      "Natur",
+      "Kunst",
+      "Werkstatt",
+    ]);
+  });
+
   it("keeps more than four theme identities while painting only four arms", () => {
     const tags = ["T1", "T2", "T3", "T4", "T5", "T6"];
     const weave = deriveEntityWeave(
@@ -267,7 +313,7 @@ describe("woven node projection", () => {
       "Garten",
     ]);
     expect(weaveTopicIdentity("thema:kunst")).toBe("thema:kunst");
-    expect(weaveTopicDisplayLabel("thema:kunst")).toBe("kunst");
+    expect(weaveTopicDisplayLabel("thema:kunst")).toBe("Kunst");
     // Meaningful lowercase prefix must not be stripped generically.
     expect(weaveTopicDisplayLabel("kunst:öffentlicher raum")).toBe(
       "kunst:öffentlicher raum",

@@ -10,6 +10,12 @@
   import { formatDate } from "$lib/utils/formatDate";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
   import type { MapEntityViewModel } from "$lib/map/types";
+  import {
+    combineKnottingTags,
+    splitKnottingTags,
+    type KnottingTopic,
+  } from "$lib/knottingTopics";
+  import KnottingTopicsSelector from "$lib/components/KnottingTopicsSelector.svelte";
   import NodeConversation from "./NodeConversation.svelte";
 
   type DomainChanged = {
@@ -46,7 +52,8 @@
   let formAddress = "";
   let formLat = "";
   let formLon = "";
-  let formTags = "";
+  let formTopics: KnottingTopic[] = [];
+  let formKeywords = "";
   let conflictNode: NodeDetails | null = null;
   let SimilarNodesComponent:
     | typeof import("./SimilarNodes.svelte").default
@@ -107,6 +114,10 @@
     ($selection?.data?.created_by_account_id as string | undefined);
   $: currentCreatorTitle = nodeDetails?.created_by_account_current_title || "";
   $: timelineEvents = nodeDetails?.history || [];
+  $: visibleTagSplit = splitKnottingTags(
+    nodeDetails?.tags || $selection?.data?.tags || [],
+  );
+  $: conflictTagSplit = splitKnottingTags(conflictNode?.tags || []);
   $: canMutate =
     $authStore.authenticated &&
     ($authStore.role === "weber" ||
@@ -188,7 +199,11 @@
     formAddress = nodeDetails?.address || "";
     formLat = location ? String(location.lat) : "";
     formLon = location ? String(location.lon) : "";
-    formTags = (nodeDetails?.tags || fallback?.tags || []).join(", ");
+    const splitTags = splitKnottingTags(
+      nodeDetails?.tags || fallback?.tags || [],
+    );
+    formTopics = splitTags.topics;
+    formKeywords = splitTags.keywords.join(", ");
     mutationError = "";
     conflictNode = null;
     editing = true;
@@ -235,14 +250,7 @@
           location: { lat, lon },
           summary: formSummary.trim() || undefined,
           info: formInfo.trim() || undefined,
-          tags: Array.from(
-            new Set(
-              formTags
-                .split(",")
-                .map((tag) => tag.trim())
-                .filter(Boolean),
-            ),
-          ),
+          tags: combineKnottingTags(formTopics, formKeywords.split(",")),
         },
         nodeDetails?.updated_at,
       );
@@ -373,9 +381,18 @@
             <input bind:value={formLon} inputmode="decimal" required />
           </label>
         </div>
+        <KnottingTopicsSelector
+          id="edit-knot-topics"
+          bind:value={formTopics}
+          disabled={saving}
+        />
         <label>
-          Schlagwörter, durch Kommas getrennt
-          <input bind:value={formTags} />
+          Weitere Schlagwörter, durch Kommas getrennt
+          <input bind:value={formKeywords} />
+          <span class="field-help">
+            Freie Schlagwörter ergänzen Suche und Beschreibung; sie ersetzen die
+            ausgewählten Themen nicht.
+          </span>
         </label>
 
         {#if mutationError}<p class="error" role="alert">
@@ -405,9 +422,13 @@
                   <dt>Adresse</dt>
                   <dd>{conflictNode.address}</dd>
                 </div>{/if}
-              {#if conflictNode.tags?.length}<div>
+              {#if conflictTagSplit.topics.length}<div>
+                  <dt>Themen</dt>
+                  <dd>{conflictTagSplit.topics.join(", ")}</dd>
+                </div>{/if}
+              {#if conflictTagSplit.keywords.length}<div>
                   <dt>Schlagwörter</dt>
-                  <dd>{conflictNode.tags.join(", ")}</dd>
+                  <dd>{conflictTagSplit.keywords.join(", ")}</dd>
                 </div>{/if}
             </dl>
           </section>
@@ -503,9 +524,13 @@
                   <strong>Information:</strong>
                   {nodeDetails.info}
                 </p>{/if}
-              {#if nodeDetails?.tags?.length}<p>
+              {#if visibleTagSplit.topics.length}<p>
+                  <strong>Themen:</strong>
+                  {visibleTagSplit.topics.join(", ")}
+                </p>{/if}
+              {#if visibleTagSplit.keywords.length}<p>
                   <strong>Schlagwörter:</strong>
-                  {nodeDetails.tags.join(", ")}
+                  {visibleTagSplit.keywords.join(", ")}
                 </p>{/if}
               {#if nodeDetails?.participants?.length}
                 <div class="participants">
@@ -674,6 +699,13 @@
   }
   .mutation-actions {
     padding-top: 0.25rem;
+  }
+  .field-help {
+    display: block;
+    margin-top: 0.35rem;
+    color: var(--muted);
+    font-size: 0.85rem;
+    font-weight: 400;
   }
   .participants p,
   .collective-note {
