@@ -52,13 +52,15 @@ type Group = {
 };
 
 /**
- * Diagonal strand pairing:
+ * Diagonal strand pairing (canonical depth map: WEAVE_ARM_DEPTH in types.ts):
  * - strand A (under): northwest ↔ southeast
  * - strand B (over):  northeast ↔ southwest
  *
  * One theme colours the whole X; two themes each take one strand; three leave
  * the remaining arm on strand A with the first theme; four map 1:1; more than
  * four keep full identities in themeSegments while only the first four paint.
+ * Per-arm segment colours remain model data for primaryThemeColor contracts;
+ * X DOM rendering no longer consumes them (root --weave-thread-color only).
  */
 export function assignXCoreSegments(
   topicLabels: readonly string[],

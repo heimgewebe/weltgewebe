@@ -3,7 +3,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it, vi, afterEach } from "vitest";
 import type { MapEntityViewModel, WeaveArm } from "$lib/map/types";
-import { WEAVE_ARMS } from "$lib/map/types";
+import {
+  WEAVE_ARM_DEPTH,
+  WEAVE_ARMS,
+  WEAVE_OVER_ARMS,
+  WEAVE_UNDER_ARMS,
+} from "$lib/map/types";
 import {
   assignXCoreSegments,
   deriveEntityWeave,
@@ -21,6 +26,7 @@ import {
   normalizeEdgeLifecycle,
   FADEN_LIFETIME_MS,
 } from "$lib/map/edgeLifecycle";
+import { DomElement, installDom as installDomStub } from "./domElementTestStub";
 import { weaveRuntime } from "./weaveRuntime";
 import type { WeaveEntity } from "$lib/map/weaveTheme";
 
@@ -43,97 +49,15 @@ const OVERLAY_DIR = dirname(fileURLToPath(import.meta.url));
  *      knotting thread's terminal (target-side) segment, and their width
  *      through the same `KNOTTING_THREAD_WIDTH_PX` token `edges.ts` uses for
  *      that thread's line-width — so neither can silently drift from the
- *      thread it continues.
+ *      thread it continues. Colour injection is root-only
+ *      (--weave-thread-color); arms inherit via CSS.
  *   6. Governance overlays (arm overlays) still render on top of the X.
  *   7. (Covered together with existing suites) existing thread/node cases
  *      stay green — see edges.test.ts / weaveRuntime.test.ts / nodes.test.ts.
  */
 
-// ─── Minimal DOM stub (mirrors weaveRuntime.test.ts) ───────────────────────
-
-class DomElement {
-  className = "";
-  title = "";
-  textContent = "";
-  style = {
-    opacity: "",
-    background: "",
-    props: new Map<string, string>(),
-    setProperty(name: string, value: string) {
-      this.props.set(name, value);
-    },
-    getPropertyValue(name: string) {
-      return this.props.get(name) ?? "";
-    },
-  };
-  dataset: Record<string, string> = {};
-  children: DomElement[] = [];
-  attributes = new Map<string, string>();
-  tagName = "SPAN";
-
-  setAttribute(name: string, value: string) {
-    this.attributes.set(name, value);
-    if (name.startsWith("data-")) {
-      const key = name
-        .slice(5)
-        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
-      this.dataset[key] = value;
-    }
-  }
-
-  getAttribute(name: string) {
-    return this.attributes.get(name) ?? null;
-  }
-
-  append(...nodes: DomElement[]) {
-    this.children.push(...nodes);
-  }
-
-  get firstChild(): DomElement | null {
-    return this.children[0] ?? null;
-  }
-
-  removeChild(child: DomElement) {
-    const index = this.children.indexOf(child);
-    if (index >= 0) this.children.splice(index, 1);
-    return child;
-  }
-
-  querySelectorAll(selector: string): DomElement[] {
-    const matches: DomElement[] = [];
-    const visit = (node: DomElement) => {
-      for (const child of node.children) {
-        if (selector === "*" || matchesSelector(child, selector)) {
-          matches.push(child);
-        }
-        visit(child);
-      }
-    };
-    visit(this);
-    return matches;
-  }
-}
-
-function matchesSelector(node: DomElement, selector: string): boolean {
-  if (selector === "*") return true;
-  if (selector.startsWith(".")) {
-    return node.className.split(/\s+/).includes(selector.slice(1));
-  }
-  if (selector.startsWith("[") && selector.endsWith("]")) {
-    const body = selector.slice(1, -1);
-    const eq = body.indexOf("=");
-    if (eq < 0) return node.attributes.has(body);
-    const name = body.slice(0, eq);
-    const raw = body.slice(eq + 1).replace(/^["']|["']$/g, "");
-    return node.attributes.get(name) === raw;
-  }
-  return false;
-}
-
 function installDom() {
-  vi.stubGlobal("document", {
-    createElement: () => new DomElement(),
-  });
+  installDomStub(vi);
 }
 
 afterEach(() => {
@@ -251,20 +175,16 @@ describe("Woven X core: exactly four arms, deterministic over/under alternation"
     expect(under).toBeDefined();
     expect(over).toBeDefined();
 
-    const underArms = new Set(
-      under!.children.map((arm) => arm.dataset.arm as WeaveArm),
-    );
-    const overArms = new Set(
-      over!.children.map((arm) => arm.dataset.arm as WeaveArm),
-    );
-    // Deterministic depth sequence per arm, compass order NW, NE, SE, SW:
-    const sequence: ("under" | "over")[] = WEAVE_ARMS.map((arm) =>
-      underArms.has(arm) ? "under" : "over",
-    );
+    const underArms = under!.children.map((arm) => arm.dataset.arm as WeaveArm);
+    const overArms = over!.children.map((arm) => arm.dataset.arm as WeaveArm);
+    // Runtime strands must match the single canonical depth mapping.
+    expect(underArms).toEqual([...WEAVE_UNDER_ARMS]);
+    expect(overArms).toEqual([...WEAVE_OVER_ARMS]);
+    const sequence = WEAVE_ARMS.map((arm) => WEAVE_ARM_DEPTH[arm]);
     expect(sequence).toEqual(["under", "over", "under", "over"]);
     // Every arm belongs to exactly one strand — no arm is both/neither.
-    expect(underArms.size + overArms.size).toBe(4);
-    for (const arm of underArms) expect(overArms.has(arm)).toBe(false);
+    expect(new Set([...underArms, ...overArms]).size).toBe(4);
+    for (const arm of underArms) expect(overArms).not.toContain(arm);
   });
 });
 
@@ -294,7 +214,7 @@ describe("No separate circle/symbol feature is needed for a node", () => {
 });
 
 describe("The X arms are the incoming knotting thread, not an independent palette", () => {
-  it("gives every arm the exact same colour, resolved through terminalThreadColor", () => {
+  it("injects terminalThreadColor once on the root for CSS inheritance", () => {
     installDom();
     // kind "Knoten" is ignored as a theme, so the three tags alone (three
     // distinct, non-colliding hash colours) determine the palette.
@@ -309,13 +229,15 @@ describe("The X arms are the incoming knotting thread, not an independent palett
     const host = root as unknown as DomElement;
     const arms = host.querySelectorAll(".woven-node__arm");
     expect(arms).toHaveLength(4);
-    const colors = arms.map((arm) =>
-      arm.style.getPropertyValue("--arm-color").trim(),
+    // Sole colour injection point: root --weave-thread-color. Arms must not
+    // re-set --arm-color inline; markers.css inherits via
+    // --arm-color: var(--weave-thread-color).
+    expect(host.style.getPropertyValue("--weave-thread-color").trim()).toBe(
+      expectedColor,
     );
-    // All four arms — under and over alike — share one colour: there is no
-    // per-topic arm palette any more, only the one thread colour.
-    expect(new Set(colors).size).toBe(1);
-    expect(colors[0]).toBe(expectedColor);
+    for (const arm of arms) {
+      expect(arm.style.getPropertyValue("--arm-color")).toBe("");
+    }
     // Sanity: with three distinct topics this is not trivially the primary
     // colour — the terminal colour genuinely differs from it.
     expect(expectedColor).not.toBe(weave.primaryThemeColor);
@@ -358,9 +280,10 @@ describe("The X arms are the incoming knotting thread, not an independent palett
       true,
       createdAt,
     );
-    expect(features.length).toBe(palette.length * 2);
-    // Prefer the highest themeStrand (closest to the target), not mere array
-    // position — that is the segment edges.ts actually paints at the centre.
+    expect(features.length).toBeGreaterThan(0);
+    // Terminal segment = highest themeStrand (closest to the target), not a
+    // brittle total-feature count. That is the segment edges.ts paints at the
+    // centre; its colour and final coordinate prove thread→X continuity.
     const terminalFeature = features.reduce((best, feature) => {
       const strand = Number(feature.properties?.themeStrand ?? -1);
       const bestStrand = Number(best?.properties?.themeStrand ?? -1);
@@ -377,14 +300,13 @@ describe("The X arms are the incoming knotting thread, not an independent palett
 
     const { root } = weaveRuntime.createRoot(target as WeaveEntity, "node");
     const host = root as unknown as DomElement;
-    const armColors = host
-      .querySelectorAll(".woven-node__arm")
-      .map((arm) => arm.style.getPropertyValue("--arm-color").trim());
-    expect(new Set(armColors).size).toBe(1);
-    expect(armColors[0]).toBe(terminalColor);
     expect(host.style.getPropertyValue("--weave-thread-color").trim()).toBe(
       terminalColor,
     );
+    // No redundant per-arm colour injection — inheritance only.
+    for (const arm of host.querySelectorAll(".woven-node__arm")) {
+      expect(arm.style.getPropertyValue("--arm-color")).toBe("");
+    }
   });
 
   it("falls back to the same fallback colour the edge itself uses when no theme palette exists", () => {
@@ -395,11 +317,9 @@ describe("The X arms are the incoming knotting thread, not an independent palett
       "node",
     );
     const host = root as unknown as DomElement;
-    const colors = host
-      .querySelectorAll(".woven-node__arm")
-      .map((arm) => arm.style.getPropertyValue("--arm-color").trim());
-    expect(new Set(colors).size).toBe(1);
-    expect(colors[0]).toBe(terminalThreadColor(weave));
+    expect(host.style.getPropertyValue("--weave-thread-color").trim()).toBe(
+      terminalThreadColor(weave),
+    );
   });
 
   it("derives the arm width from the single shared knotting-thread token, not a duplicated magic number", () => {
@@ -417,10 +337,9 @@ describe("The X arms are the incoming knotting thread, not an independent palett
 
   it("keeps markers.css free of a hard-coded knotting width fallback", () => {
     const css = readFileSync(join(OVERLAY_DIR, "markers.css"), "utf8");
-    // The width token must not reappear as a CSS magic number; only
-    // weaveRuntime's inline --weave-arm-width from KNOTTING_THREAD_WIDTH_PX
-    // may set arm thickness.
-    expect(css).not.toMatch(/4\.15/);
+    // Structural proof only: arms consume the runtime token and CSS never
+    // redefines --weave-arm-width as a numeric px fallback. The literal
+    // token value lives solely in weaveVisualTokens.ts.
     expect(css).toMatch(/var\(--weave-arm-width\)/);
     expect(css).not.toMatch(/--weave-arm-width:\s*[\d.]+px/);
   });

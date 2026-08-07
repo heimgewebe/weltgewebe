@@ -1,15 +1,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type {
-  MapEntityWeave,
-  WeaveArm,
-  WeaveProposalArc,
-} from "$lib/map/types";
+import type { MapEntityWeave, WeaveProposalArc } from "$lib/map/types";
+import { WEAVE_ARMS } from "$lib/map/types";
 import {
   MAX_VISIBLE_ARM_OVERLAYS,
   MAX_VISIBLE_PROPOSAL_ARCS,
   MAX_VISIBLE_VOTE_STITCHES,
   maxWeaveDomNodeBudget,
 } from "$lib/map/weaveModel";
+import { DomElement, installDom as installDomStub } from "./domElementTestStub";
 import {
   applyWeaveDynamicProperties,
   countRenderedWeaveDomNodes,
@@ -17,108 +15,24 @@ import {
   weaveRuntime,
 } from "./weaveRuntime";
 
-/**
- * Minimal element tree that supports the createElement/text/attribute path
- * used by weaveRuntime. Vitest runs in the node environment; this host is
- * intentionally close to jsdom semantics for descendant counting and attribute
- * safety without adding a new runtime dependency.
- */
-class DomElement {
-  className = "";
-  title = "";
-  textContent = "";
-  style = {
-    opacity: "",
-    background: "",
-    props: new Map<string, string>(),
-    setProperty(name: string, value: string) {
-      this.props.set(name, value);
-    },
-  };
-  dataset: Record<string, string> = {};
-  children: DomElement[] = [];
-  attributes = new Map<string, string>();
-
-  setAttribute(name: string, value: string) {
-    this.attributes.set(name, value);
-    if (name.startsWith("data-")) {
-      const key = name
-        .slice(5)
-        .replace(/-([a-z])/g, (_, letter: string) => letter.toUpperCase());
-      this.dataset[key] = value;
-    }
-  }
-
-  getAttribute(name: string) {
-    return this.attributes.get(name) ?? null;
-  }
-
-  append(...nodes: DomElement[]) {
-    this.children.push(...nodes);
-  }
-
-  get firstChild(): DomElement | null {
-    return this.children[0] ?? null;
-  }
-
-  removeChild(child: DomElement) {
-    const index = this.children.indexOf(child);
-    if (index >= 0) this.children.splice(index, 1);
-    return child;
-  }
-
-  querySelectorAll(selector: string): DomElement[] {
-    const matches: DomElement[] = [];
-    const visit = (node: DomElement) => {
-      for (const child of node.children) {
-        if (selector === "*" || matchesSelector(child, selector)) {
-          matches.push(child);
-        }
-        visit(child);
-      }
-    };
-    visit(this);
-    return matches;
-  }
-}
-
-function matchesSelector(node: DomElement, selector: string): boolean {
-  if (selector === "*") return true;
-  if (selector.startsWith(".")) {
-    return node.className.split(/\s+/).includes(selector.slice(1));
-  }
-  if (selector.startsWith("[") && selector.endsWith("]")) {
-    const body = selector.slice(1, -1);
-    const eq = body.indexOf("=");
-    if (eq < 0) return node.attributes.has(body);
-    const name = body.slice(0, eq);
-    const raw = body.slice(eq + 1).replace(/^["']|["']$/g, "");
-    return node.attributes.get(name) === raw;
-  }
-  return false;
-}
-
 function installDom() {
-  vi.stubGlobal("document", {
-    createElement: () => new DomElement(),
-  });
+  installDomStub(vi);
 }
 
 function maximalWeave(): MapEntityWeave {
-  const arms: WeaveArm[] = ["northwest", "northeast", "southeast", "southwest"];
-  const xCoreSegments = arms.map((arm, index) => ({
+  const xCoreSegments = WEAVE_ARMS.map((arm, index) => ({
     arm,
     themeId: `theme-${index}`,
     label: `Theme ${index}`,
     color: `#${(index + 1).toString(16).repeat(6).slice(0, 6)}`,
   }));
-  const armOverlays = arms
-    .slice(0, MAX_VISIBLE_ARM_OVERLAYS)
-    .map((arm, index) => ({
+  const armOverlays = WEAVE_ARMS.slice(0, MAX_VISIBLE_ARM_OVERLAYS).map(
+    (arm, index) => ({
       arm,
       id: `overlay-${index}`,
       label: index === 0 ? 'Notiz "A" & <B>' : `Overlay ${index}`,
-    }));
+    }),
+  );
   const proposalArcs: WeaveProposalArc[] = Array.from(
     { length: MAX_VISIBLE_PROPOSAL_ARCS },
     (_, index) => ({

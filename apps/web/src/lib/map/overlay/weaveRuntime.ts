@@ -3,6 +3,7 @@ import type {
   MapEntityViewModel,
   MapEntityWeave,
 } from "$lib/map/types";
+import { WEAVE_OVER_ARMS, WEAVE_UNDER_ARMS } from "$lib/map/types";
 import type { WeaveEntity } from "$lib/map/weaveTheme";
 import {
   deriveEntityWeave,
@@ -140,8 +141,10 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   );
   // The X is the incoming knotting thread continuing past the centre, so
   // every arm shares one colour and one width with that thread — never a
-  // per-topic palette and never a duplicated width constant. See
-  // terminalThreadColor and KNOTTING_THREAD_WIDTH_PX.
+  // per-topic palette and never a duplicated width constant. Colour is
+  // injected once on the root (--weave-thread-color); arms inherit via CSS
+  // (--arm-color: var(--weave-thread-color)). See terminalThreadColor and
+  // KNOTTING_THREAD_WIDTH_PX.
   const threadColor = terminalThreadColor(weave);
   root.style.setProperty("--weave-thread-color", threadColor);
   root.style.setProperty("--weave-arm-width", `${KNOTTING_THREAD_WIDTH_PX}px`);
@@ -169,18 +172,14 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
       "data-strand": "a",
     },
   );
-  for (const arm of ["northwest", "southeast"] as const) {
-    const armEl = createSpan("woven-node__arm", { "data-arm": arm });
-    armEl.style.setProperty("--arm-color", threadColor);
-    strandUnder.append(armEl);
+  for (const arm of WEAVE_UNDER_ARMS) {
+    strandUnder.append(createSpan("woven-node__arm", { "data-arm": arm }));
   }
   const strandOver = createSpan("woven-node__strand woven-node__strand--over", {
     "data-strand": "b",
   });
-  for (const arm of ["northeast", "southwest"] as const) {
-    const armEl = createSpan("woven-node__arm", { "data-arm": arm });
-    armEl.style.setProperty("--arm-color", threadColor);
-    strandOver.append(armEl);
+  for (const arm of WEAVE_OVER_ARMS) {
+    strandOver.append(createSpan("woven-node__arm", { "data-arm": arm }));
   }
   xCore.append(strandUnder, strandOver);
   for (const overlay of weave.armOverlays) {
