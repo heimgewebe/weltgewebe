@@ -83,10 +83,14 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
             with self.subTest(caddyfile=relative):
                 source = (REPO / relative).read_text(encoding="utf-8")
                 self.assertEqual(source.count("@legacyMapHtml path /map.html"), 1)
-                self.assertEqual(source.count("redir @legacyMapHtml /map{?query} 308"), 1)
+                self.assertEqual(source.count("route @legacyMapHtml {"), 1)
+                self.assertEqual(source.count("uri replace /map.html /map"), 1)
+                self.assertEqual(source.count("redir {uri} 308"), 1)
                 adapted = json.dumps(adapt(relative), sort_keys=True)
                 self.assertIn('"path": ["/map.html"]', adapted)
-                self.assertIn('/map{http.request.uri.prefixed_query}', adapted)
+                self.assertIn('"find": "/map.html"', adapted)
+                self.assertIn('"replace": "/map"', adapted)
+                self.assertIn('"Location": ["{http.request.uri}"]', adapted)
                 self.assertIn('"status_code": 308', adapted)
 
     def test_adapted_app_route_has_exact_matchers_and_canonical_edge_csp(self) -> None:

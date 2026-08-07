@@ -14,7 +14,7 @@ relations:
 ---
 # Kanonische Kartenroute `/map`
 
-Stand: 2026-08-06
+Stand: 2026-08-07
 
 ## Anlass
 
@@ -35,7 +35,7 @@ Die Query-Zeichenkette bleibt unverändert erhalten:
 | `/map` | normale Kartenanwendung, kein Redirect |
 | andere `.html`-Pfade | unveränderte bestehende Routingsemantik |
 
-Caddy verwendet dafür den optionalen Query-Platzhalter `{?query}`. Er fügt das Fragezeichen nur ein, wenn die Anfrage tatsächlich eine Query enthält. Die Query darf nicht durch eine allgemeine Zeichenersetzung verändert werden; ein kodierter Wert wie `next=%2Fmap.html` muss bytegetreu erhalten bleiben.
+Caddy setzt dafür eine eng begrenzte `route` ein: Nur bei `/map.html` wird der URI-Pfad per `uri replace /map.html /map` umgeschrieben und anschließend der vollständige `{uri}` mit HTTP 308 als Redirectziel verwendet. Dadurch bleibt die bestehende Query unverändert Bestandteil des URI, während die alte Pfadkomponente verschwindet. Der zuvor verwendete optionale Query-Platzhalter `{?query}` ist hier nicht der Produktionsvertrag, weil der Live-Readback gezeigt hat, dass die konkrete Redirectform die Query verlor. Eine Query wie `next=%2Fmap.html` darf durch die Pfadumschreibung nicht verändert werden.
 
 Die Redirectregel muss vor dem statischen `try_files`- beziehungsweise SPA-Fallback ausgewertet werden. Andernfalls kann `map.html` erneut als vorhandene Datei ausgeliefert werden und die Schleife wieder auftreten.
 

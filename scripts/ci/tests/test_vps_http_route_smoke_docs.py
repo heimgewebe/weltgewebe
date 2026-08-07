@@ -113,7 +113,10 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
         block = (
             "@legacyMapHtml path /map.html\n"
-            "\tredir @legacyMapHtml /map{?query} 308"
+            "\troute @legacyMapHtml {\n"
+            "\t\turi replace /map.html /map\n"
+            "\t\tredir {uri} 308\n"
+            "\t}"
         )
         self.assertEqual(production.count(block), 1)
         self.assertLess(

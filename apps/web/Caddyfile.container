@@ -11,7 +11,10 @@
 	# Canonicalize the one legacy filename whose Svelte bootstrap otherwise
 	# reloads /map.html indefinitely. Preserve the original query verbatim.
 	@legacyMapHtml path /map.html
-	redir @legacyMapHtml /map{?query} 308
+	route @legacyMapHtml {
+		uri replace /map.html /map
+		redir {uri} 308
+	}
 	try_files {path} {path}/ /index.html
 	file_server
 	header {
