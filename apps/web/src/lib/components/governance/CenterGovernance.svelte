@@ -11,9 +11,9 @@
   } from "$lib/api/governance";
 
   export let centerId: string;
-  export let proposalCount = 0;
-  export let openProposalCount = 0;
-  export let votingProposalCount = 0;
+  export let proposalCount: number | null = null;
+  export let openProposalCount: number | null = null;
+  export let votingProposalCount: number | null = null;
 
   let proposals: Proposal[] = [];
   let loading = true;
@@ -119,15 +119,15 @@
   <dl class="counts" aria-label="Governance-Überblick">
     <div>
       <dt>Alle Anträge</dt>
-      <dd>{displayedProposalCount}</dd>
+      <dd>{displayedProposalCount ?? "—"}</dd>
     </div>
     <div>
       <dt>Offen</dt>
-      <dd>{displayedOpenProposalCount}</dd>
+      <dd>{displayedOpenProposalCount ?? "—"}</dd>
     </div>
     <div>
       <dt>Abstimmung</dt>
-      <dd>{displayedVotingProposalCount}</dd>
+      <dd>{displayedVotingProposalCount ?? "—"}</dd>
     </div>
   </dl>
 
