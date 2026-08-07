@@ -52,17 +52,27 @@ async function mockCenter(page: Page) {
   await mockApiResponses(page, {
     auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
   });
-  await page.route("**/api/webgemeindezentren*", async (route) => {
+  await page.route("**/api/webgemeindezentren**", async (route) => {
     const pathname = new URL(route.request().url()).pathname;
-    if (pathname !== "/api/webgemeindezentren") {
-      await route.fallback();
+    if (pathname === "/api/webgemeindezentren") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(
+          mockListResponse(route.request().url(), [DETAILS]),
+        ),
+      });
       return;
     }
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify(mockListResponse(route.request().url(), [CENTER])),
-    });
+    if (pathname === "/api/webgemeindezentren/webgemeindezentrum-hammer-park") {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(DETAILS),
+      });
+      return;
+    }
+    await route.fallback();
   });
   await page.route("**/api/proposals", async (route) => {
     await route.fulfill({
@@ -103,16 +113,6 @@ async function mockCenter(page: Page) {
           items: [],
           page: { limit: 50, next_cursor: null, has_more: false },
         }),
-      });
-    },
-  );
-  await page.route(
-    "**/api/webgemeindezentren/webgemeindezentrum-hammer-park",
-    async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify(DETAILS),
       });
     },
   );
@@ -224,6 +224,103 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
     });
   });
 
+  test("opens a clear full view and preserves the map return target", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1200, height: 850 });
+    await page.goto(
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park",
+    );
+
+    const fullViewLink = page.getByTestId("webgemeindezentrum-full-view-link");
+    await expect(fullViewLink).toBeVisible();
+    await expect(fullViewLink).toHaveAttribute(
+      "href",
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park&view=webgemeindezentrum",
+    );
+    await fullViewLink.click();
+
+    await expect(page).toHaveURL(
+      /\/map\?focus=webgemeindezentrum:webgemeindezentrum-hammer-park&view=webgemeindezentrum$/,
+    );
+    const fullView = page.getByTestId("webgemeindezentrum-full-view");
+    await expect(fullView).toBeVisible();
+    const fullViewBounds = await fullView.boundingBox();
+    expect(fullViewBounds).not.toBeNull();
+    expect(fullViewBounds!.x).toBeCloseTo(0, 1);
+    expect(fullViewBounds!.y).toBeCloseTo(0, 1);
+    expect(fullViewBounds!.width).toBeCloseTo(1200, 0);
+    expect(fullViewBounds!.height).toBeCloseTo(850, 0);
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Webgemeindezentrum Hammer Park",
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Webgemeindezentrum Hammer Park",
+      }),
+    ).toBeFocused();
+
+    const locationState = page.getByTestId(
+      "webgemeindezentrum-full-location-state",
+    );
+    await expect(locationState).toContainText("Gewünschter Treffort");
+    await expect(locationState).toContainText("Noch keine Bestätigung");
+    await expect(page.getByTestId("center-governance")).toBeVisible();
+    await expect(
+      page.getByTestId("webgemeindezentrum-full-conversation"),
+    ).toBeVisible();
+
+    const activity = page.getByTestId("webgemeindezentrum-activity-summary");
+    await expect(activity).toContainText("2");
+    await expect(activity).toContainText("Anträge");
+    await expect(activity).toContainText("Gesprächsbeiträge");
+    await expect(
+      page.getByTestId("webgemeindezentrum-map-link"),
+    ).toHaveAttribute(
+      "href",
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park",
+    );
+  });
+
+  test("does not present missing detail data as zero activity", async ({
+    page,
+  }) => {
+    await page.route(
+      "**/api/webgemeindezentren/webgemeindezentrum-hammer-park",
+      async (route) => {
+        await route.fulfill({ status: 503, body: "detail unavailable" });
+      },
+    );
+    await page.route("**/api/proposals", async (route) =>
+      route.fulfill({ status: 503, body: "proposals unavailable" }),
+    );
+    await page.goto(
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park&view=webgemeindezentrum",
+    );
+
+    await expect(
+      page.getByTestId("webgemeindezentrum-details-error"),
+    ).toBeVisible();
+    await expect(
+      page.getByTestId("webgemeindezentrum-activity-summary"),
+    ).toHaveCount(0);
+    const governance = page.getByTestId("center-governance");
+    await expect(governance.getByRole("alert")).toContainText(
+      "Anträge können gerade nicht geladen werden.",
+    );
+    await expect(governance.locator(".counts dd")).toHaveText(["—", "—", "—"]);
+    await expect(
+      page.getByTestId("webgemeindezentrum-full-location-state"),
+    ).toContainText("Gewünschter Treffort");
+    await expect(
+      page.getByTestId("webgemeindezentrum-details-error"),
+    ).toContainText("konnten nicht geladen werden");
+  });
+
   test("opens from the map with a real keyboard action", async ({ page }) => {
     await page.goto("/map");
     const marker = page.getByTestId(
@@ -237,6 +334,27 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
 
     await expect(page.getByTestId("context-panel")).toBeVisible();
     await expect(page.getByTestId("webgemeindezentrum-heading")).toBeFocused();
+  });
+
+  test("keeps the full view readable as a single column on mobile", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park&view=webgemeindezentrum",
+    );
+
+    const fullView = page.getByTestId("webgemeindezentrum-full-view");
+    await expect(fullView).toBeVisible();
+    const workGrid = fullView.locator(".work-grid");
+    await expect(workGrid).toBeVisible();
+    const columns = await workGrid.evaluate(
+      (element) => getComputedStyle(element).gridTemplateColumns,
+    );
+    expect(columns.trim().split(/\s+/)).toHaveLength(1);
+    await expect(
+      page.getByTestId("webgemeindezentrum-full-location-state"),
+    ).toContainText("Gewünschter Treffort");
   });
 
   test("keeps the essential truth visible in the compact mobile stage", async ({
