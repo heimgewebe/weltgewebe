@@ -191,6 +191,7 @@ describe("buildEdgeFeatures", () => {
           primaryThemeColor: "#5f7a55",
           coreDensity: 0.5,
           conversationRingThickness: 0,
+          conversationRingScale: 0,
           knottingThreadCount: 0,
           conversationThreadCount: 0,
           conversationOpacity: 0,

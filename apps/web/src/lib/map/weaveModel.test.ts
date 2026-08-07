@@ -9,11 +9,14 @@ import type {
   MapEntityWebgemeindezentrum,
 } from "$lib/map/types";
 import {
+  CONVERSATION_RING_MIN_SCALE,
+  CONVERSATION_RING_MAX_SCALE,
   MAX_VISIBLE_PROPOSAL_ARCS,
   MAX_VISIBLE_VOTE_STITCHES,
   MAX_X_CORE_THEMES,
   WEAVE_ZONE_ORDER,
   assignXCoreSegments,
+  conversationRingScale,
   conversationRingThickness,
   deriveArmOverlays,
   deriveEntityWeave,
@@ -420,21 +423,46 @@ describe("woven node projection", () => {
     expect(visibleStops).toHaveLength(MAX_VISIBLE_VOTE_STITCHES);
   });
 
-  it("saturates conversation ring thickness with log1p", () => {
+  it("scales conversation-ring diameter and band thickness with active thread count", () => {
     expect(conversationRingThickness(0)).toBe(0);
-    const one = conversationRingThickness(1);
-    const few = conversationRingThickness(4);
-    const many = conversationRingThickness(40);
-    expect(one).toBeGreaterThan(0);
-    expect(few).toBeGreaterThan(one);
-    expect(many).toBe(1);
-    expect(
-      deriveEntityWeave(
-        node(),
-        [edge("talk", "conversation", "conversation-node")],
-        nowMs,
-      ).conversationRingThickness,
-    ).toBeGreaterThan(0);
+    expect(conversationRingScale(0)).toBe(0);
+    expect(conversationRingScale(Number.NaN)).toBe(0);
+
+    const oneThickness = conversationRingThickness(1);
+    const fewThickness = conversationRingThickness(4);
+    const manyThickness = conversationRingThickness(40);
+    expect(oneThickness).toBeGreaterThan(0);
+    expect(fewThickness).toBeGreaterThan(oneThickness);
+    expect(manyThickness).toBe(1);
+
+    const oneScale = conversationRingScale(1);
+    const fewScale = conversationRingScale(4);
+    const manyScale = conversationRingScale(40);
+    expect(oneScale).toBe(CONVERSATION_RING_MIN_SCALE);
+    expect(fewScale).toBeGreaterThan(oneScale);
+    expect(manyScale).toBe(CONVERSATION_RING_MAX_SCALE);
+    expect(conversationRingScale(20)).toBe(CONVERSATION_RING_MAX_SCALE);
+    expect(conversationRingScale(21)).toBe(CONVERSATION_RING_MAX_SCALE);
+    expect(conversationRingScale(Number.POSITIVE_INFINITY)).toBe(0);
+
+    const one = deriveEntityWeave(
+      node(),
+      [edge("talk", "conversation", "conversation-node")],
+      nowMs,
+    );
+    const four = deriveEntityWeave(
+      node(),
+      Array.from({ length: 4 }, (_, index) =>
+        edge(`talk-${index}`, "conversation", `conversation-${index}`),
+      ),
+      nowMs,
+    );
+    expect(one.conversationRingThickness).toBeGreaterThan(0);
+    expect(one.conversationRingScale).toBeCloseTo(oneScale);
+    expect(four.conversationThreadCount).toBe(4);
+    expect(four.conversationRingScale).toBeGreaterThan(
+      one.conversationRingScale,
+    );
   });
 
   it("projects empty arm overlays until a content source exists", () => {
@@ -503,6 +531,7 @@ describe("woven node projection", () => {
     expect(weave.conversationThreadCount).toBe(0);
     expect(weave.conversationOpacity).toBe(0);
     expect(weave.conversationRingThickness).toBe(0);
+    expect(weave.conversationRingScale).toBe(0);
   });
 
   it("keeps seven proposals separate and uses the eighth visual slot as overflow", () => {

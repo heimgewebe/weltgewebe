@@ -36,10 +36,17 @@ export const MAX_VISIBLE_ARM_OVERLAYS = 4;
 /** Visible vote stitches per proposal arc; the model keeps the full count. */
 export const MAX_VISIBLE_VOTE_STITCHES = 12;
 /**
- * Conversation count at which log1p thickness reaches the fixed maximum.
- * Higher counts stay capped — no unbounded ring growth.
+ * Conversation count at which both log1p ring signals reach their fixed
+ * maxima. Higher counts stay capped — no unbounded ring growth.
  */
-export const CONVERSATION_THICKNESS_SATURATION_COUNT = 20;
+export const CONVERSATION_RING_SATURATION_COUNT = 20;
+/** Smallest ring diameter once at least one active conversation is attached. */
+export const CONVERSATION_RING_MIN_SCALE = 0.75;
+/**
+ * Largest ring diameter scale. The fixed ceiling preserves separation from
+ * the outer proposal zone instead of letting high activity swallow the node.
+ */
+export const CONVERSATION_RING_MAX_SCALE = 1.25;
 
 type Group = {
   subjectId: string;
@@ -137,14 +144,40 @@ export function deriveWeaveThemeSegments(
 }
 
 /**
- * log1p saturation into [0, 1]. Zero conversations stay invisible; growth is
- * smooth and hard-capped at CONVERSATION_THICKNESS_SATURATION_COUNT.
+ * Shared active-conversation signal. A logarithmic curve keeps the first few
+ * attached threads visually meaningful while a hard cap prevents high counts
+ * from dominating the marker.
  */
-export function conversationRingThickness(count: number): number {
+function conversationRingActivity(count: number): number {
   if (!Number.isFinite(count) || count <= 0) return 0;
   const ratio =
-    Math.log1p(count) / Math.log1p(CONVERSATION_THICKNESS_SATURATION_COUNT);
+    Math.log1p(count) / Math.log1p(CONVERSATION_RING_SATURATION_COUNT);
   return Math.min(1, Math.max(0, ratio));
+}
+
+/** Saturated ring-band thickness in relative units [0, 1]. */
+export function conversationRingThickness(count: number): number {
+  return conversationRingActivity(count);
+}
+
+/**
+ * Saturated ring-diameter scale. Zero stays invisible; active counts map from
+ * the fixed minimum to maximum scale so diameter directly encodes participation.
+ * One active thread is the exact visual minimum; the saturation count is the
+ * exact maximum. This uses the full declared range for real integer counts.
+ */
+export function conversationRingScale(count: number): number {
+  if (!Number.isFinite(count) || count <= 0) return 0;
+  const boundedCount = Math.min(
+    CONVERSATION_RING_SATURATION_COUNT,
+    Math.max(1, count),
+  );
+  const activity =
+    Math.log(boundedCount) / Math.log(CONVERSATION_RING_SATURATION_COUNT);
+  return (
+    CONVERSATION_RING_MIN_SCALE +
+    activity * (CONVERSATION_RING_MAX_SCALE - CONVERSATION_RING_MIN_SCALE)
+  );
 }
 
 /**
@@ -309,6 +342,7 @@ export function deriveEntityWeave(
     conversationRingThickness: conversationRingThickness(
       conversationThreadCount,
     ),
+    conversationRingScale: conversationRingScale(conversationThreadCount),
     knottingThreadCount,
     conversationThreadCount,
     conversationOpacity,

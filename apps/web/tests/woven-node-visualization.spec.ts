@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { FADEN_LIFETIME_MS } from "../src/lib/map/edgeLifecycle";
+import { conversationRingScale } from "../src/lib/map/weaveModel";
 import { demoAccounts, demoNodes } from "../src/lib/demo/demoData";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
@@ -92,6 +93,33 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven.locator('[data-zone="proposal"]')).toHaveCount(2);
     await expect(woven.locator('[data-zone="vote"]')).toHaveCount(2);
     await expect(woven.locator(".woven-node__cross")).toHaveCount(0);
+
+    const conversationScaleProof = await woven.evaluate((root) => {
+      const ring = root.querySelector<HTMLElement>(".woven-node__conversation");
+      if (!ring) throw new Error("conversation ring missing");
+      const requestedScale = Number(
+        (root as HTMLElement).style
+          .getPropertyValue("--weave-conversation-scale")
+          .trim(),
+      );
+      const transform = new DOMMatrixReadOnly(getComputedStyle(ring).transform);
+      return {
+        requestedScale,
+        appliedScaleX: transform.a,
+        appliedScaleY: transform.d,
+      };
+    });
+    expect(conversationScaleProof.requestedScale).toBeCloseTo(
+      conversationRingScale(2),
+    );
+    expect(conversationScaleProof.appliedScaleX).toBeCloseTo(
+      conversationScaleProof.requestedScale,
+      3,
+    );
+    expect(conversationScaleProof.appliedScaleY).toBeCloseTo(
+      conversationScaleProof.requestedScale,
+      3,
+    );
 
     const armColorProof = await woven.evaluate((root) => {
       const threadColor = root.style
@@ -515,7 +543,7 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       });
     });
 
-    const evidenceDir = testInfo.outputPath("pr-1685-visual-evidence");
+    const evidenceDir = testInfo.outputPath("pr-1715-visual-evidence");
     const capture = async (name: string) => {
       await page.screenshot({
         path: `${evidenceDir}/${name}.png`,
@@ -537,6 +565,30 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven.locator(".woven-node__overflow")).toHaveText("+3");
     await expect(woven.locator(".woven-node__arm")).toHaveCount(4);
     await expect(woven).toHaveAttribute("data-x-geometry", "diagonal");
+
+    const denseConversationScale = await woven.evaluate((root) => {
+      const ring = root.querySelector<HTMLElement>(".woven-node__conversation");
+      if (!ring) throw new Error("conversation ring missing");
+      const requestedScale = Number(
+        (root as HTMLElement).style
+          .getPropertyValue("--weave-conversation-scale")
+          .trim(),
+      );
+      return {
+        requestedScale,
+        appliedScale: new DOMMatrixReadOnly(getComputedStyle(ring).transform).a,
+      };
+    });
+    expect(denseConversationScale.requestedScale).toBeCloseTo(
+      conversationRingScale(12),
+    );
+    expect(denseConversationScale.requestedScale).toBeGreaterThan(
+      conversationRingScale(2),
+    );
+    expect(denseConversationScale.appliedScale).toBeCloseTo(
+      denseConversationScale.requestedScale,
+      3,
+    );
 
     const geometry = await woven.evaluate((root) => {
       const style = getComputedStyle(root);
