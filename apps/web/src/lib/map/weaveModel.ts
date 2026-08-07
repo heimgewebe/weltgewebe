@@ -36,8 +36,8 @@ export const MAX_VISIBLE_ARM_OVERLAYS = 4;
 /** Visible vote stitches per proposal arc; the model keeps the full count. */
 export const MAX_VISIBLE_VOTE_STITCHES = 12;
 /**
- * Conversation count at which both log1p ring signals reach their fixed
- * maxima. Higher counts stay capped — no unbounded ring growth.
+ * Conversation count at which the logarithmic ring-diameter signal reaches
+ * its fixed maximum. Higher counts stay capped — no unbounded ring growth.
  */
 export const CONVERSATION_RING_SATURATION_COUNT = 20;
 /** Smallest ring diameter once at least one active conversation is attached. */
@@ -141,23 +141,6 @@ export function deriveWeaveThemeSegments(
       arm: primaryArmByTheme.get(id) ?? null,
     };
   });
-}
-
-/**
- * Shared active-conversation signal. A logarithmic curve keeps the first few
- * attached threads visually meaningful while a hard cap prevents high counts
- * from dominating the marker.
- */
-function conversationRingActivity(count: number): number {
-  if (!Number.isFinite(count) || count <= 0) return 0;
-  const ratio =
-    Math.log1p(count) / Math.log1p(CONVERSATION_RING_SATURATION_COUNT);
-  return Math.min(1, Math.max(0, ratio));
-}
-
-/** Saturated ring-band thickness in relative units [0, 1]. */
-export function conversationRingThickness(count: number): number {
-  return conversationRingActivity(count);
 }
 
 /**
@@ -338,9 +321,6 @@ export function deriveEntityWeave(
       0.42 +
         Math.log2(knottingThreadCount + 1) * 0.14 +
         Math.min(MAX_X_CORE_THEMES, themeSegments.length) * 0.045,
-    ),
-    conversationRingThickness: conversationRingThickness(
-      conversationThreadCount,
     ),
     conversationRingScale: conversationRingScale(conversationThreadCount),
     knottingThreadCount,

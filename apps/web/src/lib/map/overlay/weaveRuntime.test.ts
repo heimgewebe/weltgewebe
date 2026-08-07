@@ -7,9 +7,11 @@ import {
   MAX_VISIBLE_VOTE_STITCHES,
   maxWeaveDomNodeBudget,
 } from "$lib/map/weaveModel";
+import { CONVERSATION_THREAD_WIDTH_PX } from "$lib/map/weaveVisualTokens";
 import { DomElement, installDom as installDomStub } from "./domElementTestStub";
 import {
   applyWeaveDynamicProperties,
+  conversationRingInsetPercent,
   countRenderedWeaveDomNodes,
   weaveRenderSignature,
   weaveRuntime,
@@ -63,7 +65,6 @@ function maximalWeave(): MapEntityWeave {
     armOverlays,
     primaryThemeColor: "#5f7a55",
     coreDensity: 1,
-    conversationRingThickness: 1,
     conversationRingScale: 1.25,
     knottingThreadCount: 4,
     conversationThreadCount: 20,
@@ -196,7 +197,6 @@ describe("weaveRuntime DOM safety and budget", () => {
     const weave = {
       ...maximalWeave(),
       conversationOpacity: 0.42,
-      conversationRingThickness: 1.75,
       conversationRingScale: 1.12,
       proposalArcs: [
         {
@@ -221,7 +221,12 @@ describe("weaveRuntime DOM safety and budget", () => {
     );
     const host = root as unknown as DomElement;
     expect(host.style.props.get("--weave-conversation-opacity")).toBe("0.42");
-    expect(host.style.props.get("--weave-conversation-thickness")).toBe("1.75");
+    expect(host.style.props.get("--weave-conversation-width")).toBe(
+      `${CONVERSATION_THREAD_WIDTH_PX}px`,
+    );
+    expect(host.style.props.get("--weave-conversation-inset")).toBe(
+      `${conversationRingInsetPercent(1.12)}%`,
+    );
     expect(host.style.props.get("--weave-conversation-scale")).toBe("1.12");
     expect(host.dataset.conversationThreads).toBe("20");
 
@@ -233,7 +238,6 @@ describe("weaveRuntime DOM safety and budget", () => {
       ...weave,
       conversationThreadCount: 12,
       conversationOpacity: 0.77,
-      conversationRingThickness: 0.8,
       conversationRingScale: 1.16,
     };
     const nextSignature = weaveRuntime.syncRoot(
@@ -257,17 +261,27 @@ describe("weaveRuntime DOM safety and budget", () => {
     );
     expect(host.dataset.conversationThreads).toBe("12");
     expect(host.style.props.get("--weave-conversation-scale")).toBe("1.16");
+    expect(host.style.props.get("--weave-conversation-inset")).toBe(
+      `${conversationRingInsetPercent(1.16)}%`,
+    );
+    expect(host.style.props.get("--weave-conversation-width")).toBe(
+      `${CONVERSATION_THREAD_WIDTH_PX}px`,
+    );
 
     const aged = {
       ...weave,
       conversationOpacity: 0.11,
-      conversationRingThickness: 0.5,
       conversationRingScale: 0.84,
       proposalArcs: [{ ...weave.proposalArcs[0], opacity: 0.2 }],
     };
     applyWeaveDynamicProperties(root as HTMLElement, aged);
     expect(host.style.props.get("--weave-conversation-opacity")).toBe("0.11");
-    expect(host.style.props.get("--weave-conversation-thickness")).toBe("0.5");
+    expect(host.style.props.get("--weave-conversation-inset")).toBe(
+      `${conversationRingInsetPercent(0.84)}%`,
+    );
+    expect(host.style.props.get("--weave-conversation-width")).toBe(
+      `${CONVERSATION_THREAD_WIDTH_PX}px`,
+    );
     expect(host.style.props.get("--weave-conversation-scale")).toBe("0.84");
     const slot = host.querySelectorAll("[data-proposal-slot]")[0];
     expect(slot.style.opacity).toBe("0.2");
@@ -276,7 +290,6 @@ describe("weaveRuntime DOM safety and budget", () => {
       ...aged,
       conversationThreadCount: 0,
       conversationOpacity: 0,
-      conversationRingThickness: 0,
       conversationRingScale: 0,
     });
     expect(host.dataset.conversationThreads).toBe("0");

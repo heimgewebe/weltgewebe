@@ -68,14 +68,17 @@ Lage, Breite, Bindung und Rhythmus unterscheiden können.
    hinzugefügten Inhalte liefert (Wahrheitsgrenze).
 2. **Gesprächsring** — aktive Gesprächsfäden liegen unmittelbar um die Kreuzung.
    Die Anzahl der aktuell am Ziel anknüpfenden aktiven Gesprächsfäden steuert
-   sichtbar den Ringdurchmesser: wenige Gespräche ergeben einen kleinen, engen
-   Ring, mehr Gespräche einen größeren Ring. Durchmesser und Banddicke wachsen
-   gesättigt (`log1p` oder gleichwertig) innerhalb fester Grenzen, sodass der
-   Gesprächsring nicht in den äußeren Antragsring hineinwächst. Bei null
-   Gesprächen ist der Ring unsichtbar. Rein zeitliche Alterungsopazität
-   aktualisiert CSS/Style am bestehenden DOM. Auch Mengenänderungen eines
-   bereits vorhandenen Gesprächsrings aktualisieren Durchmesser, Banddicke und
-   Zähler am bestehenden DOM statt den gesamten Gewebekörper neu aufzubauen.
+   sichtbar ausschließlich den Ringdurchmesser: wenige Gespräche ergeben einen
+   kleinen, engen Ring, mehr Gespräche einen größeren Ring. Der Durchmesser
+   wächst gesättigt (`log` oder gleichwertig) innerhalb fester Grenzen, sodass
+   der Gesprächsring nicht in den äußeren Antragsring hineinwächst. Die
+   Banddicke ist dagegen eine Materialeigenschaft der Fadenart und bleibt
+   unabhängig von der Menge konstant auf exakt derselben Garnstärke wie der
+   ankommende Gesprächsfaden. Bei null Gesprächen ist der Ring unsichtbar. Rein
+   zeitliche Alterungsopazität aktualisiert CSS/Style am bestehenden DOM. Auch
+   Mengenänderungen eines bereits vorhandenen Gesprächsrings aktualisieren
+   Durchmesser und Zähler am bestehenden DOM statt den gesamten Gewebekörper
+   neu aufzubauen.
 3. **Antragsring** — jeder aktive Antrag erhält einen getrennten äußeren
    Antragsbogen. Bis zu sieben aktuelle Bögen bleiben einzeln sichtbar; eine
    achte Darstellung bündelt zusätzlichen Überlauf wahrheitsgetreu und nennt

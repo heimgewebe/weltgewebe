@@ -49,7 +49,8 @@
   --weave-primary: #76523d;
   --weave-core-density: 0.5;
   --weave-conversation-opacity: 0;
-  --weave-conversation-thickness: 0;
+  --weave-conversation-width: 0px;
+  --weave-conversation-inset: 50%;
   --weave-conversation-scale: 0;
   /*
    * Terminal colour of the incoming knotting thread (see
@@ -80,17 +81,16 @@
 
 .woven-node__conversation {
   position: absolute;
-  inset: 26%;
+  inset: var(--weave-conversation-inset);
   z-index: 2;
   border-radius: 50%;
   opacity: var(--weave-conversation-opacity);
-  transform: scale(var(--weave-conversation-scale));
-  transform-origin: center center;
   transition:
-    transform 0.18s ease-out,
+    inset 0.18s ease-out,
     opacity 0.18s ease-out;
-  /* Thickness grows with log1p saturation via the CSS variable [0, 1]. */
-  --conversation-band: calc(2px + var(--weave-conversation-thickness) * 5px);
+  /* Count changes diameter only. Yarn gauge stays identical to the incoming
+   * conversation Faden because both read CONVERSATION_THREAD_WIDTH_PX. */
+  --conversation-band: var(--weave-conversation-width);
   background:
     repeating-conic-gradient(
       rgba(247, 231, 208, 0.28) 0deg 2deg,

@@ -47,6 +47,7 @@ import {
 } from "$lib/map/overlay/edges";
 import { LAYERS } from "$lib/map/overlay/layers";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
+import { CONVERSATION_THREAD_WIDTH_PX } from "$lib/map/weaveVisualTokens";
 
 const createdAt = Date.parse("2026-07-17T10:00:00Z");
 const points = [
@@ -190,7 +191,6 @@ describe("buildEdgeFeatures", () => {
           armOverlays: [],
           primaryThemeColor: "#5f7a55",
           coreDensity: 0.5,
-          conversationRingThickness: 0,
           conversationRingScale: 0,
           knottingThreadCount: 0,
           conversationThreadCount: 0,
@@ -509,6 +509,9 @@ describe("natural thread curves", () => {
     );
     // Subject-bound: mid deflection is not required to rank like private
     // profiles (shared target axis dominates); multi-source tests lock approach.
+    expect(EDGE_VISUAL_STYLE.byType.conversation.width).toBe(
+      CONVERSATION_THREAD_WIDTH_PX,
+    );
     expect(EDGE_VISUAL_STYLE.byType.knotting.width).toBeGreaterThan(
       EDGE_VISUAL_STYLE.byType.conversation.width,
     );

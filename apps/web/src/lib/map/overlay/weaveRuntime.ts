@@ -12,7 +12,11 @@ import {
   terminalThreadColor,
   voteStitchConicGradient,
 } from "$lib/map/weaveModel";
-import { KNOTTING_THREAD_WIDTH_PX } from "$lib/map/weaveVisualTokens";
+import {
+  CONVERSATION_RING_BASE_DIAMETER_PERCENT,
+  CONVERSATION_THREAD_WIDTH_PX,
+  KNOTTING_THREAD_WIDTH_PX,
+} from "$lib/map/weaveVisualTokens";
 
 export type WeaveRootState = {
   root: HTMLElement;
@@ -81,9 +85,14 @@ export function weaveRenderSignature(weave: MapEntityWeave): string {
 
 /**
  * DOM-preserving dynamic CSS state written onto an already-rendered weave body.
- * Covers conversation opacity, ring thickness and ring diameter scale, plus
- * per-slot proposal/vote opacities — not a structural rebuild.
+ * Covers conversation opacity and ring diameter geometry, plus per-slot
+ * proposal/vote opacities — not a structural rebuild. The yarn gauge is static.
  */
+export function conversationRingInsetPercent(scale: number): number {
+  if (!Number.isFinite(scale) || scale <= 0) return 50;
+  return 50 - (CONVERSATION_RING_BASE_DIAMETER_PERCENT * scale) / 2;
+}
+
 export function applyWeaveDynamicProperties(
   root: HTMLElement,
   weave: MapEntityWeave,
@@ -94,12 +103,12 @@ export function applyWeaveDynamicProperties(
     String(weave.conversationOpacity),
   );
   root.style.setProperty(
-    "--weave-conversation-thickness",
-    String(weave.conversationRingThickness),
-  );
-  root.style.setProperty(
     "--weave-conversation-scale",
     String(weave.conversationRingScale),
+  );
+  root.style.setProperty(
+    "--weave-conversation-inset",
+    `${conversationRingInsetPercent(weave.conversationRingScale)}%`,
   );
   const conversation = root.querySelectorAll<HTMLElement>(
     ".woven-node__conversation",
@@ -143,6 +152,10 @@ function renderWeave(root: HTMLElement, weave: MapEntityWeave) {
   });
   root.style.setProperty("--weave-primary", weave.primaryThemeColor);
   root.style.setProperty("--weave-core-density", String(weave.coreDensity));
+  root.style.setProperty(
+    "--weave-conversation-width",
+    `${CONVERSATION_THREAD_WIDTH_PX}px`,
+  );
   // The incoming knotting thread and all four stitched arms are one physical
   // yarn, so width has exactly one source of truth. Colour is different: the
   // incoming edge may braid several topic colours, and the X must keep that

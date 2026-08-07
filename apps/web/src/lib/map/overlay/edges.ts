@@ -9,7 +9,10 @@ import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { FadenType, MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { MAX_X_CORE_THEMES, targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
-import { KNOTTING_THREAD_WIDTH_PX } from "$lib/map/weaveVisualTokens";
+import {
+  CONVERSATION_THREAD_WIDTH_PX,
+  KNOTTING_THREAD_WIDTH_PX,
+} from "$lib/map/weaveVisualTokens";
 import { LAYERS } from "./layers";
 
 /**
@@ -38,7 +41,7 @@ export const EDGE_VISUAL_STYLE = {
   byType: {
     // Gespräch: feinster, weichster und am stärksten ausschwingender Faden.
     conversation: {
-      width: 1.75,
+      width: CONVERSATION_THREAD_WIDTH_PX,
       dashArray: [1.1, 0.9] as [number, number],
       bodyContinuous: true,
       shadowContinuous: true,

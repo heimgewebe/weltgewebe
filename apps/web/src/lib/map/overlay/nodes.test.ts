@@ -247,7 +247,6 @@ function makeWeave(overrides: Partial<MapEntityWeave> = {}): MapEntityWeave {
     armOverlays: [],
     primaryThemeColor: "#5f7a55",
     coreDensity: 0.55,
-    conversationRingThickness: 0.35,
     conversationRingScale: 0.9,
     knottingThreadCount: 1,
     conversationThreadCount: 1,

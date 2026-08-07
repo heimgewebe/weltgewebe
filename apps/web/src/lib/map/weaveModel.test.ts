@@ -17,7 +17,6 @@ import {
   WEAVE_ZONE_ORDER,
   assignXCoreSegments,
   conversationRingScale,
-  conversationRingThickness,
   deriveArmOverlays,
   deriveEntityWeave,
   deriveWeaveThemeSegments,
@@ -423,17 +422,9 @@ describe("woven node projection", () => {
     expect(visibleStops).toHaveLength(MAX_VISIBLE_VOTE_STITCHES);
   });
 
-  it("scales conversation-ring diameter and band thickness with active thread count", () => {
-    expect(conversationRingThickness(0)).toBe(0);
+  it("scales conversation-ring diameter with active thread count and saturates", () => {
     expect(conversationRingScale(0)).toBe(0);
     expect(conversationRingScale(Number.NaN)).toBe(0);
-
-    const oneThickness = conversationRingThickness(1);
-    const fewThickness = conversationRingThickness(4);
-    const manyThickness = conversationRingThickness(40);
-    expect(oneThickness).toBeGreaterThan(0);
-    expect(fewThickness).toBeGreaterThan(oneThickness);
-    expect(manyThickness).toBe(1);
 
     const oneScale = conversationRingScale(1);
     const fewScale = conversationRingScale(4);
@@ -457,7 +448,6 @@ describe("woven node projection", () => {
       ),
       nowMs,
     );
-    expect(one.conversationRingThickness).toBeGreaterThan(0);
     expect(one.conversationRingScale).toBeCloseTo(oneScale);
     expect(four.conversationThreadCount).toBe(4);
     expect(four.conversationRingScale).toBeGreaterThan(
@@ -530,7 +520,6 @@ describe("woven node projection", () => {
     expect(weave.totalActiveThreadCount).toBe(0);
     expect(weave.conversationThreadCount).toBe(0);
     expect(weave.conversationOpacity).toBe(0);
-    expect(weave.conversationRingThickness).toBe(0);
     expect(weave.conversationRingScale).toBe(0);
   });
 
