@@ -931,10 +931,11 @@
       styleRehydrateGeneration = generation;
       queueMicrotask(rehydrateMapOverlays);
     };
-    const finishLoading = (generation: number) => {
+    const finishInitialLoading = (generation: number) => {
       if (
         destroyed ||
         mapInitTerminated ||
+        !isLoading ||
         generation !== basemapStyleGeneration
       ) {
         return;
@@ -962,12 +963,23 @@
       activeBasemapScheme = scheme;
       const generation = ++basemapStyleGeneration;
       styleRehydrateQueued = false;
-      // Camera and UI controls survive setStyle; only basemap layers reload.
-      map.setStyle(resolveBasemapStyle(currentBasemap, scheme));
+      mapStyleReady = false;
+      // Theme changes need a deterministic style lifecycle. A URL-based
+      // diff keeps the previous style alive while the replacement JSON is
+      // fetched, which can let an obsolete first render win the startup race.
+      // A full style swap aborts/removes that old style while preserving camera
+      // and UI controls; domain overlays are rehydrated below.
+      map.setStyle(resolveBasemapStyle(currentBasemap, scheme), { diff: false });
       map.once("style.load", () => {
-        if (destroyed || generation !== basemapStyleGeneration) return;
+        if (destroyed || !map || generation !== basemapStyleGeneration) return;
+        mapStyleReady = true;
         queueOverlayRehydrate(generation);
-        if (!mapHasLoaded) finishLoading(generation);
+        // style.load only means the style JSON is ready. During the initial
+        // reveal, wait for idle so requested tiles/sources and overlay work have
+        // produced a complete rendered frame before removing the loading cover.
+        if (isLoading) {
+          map.once("idle", () => finishInitialLoading(generation));
+        }
       });
     }
     const handleMarkerClick = (e: Event) => {
@@ -1042,7 +1054,6 @@
       );
 
       activeBasemapScheme = readDocumentColorScheme();
-      const initialBasemapGeneration = basemapStyleGeneration;
       map = new maplibregl.Map({
         container,
         style: resolveBasemapStyle(currentBasemap, activeBasemapScheme),
@@ -1101,7 +1112,14 @@
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
       map.on("resize", handleSearchMapResize);
 
-      map.once("load", () => finishLoading(initialBasemapGeneration));
+      map.once("load", () => {
+        // MapLibre emits this map-level event only once. Bind acceptance to
+        // whatever basemap generation is current at that moment rather than to
+        // the constructor's original style. If the document scheme changed at
+        // the boundary, finishInitialLoading starts a full style swap and that
+        // swap's idle event completes the reveal.
+        finishInitialLoading(basemapStyleGeneration);
+      });
       map.on("error", (event) => {
         const error =
           event && typeof event === "object" && "error" in event
@@ -1300,7 +1318,8 @@
     inset: 0;
   }
   #map.map-loading {
-    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
   }
   #map :global(canvas) {
     filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95);

@@ -129,7 +129,7 @@ describe("map page early init-timeout wiring", () => {
     const clearOccurrences = pageSource.match(
       /clearTimeout\(\s*loadingTimeout\s*\)/g,
     );
-    // failMapInit, finishLoading, and onMount cleanup must all cancel it.
+    // failMapInit, finishInitialLoading, and onMount cleanup must all cancel it.
     expect(clearOccurrences?.length).toBeGreaterThanOrEqual(3);
   });
 
@@ -143,10 +143,10 @@ describe("map page early init-timeout wiring", () => {
     expect(failSlice).toContain("teardownMapRuntime();");
 
     const finishIdx = pageSource.indexOf(
-      "const finishLoading = (generation: number) => {",
+      "const finishInitialLoading = (generation: number) => {",
     );
     const loadListenerIdx = pageSource.indexOf(
-      'map.once("load", () => finishLoading(initialBasemapGeneration));',
+      'map.once("load", () => {',
       finishIdx,
     );
     expect(finishIdx).toBeGreaterThan(-1);
@@ -154,6 +154,12 @@ describe("map page early init-timeout wiring", () => {
     const finishSlice = pageSource.slice(finishIdx, loadListenerIdx);
     expect(finishSlice).toMatch(/mapInitTerminated\s*\|\|/);
     expect(finishSlice).toContain("generation !== basemapStyleGeneration");
+    expect(finishSlice).toContain("switchBasemapScheme(currentScheme)");
+    expect(pageSource).toContain(
+      'map.once("idle", () => finishInitialLoading(generation));',
+    );
+    expect(pageSource).toContain("{ diff: false }");
+    expect(pageSource).not.toContain("initialBasemapGeneration");
   });
 
   it("tears down partial map resources on terminal init failure", () => {
