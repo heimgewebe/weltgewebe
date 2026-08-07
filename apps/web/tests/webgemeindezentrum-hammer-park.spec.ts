@@ -107,7 +107,7 @@ async function mockCenter(page: Page) {
     },
   );
   await page.route(
-    "**/api/webgemeindezentren/webgemeindezentrum-hammer-park",
+    "**/api/webgemeindezentrum/webgemeindezentrum-hammer-park",
     async (route) => {
       await route.fulfill({
         status: 200,
@@ -222,6 +222,57 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
         map.getZoom() >= 14
       );
     });
+  });
+
+  test("opens a clear full view and preserves the map return target", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1200, height: 850 });
+    await page.goto(
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park",
+    );
+
+    const fullViewLink = page.getByTestId("webgemeindezentrum-full-view-link");
+    await expect(fullViewLink).toBeVisible();
+    await expect(fullViewLink).toHaveAttribute(
+      "href",
+      "/webgemeindezentrum?id=webgemeindezentrum-hammer-park",
+    );
+    await fullViewLink.click();
+
+    await expect(page).toHaveURL(
+      /\/webgemeindezentrum\?id=webgemeindezentrum-hammer-park$/,
+    );
+    await expect(
+      page.getByTestId("webgemeindezentrum-full-view"),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        level: 1,
+        name: "Webgemeindezentrum Hammer Park",
+      }),
+    ).toBeVisible();
+
+    const locationState = page.getByTestId(
+      "webgemeindezentrum-full-location-state",
+    );
+    await expect(locationState).toContainText("Gewünschter Treffort");
+    await expect(locationState).toContainText("Noch keine Bestätigung");
+    await expect(page.getByTestId("center-governance")).toBeVisible();
+    await expect(
+      page.getByTestId("webgemeindezentrum-full-conversation"),
+    ).toBeVisible();
+
+    const activity = page.getByTestId("webgemeindezentrum-activity-summary");
+    await expect(activity).toContainText("2");
+    await expect(activity).toContainText("Anträge");
+    await expect(activity).toContainText("Gesprächsbeiträge");
+    await expect(
+      page.getByTestId("webgemeindezentrum-map-link"),
+    ).toHaveAttribute(
+      "href",
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park",
+    );
   });
 
   test("opens from the map with a real keyboard action", async ({ page }) => {

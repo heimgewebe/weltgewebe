@@ -127,5 +127,8 @@ export function buildPanelEndpoint(
   if (base) {
     return `${base}/api/${resourcePath}/${id}`;
   }
+  if (resource === "webgemeindezentrum") {
+    return `/api/webgemeindezentrum/${id}`;
+  }
   return `/api/${resourcePath}/${id}`;
 }

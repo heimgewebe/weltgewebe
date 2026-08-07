@@ -57,12 +57,12 @@ async function flushMicrotasks() {
 }
 
 describe("buildPanelEndpoint", () => {
-  it("returns the plural local endpoint exposed by the API router", () => {
+  it("uses the static-safe singular local Webgemeindezentrum detail route", () => {
     expect(buildPanelEndpoint("node", "abc", "")).toBe("/api/nodes/abc");
     expect(buildPanelEndpoint("account", "x", "")).toBe("/api/accounts/x");
     expect(buildPanelEndpoint("edge", "1", "")).toBe("/api/edges/1");
     expect(buildPanelEndpoint("webgemeindezentrum", "center-1", "")).toBe(
-      "/api/webgemeindezentren/center-1",
+      "/api/webgemeindezentrum/center-1",
     );
   });
 
