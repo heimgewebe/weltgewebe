@@ -215,8 +215,9 @@ Knoten und Fäden teilen dieselbe textile Materialsprache.
   ist nach projizierter Chordlänge begrenzt (`EDGE_CURVE_FULL_LENGTH_M`,
   `EDGE_CURVE_MAX_BULGE_M`). Biegungsseite und Mikrovariation entstehen stabil
   aus Fadenidentität (`threadId` / `faden_subject_id`), nicht aus Zufall oder
-  Physiksimulation. Die Abtastpunktzahl ist fest auf höchstens 96 Punkte
-  begrenzt und mit einer maximalen sichtbaren Richtungsabweichung von 3 Grad
+  Physiksimulation. Die Abtastpunktzahl ist als harter Produktionsvertrag auf
+  höchstens 24 Punkte begrenzt und mit einer maximalen sichtbaren
+  Richtungsabweichung von 3 Grad
   krümmungs-/flachheitsadaptiv: Für jede
   zu prüfende Spanne werden mehrere innere Stützstellen ausgewertet (nicht nur
   die zwei Span-Enden), und die stärkste Tangentenrotation **zwischen einem
