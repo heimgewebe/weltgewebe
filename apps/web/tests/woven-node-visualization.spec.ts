@@ -599,12 +599,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     // Thread/X width continuity across representative zooms: shared token +
     // computed arm widths stay continuous. Compare numerically so browser
     // subpixel rounding (e.g. 4.15px → 4.14062px) is not flaky string equality.
+    // MapLibre knotting body line-width (LAYERS.EDGES_KNOTTING_LAYER) is
+    // mandatory evidence at every sample — not optional/null soft-pass.
     const parsePx = (value: string) => Number.parseFloat(value);
     const zoomWidthSamples: Array<{
       zoom: number;
       armWidthToken: string;
       armWidthPx: number[];
-      knottingLineWidth: number | null;
+      knottingLineWidth: number;
     }> = [];
     for (const zoom of [12, 14, 16] as const) {
       await page.evaluate((z) => (window as any).__TEST_MAP__.setZoom(z), zoom);
@@ -622,26 +624,28 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         ).map((arm) => Number.parseFloat(getComputedStyle(arm).width));
         return { armWidthToken, armWidthPx };
       });
+      // Production layer id: LAYERS.EDGES_KNOTTING_LAYER = "edges-knotting-layer"
       const knottingLineWidth = await page.evaluate(() => {
         const map = (window as any).__TEST_MAP__;
-        // Production knotting body layer id from layers.ts / edges.ts.
+        if (!map || typeof map.getPaintProperty !== "function") {
+          return null;
+        }
         try {
-          const width = map?.getPaintProperty?.(
-            "edges-knotting-layer",
-            "line-width",
-          );
-          return typeof width === "number" && Number.isFinite(width)
-            ? width
-            : null;
+          return map.getPaintProperty("edges-knotting-layer", "line-width");
         } catch {
           return null;
         }
       });
+      expect(
+        typeof knottingLineWidth === "number" &&
+          Number.isFinite(knottingLineWidth),
+        `MapLibre edges-knotting-layer line-width must be a finite number at zoom ${zoom}; got ${JSON.stringify(knottingLineWidth)}`,
+      ).toBe(true);
       zoomWidthSamples.push({
         zoom,
         armWidthToken: sample.armWidthToken,
         armWidthPx: sample.armWidthPx,
-        knottingLineWidth,
+        knottingLineWidth: knottingLineWidth as number,
       });
     }
     expect(zoomWidthSamples).toHaveLength(3);
@@ -663,9 +667,8 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       expect(sample.armWidthPx[0]).toBeCloseTo(baselineArmPx, 5);
       // Computed arm width tracks the shared token (allow subpixel rounding).
       expect(sample.armWidthPx[0]).toBeCloseTo(tokenPx, 1);
-      if (sample.knottingLineWidth != null) {
-        expect(sample.knottingLineWidth).toBeCloseTo(tokenPx, 5);
-      }
+      // MapLibre knotting line-width must match the shared DOM arm-width token.
+      expect(sample.knottingLineWidth).toBeCloseTo(tokenPx, 5);
     }
 
     await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(13.4));
