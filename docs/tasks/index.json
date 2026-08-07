@@ -567,14 +567,14 @@
       ],
       "missing_evidence": [],
       "acceptance": [
-        "Eine minimale Claim-Evidence-Spine existiert mit vier CLAIM-AGENT-SAFE-* Claims",
-        "Die Spine ist deterministisch validierbar via Claim-Registry, Doc-Freshness-Registry und Claim-Evidence-Map",
-        "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und über Repo-Checks validierbar",
-        "Task-Control-Registrierung bleibt sichtbar; epistemische Grenzen bleiben sichtbar",
-        "Scope wird deklarativ durch scripts/docmeta/freshness_scope_policy.yml entschieden; aktueller realer Scope bleibt CLAIM-AGENT-SAFE-* (S3-Scope-Policy umgesetzt)",
-        "Status bleibt partial: Scope bewusst klein, alle drei Claims tragen requires_live_check, kein Wahrheits-/Suffizienz-/Kausalitäts-/Vollständigkeitsbeweis",
-        "Claim-Evidence-Information wird intern als ClaimInfo typisiert; externes Registry-/Generator-Verhalten bleibt unverändert",
-        "Review-Age-Hygiene für kanonische Architektur-/Runtime-/Runbook-Dokumente wurde durchgeführt; betroffene Dokumente sind geprüft, aktualisiert oder explizit eingeordnet"
+        "Eine minimale Claim-Evidence-Spine existiert; alle durch scripts/docmeta/freshness_scope_policy.yml aktivierten Claim-Familien werden vollständig in docs/doc-freshness-registry.yml gespiegelt.",
+        "Die Spine ist deterministisch validierbar via Claim-Registry, Doc-Freshness-Registry und Claim-Evidence-Map.",
+        "Claim-Evidence-Map und Doc-Freshness-Registry sind vorhanden und über Repo-Checks validierbar.",
+        "Task-Control-Registrierung bleibt sichtbar; epistemische Grenzen bleiben sichtbar.",
+        "Der reale Freshness-Scope wird ausschließlich deklarativ durch scripts/docmeta/freshness_scope_policy.yml bestimmt; Task-Metadaten hard-codieren weder Claim-Anzahl noch eine einzelne Claim-Familie.",
+        "Status bleibt partial: aktive Scope-Familien verlangen require_live_check, Registry-Einträge bleiben partial oder stale, und die Schiene behauptet keinen Wahrheits-, Suffizienz-, Kausalitäts- oder Vollständigkeitsbeweis.",
+        "Claim-Evidence-Information wird intern als ClaimInfo typisiert; externes Registry-/Generator-Verhalten bleibt unverändert.",
+        "Review-Age-Hygiene bleibt über last_verified und status in docs/doc-freshness-registry.yml sichtbar; überalterte oder live nicht belegte Einträge dürfen stale bleiben statt still hochgestuft zu werden."
       ],
       "links": {
         "issues": [],
@@ -586,7 +586,7 @@
           "docs/tasks/board.md"
         ]
       },
-      "updated_at": "2026-06-09"
+      "updated_at": "2026-08-07"
     },
     {
       "id": "DOCMETA-PROOF-001",

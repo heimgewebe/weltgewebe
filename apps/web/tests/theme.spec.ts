@@ -135,6 +135,122 @@ test.describe("Farbschema", () => {
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
   });
 
+  test("gibt beim Start nur die aktuelle Basemap-Stilgeneration frei", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("weltgewebe.theme", "dark");
+    });
+    await mockApiResponses(page);
+
+    const darkStyleBody = JSON.stringify({
+      version: 8,
+      sources: {
+        "dark-delayed-source": {
+          type: "geojson",
+          data: "/test-dark-delayed-source.geojson",
+        },
+      },
+      layers: [
+        {
+          id: "dark-delayed-layer",
+          type: "circle",
+          source: "dark-delayed-source",
+        },
+      ],
+    });
+    const lightStyleBody = JSON.stringify({
+      version: 8,
+      sources: {},
+      layers: [
+        {
+          id: "light-ready-layer",
+          type: "background",
+          paint: { "background-color": "#ffffff" },
+        },
+      ],
+    });
+
+    let markDarkRequested!: () => void;
+    let markLightRequested!: () => void;
+    let markDarkSourceRequested!: () => void;
+    let releaseDarkSource!: () => void;
+    const darkRequested = new Promise<void>((resolve) => {
+      markDarkRequested = resolve;
+    });
+    const lightRequested = new Promise<void>((resolve) => {
+      markLightRequested = resolve;
+    });
+    const darkSourceRequested = new Promise<void>((resolve) => {
+      markDarkSourceRequested = resolve;
+    });
+    const darkSourceRelease = new Promise<void>((resolve) => {
+      releaseDarkSource = resolve;
+    });
+
+    await page.route("**/local-basemap/style-dark.json*", async (route) => {
+      markDarkRequested();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: darkStyleBody,
+      });
+    });
+    await page.route("**/test-dark-delayed-source.geojson", async (route) => {
+      markDarkSourceRequested();
+      await darkSourceRelease;
+      try {
+        await route.fulfill({
+          status: 200,
+          contentType: "application/geo+json",
+          body: JSON.stringify({ type: "FeatureCollection", features: [] }),
+        });
+      } catch {
+        // A full style swap is expected to abort this obsolete source request.
+      }
+    });
+    await page.route("**/local-basemap/style.json*", async (route) => {
+      markLightRequested();
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: lightStyleBody,
+      });
+    });
+
+    await page.goto("/map", { waitUntil: "domcontentloaded" });
+    await darkRequested;
+    await darkSourceRequested;
+    await page.waitForFunction(() => Boolean((window as any).__TEST_MAP__));
+    await expect(page.locator(".loading-overlay")).toBeVisible();
+    await expect(page.locator("#map")).toHaveClass(/map-loading/);
+
+    await page.evaluate(() => {
+      document.documentElement.dataset.colorScheme = "light";
+    });
+    await lightRequested;
+    await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "light");
+
+    await expect(page.locator(".loading-overlay")).toHaveCount(0, {
+      timeout: 10000,
+    });
+    await expect(page.locator("#map")).not.toHaveClass(/map-loading/);
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const map = (window as any).__TEST_MAP__;
+          return {
+            loaded: map?.loaded() ?? false,
+            light: Boolean(map?.getLayer("light-ready-layer")),
+            dark: Boolean(map?.getLayer("dark-delayed-layer")),
+          };
+        }),
+      )
+      .toEqual({ loaded: true, light: true, dark: false });
+
+    releaseDarkSource();
+  });
+
   test("wechselt den Kartenstil live und rehydriert die Fadenebenen", async ({
     page,
   }) => {
