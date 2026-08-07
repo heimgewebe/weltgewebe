@@ -135,6 +135,89 @@ test.describe("Farbschema", () => {
     await expect(themeRoot(page)).toHaveAttribute("data-theme", "light");
   });
 
+  test("gibt beim Start nur die aktuelle Basemap-Stilgeneration frei", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      window.localStorage.setItem("weltgewebe.theme", "dark");
+    });
+    await mockApiResponses(page);
+
+    const emptyStyleBody = JSON.stringify({
+      version: 8,
+      sources: {},
+      layers: [],
+    });
+    let markDarkRequested!: () => void;
+    let markLightRequested!: () => void;
+    let releaseDark!: () => void;
+    let releaseLight!: () => void;
+    const darkRequested = new Promise<void>((resolve) => {
+      markDarkRequested = resolve;
+    });
+    const lightRequested = new Promise<void>((resolve) => {
+      markLightRequested = resolve;
+    });
+    const darkRelease = new Promise<void>((resolve) => {
+      releaseDark = resolve;
+    });
+    const lightRelease = new Promise<void>((resolve) => {
+      releaseLight = resolve;
+    });
+
+    await page.route("**/local-basemap/style-dark.json*", async (route) => {
+      markDarkRequested();
+      await darkRelease;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: emptyStyleBody,
+      });
+    });
+    await page.route("**/local-basemap/style.json*", async (route) => {
+      markLightRequested();
+      await lightRelease;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: emptyStyleBody,
+      });
+    });
+
+    await page.goto("/map", { waitUntil: "domcontentloaded" });
+    await darkRequested;
+    await page.waitForFunction(() => Boolean((window as any).__TEST_MAP__));
+    await expect(page.locator(".loading-overlay")).toBeVisible();
+
+    await page.evaluate(() => {
+      document.documentElement.dataset.colorScheme = "light";
+    });
+    await lightRequested;
+    await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "light");
+
+    // Simuliert ein verspätetes generisches load-Ereignis der überholten
+    // dunklen Startkarte. Es darf den dunklen Frame nicht sichtbar machen,
+    // solange der inzwischen gültige helle Stil noch lädt.
+    await page.evaluate(() => {
+      (window as any).__TEST_MAP__.fire("load");
+    });
+    await expect(page.locator(".loading-overlay")).toBeVisible();
+    await expect(page.locator("#map")).toHaveClass(/map-loading/);
+
+    releaseLight();
+    await expect
+      .poll(() =>
+        page.evaluate(
+          () => (window as any).__TEST_MAP__?.isStyleLoaded() ?? false,
+        ),
+      )
+      .toBe(true);
+    await expect(page.locator(".loading-overlay")).toHaveCount(0);
+    await expect(page.locator("#map")).not.toHaveClass(/map-loading/);
+
+    releaseDark();
+  });
+
   test("wechselt den Kartenstil live und rehydriert die Fadenebenen", async ({
     page,
   }) => {

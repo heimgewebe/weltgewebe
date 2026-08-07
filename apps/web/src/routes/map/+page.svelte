@@ -931,10 +931,32 @@
       styleRehydrateGeneration = generation;
       queueMicrotask(rehydrateMapOverlays);
     };
+    const finishLoading = (generation: number) => {
+      if (
+        destroyed ||
+        mapInitTerminated ||
+        generation !== basemapStyleGeneration
+      ) {
+        return;
+      }
+      const currentScheme = readDocumentColorScheme();
+      if (currentScheme !== activeBasemapScheme) {
+        switchBasemapScheme(currentScheme);
+        return;
+      }
+      mapHasLoaded = true;
+      if (loadingTimeout !== undefined) {
+        clearTimeout(loadingTimeout);
+        loadingTimeout = undefined;
+      }
+      isLoading = false;
+      mapStyleReady = true;
+      invalidateSearchViewportGeometry();
+    };
     const handleMapStyleData = () => {
       queueOverlayRehydrate(basemapStyleGeneration);
     };
-    const switchBasemapScheme = (scheme: ColorScheme) => {
+    function switchBasemapScheme(scheme: ColorScheme) {
       if (!map || destroyed || mapInitTerminated) return;
       if (scheme === activeBasemapScheme) return;
       activeBasemapScheme = scheme;
@@ -945,8 +967,9 @@
       map.once("style.load", () => {
         if (destroyed || generation !== basemapStyleGeneration) return;
         queueOverlayRehydrate(generation);
+        if (!mapHasLoaded) finishLoading(generation);
       });
-    };
+    }
     const handleMarkerClick = (e: Event) => {
       const target = e.target as HTMLElement;
       const markerBtn = target.closest(
@@ -1019,6 +1042,7 @@
       );
 
       activeBasemapScheme = readDocumentColorScheme();
+      const initialBasemapGeneration = basemapStyleGeneration;
       map = new maplibregl.Map({
         container,
         style: resolveBasemapStyle(currentBasemap, activeBasemapScheme),
@@ -1077,19 +1101,7 @@
       cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
       map.on("resize", handleSearchMapResize);
 
-      const finishLoading = () => {
-        if (destroyed || mapInitTerminated) return;
-        mapHasLoaded = true;
-        if (loadingTimeout !== undefined) {
-          clearTimeout(loadingTimeout);
-          loadingTimeout = undefined;
-        }
-        isLoading = false;
-        mapStyleReady = true;
-        invalidateSearchViewportGeometry();
-      };
-
-      map.once("load", finishLoading);
+      map.once("load", () => finishLoading(initialBasemapGeneration));
       map.on("error", (event) => {
         const error =
           event && typeof event === "object" && "error" in event
@@ -1244,6 +1256,7 @@
     class:panel-open={$contextPanelOpen}
     class:search-open={$isSearchOpen}
     class:filter-open={$isFilterOpen}
+    class:map-loading={isLoading}
     bind:this={mapContainer}
   ></div>
   {#if mapInitFailed}
@@ -1285,6 +1298,9 @@
   #map {
     position: absolute;
     inset: 0;
+  }
+  #map.map-loading {
+    visibility: hidden;
   }
   #map :global(canvas) {
     filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95);
