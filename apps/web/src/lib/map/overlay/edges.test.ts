@@ -529,6 +529,10 @@ describe("natural thread curves", () => {
     );
   });
 
+  it("keeps the production curve budget at no more than 24 points", () => {
+    expect(EDGE_CURVE_MAX_SAMPLES).toBe(24);
+  });
+
   it("bounds sample count by EDGE_CURVE_MAX_SAMPLES", () => {
     const far: [number, number] = [12, 55];
     const count = threadCurveSampleCount(source, far, {

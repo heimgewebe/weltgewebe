@@ -80,8 +80,8 @@ export const EDGE_VISUAL_STYLE = {
   mainWidth: 2.35,
 } as const;
 
-/** Hard cap on sampled curve points (no unbounded polylines). */
-export const EDGE_CURVE_MAX_SAMPLES = 96;
+/** Hard production cap from the T068 curve contract (no unbounded polylines). */
+export const EDGE_CURVE_MAX_SAMPLES = 24;
 /** Minimum samples so even short curves retain a visually round silhouette. */
 export const EDGE_CURVE_MIN_SAMPLES = 6;
 /**
