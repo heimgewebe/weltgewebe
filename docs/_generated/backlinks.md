@@ -136,6 +136,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/reports/domain-postgres-instance-coherence-decision.md
 
+## apps/web/Caddyfile.container
+
+- [relates_to] docs/deploy/map-html-canonical-route.md
+
 ## apps/web/src/lib/components/governance/ProposalDetail.svelte
 
 - [relates_to] docs/reports/weltgewebe-os-v1-t018-conversation-convergence-plan.md
@@ -504,6 +508,10 @@ Generated automatically. Do not edit.
 ## docs/deploy/heimserver.integration.md
 
 - [relates_to] docs/deploy/heimserver.deployment.md
+
+## docs/deploy/merge-to-live.md
+
+- [relates_to] docs/deploy/map-html-canonical-route.md
 
 ## docs/deploy/secondary-domain-web-surfaces.md
 
@@ -1223,6 +1231,7 @@ Generated automatically. Do not edit.
 
 ## infra/caddy/Caddyfile.vps
 
+- [relates_to] docs/deploy/map-html-canonical-route.md
 - [relates_to] docs/deploy/public-metrics-boundary.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 
