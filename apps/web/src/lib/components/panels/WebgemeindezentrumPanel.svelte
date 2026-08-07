@@ -8,52 +8,21 @@
     createPanelDetailsLoader,
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
-  import type {
-    MapEntityWebgemeindezentrum,
-    OrtswebereiReference,
-    WebgemeindezentrumLocationState,
-  } from "$lib/map/types";
-
-  type LocationHistoryEvent = {
-    event_id: number;
-    event_type: string;
-    location_state: WebgemeindezentrumLocationState;
-    location_state_label: string;
-    location: { lat: number; lon: number };
-    location_label: string;
-    reason: string;
-    decided_at: string;
-  };
-
-  type CenterDetails = {
-    type: "webgemeindezentrum";
-    id: string;
-    title: string;
-    ortsweberei: OrtswebereiReference;
-    location_state: WebgemeindezentrumLocationState;
-    location_state_label: string;
-    faden_endpoint_id: string;
-    conversation_id: string;
-    location: { lat: number; lon: number };
-    location_label: string;
-    meeting_note: string;
-    access_note: string;
-    created_at: string;
-    updated_at: string;
-    governance: {
-      proposal_count: number;
-      open_proposal_count: number;
-      voting_proposal_count: number;
-      conversation_message_count: number;
-    };
-    location_history?: LocationHistoryEvent[];
-  };
+  import type { MapEntityWebgemeindezentrum } from "$lib/map/types";
+  import {
+    emptyWebgemeindezentrumGovernance,
+    webgemeindezentrumTruthHeading,
+    type WebgemeindezentrumDetails,
+  } from "$lib/webgemeindezentrum/details";
 
   let heading: HTMLHeadingElement;
-  const detailsLoader = createPanelDetailsLoader<CenterDetails>(selection, {
-    buildEndpoint: (id) => buildPanelEndpoint("webgemeindezentrum", id),
-    resourceLabel: "Webgemeindezentrum",
-  });
+  const detailsLoader = createPanelDetailsLoader<WebgemeindezentrumDetails>(
+    selection,
+    {
+      buildEndpoint: (id) => buildPanelEndpoint("webgemeindezentrum", id),
+      resourceLabel: "Webgemeindezentrum",
+    },
+  );
   const detailsStore = detailsLoader.details;
   const loadingStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
@@ -75,22 +44,8 @@
   $: history = details?.location_history || [];
   $: centerId = details?.id || fallback?.id;
   $: conversationId = details?.conversation_id || fallback?.conversation_id;
-  $: governance = details?.governance || {
-    proposal_count: 0,
-    open_proposal_count: 0,
-    voting_proposal_count: 0,
-    conversation_message_count: 0,
-  };
-  $: truthHeading =
-    locationState === "confirmed"
-      ? "Bestätigter Treffort"
-      : locationState === "unavailable"
-        ? "Derzeit nicht verfügbar"
-        : locationState === "relocation_proposed"
-          ? "Verlegung vorgeschlagen"
-          : locationState === "provisional"
-            ? "Vorläufiger Treffort"
-            : "Noch keine Bestätigung";
+  $: governance = details?.governance ?? emptyWebgemeindezentrumGovernance();
+  $: truthHeading = webgemeindezentrumTruthHeading(locationState);
 </script>
 
 <section class="center-mode" aria-labelledby="webgemeindezentrum-heading">
@@ -126,6 +81,17 @@
       <p><strong>Ortsweberei:</strong> {ortsweberei.name}</p>
     {/if}
   </div>
+
+  {#if centerId}
+    <a
+      class="full-view-link"
+      href={`/webgemeindezentrum?id=${encodeURIComponent(centerId)}`}
+      data-testid="webgemeindezentrum-full-view-link"
+    >
+      <span>Vollansicht öffnen</span>
+      <span aria-hidden="true">→</span>
+    </a>
+  {/if}
 
   {#if $loadingStore && !details}
     <p class="ghost" role="status">Lade Standortverlauf…</p>
@@ -203,3 +169,30 @@
     </section>
   </div>
 </section>
+
+<style>
+  .full-view-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    min-height: 44px;
+    box-sizing: border-box;
+    padding: 0.55rem 0.75rem;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 10px;
+    background: var(--accent-soft);
+    color: var(--text);
+    font-weight: 700;
+    text-decoration: none;
+  }
+
+  .full-view-link:hover {
+    border-color: var(--accent);
+  }
+
+  .full-view-link:focus-visible {
+    outline: 3px solid var(--accent);
+    outline-offset: 2px;
+  }
+</style>
