@@ -142,15 +142,18 @@ describe("map page early init-timeout wiring", () => {
     expect(failSlice).toContain("mapInitTerminated = true;");
     expect(failSlice).toContain("teardownMapRuntime();");
 
-    const finishIdx = pageSource.indexOf("const finishLoading = () => {");
+    const finishIdx = pageSource.indexOf(
+      "const finishLoading = (generation: number) => {",
+    );
     const loadListenerIdx = pageSource.indexOf(
-      'map.once("load", finishLoading)',
+      'map.once("load", () => finishLoading(initialBasemapGeneration));',
       finishIdx,
     );
+    expect(finishIdx).toBeGreaterThan(-1);
+    expect(loadListenerIdx).toBeGreaterThan(finishIdx);
     const finishSlice = pageSource.slice(finishIdx, loadListenerIdx);
-    expect(finishSlice).toContain(
-      "if (destroyed || mapInitTerminated) return;",
-    );
+    expect(finishSlice).toMatch(/mapInitTerminated\s*\|\|/);
+    expect(finishSlice).toContain("generation !== basemapStyleGeneration");
   });
 
   it("tears down partial map resources on terminal init failure", () => {
