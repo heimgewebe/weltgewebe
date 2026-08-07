@@ -9,6 +9,7 @@ import { edgeOpacityAt } from "$lib/map/edgeLifecycle";
 import type { FadenType, MapEdge, MapEntityViewModel } from "$lib/map/types";
 import { MAX_X_CORE_THEMES, targetThemePalette } from "$lib/map/weaveModel";
 import { primaryWeaveColor } from "$lib/map/weaveTheme";
+import { KNOTTING_THREAD_WIDTH_PX } from "$lib/map/weaveVisualTokens";
 import { LAYERS } from "./layers";
 
 /**
@@ -49,9 +50,12 @@ export const EDGE_VISUAL_STYLE = {
       bodyContinuous: true,
       shadowContinuous: true,
     },
-    // Knüpfung: tragender, dichtester und stabilster Faden.
+    // Knüpfung: tragender, dichtester und stabilster Faden. Width is the
+    // single shared token also driving the stitched X's arm width in
+    // weaveRuntime.ts/markers.css — the thread must not change thickness as
+    // it enters the node.
     knotting: {
-      width: 4.15,
+      width: KNOTTING_THREAD_WIDTH_PX,
       dashArray: [4.2, 0.18] as [number, number],
       bodyContinuous: true,
       shadowContinuous: true,

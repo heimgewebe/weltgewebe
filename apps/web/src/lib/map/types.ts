@@ -135,6 +135,31 @@ export const WEAVE_ARMS: readonly WeaveArm[] = [
   "southwest",
 ] as const;
 
+/** Over/under depth of one diagonal X arm at the centre crossing. */
+export type WeaveArmDepth = "under" | "over";
+
+/**
+ * Canonical over/under pairing of the diagonal X (compass order NW→NE→SE→SW
+ * alternates under/over). Runtime DOM strands and contract tests both read
+ * from this single mapping so the under/over arrays cannot drift apart.
+ */
+export const WEAVE_ARM_DEPTH: Readonly<Record<WeaveArm, WeaveArmDepth>> = {
+  northwest: "under",
+  northeast: "over",
+  southeast: "under",
+  southwest: "over",
+} as const;
+
+/** NW↔SE diagonal: strand A, drawn under the crossing. */
+export const WEAVE_UNDER_ARMS: readonly WeaveArm[] = WEAVE_ARMS.filter(
+  (arm) => WEAVE_ARM_DEPTH[arm] === "under",
+);
+
+/** NE↔SW diagonal: strand B, drawn over the crossing. */
+export const WEAVE_OVER_ARMS: readonly WeaveArm[] = WEAVE_ARMS.filter(
+  (arm) => WEAVE_ARM_DEPTH[arm] === "over",
+);
+
 /**
  * One topic that colours the body. Identity (`id`) is the full normalised topic
  * text (`NFKC` + whitespace unify + trim) — never case-folded, never a
@@ -149,7 +174,11 @@ export interface WeaveThemeSegment {
   arm: WeaveArm | null;
 }
 
-/** Exactly one coloured arm slot of the diagonal X. */
+/**
+ * Exactly one arm slot of the diagonal X.
+ * `color` remains part of the model / primaryThemeColor contract; X DOM
+ * rendering no longer consumes per-arm colours (root --weave-thread-color only).
+ */
 export interface WeaveXCoreSegment {
   arm: WeaveArm;
   themeId: string;

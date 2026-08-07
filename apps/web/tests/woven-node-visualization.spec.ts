@@ -93,22 +93,30 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     await expect(woven.locator('[data-zone="vote"]')).toHaveCount(2);
     await expect(woven.locator(".woven-node__cross")).toHaveCount(0);
 
-    const armColors = await woven.evaluate((root) =>
-      Array.from(root.querySelectorAll<HTMLElement>(".woven-node__arm")).map(
-        (arm) => ({
-          arm: arm.dataset.arm,
-          color: arm.style.getPropertyValue("--arm-color").trim(),
-        }),
-      ),
-    );
-    expect(new Set(armColors.map((entry) => entry.color)).size).toBe(2);
-    const nw = armColors.find((entry) => entry.arm === "northwest")?.color;
-    const se = armColors.find((entry) => entry.arm === "southeast")?.color;
-    const ne = armColors.find((entry) => entry.arm === "northeast")?.color;
-    const sw = armColors.find((entry) => entry.arm === "southwest")?.color;
-    expect(nw).toBe(se);
-    expect(ne).toBe(sw);
-    expect(nw).not.toBe(ne);
+    const armColorProof = await woven.evaluate((root) => {
+      const threadColor = root.style
+        .getPropertyValue("--weave-thread-color")
+        .trim();
+      const arms = Array.from(
+        root.querySelectorAll<HTMLElement>(".woven-node__arm"),
+      ).map((arm) => ({
+        arm: arm.dataset.arm,
+        // No per-arm inline colour; inheritance is via CSS custom properties.
+        inlineArmColor: arm.style.getPropertyValue("--arm-color").trim(),
+        inheritedThreadColor: getComputedStyle(arm)
+          .getPropertyValue("--weave-thread-color")
+          .trim(),
+      }));
+      return { threadColor, arms };
+    });
+    // The X is the incoming knotting thread continuing past the centre —
+    // root --weave-thread-color is the sole injection; arms inherit it.
+    expect(armColorProof.threadColor).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(armColorProof.arms).toHaveLength(4);
+    for (const arm of armColorProof.arms) {
+      expect(arm.inlineArmColor).toBe("");
+      expect(arm.inheritedThreadColor).toBe(armColorProof.threadColor);
+    }
 
     const rendered = await page.evaluate((nodeId) => {
       const map = (window as any).__TEST_MAP__;
@@ -119,9 +127,9 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       ) as HTMLElement | null;
       return {
         markerTheme: root?.style.getPropertyValue("--weave-primary"),
-        armColors: Array.from(
-          root?.querySelectorAll<HTMLElement>(".woven-node__arm") ?? [],
-        ).map((arm) => arm.style.getPropertyValue("--arm-color").trim()),
+        threadColor: root?.style
+          .getPropertyValue("--weave-thread-color")
+          .trim(),
         typedFeatures:
           serialized?.data?.features
             ?.filter((feature: any) => feature.properties.fadenType !== "out")
@@ -140,11 +148,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       rendered.typedFeatures.map((feature: any) => feature.id),
     );
     expect(edgeIds.size).toBe(edges.length);
+    expect(rendered.threadColor).toMatch(/^#[0-9a-f]{6}$/i);
+    const threadColor = rendered.threadColor;
     for (const feature of rendered.typedFeatures) {
       expect(feature.themeColors?.length).toBeGreaterThan(1);
-      expect(feature.themeColors).toEqual(
-        expect.arrayContaining(rendered.armColors),
-      );
+      // The X's shared root colour is exactly the terminal (target-side)
+      // colour of the incoming thread's theme palette — see
+      // terminalThreadColor in weaveModel.ts.
+      expect(feature.themeColors.at(-1)).toBe(threadColor);
       expect(feature.themeColors).toContain(feature.themeColor);
     }
     expect(
@@ -177,14 +188,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
           10,
         );
       return {
-        crossing: z(".woven-node__crossing"),
         conversation: z(".woven-node__conversation"),
         x: z(".woven-node__x"),
         proposal: z('[data-zone="proposal"]'),
         vote: z('[data-zone="vote"]'),
       };
     });
-    expect(layerOrder.crossing).toBeLessThan(layerOrder.conversation);
+    // No crossing/knot layer: conversation ring sits under the stitched X;
+    // proposal and vote overlays remain above both.
     expect(layerOrder.conversation).toBeLessThan(layerOrder.x);
     expect(layerOrder.x).toBeLessThan(layerOrder.proposal);
     expect(layerOrder.proposal).toBeLessThan(layerOrder.vote);
@@ -529,13 +540,23 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       const host = (root.closest(".map-marker") ??
         root.parentElement?.parentElement) as HTMLElement | null;
       const hostBox = host?.getBoundingClientRect();
+      const threadColor = root.style
+        .getPropertyValue("--weave-thread-color")
+        .trim();
+      const armWidthToken = root.style
+        .getPropertyValue("--weave-arm-width")
+        .trim();
       const arms = Array.from(
         root.querySelectorAll<HTMLElement>(".woven-node__arm"),
       ).map((arm) => {
         const armStyle = getComputedStyle(arm);
         return {
           arm: arm.dataset.arm,
-          color: arm.style.getPropertyValue("--arm-color").trim(),
+          inlineArmColor: arm.style.getPropertyValue("--arm-color").trim(),
+          inheritedThreadColor: armStyle
+            .getPropertyValue("--weave-thread-color")
+            .trim(),
+          width: armStyle.width,
           transform: armStyle.transform,
         };
       });
@@ -546,12 +567,11 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         borderRadius: style.borderRadius,
         width: box.width,
         height: box.height,
+        threadColor,
+        armWidthToken,
         arms,
         hostWidth: hostBox?.width ?? 0,
         hostHeight: hostBox?.height ?? 0,
-        distinctArmColors: new Set(
-          arms.map((entry) => entry.color).filter(Boolean),
-        ).size,
       };
     });
     expect(geometry.overflow).toBe("visible");
@@ -559,8 +579,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
       geometry.background === "rgba(0, 0, 0, 0)" ||
         geometry.background === "transparent",
     ).toBe(true);
-    expect(geometry.distinctArmColors).toBeGreaterThan(1);
-    expect(geometry.distinctArmColors).toBeLessThanOrEqual(4);
+    // The X is one continuous knotting thread past the centre — root colour
+    // is the sole injection; all four arms inherit it.
+    expect(geometry.threadColor).toMatch(/^#[0-9a-f]{6}$/i);
+    expect(geometry.arms).toHaveLength(4);
+    for (const arm of geometry.arms) {
+      expect(arm.inlineArmColor).toBe("");
+      expect(arm.inheritedThreadColor).toBe(geometry.threadColor);
+    }
     expect(geometry.hostWidth).toBeGreaterThanOrEqual(44);
     expect(geometry.hostHeight).toBeGreaterThanOrEqual(44);
     // Diagonal X: both strands are rotated; no axis-aligned plus arms.
@@ -569,6 +595,81 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         (arm) => arm.transform.includes("matrix") || arm.transform !== "none",
       ),
     ).toBe(true);
+
+    // Thread/X width continuity across representative zooms: shared token +
+    // computed arm widths stay continuous. Compare numerically so browser
+    // subpixel rounding (e.g. 4.15px → 4.14062px) is not flaky string equality.
+    // MapLibre knotting body line-width (LAYERS.EDGES_KNOTTING_LAYER) is
+    // mandatory evidence at every sample — not optional/null soft-pass.
+    const parsePx = (value: string) => Number.parseFloat(value);
+    const zoomWidthSamples: Array<{
+      zoom: number;
+      armWidthToken: string;
+      armWidthPx: number[];
+      knottingLineWidth: number;
+    }> = [];
+    for (const zoom of [12, 14, 16] as const) {
+      await page.evaluate((z) => (window as any).__TEST_MAP__.setZoom(z), zoom);
+      await expect
+        .poll(async () =>
+          page.evaluate(() => (window as any).__TEST_MAP__.getZoom()),
+        )
+        .toBeCloseTo(zoom, 5);
+      const sample = await woven.evaluate((root) => {
+        const armWidthToken = root.style
+          .getPropertyValue("--weave-arm-width")
+          .trim();
+        const armWidthPx = Array.from(
+          root.querySelectorAll<HTMLElement>(".woven-node__arm"),
+        ).map((arm) => Number.parseFloat(getComputedStyle(arm).width));
+        return { armWidthToken, armWidthPx };
+      });
+      // Production layer id: LAYERS.EDGES_KNOTTING_LAYER = "edges-knotting-layer"
+      const knottingLineWidth = await page.evaluate(() => {
+        const map = (window as any).__TEST_MAP__;
+        if (!map || typeof map.getPaintProperty !== "function") {
+          return null;
+        }
+        try {
+          return map.getPaintProperty("edges-knotting-layer", "line-width");
+        } catch {
+          return null;
+        }
+      });
+      expect(
+        typeof knottingLineWidth === "number" &&
+          Number.isFinite(knottingLineWidth),
+        `MapLibre edges-knotting-layer line-width must be a finite number at zoom ${zoom}; got ${JSON.stringify(knottingLineWidth)}`,
+      ).toBe(true);
+      zoomWidthSamples.push({
+        zoom,
+        armWidthToken: sample.armWidthToken,
+        armWidthPx: sample.armWidthPx,
+        knottingLineWidth: knottingLineWidth as number,
+      });
+    }
+    expect(zoomWidthSamples).toHaveLength(3);
+    const baselineToken = zoomWidthSamples[0].armWidthToken;
+    expect(baselineToken).toMatch(/^[\d.]+px$/);
+    const tokenPx = parsePx(baselineToken);
+    expect(Number.isFinite(tokenPx)).toBe(true);
+    expect(tokenPx).toBeGreaterThan(0);
+    const baselineArmPx = zoomWidthSamples[0].armWidthPx[0];
+    for (const sample of zoomWidthSamples) {
+      // Token itself must not drift with zoom (style property, not layout).
+      expect(sample.armWidthToken).toBe(baselineToken);
+      expect(sample.armWidthPx).toHaveLength(4);
+      // All four arms share one computed width within a zoom.
+      for (const width of sample.armWidthPx) {
+        expect(width).toBeCloseTo(sample.armWidthPx[0], 5);
+      }
+      // Cross-zoom continuity of the laid-out arm width.
+      expect(sample.armWidthPx[0]).toBeCloseTo(baselineArmPx, 5);
+      // Computed arm width tracks the shared token (allow subpixel rounding).
+      expect(sample.armWidthPx[0]).toBeCloseTo(tokenPx, 1);
+      // MapLibre knotting line-width must match the shared DOM arm-width token.
+      expect(sample.knottingLineWidth).toBeCloseTo(tokenPx, 5);
+    }
 
     await page.evaluate(() => (window as any).__TEST_MAP__.setZoom(13.4));
     await expect(woven).toHaveAttribute("data-weave-detail", "compact");
@@ -645,20 +746,21 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
     expect(mobileTouch.height).toBeGreaterThanOrEqual(44);
     await capture("mobile-narrow");
 
-    // Geographic center anchor: marker, visual and X-crossing share one midpoint.
+    // Geographic center anchor: marker, visual and stitched X share one midpoint.
+    // There is no separate crossing element — the X body is the knot.
     const anchor = await marker.evaluate((element) => {
       const visual = element.querySelector(
         ".map-marker__visual",
       ) as HTMLElement | null;
-      const crossing = element.querySelector(
-        ".woven-node__crossing",
+      const xCore = element.querySelector(
+        ".woven-node__x",
       ) as HTMLElement | null;
-      if (!visual || !crossing) {
-        throw new Error("marker visual or crossing missing");
+      if (!visual || !xCore) {
+        throw new Error("marker visual or woven X missing");
       }
       const markerBox = element.getBoundingClientRect();
       const visualBox = visual.getBoundingClientRect();
-      const crossingBox = crossing.getBoundingClientRect();
+      const xBox = xCore.getBoundingClientRect();
       const style = getComputedStyle(visual);
       return {
         transformOrigin: style.transformOrigin,
@@ -666,18 +768,14 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
         markerCy: markerBox.top + markerBox.height / 2,
         visualCx: visualBox.left + visualBox.width / 2,
         visualCy: visualBox.top + visualBox.height / 2,
-        crossingCx: crossingBox.left + crossingBox.width / 2,
-        crossingCy: crossingBox.top + crossingBox.height / 2,
+        xCx: xBox.left + xBox.width / 2,
+        xCy: xBox.top + xBox.height / 2,
       };
     });
     expect(Math.abs(anchor.visualCx - anchor.markerCx)).toBeLessThanOrEqual(2);
     expect(Math.abs(anchor.visualCy - anchor.markerCy)).toBeLessThanOrEqual(2);
-    expect(Math.abs(anchor.crossingCx - anchor.markerCx)).toBeLessThanOrEqual(
-      3,
-    );
-    expect(Math.abs(anchor.crossingCy - anchor.markerCy)).toBeLessThanOrEqual(
-      3,
-    );
+    expect(Math.abs(anchor.xCx - anchor.markerCx)).toBeLessThanOrEqual(3);
+    expect(Math.abs(anchor.xCy - anchor.markerCy)).toBeLessThanOrEqual(3);
     // transform-origin is center: keyword, percent, or resolved px near mid-box.
     const originParts = anchor.transformOrigin
       .split(/\s+/)

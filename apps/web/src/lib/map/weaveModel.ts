@@ -52,13 +52,15 @@ type Group = {
 };
 
 /**
- * Diagonal strand pairing:
+ * Diagonal strand pairing (canonical depth map: WEAVE_ARM_DEPTH in types.ts):
  * - strand A (under): northwest ↔ southeast
  * - strand B (over):  northeast ↔ southwest
  *
  * One theme colours the whole X; two themes each take one strand; three leave
  * the remaining arm on strand A with the first theme; four map 1:1; more than
  * four keep full identities in themeSegments while only the first four paint.
+ * Per-arm segment colours remain model data for primaryThemeColor contracts;
+ * X DOM rendering no longer consumes them (root --weave-thread-color only).
  */
 export function assignXCoreSegments(
   topicLabels: readonly string[],
@@ -367,6 +369,29 @@ export function targetThemePalette(
     : [entity.primaryThemeColor || WEAVE_FALLBACK_COLOR];
 }
 
+/**
+ * The exact visible colour of the incoming knotting thread's last painted
+ * segment before it reaches the node centre. `edges.ts` braids a target's
+ * {@link targetThemePalette} across the thread in `palette.length * 2`
+ * segments cycling through the palette, so the final segment — the one
+ * touching the centre — always lands on the palette's last colour. The
+ * stitched X is the same thread continuing past that point, so every arm
+ * must resolve its colour through this one helper rather than an independent
+ * per-arm topic palette; that is what keeps the thread and the X from ever
+ * picking two different colours for the same node. Falls back to the same
+ * {@link WEAVE_FALLBACK_COLOR} the edge itself falls back to when no theme
+ * palette exists.
+ */
+export function terminalThreadColor(
+  entity:
+    | Pick<MapEntityWeave, "themeSegments" | "primaryThemeColor">
+    | null
+    | undefined,
+): string {
+  const palette = targetThemePalette(entity);
+  return palette[palette.length - 1] ?? WEAVE_FALLBACK_COLOR;
+}
+
 export function voteStitchConicGradient(
   spanDeg: number,
   voteCount: number,
@@ -397,10 +422,9 @@ export function voteStitchConicGradient(
  * Used by the deterministic budget test; keep in sync with {@link renderWeave}.
  */
 export function maxWeaveDomNodeBudget(): number {
-  // crossing + conversation + x root + 2 strands + 4 arms
+  // conversation ring + x root + 2 strands + 4 arms
   // + max arm overlays + 8 proposal arcs + 8 vote siblings + overflow badge
   return (
-    1 +
     1 +
     1 +
     2 +
