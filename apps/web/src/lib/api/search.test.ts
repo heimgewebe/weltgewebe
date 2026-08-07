@@ -81,6 +81,11 @@ describe("buildSimilarNodeQuery", () => {
       "Radwerkstatt · Werkstatt · Gemeinsam Fahrräder reparieren · Offene Werkstatt · Fahrrad · Hilfe",
     );
   });
+  it("uses readable labels for stable knotting-topic tags", () => {
+    expect(
+      buildSimilarNodeQuery({ title: "Küche", tags: ["thema:ernährung"] }),
+    ).toBe("Küche · Ernährung");
+  });
 
   it("never exceeds the T006 query contract", () => {
     expect(buildSimilarNodeQuery({ title: "x".repeat(600) })).toHaveLength(

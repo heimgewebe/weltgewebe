@@ -1,3 +1,4 @@
+import { knottingTagDisplayLabel } from "$lib/knottingTopics";
 import type { MapEntityViewModel } from "$lib/map/types";
 
 const normalizedTermsByEntity = new WeakMap<
@@ -24,13 +25,12 @@ function buildMapSearchTermsNormalized(
             marker.ortsweberei.name,
           ]
         : ["Garnrolle", "Garnrollen"];
+  const tagTerms = (marker.tags ?? []).flatMap((tag) => {
+    const display = knottingTagDisplayLabel(tag);
+    return display === tag ? [tag] : [tag, display];
+  });
 
-  return [
-    marker.title,
-    marker.summary,
-    ...(marker.tags ?? []),
-    ...semanticTerms,
-  ]
+  return [marker.title, marker.summary, ...tagTerms, ...semanticTerms]
     .filter((term): term is string => typeof term === "string")
     .map(normalizeMapSearchTerm);
 }

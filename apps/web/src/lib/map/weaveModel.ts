@@ -63,11 +63,19 @@ type Group = {
 export function assignXCoreSegments(
   topicLabels: readonly string[],
 ): WeaveXCoreSegment[] {
-  const visual = topicLabels.slice(0, MAX_X_CORE_THEMES).map((label) => ({
-    themeId: weaveTopicIdentity(label),
-    label: weaveTopicDisplayLabel(label),
-    color: weaveTopicColor(label),
-  }));
+  const visual: Omit<WeaveXCoreSegment, "arm">[] = [];
+  const seen = new Set<string>();
+  for (const label of topicLabels) {
+    const themeId = weaveTopicIdentity(label);
+    if (!themeId || seen.has(themeId)) continue;
+    seen.add(themeId);
+    visual.push({
+      themeId,
+      label: weaveTopicDisplayLabel(label),
+      color: weaveTopicColor(label),
+    });
+    if (visual.length === MAX_X_CORE_THEMES) break;
+  }
   const fallback = {
     themeId: weaveTopicIdentity("Gemeingut"),
     label: "Gemeingut",

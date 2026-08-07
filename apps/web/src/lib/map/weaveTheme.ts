@@ -1,3 +1,7 @@
+import {
+  knottingTagDisplayLabel,
+  prioritizeKnottingTopics,
+} from "$lib/knottingTopics";
 import type {
   MapEntityNode,
   MapEntityWebgemeindezentrum,
@@ -126,7 +130,11 @@ function stripAllowlistedTechnicalNamespace(value: string): string {
  */
 export function weaveTopicDisplayLabel(label: string): string {
   const normalised = normalizeWeaveTopicText(label);
-  const withoutNoise = stripAllowlistedTechnicalNamespace(normalised);
+  const controlledLabel = knottingTagDisplayLabel(normalised);
+  const withoutNoise =
+    controlledLabel === normalised
+      ? stripAllowlistedTechnicalNamespace(normalised)
+      : controlledLabel;
   const display = withoutNoise || normalised;
   if (countGraphemes(display) <= WEAVE_TOPIC_DISPLAY_MAX_LENGTH) return display;
   const body = takeGraphemes(
@@ -142,10 +150,11 @@ export function weaveTopicDisplayLabel(label: string): string {
  * compresses the visual to at most four primary arm colours.
  */
 export function weaveTopics(entity: WeaveEntity): string[] {
+  const nodeTags = prioritizeKnottingTopics(entity.tags ?? []);
   const raw: Array<string | null | undefined> =
     entity.type === "webgemeindezentrum"
       ? ["Gemeinschaft", "Mitentscheiden"]
-      : [...(entity.tags ?? []), entity.kind];
+      : [...nodeTags, entity.kind];
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of raw) {

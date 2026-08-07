@@ -2,13 +2,13 @@ import { describe, expect, it } from "vitest";
 import type { MapEntityViewModel } from "$lib/map/types";
 import { getMapSearchTermsNormalized } from "./searchIndex";
 
-function makeNode(title: string): MapEntityViewModel {
+function makeNode(title: string, tags = ["Commons"]): MapEntityViewModel {
   return {
     type: "node",
     id: title,
     title,
     kind: "Werkstatt",
-    tags: ["Commons"],
+    tags,
     created_at: "2025-01-01T00:00:00Z",
     lat: 53.5,
     lon: 10,
@@ -27,5 +27,14 @@ describe("map search index", () => {
     expect(second).not.toBe(first);
     expect(second).toContain("beta");
     expect(second).not.toContain("alpha");
+  });
+
+  it("indexes stable topic tags under their human-readable labels", () => {
+    const node = makeNode("Küche", ["thema:ernährung", "Werkstatt"]);
+    const terms = getMapSearchTermsNormalized(node);
+
+    expect(terms).toContain("thema:ernährung");
+    expect(terms).toContain("ernährung");
+    expect(terms).toContain("werkstatt");
   });
 });

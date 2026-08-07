@@ -152,6 +152,7 @@ export interface CreateNodePayload {
   address: string;
   location: Location;
   summary?: string;
+  tags: string[];
   /** Stable UUID for retrying one user action after an uncertain response. */
   operation_id: string;
 }

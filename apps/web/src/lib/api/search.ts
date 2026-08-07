@@ -1,3 +1,4 @@
+import { knottingTagDisplayLabel } from "$lib/knottingTopics";
 import type { MapEntityNode, Node } from "$lib/map/types";
 
 export const MAX_SEARCH_QUERY_CHARS = 512;
@@ -87,12 +88,13 @@ export interface SimilarNodeSource {
 }
 
 export function buildSimilarNodeQuery(source: SimilarNodeSource): string {
+  const readableTags = (source.tags ?? []).map(knottingTagDisplayLabel);
   const parts = [
     source.title,
     source.kind,
     source.summary,
     source.info,
-    ...(source.tags ?? []),
+    ...readableTags,
   ]
     .map((part) => part?.trim())
     .filter((part): part is string => Boolean(part));
