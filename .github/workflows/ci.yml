@@ -298,7 +298,7 @@ jobs:
           CARGO_TERM_COLOR: always
 
       - name: Cache Cargo artifacts
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: |
             ~/.cargo/registry
@@ -434,7 +434,7 @@ jobs:
         run: pnpm sync
 
       - name: Cache Playwright browser binaries
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-ms-playwright-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
@@ -507,7 +507,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Cache Playwright Chromium
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: ~/.cache/ms-playwright
           key: ${{ runner.os }}-web-runtime-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
@@ -617,7 +617,7 @@ jobs:
             !**/.git/**
 
       - name: Cache lychee responses
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: .lycheecache
           key: ${{ runner.os }}-lychee-${{ hashFiles('**/*.md', '.lychee.toml') }}

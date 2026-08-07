@@ -198,7 +198,7 @@ jobs:
           --github-output "$GITHUB_OUTPUT"
       - name: Restore immutable direct proof evidence
         id: proof-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: build/kubernetes-platform/reuse/kind-gitops
           key: kubernetes-proof-v1-${{ runner.os }}-${{ steps.proof-identity.outputs.identity }}
@@ -211,7 +211,7 @@ jobs:
           --proof build/kubernetes-platform/reuse/kind-gitops/proof.json
       - name: Restore verified platform downloads
         if: steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: .cache/weltgewebe-platform/downloads
           key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
@@ -430,7 +430,7 @@ jobs:
           --github-output "$GITHUB_OUTPUT"
       - name: Restore immutable HA proof evidence
         id: proof-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: build/kubernetes-platform/reuse/ha-recovery
           key: kubernetes-proof-v1-${{ runner.os }}-${{ steps.proof-identity.outputs.identity }}
@@ -443,7 +443,7 @@ jobs:
           --proof build/kubernetes-platform/reuse/ha-recovery/proof.json
       - name: Restore verified platform downloads
         if: steps.proof-cache.outputs.cache-hit != 'true'
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # tag: v6.1.0
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
         with:
           path: .cache/weltgewebe-platform/downloads
           key: weltgewebe-platform-downloads-${{ runner.os }}-${{ hashFiles('platform/toolchain.lock.json') }}
