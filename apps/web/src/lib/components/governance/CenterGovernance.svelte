@@ -2,10 +2,12 @@
   import { onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import {
+    createSachProposal,
     createWeberProposal,
     formatRemaining,
     GovernanceApiError,
     listProposals,
+    proposalTitle,
     statusLabel,
     type Proposal,
   } from "$lib/api/governance";
@@ -19,6 +21,8 @@
   let loading = true;
   let error = "";
   let summary = "";
+  let sachTitle = "";
+  let sachSummary = "";
   let submitting = false;
   let submitError = "";
   let mounted = false;
@@ -32,7 +36,9 @@
     (proposal) => proposal.status === "consent" || proposal.status === "voting",
   );
   $: ownOpenProposal = activeProposals.some(
-    (proposal) => proposal.applicant_account_id === $authStore.account_id,
+    (proposal) =>
+      proposal.kind === "weberantrag" &&
+      proposal.applicant_account_id === $authStore.account_id,
   );
   $: displayedProposalCount =
     loading || error ? proposalCount : centerProposals.length;
@@ -43,8 +49,11 @@
       ? votingProposalCount
       : centerProposals.filter((proposal) => proposal.status === "voting")
           .length;
-  $: canApply =
+  $: canApplyForWeber =
     $authStore.authenticated && $authStore.role === "gast" && !ownOpenProposal;
+  $: canCreateSach =
+    $authStore.authenticated &&
+    ($authStore.role === "weber" || $authStore.role === "admin");
 
   async function load() {
     const generation = ++loadGeneration;
@@ -64,7 +73,7 @@
   }
 
   async function submitApplication() {
-    if (submitting || !canApply) return;
+    if (submitting || !canApplyForWeber) return;
     submitting = true;
     submitError = "";
     try {
@@ -85,9 +94,35 @@
     }
   }
 
+  async function submitSachProposal() {
+    if (submitting || !canCreateSach || !sachTitle.trim()) return;
+    submitting = true;
+    submitError = "";
+    try {
+      const proposal = await createSachProposal(
+        sachTitle,
+        sachSummary,
+        centerId,
+      );
+      proposals = [
+        proposal,
+        ...proposals.filter((item) => item.id !== proposal.id),
+      ];
+      sachTitle = "";
+      sachSummary = "";
+    } catch (submitFailure) {
+      console.error(submitFailure);
+      submitError = "Der Sachantrag konnte nicht gespeichert werden.";
+    } finally {
+      submitting = false;
+    }
+  }
+
   $: if (mounted && centerId !== loadedCenterId) {
     loadedCenterId = centerId;
     summary = "";
+    sachTitle = "";
+    sachSummary = "";
     submitError = "";
     void load();
   }
@@ -135,14 +170,15 @@
     <p class="muted" role="status">Lade Anträge…</p>
   {:else if error}
     <p class="error" role="alert">{error}</p>
-  {:else if activeProposals.length > 0}
+  {:else if centerProposals.length > 0}
     <ol class="proposals">
-      {#each activeProposals.slice(0, 5) as proposal (proposal.id)}
+      {#each centerProposals.slice(0, 5) as proposal (proposal.id)}
         <li>
           <a href={`/antraege?id=${encodeURIComponent(proposal.id)}`}>
-            <strong>{proposal.applicant_title}</strong>
+            <strong>{proposalTitle(proposal)}</strong>
             <span
-              >{statusLabel(proposal.status)} · {formatRemaining(
+              >{proposal.kind === "sachantrag" ? "Sachantrag" : "Weberantrag"}
+              · {statusLabel(proposal.status)} · {formatRemaining(
                 proposal.remaining_seconds,
               )}</span
             >
@@ -152,10 +188,10 @@
       {/each}
     </ol>
   {:else}
-    <p class="muted">Derzeit ist kein Antrag in einer offenen Phase.</p>
+    <p class="muted">Für dieses Zentrum liegt noch kein Antrag vor.</p>
   {/if}
 
-  {#if canApply}
+  {#if canApplyForWeber}
     <form class="application" on:submit|preventDefault={submitApplication}>
       <label for="center-weber-application">Weberstatus beantragen</label>
       <textarea
@@ -173,6 +209,30 @@
     <p class="muted">Dein Weberantrag ist bereits offen und oben verlinkt.</p>
   {:else if !$authStore.authenticated}
     <p class="muted">Melde dich an, um Anträge zu stellen oder mitzuwirken.</p>
+  {/if}
+
+  {#if canCreateSach}
+    <form class="application" on:submit|preventDefault={submitSachProposal}>
+      <label for="center-sach-title">Sachantrag stellen</label>
+      <input
+        id="center-sach-title"
+        bind:value={sachTitle}
+        maxlength="200"
+        required
+        placeholder="Worüber soll die Ortsweberei entscheiden?"
+      />
+      <label for="center-sach-summary">Begründung</label>
+      <textarea
+        id="center-sach-summary"
+        bind:value={sachSummary}
+        maxlength="2000"
+        rows="3"
+        placeholder="Ausgangslage und gewünschter Beschluss"></textarea>
+      {#if submitError}<p class="error" role="alert">{submitError}</p>{/if}
+      <button type="submit" disabled={submitting || !sachTitle.trim()}>
+        {submitting ? "Antrag wird geknüpft…" : "Sachantrag stellen"}
+      </button>
+    </form>
   {/if}
 </section>
 
@@ -213,6 +273,7 @@
     display: grid;
     gap: 0.25rem;
   }
+  input,
   textarea {
     box-sizing: border-box;
     width: 100%;

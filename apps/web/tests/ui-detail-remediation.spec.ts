@@ -87,7 +87,7 @@ test.describe("UI detail remediation", () => {
     expect(Math.abs(visualCenterX - markerCenterX)).toBeLessThanOrEqual(1.5);
   });
 
-  test("exposes the finished conversation tab but no unfinished proposal tab or raw coordinates", async ({
+  test("exposes finished conversation and proposal tabs without raw coordinates", async ({
     page,
   }) => {
     const node = page.locator(".map-marker:not(.marker-account)").first();
@@ -97,7 +97,7 @@ test.describe("UI detail remediation", () => {
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
     await expect(panel.getByRole("tab", { name: "Gespräch" })).toBeVisible();
-    await expect(panel.getByRole("tab", { name: "Anträge" })).toHaveCount(0);
+    await expect(panel.getByRole("tab", { name: "Anträge" })).toBeVisible();
     await expect(panel).not.toContainText("Koordinaten:");
     await expect(panel).not.toContainText("Art: event");
   });

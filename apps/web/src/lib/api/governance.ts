@@ -3,8 +3,11 @@ export type VoteChoice = "ja" | "nein" | "enthaltung";
 
 export interface Proposal {
   id: string;
-  kind: "weberantrag";
+  kind: "weberantrag" | "sachantrag";
   webgemeindezentrum_id: string;
+  title?: string;
+  target_node_id?: string;
+  target_node_title?: string;
   applicant_account_id: string | null;
   applicant_title: string;
   summary?: string;
@@ -89,6 +92,32 @@ export function createWeberProposal(
         : {}),
     }),
   });
+}
+
+export function createSachProposal(
+  title: string,
+  summary?: string,
+  webgemeindezentrumId?: string,
+  targetNodeId?: string,
+): Promise<Proposal> {
+  return request<Proposal>("/api/proposals", {
+    method: "POST",
+    body: JSON.stringify({
+      kind: "sachantrag",
+      title: title.trim(),
+      ...(summary?.trim() ? { summary: summary.trim() } : {}),
+      ...(webgemeindezentrumId
+        ? { webgemeindezentrum_id: webgemeindezentrumId }
+        : {}),
+      ...(targetNodeId ? { target_node_id: targetNodeId } : {}),
+    }),
+  });
+}
+
+export function proposalTitle(proposal: Proposal): string {
+  return proposal.kind === "sachantrag"
+    ? proposal.title || "Sachantrag ohne Titel"
+    : `Weberstatus für ${proposal.applicant_title}`;
 }
 
 export function submitVeto(id: string, reason: string): Promise<Veto> {

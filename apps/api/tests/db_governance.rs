@@ -13,9 +13,9 @@ use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::time::{sleep, timeout, Duration as TokioDuration};
 use weltgewebe_api::governance::{
-    add_message, add_veto, create_weber_proposal, delete_guest_account, finalize_due_proposals,
-    get_proposal, list_proposals, upsert_vote, CreateProposalError, MessageError, ProposalStatus,
-    VetoError, VoteChoice, VoteError, VoteWriteOutcome,
+    add_message, add_veto, create_sach_proposal, create_weber_proposal, delete_guest_account,
+    finalize_due_proposals, get_proposal, list_proposals, upsert_vote, CreateProposalError,
+    MessageError, ProposalStatus, VetoError, VoteChoice, VoteError, VoteWriteOutcome,
 };
 
 const GUEST_A: &str = "gov-proof-guest-a";
@@ -25,6 +25,7 @@ const WEBER_A: &str = "gov-proof-weber-a";
 const WEBER_B: &str = "gov-proof-weber-b";
 const GUEST_NODE: &str = "gov-proof-guest-node";
 const GUEST_EDGE: &str = "gov-proof-guest-edge";
+const SACH_NODE: &str = "gov-proof-sach-node";
 const DETACHED_PROOF_APPLICANT_TITLE: &str = "gov-proof:Gast C";
 
 fn direct_database_url() -> String {
@@ -118,6 +119,157 @@ async fn seed_account(pool: &sqlx::PgPool, id: &str, role: &str) {
     .execute(pool)
     .await
     .expect("seed account");
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn sachantraege_require_weber_allow_multiple_and_accept_without_promotion() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, GUEST_A, "gast").await;
+    seed_account(&pool, WEBER_A, "weber").await;
+    seed_guest_node(&pool, WEBER_A, SACH_NODE).await;
+
+    let t0 = Utc.with_ymd_and_hms(2026, 8, 8, 12, 0, 0).unwrap();
+    let guest_attempt =
+        create_sach_proposal(&pool, GUEST_A, "Gast A", "Nicht zulässig", None, None, t0).await;
+    assert!(matches!(
+        guest_attempt,
+        Err(CreateProposalError::NotSachApplicant)
+    ));
+
+    let first = create_sach_proposal(
+        &pool,
+        WEBER_A,
+        "Weber A",
+        "Werkstattzeiten beschließen",
+        Some("Die Nutzung soll verlässlich werden."),
+        Some(SACH_NODE),
+        t0,
+    )
+    .await
+    .expect("create first Sachantrag");
+    let second = create_sach_proposal(
+        &pool,
+        WEBER_A,
+        "Weber A",
+        "Materialbudget beschließen",
+        None,
+        None,
+        t0 + Duration::minutes(1),
+    )
+    .await
+    .expect("multiple open Sachantraege are allowed");
+    assert_eq!(first.target_node_id.as_deref(), Some(SACH_NODE));
+    assert_eq!(first.target_node_title.as_deref(), Some("Rennknoten"));
+    assert_eq!(second.kind, "sachantrag");
+
+    let outcomes = finalize_due_proposals(&pool, t0 + Duration::days(7) + Duration::minutes(1))
+        .await
+        .expect("finalize Sachantraege");
+    assert_eq!(outcomes.len(), 2);
+    assert!(outcomes
+        .iter()
+        .all(|outcome| { outcome.status == ProposalStatus::Accepted && !outcome.promoted }));
+    let role: String = sqlx::query_scalar("SELECT role FROM domain_accounts WHERE id = $1")
+        .bind(WEBER_A)
+        .fetch_one(&pool)
+        .await
+        .expect("read unchanged role");
+    assert_eq!(role, "weber");
+
+    sqlx::query("DELETE FROM domain_nodes WHERE id = $1")
+        .bind(SACH_NODE)
+        .execute(&pool)
+        .await
+        .expect("remove target node");
+    let after_delete = get_proposal(&pool, &first.id)
+        .await
+        .expect("read proposal")
+        .expect("proposal remains");
+    assert_eq!(after_delete.target_node_id, None);
+    assert_eq!(
+        after_delete.target_node_title.as_deref(),
+        Some("Rennknoten")
+    );
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn sachantrag_uses_shared_veto_voting_majority_and_self_decision_guard() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, WEBER_A, "weber").await;
+    seed_account(&pool, WEBER_B, "weber").await;
+
+    let t0 = Utc.with_ymd_and_hms(2026, 8, 8, 12, 0, 0).unwrap();
+    let proposal = create_sach_proposal(
+        &pool,
+        WEBER_A,
+        "Weber A",
+        "Gemeinschaftsraum öffnen",
+        None,
+        None,
+        t0,
+    )
+    .await
+    .expect("create Sachantrag");
+
+    let own_veto = add_veto(
+        &pool,
+        &proposal.id,
+        WEBER_A,
+        "Weber A",
+        "Eigener Einwand",
+        t0 + Duration::days(1),
+    )
+    .await;
+    assert!(matches!(own_veto, Err(VetoError::ApplicantCannotDecide)));
+    add_veto(
+        &pool,
+        &proposal.id,
+        WEBER_B,
+        "Weber B",
+        "Bitte ausdrücklich abstimmen",
+        t0 + Duration::days(1),
+    )
+    .await
+    .expect("foreign veto");
+    finalize_due_proposals(&pool, t0 + Duration::days(7))
+        .await
+        .expect("open voting");
+
+    let own_vote = upsert_vote(
+        &pool,
+        &proposal.id,
+        WEBER_A,
+        VoteChoice::Ja,
+        t0 + Duration::days(8),
+    )
+    .await;
+    assert!(matches!(own_vote, Err(VoteError::ApplicantCannotDecide)));
+    upsert_vote(
+        &pool,
+        &proposal.id,
+        WEBER_B,
+        VoteChoice::Ja,
+        t0 + Duration::days(8),
+    )
+    .await
+    .expect("foreign yes vote");
+
+    let outcomes = finalize_due_proposals(&pool, t0 + Duration::days(14))
+        .await
+        .expect("finalize voting");
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outcomes[0].status, ProposalStatus::Accepted);
+    assert!(!outcomes[0].promoted);
+
+    cleanup(&pool).await;
 }
 
 #[tokio::test]

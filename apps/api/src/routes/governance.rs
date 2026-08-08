@@ -32,7 +32,7 @@ use crate::config::{
 use crate::governance::{
     self, CreateProposalError, GuestExitError, MessageError, ProposalMessage, ProposalStatus,
     ProposalWithCounts, Veto, VetoError, VoteChoice, VoteError, VoteWriteOutcome,
-    MESSAGE_BODY_MAX_CHARS, SUMMARY_MAX_CHARS, VETO_REASON_MAX_CHARS,
+    MESSAGE_BODY_MAX_CHARS, PROPOSAL_TITLE_MAX_CHARS, SUMMARY_MAX_CHARS, VETO_REASON_MAX_CHARS,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
@@ -147,6 +147,12 @@ pub struct ProposalView {
     pub id: String,
     pub kind: String,
     pub webgemeindezentrum_id: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_node_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub target_node_title: Option<String>,
     pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -181,6 +187,9 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
         id: proposal.id,
         kind: proposal.kind,
         webgemeindezentrum_id: proposal.webgemeindezentrum_id,
+        title: proposal.title,
+        target_node_id: proposal.target_node_id,
+        target_node_title: proposal.target_node_title,
         applicant_account_id: proposal.applicant_account_id,
         applicant_title: proposal.applicant_title,
         summary: proposal.summary,
@@ -339,8 +348,8 @@ fn required_trimmed_text(
         .ok_or_else(|| bad_request(&format!("missing or empty field: {field}")))
 }
 
-/// POST /proposals — der einzige zustandsändernde Antragsweg für Gäste:
-/// der eigene Antrag auf Weberstatus.
+/// POST /proposals — Weberantrag für Gäste oder Sachantrag für Weber/Admin.
+/// Erlaubte Felder werden je `kind` strikt getrennt geprüft.
 pub async fn create_proposal(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
@@ -348,25 +357,30 @@ pub async fn create_proposal(
 ) -> Result<(StatusCode, Json<ProposalView>), ApiError> {
     let account_id = require_account_id(&auth)?;
 
-    if auth.role != Role::Gast {
-        return Err((
-            StatusCode::CONFLICT,
-            "account already holds weber status".to_string(),
-        ));
-    }
     let pool = require_pool(&state)?;
 
     let object = payload
         .as_object()
         .ok_or_else(|| bad_request("proposal request must be a JSON object"))?;
+    let kind = object
+        .get("kind")
+        .and_then(Value::as_str)
+        .ok_or_else(|| bad_request("kind must be one of: weberantrag, sachantrag"))?;
+    let allowed_fields: &[&str] = match kind {
+        "weberantrag" => &["kind", "summary", "webgemeindezentrum_id"],
+        "sachantrag" => &[
+            "kind",
+            "title",
+            "summary",
+            "webgemeindezentrum_id",
+            "target_node_id",
+        ],
+        _ => return Err(bad_request("kind must be one of: weberantrag, sachantrag")),
+    };
     for key in object.keys() {
-        if key != "kind" && key != "summary" && key != "webgemeindezentrum_id" {
-            return Err(bad_request(&format!("unknown field: {key}")));
+        if !allowed_fields.contains(&key.as_str()) {
+            return Err(bad_request(&format!("unknown field for {kind}: {key}")));
         }
-    }
-    match object.get("kind").and_then(Value::as_str) {
-        Some("weberantrag") => {}
-        _ => return Err(bad_request("kind must be \"weberantrag\"")),
     }
     let summary = optional_trimmed_text(object.get("summary"), "summary", SUMMARY_MAX_CHARS)?;
     let webgemeindezentrum_id = optional_trimmed_text(
@@ -375,30 +389,72 @@ pub async fn create_proposal(
         128,
     )?;
 
-    let title = account_title(&state, &account_id).await;
-    let proposal = governance::create_weber_proposal_at_center(
-        pool,
-        &account_id,
-        &title,
-        summary.as_deref(),
-        webgemeindezentrum_id.as_deref(),
-        Utc::now(),
-    )
-    .await
-    .map_err(|error| match error {
+    let applicant_title = account_title(&state, &account_id).await;
+    let proposal_result = match kind {
+        "weberantrag" => {
+            if auth.role != Role::Gast {
+                return Err((
+                    StatusCode::CONFLICT,
+                    "account already holds Weber status".to_string(),
+                ));
+            }
+            governance::create_weber_proposal_at_center(
+                pool,
+                &account_id,
+                &applicant_title,
+                summary.as_deref(),
+                webgemeindezentrum_id.as_deref(),
+                Utc::now(),
+            )
+            .await
+        }
+        "sachantrag" => {
+            if !matches!(auth.role, Role::Weber | Role::Admin) {
+                return Err((
+                    StatusCode::FORBIDDEN,
+                    "Sachantraege require Weber or administrator status".to_string(),
+                ));
+            }
+            let title =
+                required_trimmed_text(object.get("title"), "title", PROPOSAL_TITLE_MAX_CHARS)?;
+            let target_node_id =
+                optional_trimmed_text(object.get("target_node_id"), "target_node_id", 200)?;
+            governance::create_sach_proposal_at_center(
+                pool,
+                &account_id,
+                &applicant_title,
+                &title,
+                summary.as_deref(),
+                webgemeindezentrum_id.as_deref(),
+                target_node_id.as_deref(),
+                Utc::now(),
+            )
+            .await
+        }
+        _ => unreachable!("kind was validated above"),
+    };
+    let proposal = proposal_result.map_err(|error| match error {
         CreateProposalError::AlreadyOpen => (
             StatusCode::CONFLICT,
-            "an open weberantrag already exists for this account".to_string(),
+            "an open proposal of this kind already exists for this account".to_string(),
         ),
         CreateProposalError::NotGuest => (
             StatusCode::CONFLICT,
             "only an active guest account may apply for Weber status".to_string(),
         ),
+        CreateProposalError::NotSachApplicant => (
+            StatusCode::FORBIDDEN,
+            "only an active Weber or administrator may create a Sachantrag".to_string(),
+        ),
         CreateProposalError::CenterUnavailable => (
             StatusCode::SERVICE_UNAVAILABLE,
             "the requested Webgemeindezentrum is not an active governance center".to_string(),
         ),
-        CreateProposalError::Database(error) => internal_error("create_weber_proposal")(error),
+        CreateProposalError::TargetNodeNotFound => (
+            StatusCode::NOT_FOUND,
+            "the target node does not exist".to_string(),
+        ),
+        CreateProposalError::Database(error) => internal_error("create_proposal")(error),
     })?;
 
     if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
@@ -423,8 +479,9 @@ pub async fn create_proposal(
     tracing::info!(
         event = "governance.proposal.created",
         proposal_id = %proposal.id,
+        kind = %proposal.kind,
         center_id = %proposal.webgemeindezentrum_id,
-        "Weberantrag created"
+        "Governance proposal created"
     );
 
     let now = Utc::now();
@@ -471,7 +528,7 @@ pub async fn veto_proposal(
             ),
             VetoError::ApplicantCannotDecide => (
                 StatusCode::FORBIDDEN,
-                "the applicant cannot veto the own Weber proposal".to_string(),
+                "the applicant cannot veto the own proposal".to_string(),
             ),
             VetoError::ActorNotEligible => (
                 StatusCode::FORBIDDEN,
@@ -553,7 +610,7 @@ pub async fn vote_proposal(
             ),
             VoteError::ApplicantCannotDecide => (
                 StatusCode::FORBIDDEN,
-                "the applicant cannot vote on the own Weber proposal".to_string(),
+                "the applicant cannot vote on the own proposal".to_string(),
             ),
             VoteError::ActorNotEligible => (
                 StatusCode::FORBIDDEN,
