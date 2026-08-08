@@ -347,6 +347,13 @@ jobs:
               --test db_domain_schema_migrations \
               -- --include-ignored --test-threads=1
 
+      - name: Run governance integration proof (direct PostgreSQL, --include-ignored)
+        run: |
+          DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@localhost:5432/${PGDATABASE}" \
+            cargo test --locked -p weltgewebe-api \
+              --test db_governance \
+              -- --include-ignored --test-threads=1
+
   db-domain-backfill-proof:
     name: db domain backfill proof (phase c)
     runs-on: ubuntu-latest
