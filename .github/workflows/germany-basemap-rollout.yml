@@ -114,7 +114,7 @@ jobs:
           version: 9.11.0
 
       - name: Setup Node
-        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e
+        uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
         with:
           node-version-file: ".node-version"
           cache: "pnpm"
