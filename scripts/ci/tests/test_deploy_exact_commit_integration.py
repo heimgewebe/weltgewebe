@@ -924,6 +924,55 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertIn("basemap_variant=germany", result.stdout)
         self.assertNotIn("reason=basemap_identity_drift", result.stdout)
 
+    def test_reconciler_rejects_same_commit_public_bundle_with_missing_germany_pmtiles_alias(
+        self,
+    ) -> None:
+        run(
+            self.privileged(
+                [
+                    "rm",
+                    "-f",
+                    str(self.source / "build/basemap/basemap-germany.pmtiles"),
+                ]
+            )
+        )
+        result = self.reconcile_existing_public_commit(
+            extra_env={"PUBLIC_COMMIT": self.commit}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
+        self.assertIn(
+            "required nationwide Germany basemap alias is missing: basemap-germany.pmtiles",
+            result.stderr,
+        )
+
+    def test_reconciler_rejects_same_commit_public_bundle_with_broken_germany_meta_alias(
+        self,
+    ) -> None:
+        meta_alias = self.source / "build/basemap/basemap-germany.meta.json"
+        run(self.privileged(["rm", "-f", str(meta_alias)]))
+        run(
+            self.privileged(
+                [
+                    "ln",
+                    "-s",
+                    "missing-germany.meta.json",
+                    str(meta_alias),
+                ]
+            )
+        )
+        result = self.reconcile_existing_public_commit(
+            extra_env={"PUBLIC_COMMIT": self.commit}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
+        self.assertIn(
+            "required nationwide Germany basemap alias is broken: basemap-germany.meta.json",
+            result.stderr,
+        )
+
     def test_reconciler_rejects_a_regional_frontend_artifact(self) -> None:
         self.make_artifact(basemap_variant="regional")
         result = self.reconcile_stale_public_commit()

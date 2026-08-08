@@ -1164,6 +1164,40 @@ expected_germany_style_sha="$(
 [[ "$expected_germany_style_sha" =~ ^[0-9a-f]{64}$ ]] ||
   fail "target nationwide Germany style hash is invalid"
 
+# The public build label alone is insufficient: the local data aliases that
+# serve nationwide Germany must also be intact before any same-commit no-op.
+germany_basemap_root="$SOURCE_CHECKOUT/build/basemap"
+[[ -d "$germany_basemap_root" && ! -L "$germany_basemap_root" ]] ||
+  fail "nationwide Germany basemap artifact root is missing or unsafe"
+germany_basemap_real="$(realpath -e "$germany_basemap_root")" ||
+  fail "nationwide Germany basemap artifact root cannot be resolved"
+source_real="$(realpath -e "$SOURCE_CHECKOUT")" || fail "source checkout cannot be resolved"
+[[ "$germany_basemap_real" == "$source_real/build/basemap" ]] ||
+  fail "nationwide Germany basemap artifact root escaped the production checkout"
+[[ "$(stat --format=%u "$germany_basemap_real")" == "0" ]] ||
+  fail "nationwide Germany basemap artifact root is not root-owned"
+germany_basemap_mode="$(stat --format=%a "$germany_basemap_real")"
+(((8#$germany_basemap_mode & 022) == 0)) ||
+  fail "nationwide Germany basemap artifact root is group- or world-writable"
+for germany_alias in basemap-germany.pmtiles basemap-germany.meta.json; do
+  germany_path="$germany_basemap_real/$germany_alias"
+  [[ -e "$germany_path" || -L "$germany_path" ]] ||
+    fail "required nationwide Germany basemap alias is missing: $germany_alias"
+  germany_target="$(realpath -e "$germany_path")" ||
+    fail "required nationwide Germany basemap alias is broken: $germany_alias"
+  case "$germany_target" in
+    "$germany_basemap_real"/*) ;;
+    *) fail "nationwide Germany basemap alias escapes canonical data root: $germany_alias" ;;
+  esac
+  [[ -f "$germany_target" && -s "$germany_target" ]] ||
+    fail "nationwide Germany basemap alias is not a non-empty regular file: $germany_alias"
+  [[ "$(stat --format=%u "$germany_target")" == "0" ]] ||
+    fail "nationwide Germany basemap target is not root-owned: $germany_alias"
+  germany_target_mode="$(stat --format=%a "$germany_target")"
+  (((8#$germany_target_mode & 022) == 0)) ||
+    fail "nationwide Germany basemap target is group- or world-writable: $germany_alias"
+done
+
 initial_receipt="$RECEIPT_ROOT/observed-$target_commit.json"
 if "$LIVE_VERIFIER" \
   --expected-commit "$target_commit" \
@@ -1201,39 +1235,8 @@ build_gid="$(id -g "$BUILD_USER")"
 commit_epoch="$(git -C "$SOURCE_CHECKOUT" show -s --format=%ct "$target_commit")"
 [[ "$commit_epoch" =~ ^[0-9]+$ ]] || fail "target commit timestamp is invalid"
 
-# The target Germany styles were bound before the public no-op decision above.
-# Now verify the persistent Germany PMTiles aliases before building.
-germany_basemap_root="$SOURCE_CHECKOUT/build/basemap"
-[[ -d "$germany_basemap_root" && ! -L "$germany_basemap_root" ]] ||
-  fail "nationwide Germany basemap artifact root is missing or unsafe"
-germany_basemap_real="$(realpath -e "$germany_basemap_root")" ||
-  fail "nationwide Germany basemap artifact root cannot be resolved"
-source_real="$(realpath -e "$SOURCE_CHECKOUT")" || fail "source checkout cannot be resolved"
-[[ "$germany_basemap_real" == "$source_real/build/basemap" ]] ||
-  fail "nationwide Germany basemap artifact root escaped the production checkout"
-[[ "$(stat --format=%u "$germany_basemap_real")" == "0" ]] ||
-  fail "nationwide Germany basemap artifact root is not root-owned"
-germany_basemap_mode="$(stat --format=%a "$germany_basemap_real")"
-(((8#$germany_basemap_mode & 022) == 0)) ||
-  fail "nationwide Germany basemap artifact root is group- or world-writable"
-for germany_alias in basemap-germany.pmtiles basemap-germany.meta.json; do
-  germany_path="$germany_basemap_real/$germany_alias"
-  [[ -e "$germany_path" || -L "$germany_path" ]] ||
-    fail "required nationwide Germany basemap alias is missing: $germany_alias"
-  germany_target="$(realpath -e "$germany_path")" ||
-    fail "required nationwide Germany basemap alias is broken: $germany_alias"
-  case "$germany_target" in
-    "$germany_basemap_real"/*) ;;
-    *) fail "nationwide Germany basemap alias escapes canonical data root: $germany_alias" ;;
-  esac
-  [[ -f "$germany_target" && -s "$germany_target" ]] ||
-    fail "nationwide Germany basemap alias is not a non-empty regular file: $germany_alias"
-  [[ "$(stat --format=%u "$germany_target")" == "0" ]] ||
-    fail "nationwide Germany basemap target is not root-owned: $germany_alias"
-  germany_target_mode="$(stat --format=%a "$germany_target")"
-  (((8#$germany_target_mode & 022) == 0)) ||
-    fail "nationwide Germany basemap target is group- or world-writable: $germany_alias"
-done
+# The nationwide Germany styles and persistent data aliases were validated
+# before the public no-op decision; reuse that proof for the build path.
 write_state "building" "$target_commit" "nationwide Germany basemap pre-build guard passed"
 
 source_archive="$ARTIFACT_ROOT/source-$target_commit.tar"
