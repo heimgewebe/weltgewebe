@@ -325,8 +325,28 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             json.dumps(identity, sort_keys=True) + "\n", encoding="utf-8"
         )
         self.artifact.parent.mkdir(parents=True, exist_ok=True)
-        with tarfile.open(self.artifact, "w:gz") as bundle:
+        staged_artifact = self.root / "web-artifact-staging.tar.gz"
+        with tarfile.open(staged_artifact, "w:gz") as bundle:
             bundle.add(tree, arcname="build")
+        if os.access(self.artifact.parent, os.W_OK):
+            staged_artifact.replace(self.artifact)
+        else:
+            run(
+                self.privileged(
+                    [
+                        "install",
+                        "-o",
+                        "root",
+                        "-g",
+                        "root",
+                        "-m",
+                        "0600",
+                        str(staged_artifact),
+                        str(self.artifact),
+                    ]
+                )
+            )
+            staged_artifact.unlink()
         self.artifact_sha = run(["sha256sum", str(self.artifact)]).stdout.split()[0]
 
     def make_command_shims(self) -> None:
