@@ -1,6 +1,16 @@
 import type { DirectConversation } from "$lib/api/directMessages";
 import type { Proposal } from "$lib/api/governance";
 
+function isOwnWeberApplication(
+  proposal: Proposal,
+  accountId: string,
+): boolean {
+  return (
+    proposal.kind === "weberantrag" &&
+    proposal.applicant_account_id === accountId
+  );
+}
+
 export function hasPendingWeberApplication(
   proposals: Proposal[],
   accountId: string | undefined,
@@ -8,9 +18,20 @@ export function hasPendingWeberApplication(
   if (!accountId) return false;
   return proposals.some(
     (proposal) =>
-      proposal.kind === "weberantrag" &&
-      proposal.applicant_account_id === accountId &&
+      isOwnWeberApplication(proposal, accountId) &&
       (proposal.status === "consent" || proposal.status === "voting"),
+  );
+}
+
+export function hasAcceptedWeberApplication(
+  proposals: Proposal[],
+  accountId: string | undefined,
+): boolean {
+  if (!accountId) return false;
+  return proposals.some(
+    (proposal) =>
+      isOwnWeberApplication(proposal, accountId) &&
+      proposal.status === "accepted",
   );
 }
 
