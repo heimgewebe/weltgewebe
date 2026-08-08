@@ -11,6 +11,7 @@
   import { garnrolleIcon } from "$lib/ui/icons";
   import {
     countUnreadDirectMessages,
+    hasAcceptedWeberApplication,
     hasPendingWeberApplication,
     unreadMessageBadgeLabel,
   } from "./topBarAttentionState";
@@ -99,10 +100,18 @@
       ) {
         return;
       }
-      pendingWeberApplication = hasPendingWeberApplication(
-        proposals,
-        accountId,
-      );
+
+      const pending = hasPendingWeberApplication(proposals, accountId);
+      if (!pending && hasAcceptedWeberApplication(proposals, accountId)) {
+        // A governance read can finalize the application and promote the account.
+        // Keep the non-actionable application status visible until auth confirms
+        // the new role, rather than briefly offering a second Weber application.
+        pendingWeberApplication = true;
+        await authStore.checkAuth({ force: true });
+        return;
+      }
+
+      pendingWeberApplication = pending;
     } catch {
       // Keep the last confirmed application state during transient API failures.
     }
