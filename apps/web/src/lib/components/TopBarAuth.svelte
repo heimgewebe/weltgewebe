@@ -1,6 +1,7 @@
 <script lang="ts">
   import { afterNavigate } from "$app/navigation";
   import { onMount } from "svelte";
+  import { accountAttentionInvalidation } from "$lib/accountAttention";
   import {
     listDirectConversations,
     type DirectConversation,
@@ -8,7 +9,6 @@
   import { listProposals, type Proposal } from "$lib/api/governance";
   import { authStore, type AuthStatus } from "$lib/auth/store";
   import { garnrolleIcon } from "$lib/ui/icons";
-  import { topBarAttentionRefresh } from "./topBarAttentionRefresh";
   import {
     countUnreadDirectMessages,
     hasPendingWeberApplication,
@@ -135,7 +135,7 @@
     });
 
     let attentionSignalPrimed = false;
-    const unsubscribeAttention = topBarAttentionRefresh.subscribe(() => {
+    const unsubscribeAttention = accountAttentionInvalidation.subscribe(() => {
       if (!attentionSignalPrimed) {
         attentionSignalPrimed = true;
         return;
