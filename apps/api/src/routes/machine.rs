@@ -88,12 +88,12 @@ fn canonical_operation_id(payload: &Value) -> bool {
         .is_some_and(|parsed| parsed.to_string() == raw)
 }
 
-fn require_if_match(headers: &HeaderMap) -> Result<(), Response> {
+fn missing_if_match_response(headers: &HeaderMap) -> Option<Response> {
     if headers.get(IF_MATCH).is_some() {
-        return Ok(());
+        return None;
     }
 
-    Err(machine_problem(
+    Some(machine_problem(
         StatusCode::PRECONDITION_REQUIRED,
         "machine_if_match_required",
         "Machine node mutations require If-Match with the current node ETag.",
@@ -123,7 +123,7 @@ async fn patch_machine_node(
     headers: HeaderMap,
     Json(payload): Json<UpdateNode>,
 ) -> Response {
-    if let Err(response) = require_if_match(&headers) {
+    if let Some(response) = missing_if_match_response(&headers) {
         return response;
     }
 
@@ -144,7 +144,7 @@ async fn replace_machine_node(
     headers: HeaderMap,
     Json(payload): Json<Value>,
 ) -> Response {
-    if let Err(response) = require_if_match(&headers) {
+    if let Some(response) = missing_if_match_response(&headers) {
         return response;
     }
 
@@ -164,7 +164,7 @@ async fn delete_machine_node(
     Path(id): Path<String>,
     headers: HeaderMap,
 ) -> Response {
-    if let Err(response) = require_if_match(&headers) {
+    if let Some(response) = missing_if_match_response(&headers) {
         return response;
     }
 
