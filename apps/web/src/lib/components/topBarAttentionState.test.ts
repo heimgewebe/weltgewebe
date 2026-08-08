@@ -52,18 +52,30 @@ describe("topBarAttentionState", () => {
     expect(hasAcceptedWeberApplication(proposals, undefined)).toBe(false);
   });
 
-  it("sums unread messages without letting negative counts reduce the badge", () => {
+  it("rejects malformed unread counts before summing", () => {
     const conversations = [
       { unread_count: 2 },
       { unread_count: 3 },
       { unread_count: -1 },
+      { unread_count: Number.POSITIVE_INFINITY },
+      { unread_count: 1.5 },
     ] as DirectConversation[];
 
     expect(countUnreadDirectMessages(conversations)).toBe(5);
   });
 
-  it("caps the compact badge at 99+", () => {
+  it("saturates unread totals at the 99+ display boundary", () => {
+    const conversations = [
+      { unread_count: 80 },
+      { unread_count: 40 },
+    ] as DirectConversation[];
+
+    expect(countUnreadDirectMessages(conversations)).toBe(100);
+  });
+
+  it("caps the compact badge at 99+ and rejects non-finite totals", () => {
     expect(unreadMessageBadgeLabel(4)).toBe("4");
-    expect(unreadMessageBadgeLabel(140)).toBe("99+");
+    expect(unreadMessageBadgeLabel(100)).toBe("99+");
+    expect(unreadMessageBadgeLabel(Number.POSITIVE_INFINITY)).toBe("0");
   });
 });
