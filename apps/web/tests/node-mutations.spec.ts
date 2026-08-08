@@ -20,6 +20,42 @@ async function openFirstNode(page: Page) {
 }
 
 test.describe("Knoten bearbeiten und löschen", () => {
+  test("hält den Bearbeiten-Reiter auf Tabletbreite in einer Zeile", async ({
+    page,
+  }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: "e2e-weber",
+        role: "weber",
+      },
+    });
+    await page.goto("/map");
+
+    const panel = await openFirstNode(page);
+    const tabList = panel.getByRole("tablist", { name: "Knoten-Tabs" });
+    const editTab = tabList.getByRole("tab", { name: "Bearbeiten" });
+    const layout = await editTab.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return {
+        whiteSpace: style.whiteSpace,
+        overflowWrap: style.overflowWrap,
+        textRects: range.getClientRects().length,
+        clientWidth: element.clientWidth,
+        scrollWidth: element.scrollWidth,
+      };
+    });
+
+    expect(layout.whiteSpace).toBe("nowrap");
+    expect(layout.overflowWrap).toBe("normal");
+    expect(layout.textRects).toBe(1);
+    expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
+    await expect(tabList).toHaveCSS("overflow-x", "auto");
+  });
+
   test("Weber kann einen gemeinsamen Knoten bearbeiten und samt Fadenprojektionen löschen", async ({
     page,
   }) => {

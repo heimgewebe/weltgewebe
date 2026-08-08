@@ -204,6 +204,33 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
       );
     });
     expect(haloExtendsBeyondCenter).toBe(true);
+    const alignedCenters = await marker.evaluate((element) => {
+      const centerOf = (target: Element) => {
+        const box = target.getBoundingClientRect();
+        return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+      };
+      const visual = element.querySelector<HTMLElement>(
+        ".marker-webgemeindezentrum__visual",
+      )!;
+      const halo = element.querySelector<HTMLElement>(".map-marker__halo")!;
+      return {
+        marker: centerOf(element),
+        visual: centerOf(visual),
+        halo: centerOf(halo),
+      };
+    });
+    expect(
+      Math.abs(alignedCenters.visual.x - alignedCenters.marker.x),
+    ).toBeLessThanOrEqual(0.1);
+    expect(
+      Math.abs(alignedCenters.visual.y - alignedCenters.marker.y),
+    ).toBeLessThanOrEqual(0.1);
+    expect(
+      Math.abs(alignedCenters.halo.x - alignedCenters.marker.x),
+    ).toBeLessThanOrEqual(0.1);
+    expect(
+      Math.abs(alignedCenters.halo.y - alignedCenters.marker.y),
+    ).toBeLessThanOrEqual(0.1);
 
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
