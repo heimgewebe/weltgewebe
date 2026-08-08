@@ -211,7 +211,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 "refs/heads/main",
             ]
         )
-        run(["git", "clone", "--branch", "main", str(self.remote), str(self.source)])
+        run(["git", "clone", "--no-local", "--branch", "main", str(self.remote), str(self.source)])
         self.commit = run(["git", "rev-parse", "HEAD"], cwd=self.source).stdout.strip()
 
         (self.source / "build/basemap").mkdir(parents=True)
@@ -328,6 +328,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         staged_artifact = self.root / "web-artifact-staging.tar.gz"
         with tarfile.open(staged_artifact, "w:gz") as bundle:
             bundle.add(tree, arcname="build")
+        staged_artifact_sha = run(
+            ["sha256sum", str(staged_artifact)]
+        ).stdout.split()[0]
         if os.access(self.artifact.parent, os.W_OK):
             staged_artifact.replace(self.artifact)
         else:
@@ -347,7 +350,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 )
             )
             staged_artifact.unlink()
-        self.artifact_sha = run(["sha256sum", str(self.artifact)]).stdout.split()[0]
+        self.artifact_sha = staged_artifact_sha
 
     def make_command_shims(self) -> None:
         docker = self.bin / "docker"
