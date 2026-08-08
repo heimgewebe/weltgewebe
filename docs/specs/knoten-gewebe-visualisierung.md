@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-map
 owner: product-map
-last_reviewed: 2026-08-06
+last_reviewed: 2026-08-08
 review_after: 2026-11-06
 depends_on:
   - specs.garnrolle-knoten-faden
@@ -107,8 +107,15 @@ Relation noch einen erfundenen Webungsschlag.
 
 ## Themenwahrheit
 
-Die Themenfarben stammen derzeit aus den verfügbaren Knotenschlagwörtern und der
-Knotenart. Für Webgemeindezentren werden Gemeinschaft und Mitentscheidung als
+Sobald ein Knoten mindestens ein kontrolliertes Thema (`thema:<slug>`) trägt,
+sind ausschließlich diese im Themenwähler ausgewählten Themen die Farbwahrheit.
+Freie Schlagwörter und die Knotenart bleiben dann Such-, Beschreibungs- und
+Klassifikationsmetadaten und dürfen keine zusätzliche Knoten- oder Fadenfarbe
+einführen. Ein ausgewähltes Thema bedeutet daher exakt eine semantische Farbe
+im X und in der Zielpalette des ankommenden Fadens. Nur für Knoten ohne ein
+kontrolliertes Thema bleibt als Kompatibilitätsprojektion die bisher verfügbare
+Schlagwort-/Knotenart-Palette erhalten; daraus wird keine fehlende Themenwahl
+erfunden. Für Webgemeindezentren werden Gemeinschaft und Mitentscheidung als
 vorhandener Produktkontext verwendet. Fadenlinien erben die Themenpalette ihres
 Zielkörpers: ein Thema einfarbig, mehrere Themen als kontrollierte, entlang der
 Linie wiederholte Teilstränge (keine Regenbogenblendung). Die Fadenart bleibt
