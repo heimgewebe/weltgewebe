@@ -61,6 +61,17 @@
     }
   }
 
+  @media (max-width: 420px) {
+    .topbar {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+    }
+
+    .governance-slot {
+      grid-column: 1;
+      justify-self: start;
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .topbar {
       transition: none;
