@@ -1,10 +1,7 @@
 import type { DirectConversation } from "$lib/api/directMessages";
 import type { Proposal } from "$lib/api/governance";
 
-function isOwnWeberApplication(
-  proposal: Proposal,
-  accountId: string,
-): boolean {
+function isOwnWeberApplication(proposal: Proposal, accountId: string): boolean {
   return (
     proposal.kind === "weberantrag" &&
     proposal.applicant_account_id === accountId
