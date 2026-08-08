@@ -6,6 +6,7 @@ mod domain_write_guard;
 pub mod edges;
 pub mod governance;
 pub mod health;
+pub mod machine;
 pub mod meta;
 pub mod nodes;
 mod query;
@@ -59,6 +60,7 @@ use self::{
 
 pub fn api_router() -> Router<ApiState> {
     let router = Router::new()
+        .merge(machine::api_routes())
         .route("/search", get(search_nodes))
         // Compatibility alias for node-oriented clients; `/search` is canonical.
         .route("/nodes/search", get(search_nodes))

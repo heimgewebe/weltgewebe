@@ -12,7 +12,9 @@ use crate::telemetry::BuildInfo;
 pub const API_BUILD_HEADER: &str = "x-weltgewebe-api-build";
 
 pub fn meta_routes() -> Router<ApiState> {
-    Router::new().route("/version", get(version))
+    Router::new()
+        .route("/version", get(version))
+        .merge(super::machine::root_routes())
 }
 
 async fn version() -> impl IntoResponse {
