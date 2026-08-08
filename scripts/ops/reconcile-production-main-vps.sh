@@ -15,6 +15,7 @@ DOCKER_CONFIG="$STATE_ROOT/docker-config"
 export DOCKER_CONFIG
 BUILD_USER="${WELTGEWEBE_BUILD_USER:-alex}"
 FRONTEND_URL="${WELTGEWEBE_FRONTEND_VERSION_URL:-https://weltgewebe.net/_app/version.json}"
+BASEMAP_IDENTITY_URL="${WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL:-https://weltgewebe.net/_app/basemap-build.json}"
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://weltgewebe.net/api/version}"
 NODE_BUILD_IMAGE="${WELTGEWEBE_NODE_BUILD_IMAGE:-docker.io/library/node@sha256:8898f8ed3c0126667837b678979b4ed83306c856a1227c8bf5f5f77740c25cd6}"
 DEPLOY_HELPER="${WELTGEWEBE_DEPLOY_HELPER:-/usr/local/libexec/weltgewebe-deploy-exact-commit}"
@@ -114,6 +115,52 @@ fetch_main() {
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
     "+refs/heads/main:refs/remotes/origin/main" || return 1
   git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
+}
+
+verify_public_germany_basemap_identity() {
+  local commit="$1"
+  local expected_style_sha="$2"
+  local identity_json
+
+  identity_json="$(
+    curl --fail --silent --show-error \
+      --proto '=https' \
+      --connect-timeout 5 \
+      --max-time 15 \
+      --max-filesize 65536 \
+      "$BASEMAP_IDENTITY_URL"
+  )" || return 1
+  [[ -n "$identity_json" ]] || return 1
+
+  BASEMAP_IDENTITY_JSON="$identity_json" run_ops_python "$commit" "$expected_style_sha" << 'PY_PUBLIC_BASEMAP_IDENTITY'
+import json
+import os
+import re
+import sys
+
+commit, style_sha = sys.argv[1:3]
+try:
+    payload = json.loads(os.environ["BASEMAP_IDENTITY_JSON"])
+except (KeyError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"invalid public basemap identity JSON: {exc}")
+expected = {
+    "schema_version": 1,
+    "mode": "local-sovereign",
+    "variant": "germany",
+    "style_path": "/local-basemap/style-germany.json",
+    "source_commit": commit,
+    "style_sha256": style_sha,
+}
+if not isinstance(payload, dict) or payload != expected:
+    raise SystemExit(
+        "public basemap identity differs from expected nationwide Germany contract: "
+        + json.dumps(payload, sort_keys=True)
+    )
+if not re.fullmatch(r"[0-9a-f]{40}", commit):
+    raise SystemExit("expected public source commit is malformed")
+if not re.fullmatch(r"[0-9a-f]{64}", style_sha):
+    raise SystemExit("expected public style hash is malformed")
+PY_PUBLIC_BASEMAP_IDENTITY
 }
 
 write_state() {
@@ -1077,7 +1124,7 @@ prune_releases() {
 getent passwd "$BUILD_USER" > /dev/null || fail "build user does not exist: $BUILD_USER"
 [[ "$MIN_FREE_KIB" =~ ^[0-9]+$ ]] || fail "minimum free space is invalid"
 
-for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath tar; do
+for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath tar curl; do
   require_command "$command_name"
 done
 
@@ -1104,37 +1151,8 @@ target_commit="$(fetch_main)"
 [[ "$target_commit" =~ ^[0-9a-f]{40}$ ]] || fail "origin/main did not resolve to a full commit"
 write_state "observed" "$target_commit" "reconcile started"
 
-initial_receipt="$RECEIPT_ROOT/observed-$target_commit.json"
-if "$LIVE_VERIFIER" \
-  --expected-commit "$target_commit" \
-  --frontend-url "$FRONTEND_URL" \
-  --api-url "$API_URL" \
-  --output "$initial_receipt"; then
-  observed_main="$(fetch_main)"
-  if [[ "$observed_main" != "$target_commit" ]]; then
-    write_state "superseded_after_observe" "$observed_main" "main advanced after public readback"
-    echo "production_reconcile=superseded observed=$target_commit current=$observed_main"
-    exit 0
-  fi
-  repair_observed_deployment_state "$initial_receipt"
-  write_state "consistent_observed_unattested" "$target_commit" \
-    "public identity and artifact declaration matched; provenance remains unattested"
-  ln -sfn "reconcile-receipts/$target_commit.json" "$STATE_ROOT/reconcile-current.json"
-  prune_artifacts
-  prune_releases
-  echo "production_reconcile=noop commit=$target_commit state=consistent_observed_unattested"
-  exit 0
-fi
-
-build_uid="$(id -u "$BUILD_USER")"
-build_gid="$(id -g "$BUILD_USER")"
-[[ "$build_uid" =~ ^[0-9]+$ && "$build_gid" =~ ^[0-9]+$ ]] || fail "build user IDs are invalid"
-commit_epoch="$(git -C "$SOURCE_CHECKOUT" show -s --format=%ct "$target_commit")"
-[[ "$commit_epoch" =~ ^[0-9]+$ ]] || fail "target commit timestamp is invalid"
-
-# Nationwide Germany is the production sovereign contract. Verify the exact
-# target commit contains both styles and persistent Germany PMTiles aliases are
-# safe before spending time on a frontend build.
+# Nationwide Germany is the production sovereign contract. Bind the no-op
+# decision to the exact Germany style in this commit before public readback.
 for germany_style in map-style/style-germany.json map-style/style-germany-dark.json; do
   git -C "$SOURCE_CHECKOUT" cat-file -e "$target_commit:$germany_style" ||
     fail "target commit is missing required nationwide Germany style: $germany_style"
@@ -1145,6 +1163,46 @@ expected_germany_style_sha="$(
 )"
 [[ "$expected_germany_style_sha" =~ ^[0-9a-f]{64}$ ]] ||
   fail "target nationwide Germany style hash is invalid"
+
+initial_receipt="$RECEIPT_ROOT/observed-$target_commit.json"
+if "$LIVE_VERIFIER" \
+  --expected-commit "$target_commit" \
+  --frontend-url "$FRONTEND_URL" \
+  --api-url "$API_URL" \
+  --output "$initial_receipt"; then
+  basemap_identity_matches=0
+  if verify_public_germany_basemap_identity "$target_commit" "$expected_germany_style_sha"; then
+    basemap_identity_matches=1
+  fi
+  observed_main="$(fetch_main)"
+  if [[ "$observed_main" != "$target_commit" ]]; then
+    write_state "superseded_after_observe" "$observed_main" "main advanced after public readback"
+    echo "production_reconcile=superseded observed=$target_commit current=$observed_main"
+    exit 0
+  fi
+  if [[ "$basemap_identity_matches" == "1" ]]; then
+    repair_observed_deployment_state "$initial_receipt"
+    write_state "consistent_observed_unattested" "$target_commit" \
+      "public identity, artifact declaration, and Germany basemap identity matched; provenance remains unattested"
+    ln -sfn "reconcile-receipts/$target_commit.json" "$STATE_ROOT/reconcile-current.json"
+    prune_artifacts
+    prune_releases
+    echo "production_reconcile=noop commit=$target_commit state=consistent_observed_unattested basemap_variant=germany"
+    exit 0
+  fi
+  write_state "basemap_identity_drift" "$target_commit" \
+    "public commit matched but nationwide Germany basemap identity did not; rebuild required"
+  echo "production_reconcile=repair_required commit=$target_commit reason=basemap_identity_drift"
+fi
+
+build_uid="$(id -u "$BUILD_USER")"
+build_gid="$(id -g "$BUILD_USER")"
+[[ "$build_uid" =~ ^[0-9]+$ && "$build_gid" =~ ^[0-9]+$ ]] || fail "build user IDs are invalid"
+commit_epoch="$(git -C "$SOURCE_CHECKOUT" show -s --format=%ct "$target_commit")"
+[[ "$commit_epoch" =~ ^[0-9]+$ ]] || fail "target commit timestamp is invalid"
+
+# The target Germany styles were bound before the public no-op decision above.
+# Now verify the persistent Germany PMTiles aliases before building.
 germany_basemap_root="$SOURCE_CHECKOUT/build/basemap"
 [[ -d "$germany_basemap_root" && ! -L "$germany_basemap_root" ]] ||
   fail "nationwide Germany basemap artifact root is missing or unsafe"
@@ -1359,6 +1417,8 @@ final_receipt="$RECEIPT_ROOT/public-$target_commit.json"
   --wait-seconds 120 \
   --poll-seconds 5 \
   --output "$final_receipt"
+verify_public_germany_basemap_identity "$target_commit" "$expected_germany_style_sha" ||
+  fail "public nationwide Germany basemap identity mismatch after deploy"
 
 current_main="$(fetch_main)"
 if [[ "$current_main" != "$target_commit" ]]; then

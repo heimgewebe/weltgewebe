@@ -409,6 +409,19 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                     } > "$headers"
                   fi
                   printf '{"commit":"%s","version":"0.1.0"}\\n' "$public_commit"
+                elif [[ "$url" == *"/_app/basemap-build.json" ]]; then
+                  public_variant="${TEST_PUBLIC_BASEMAP_VARIANT:-germany}"
+                  if [[ -n "${TEST_DEPLOY_MARKER:-}" && -e "$TEST_DEPLOY_MARKER" ]]; then
+                    public_variant="germany"
+                  fi
+                  if [[ "$public_variant" == "germany" ]]; then
+                    style_sha="$(sha256sum "$WELTGEWEBE_SOURCE_CHECKOUT/map-style/style-germany.json" | awk '{print $1}')"
+                    printf '{"schema_version":1,"mode":"local-sovereign","variant":"germany","style_path":"/local-basemap/style-germany.json","source_commit":"%s","style_sha256":"%s"}\\n' \
+                      "$public_commit" "$style_sha"
+                  else
+                    printf '{"schema_version":1,"mode":"local-sovereign","variant":"regional","style_path":"/local-basemap/style.json","source_commit":"%s","style_sha256":"%064d"}\\n' \
+                      "$public_commit" 0
+                  fi
                 else
                   printf '{"commit":"%s","version":"%s"}\\n' \
                     "$public_commit" "${public_commit:0:8}"
@@ -700,6 +713,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             "WELTGEWEBE_FRONTEND_VERSION_URL": (
                 "https://example.invalid/_app/version.json"
             ),
+            "WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL": (
+                "https://example.invalid/_app/basemap-build.json"
+            ),
             "WELTGEWEBE_API_VERSION_URL": "https://example.invalid/api/version",
             "TEST_COMMIT": self.commit,
             "TEST_REMOTE": str(self.remote),
@@ -880,6 +896,33 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             ]
         )
         return run(argv, check=False)
+
+    def test_reconciler_repairs_same_commit_regional_public_bundle(self) -> None:
+        marker = self.root / "deploy-complete"
+        result = self.reconcile_existing_public_commit(
+            extra_env={
+                "WELTGEWEBE_DEPLOY_HELPER": str(DEPLOY_SCRIPT),
+                "PUBLIC_COMMIT": self.commit,
+                "TEST_PUBLIC_BASEMAP_VARIANT": "regional",
+                "TEST_DEPLOY_MARKER": str(marker),
+            }
+        )
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(marker.exists())
+        self.assertIn("reason=basemap_identity_drift", result.stdout)
+        self.assertIn("production_reconcile=verified", result.stdout)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
+
+    def test_reconciler_keeps_same_commit_germany_public_bundle_as_noop(self) -> None:
+        result = self.reconcile_existing_public_commit(
+            extra_env={"PUBLIC_COMMIT": self.commit}
+        )
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("production_reconcile=noop", result.stdout)
+        self.assertIn("basemap_variant=germany", result.stdout)
+        self.assertNotIn("reason=basemap_identity_drift", result.stdout)
 
     def test_reconciler_rejects_a_regional_frontend_artifact(self) -> None:
         self.make_artifact(basemap_variant="regional")

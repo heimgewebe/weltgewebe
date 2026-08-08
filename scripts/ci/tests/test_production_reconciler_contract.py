@@ -111,6 +111,12 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("nationwide Germany basemap target is group- or world-writable", script)
         self.assertIn("build/_app/basemap-build.json", script)
         self.assertIn("frontend basemap build identity mismatch", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL", script)
+        self.assertIn("verify_public_germany_basemap_identity", script)
+        self.assertIn("reason=basemap_identity_drift", script)
+        self.assertIn(
+            "public nationwide Germany basemap identity mismatch after deploy", script
+        )
         self.assertIn("/local-basemap/style-germany.json", script)
 
     def test_deploy_helper_runs_bounded_migrations_before_full_deploy(self) -> None:
