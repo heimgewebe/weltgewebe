@@ -254,8 +254,12 @@ async fn csrf_blocks_all_mutating_endpoints_without_origin() -> Result<()> {
         (Method::PUT, "/notifications/preferences"),
         (Method::POST, "/push/subscriptions"),
         (Method::DELETE, "/push/subscriptions"),
-        // Cross-cutting (non-auth) mutating route to prove the guard is global.
+        // Cross-cutting (non-auth) mutating routes to prove the guard is global.
         (Method::PATCH, "/nodes/any-node-id"),
+        (Method::POST, "/machine/v1/nodes"),
+        (Method::PATCH, "/machine/v1/nodes/any-node-id"),
+        (Method::PUT, "/machine/v1/nodes/any-node-id"),
+        (Method::DELETE, "/machine/v1/nodes/any-node-id"),
     ];
 
     for (method, path) in mutating_endpoints {
@@ -397,6 +401,10 @@ const CSRF_COVERED_MUTATING_ROUTES: &[(&str, &str)] = &[
     ("PUT", "/nodes/{id}"),
     ("DELETE", "/nodes/{id}"),
     ("POST", "/nodes"),
+    ("POST", "/machine/v1/nodes"),
+    ("PATCH", "/machine/v1/nodes/{id}"),
+    ("PUT", "/machine/v1/nodes/{id}"),
+    ("DELETE", "/machine/v1/nodes/{id}"),
     ("POST", "/conversations/{id}/messages"),
     ("POST", "/direct-conversations"),
     ("PUT", "/notifications/preferences"),
