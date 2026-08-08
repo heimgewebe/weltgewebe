@@ -1,3 +1,5 @@
+import { invalidateAccountAttention } from "$lib/accountAttention";
+
 export type ProposalStatus = "consent" | "voting" | "accepted" | "rejected";
 export type VoteChoice = "ja" | "nein" | "enthaltung";
 
@@ -78,11 +80,11 @@ export function getProposal(id: string): Promise<ProposalDetail> {
   return request<ProposalDetail>(`/api/proposals/${encodeURIComponent(id)}`);
 }
 
-export function createWeberProposal(
+export async function createWeberProposal(
   summary?: string,
   webgemeindezentrumId?: string,
 ): Promise<Proposal> {
-  return request<Proposal>("/api/proposals", {
+  const proposal = await request<Proposal>("/api/proposals", {
     method: "POST",
     body: JSON.stringify({
       kind: "weberantrag",
@@ -92,6 +94,8 @@ export function createWeberProposal(
         : {}),
     }),
   });
+  invalidateAccountAttention();
+  return proposal;
 }
 
 export function createSachProposal(
