@@ -140,6 +140,29 @@ describe("woven node projection", () => {
     ]);
   });
 
+  it("keeps one selected controlled topic semantically one-coloured", () => {
+    const weave = deriveEntityWeave(
+      node({
+        tags: ["thema:natur", "Werkstatt"],
+        kind: "Garten",
+      }),
+      [],
+      nowMs,
+    );
+
+    expect(weave.themeSegments.map((segment) => segment.id)).toEqual([
+      "thema:natur",
+    ]);
+    expect(weave.themeSegments.map((segment) => segment.label)).toEqual([
+      "Natur",
+    ]);
+    const palette = targetThemePalette(weave);
+    expect(palette).toHaveLength(1);
+    expect(
+      new Set(weave.xCoreSegments.map((segment) => segment.color)),
+    ).toEqual(new Set(palette));
+  });
+
   it("assigns two themes to the two diagonal strands", () => {
     const arms = assignXCoreSegments(["Natur", "Bildung"]);
     const byArm = Object.fromEntries(
@@ -184,7 +207,7 @@ describe("woven node projection", () => {
     ]);
   });
 
-  it("prioritizes controlled knotting topics for the four visible X arms", () => {
+  it("uses controlled knotting topics exclusively for the visible X colours", () => {
     const weave = deriveEntityWeave(
       node({
         tags: [
@@ -200,17 +223,21 @@ describe("woven node projection", () => {
       nowMs,
     );
 
+    expect(weave.themeSegments.map((segment) => segment.id)).toEqual([
+      "thema:wohnen",
+      "thema:natur",
+      "thema:kunst",
+    ]);
+    expect(weave.themeSegments.map((segment) => segment.label)).toEqual([
+      "Wohnen",
+      "Natur",
+      "Kunst",
+    ]);
     expect(weave.xCoreSegments.map((segment) => segment.themeId)).toEqual([
       "thema:wohnen",
       "thema:natur",
       "thema:kunst",
-      "Werkstatt",
-    ]);
-    expect(weave.xCoreSegments.map((segment) => segment.label)).toEqual([
-      "Wohnen",
-      "Natur",
-      "Kunst",
-      "Werkstatt",
+      "thema:wohnen",
     ]);
   });
 
@@ -312,7 +339,6 @@ describe("woven node projection", () => {
     // Identity keeps the full normalised text — no prefix strip before hash/id.
     expect(weaveTopics(node({ tags: ["thema:kunst"] }))).toEqual([
       "thema:kunst",
-      "Garten",
     ]);
     expect(weaveTopicIdentity("thema:kunst")).toBe("thema:kunst");
     expect(weaveTopicDisplayLabel("thema:kunst")).toBe("Kunst");

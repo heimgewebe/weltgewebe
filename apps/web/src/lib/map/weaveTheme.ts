@@ -1,6 +1,8 @@
 import {
+  combineKnottingTags,
   knottingTagDisplayLabel,
   prioritizeKnottingTopics,
+  splitKnottingTags,
 } from "$lib/knottingTopics";
 import type {
   MapEntityNode,
@@ -145,16 +147,25 @@ export function weaveTopicDisplayLabel(label: string): string {
 }
 
 /**
- * Full normalised topic texts, deduplicated by identity, never truncated and
- * never hard-capped. The model keeps every distinct topic; the X core later
- * compresses the visual to at most four primary arm colours.
+ * Full normalised visual topic texts, deduplicated by identity and never
+ * truncated. Once a node has at least one controlled knotting topic, those
+ * selected topics are the complete colour authority: free keywords and the
+ * node kind remain descriptive/search metadata and must not silently add a
+ * second visual meaning. Nodes without controlled topics keep the previous
+ * keyword/kind fallback so externally written or older data remains visible
+ * without inventing a migration.
  */
 export function weaveTopics(entity: WeaveEntity): string[] {
-  const nodeTags = prioritizeKnottingTopics(entity.tags ?? []);
-  const raw: Array<string | null | undefined> =
-    entity.type === "webgemeindezentrum"
-      ? ["Gemeinschaft", "Mitentscheiden"]
-      : [...nodeTags, entity.kind];
+  let raw: Array<string | null | undefined>;
+  if (entity.type === "webgemeindezentrum") {
+    raw = ["Gemeinschaft", "Mitentscheiden"];
+  } else {
+    const { topics } = splitKnottingTags(entity.tags ?? []);
+    const controlledTopicTags = combineKnottingTags(topics, []);
+    raw = controlledTopicTags.length
+      ? controlledTopicTags
+      : [...prioritizeKnottingTopics(entity.tags ?? []), entity.kind];
+  }
   const seen = new Set<string>();
   const result: string[] = [];
   for (const value of raw) {
