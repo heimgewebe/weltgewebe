@@ -14,6 +14,8 @@ export interface VersionData {
 function createUpdateStore() {
   const { subscribe, set } = writable(false);
   let initialized = false;
+  let updateDetected = false;
+  let pendingCheck: Promise<void> | undefined;
 
   // The local version is strictly static and bound to the client bundle at build-time.
   // It must never be dynamically updated by a runtime fetch.
@@ -29,9 +31,7 @@ function createUpdateStore() {
     }
   }
 
-  async function checkForUpdate() {
-    if (!browser) return;
-
+  async function performCheck() {
     const serverData = await fetchServerVersion();
 
     if (!serverData) {
@@ -62,20 +62,31 @@ function createUpdateStore() {
           serverVersion: serverData.version,
         });
       }
+      updateDetected = true;
       set(true);
     }
   }
 
+  function checkForUpdate(): Promise<void> {
+    if (!browser || updateDetected) return Promise.resolve();
+    if (pendingCheck) return pendingCheck;
+
+    pendingCheck = performCheck().finally(() => {
+      pendingCheck = undefined;
+    });
+    return pendingCheck;
+  }
+
   const handleVisibilityChange = () => {
     if (document.visibilityState === "visible") {
-      checkForUpdate();
+      void checkForUpdate();
     }
   };
 
   const handlePageShow = (event: PageTransitionEvent) => {
     // If persisted is true, the page was restored from bfcache
     if (event.persisted) {
-      checkForUpdate();
+      void checkForUpdate();
     }
   };
 
@@ -85,7 +96,7 @@ function createUpdateStore() {
     initialized = true;
 
     // Check immediately on app start
-    checkForUpdate();
+    void checkForUpdate();
 
     // Re-check when the user comes back to the tab
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -100,6 +111,8 @@ function createUpdateStore() {
     init,
     reset: () => {
       set(false);
+      updateDetected = false;
+      pendingCheck = undefined;
       // For testing, we also reset initialization state so tests can cleanly re-init
       if (browser) {
         document.removeEventListener(
