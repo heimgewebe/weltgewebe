@@ -13,35 +13,50 @@
     countUnreadDirectMessages,
     hasAcceptedWeberApplication,
     hasPendingWeberApplication,
+    unreadMessageAccessibleCount,
     unreadMessageBadgeLabel,
   } from "./topBarAttentionState";
   import { deriveTopBarAuthView } from "./topBarAuthState";
 
+  type WeberApplicationState = "unknown" | "available" | "pending";
+
   const MESSAGE_POLL_MS = 30_000;
 
   let observedAccountId = "";
-  let pendingWeberApplication = false;
+  let weberApplicationState: WeberApplicationState = "unknown";
   let unreadMessageCount = 0;
   let messageRequestRevision = 0;
   let weberRequestRevision = 0;
 
   $: authView = deriveTopBarAuthView($authStore);
-  $: guestBadgeHref = pendingWeberApplication
-    ? "/antraege"
-    : "/antraege#antrag-stellen";
-  $: guestBadgeAction = pendingWeberApplication
-    ? "Weberstatus beantragt"
-    : "Weber werden";
-  $: guestBadgeTitle = pendingWeberApplication
-    ? "Weberstatus beantragt – Antrag ansehen"
-    : "Weberstatus beantragen";
+  $: pendingWeberApplication = weberApplicationState === "pending";
+  $: guestBadgeHref =
+    weberApplicationState === "available"
+      ? "/antraege#antrag-stellen"
+      : "/antraege";
+  $: guestBadgeAction =
+    weberApplicationState === "pending"
+      ? "Weberstatus beantragt"
+      : weberApplicationState === "available"
+        ? "Weber werden"
+        : "Weberstatus wird geprüft";
+  $: guestBadgeTitle =
+    weberApplicationState === "pending"
+      ? "Weberstatus beantragt – Antrag ansehen"
+      : weberApplicationState === "available"
+        ? "Weberstatus beantragen"
+        : "Weberstatus wird geprüft";
+  $: guestBadgeCompactSymbol =
+    weberApplicationState === "pending"
+      ? "◌"
+      : weberApplicationState === "available"
+        ? "G"
+        : "…";
   $: messageBadgeLabel = unreadMessageBadgeLabel(unreadMessageCount);
   $: messageAriaLabel =
-    unreadMessageCount === 1
-      ? "Private Nachrichten: 1 ungelesene Nachricht"
-      : unreadMessageCount > 1
-        ? `Private Nachrichten: ${unreadMessageCount} ungelesene Nachrichten`
-        : "Private Nachrichten";
+    unreadMessageCount > 0
+      ? `Private Nachrichten: ${unreadMessageAccessibleCount(unreadMessageCount)}`
+      : "Private Nachrichten";
 
   function retryAuth() {
     void authStore.checkAuth({ force: true });
@@ -49,7 +64,7 @@
 
   function resetAttention(accountId = "") {
     observedAccountId = accountId;
-    pendingWeberApplication = false;
+    weberApplicationState = "unknown";
     unreadMessageCount = 0;
     messageRequestRevision += 1;
     weberRequestRevision += 1;
@@ -86,7 +101,7 @@
     const accountId = status.account_id;
     if (!status.authenticated || !accountId || status.role !== "gast") {
       weberRequestRevision += 1;
-      pendingWeberApplication = false;
+      weberApplicationState = "unknown";
       return;
     }
 
@@ -106,14 +121,15 @@
         // A governance read can finalize the application and promote the account.
         // Keep the non-actionable application status visible until auth confirms
         // the new role, rather than briefly offering a second Weber application.
-        pendingWeberApplication = true;
+        weberApplicationState = "pending";
         await authStore.checkAuth({ force: true });
         return;
       }
 
-      pendingWeberApplication = pending;
+      weberApplicationState = pending ? "pending" : "available";
     } catch {
-      // Keep the last confirmed application state during transient API failures.
+      // Keep a previously confirmed state. A fresh account remains unknown so an
+      // API failure can never masquerade as permission to submit another request.
     }
   }
 
@@ -208,12 +224,16 @@
       class:pending={pendingWeberApplication}
       class="guest-badge"
       href={guestBadgeHref}
+      data-state={weberApplicationState}
       data-testid="topbar-guest-badge"
       aria-label={`Rolle: Gast – ${guestBadgeAction}`}
       title={guestBadgeTitle}
     >
       <span class="guest-badge-role">Gast</span>
       <span class="guest-badge-cta">{guestBadgeAction}</span>
+      <span class="guest-badge-compact" aria-hidden="true">
+        {guestBadgeCompactSymbol}
+      </span>
     </a>
   {/if}
 
@@ -312,6 +332,12 @@
     opacity: 0.9;
   }
 
+  .guest-badge-compact {
+    display: none;
+    font-size: 0.9rem;
+    line-height: 1;
+  }
+
   .message-entry,
   .login-entry,
   .auth-retry {
@@ -385,32 +411,24 @@
       padding: 0;
     }
 
-    .auth-symbol {
+    .auth-symbol,
+    .guest-badge-compact {
       display: inline;
     }
 
-    .auth-label {
-      display: none;
-    }
-
-    .guest-badge {
-      gap: 0;
-      padding: 0 0.6rem;
-    }
-
+    .auth-label,
+    .guest-badge-role,
     .guest-badge-cta {
       display: none;
     }
 
-    .guest-badge.pending {
-      gap: 0.3rem;
-    }
-
-    .guest-badge.pending .guest-badge-cta {
-      display: inline;
-      max-width: 8.5rem;
-      overflow: hidden;
-      text-overflow: ellipsis;
+    .guest-badge {
+      box-sizing: border-box;
+      width: 44px;
+      min-width: 44px;
+      gap: 0;
+      justify-content: center;
+      padding: 0;
     }
   }
 </style>
