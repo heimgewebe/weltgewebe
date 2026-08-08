@@ -9,6 +9,7 @@ permissions:
     paths:
       - ".wgx/**"
       - "docs/wgx-konzept.md"
+      - ".github/workflows/wgx-smoke.yml"
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -16,6 +17,9 @@ concurrency:
 
 jobs:
   smoke:
-    # auch hier: statt eigener CI-Logik nur noch Forwarder auf das
-    # kanonische wgx-Workflow-Repo.
-    uses: heimgewebe/wgx/.github/workflows/wgx-smoke.yml@814d5e9102e4020c786d6bb7e1c377004cf2bbea
+    # Compatibility filename only: verification policy is owned by Metarepo.
+    uses: heimgewebe/metarepo/.github/workflows/reusable-repo-verify.yml@fe6950616b2d06343e284a56a8944e0a36f1f972
+    with:
+      mode: smoke
+    permissions:
+      contents: read

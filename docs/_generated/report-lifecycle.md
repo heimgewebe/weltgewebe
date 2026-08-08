@@ -154,12 +154,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "Runtime health, deployment health, or the correctness of claims inside individual reports."
   ],
-  "generated_at": "2026-08-06T16:39:36+02:00",
+  "generated_at": "2026-08-08T08:06:49+02:00",
   "limitations": [
     "The report reflects repository files only and does not execute product runtime checks."
   ],
   "schema_version": 1,
-  "source_revision": "7e0b7209f6c8cca13243faa25d9c506a6dd0aaf0",
+  "source_revision": "70270bf28445fd178352efc4994f346c5981eb1e",
   "sources": [
     {
       "path": "docs/reports/agent-readiness-audit.md",
@@ -303,7 +303,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/github-actions-node24-readiness.md",
-      "sha256": "69ec3e0f8dfe168214fd1231b983cd3f22e72381a4aec56d75ecf8fcde0dc602"
+      "sha256": "4a1966c7e66cae1d4eb1161919ac6d1ec58f618e0be8b713381ca798626e90a1"
     },
     {
       "path": "docs/reports/inwx-zone-reconciliation-plan.md",
