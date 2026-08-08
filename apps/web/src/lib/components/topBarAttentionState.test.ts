@@ -5,6 +5,7 @@ import {
   countUnreadDirectMessages,
   hasAcceptedWeberApplication,
   hasPendingWeberApplication,
+  unreadMessageAccessibleCount,
   unreadMessageBadgeLabel,
 } from "./topBarAttentionState";
 
@@ -77,5 +78,13 @@ describe("topBarAttentionState", () => {
     expect(unreadMessageBadgeLabel(4)).toBe("4");
     expect(unreadMessageBadgeLabel(100)).toBe("99+");
     expect(unreadMessageBadgeLabel(Number.POSITIVE_INFINITY)).toBe("0");
+  });
+
+  it("announces a saturated unread total as a lower bound", () => {
+    expect(unreadMessageAccessibleCount(1)).toBe("1 ungelesene Nachricht");
+    expect(unreadMessageAccessibleCount(4)).toBe("4 ungelesene Nachrichten");
+    expect(unreadMessageAccessibleCount(100)).toBe(
+      "99 oder mehr ungelesene Nachrichten",
+    );
   });
 });
