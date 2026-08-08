@@ -4,7 +4,6 @@
   import { page } from "$app/stores";
   import { authStore } from "$lib/auth/store";
   import "$lib/styles/page-system.css";
-  import ProposalDetail from "$lib/components/governance/ProposalDetail.svelte";
   import {
     GovernanceApiError,
     createWeberProposal,
@@ -28,12 +27,16 @@
   let applicationSection: HTMLElement | null = null;
   let pendingApplicationFocus: ApplicationFocusRequest | null = null;
 
+  let ProposalDetail: typeof import("$lib/components/governance/ProposalDetail.svelte").default | null = null;
   let detailProposalId: string | null = null;
   let requestedDetailProposalId: string | null = null;
   let detailRebindVersion = 0;
 
   $: selectedProposalId = $page.url.searchParams.get("id");
-  $: if (selectedProposalId !== requestedDetailProposalId) {
+  $: if (
+    typeof window !== "undefined" &&
+    selectedProposalId !== requestedDetailProposalId
+  ) {
     requestedDetailProposalId = selectedProposalId;
     void rebindProposalDetail(selectedProposalId);
   }
@@ -171,6 +174,13 @@
   ): Promise<void> {
     const version = ++detailRebindVersion;
     detailProposalId = null;
+    if (proposalId && !ProposalDetail) {
+      const module = await import(
+        "$lib/components/governance/ProposalDetail.svelte"
+      );
+      if (version !== detailRebindVersion) return;
+      ProposalDetail = module.default;
+    }
     await tick();
     if (version === detailRebindVersion) detailProposalId = proposalId;
   }
@@ -223,11 +233,15 @@
 </svelte:head>
 
 {#if selectedProposalId}
-  {#if detailProposalId}
+  {#if ProposalDetail && detailProposalId}
     <ProposalDetail
       proposalId={detailProposalId}
       on:messagecountchange={updateProposalMessageCount}
     />
+  {:else}
+    <main class="wg-page wg-page--paper">
+      <p class="wg-state wg-state--muted" role="status">Antrag wird geladen…</p>
+    </main>
   {/if}
 {:else}
   <main class="wg-page wg-page--paper" data-testid="applications-page">
@@ -492,8 +506,7 @@
       border-color 120ms ease;
   }
 
-  .proposal-card:hover,
-  .proposal-card:focus-visible {
+  .proposal-card:hover {
     transform: translateY(-2px);
     border-color: var(--wg-border-strong);
   }
@@ -554,8 +567,7 @@
       transition: none;
     }
 
-    .proposal-card:hover,
-    .proposal-card:focus-visible {
+    .proposal-card:hover {
       transform: none;
     }
   }
