@@ -1,6 +1,11 @@
+use std::sync::LazyLock;
+
 use axum::{
     extract::{Path, State},
-    http::{header::IF_MATCH, HeaderMap, StatusCode},
+    http::{
+        header::{CONTENT_TYPE, IF_MATCH},
+        HeaderMap, HeaderValue, StatusCode,
+    },
     middleware::from_fn,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -28,6 +33,46 @@ use super::{
 pub const MACHINE_PROTOCOL: &str = "weltgewebe-machine/1";
 const OPERATION_MANIFEST: &str = include_str!("../../../../contracts/machine/operations.json");
 
+const DOMAIN_SCHEMAS: &[(&str, &str)] = &[
+    (
+        "account",
+        include_str!("../../../../contracts/domain/account.schema.json"),
+    ),
+    (
+        "conversation",
+        include_str!("../../../../contracts/domain/conversation.schema.json"),
+    ),
+    (
+        "edge",
+        include_str!("../../../../contracts/domain/edge.schema.json"),
+    ),
+    (
+        "message",
+        include_str!("../../../../contracts/domain/message.schema.json"),
+    ),
+    (
+        "node",
+        include_str!("../../../../contracts/domain/node.schema.json"),
+    ),
+    (
+        "role",
+        include_str!("../../../../contracts/domain/role.schema.json"),
+    ),
+];
+
+const FEDERATION_SCHEMAS: &[(&str, &str, &str)] = &[
+    (
+        "cell-descriptor",
+        "cell_descriptor",
+        include_str!("../../../../contracts/federation/v1/cell-descriptor.schema.json"),
+    ),
+    (
+        "event",
+        "event",
+        include_str!("../../../../contracts/federation/v1/event.schema.json"),
+    ),
+];
+
 #[derive(Clone, Debug, Deserialize)]
 struct MachineManifest {
     schema_version: u8,
@@ -42,6 +87,28 @@ struct ApiOperation {
     auth: String,
     write_safety: String,
 }
+
+static MACHINE_MANIFEST: LazyLock<Result<MachineManifest, String>> = LazyLock::new(|| {
+    serde_json::from_str(OPERATION_MANIFEST).map_err(|error| error.to_string())
+});
+
+static BUILD_INFO: LazyLock<BuildInfo> = LazyLock::new(BuildInfo::collect);
+
+static OPENAPI_DOCUMENT: LazyLock<Result<Value, String>> = LazyLock::new(|| {
+    let manifest = machine_manifest().map_err(|error| error.to_string())?;
+    build_openapi_document(manifest)
+});
+
+static OPENAPI_BODY: LazyLock<Result<String, String>> = LazyLock::new(|| {
+    let document = openapi_document().map_err(|error| error.to_string())?;
+    serde_json::to_string(document).map_err(|error| error.to_string())
+});
+
+static MACHINE_DESCRIPTOR_BODY: LazyLock<Result<String, String>> = LazyLock::new(|| {
+    let manifest = machine_manifest().map_err(|error| error.to_string())?;
+    serde_json::to_string(&machine_descriptor_document(manifest, &BUILD_INFO))
+        .map_err(|error| error.to_string())
+});
 
 pub fn api_routes() -> Router<ApiState> {
     Router::new()
@@ -171,22 +238,47 @@ async fn delete_machine_node(
     delete_node_serialized(State(state), Extension(auth), Path(id), headers).await
 }
 
-fn machine_manifest() -> Result<MachineManifest, serde_json::Error> {
-    serde_json::from_str(OPERATION_MANIFEST)
+fn machine_manifest() -> Result<&'static MachineManifest, &'static str> {
+    match &*MACHINE_MANIFEST {
+        Ok(manifest) => Ok(manifest),
+        Err(error) => Err(error.as_str()),
+    }
+}
+
+fn openapi_document() -> Result<&'static Value, &'static str> {
+    match &*OPENAPI_DOCUMENT {
+        Ok(document) => Ok(document),
+        Err(error) => Err(error.as_str()),
+    }
+}
+
+fn openapi_body() -> Result<&'static str, &'static str> {
+    match &*OPENAPI_BODY {
+        Ok(body) => Ok(body.as_str()),
+        Err(error) => Err(error.as_str()),
+    }
+}
+
+fn machine_descriptor_body() -> Result<&'static str, &'static str> {
+    match &*MACHINE_DESCRIPTOR_BODY {
+        Ok(body) => Ok(body.as_str()),
+        Err(error) => Err(error.as_str()),
+    }
 }
 
 async fn machine_descriptor() -> Response {
-    let manifest = match machine_manifest() {
-        Ok(manifest) => manifest,
+    match machine_descriptor_body() {
+        Ok(body) => json_static_response(body),
         Err(error) => {
-            tracing::error!(%error, "embedded machine operation manifest is invalid JSON");
-            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+            tracing::error!(%error, "failed to build machine descriptor");
+            StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
-    };
-    let build = BuildInfo::collect();
+    }
+}
 
-    Json(json!({
-        "protocol": manifest.contract,
+fn machine_descriptor_document(manifest: &MachineManifest, build: &BuildInfo) -> Value {
+    json!({
+        "protocol": manifest.contract.as_str(),
         "schema_version": manifest.schema_version,
         "build": {
             "version": build.version,
@@ -209,18 +301,8 @@ async fn machine_descriptor() -> Response {
             "federation-v1"
         ],
         "schemas": {
-            "domain": {
-                "account": "/schemas/domain/account",
-                "conversation": "/schemas/domain/conversation",
-                "edge": "/schemas/domain/edge",
-                "message": "/schemas/domain/message",
-                "node": "/schemas/domain/node",
-                "role": "/schemas/domain/role"
-            },
-            "federation": {
-                "cell_descriptor": "/schemas/federation/v1/cell-descriptor",
-                "event": "/schemas/federation/v1/event"
-            }
+            "domain": domain_schema_links(),
+            "federation": federation_schema_links(),
         },
         "write_profiles": {
             "safe-node-writes-v1": {
@@ -245,13 +327,40 @@ async fn machine_descriptor() -> Response {
             "events": "/federation/v1/events",
             "objects": "/federation/v1/objects"
         }
-    }))
-    .into_response()
+    })
+}
+
+fn domain_schema_links() -> Value {
+    Value::Object(
+        DOMAIN_SCHEMAS
+            .iter()
+            .map(|(name, _)| {
+                (
+                    (*name).to_string(),
+                    Value::String(format!("/schemas/domain/{name}")),
+                )
+            })
+            .collect(),
+    )
+}
+
+fn federation_schema_links() -> Value {
+    Value::Object(
+        FEDERATION_SCHEMAS
+            .iter()
+            .map(|(name, descriptor_key, _)| {
+                (
+                    (*descriptor_key).to_string(),
+                    Value::String(format!("/schemas/federation/v1/{name}")),
+                )
+            })
+            .collect(),
+    )
 }
 
 async fn openapi() -> Response {
-    match openapi_document() {
-        Ok(document) => Json(document).into_response(),
+    match openapi_body() {
+        Ok(body) => json_static_response(body),
         Err(error) => {
             tracing::error!(%error, "failed to build OpenAPI machine contract");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
@@ -259,12 +368,11 @@ async fn openapi() -> Response {
     }
 }
 
-fn openapi_document() -> Result<Value, serde_json::Error> {
-    let manifest = machine_manifest()?;
+fn build_openapi_document(manifest: &MachineManifest) -> Result<Value, String> {
     let mut paths = Map::new();
 
     for operation in &manifest.operations {
-        insert_openapi_operation(&mut paths, operation);
+        insert_openapi_operation(&mut paths, operation)?;
     }
 
     Ok(json!({
@@ -299,39 +407,57 @@ fn openapi_document() -> Result<Value, serde_json::Error> {
                 }
             }
         },
-        "x-weltgewebe-contract": manifest.contract,
+        "x-weltgewebe-contract": manifest.contract.as_str(),
         "x-weltgewebe-completeness": "operation-surface-plus-core-schemas",
         "x-weltgewebe-discovery": "/.well-known/weltgewebe"
     }))
 }
 
-fn insert_openapi_operation(paths: &mut Map<String, Value>, operation: &ApiOperation) {
+fn insert_openapi_operation(
+    paths: &mut Map<String, Value>,
+    operation: &ApiOperation,
+) -> Result<(), String> {
     let item = paths
         .entry(operation.path.clone())
-        .or_insert_with(|| json!({}));
-    let item = item
-        .as_object_mut()
-        .expect("OpenAPI path entries are always objects");
+        .or_insert_with(|| Value::Object(Map::new()));
+    let Some(item) = item.as_object_mut() else {
+        return Err(format!(
+            "OpenAPI path {} was not represented as an object",
+            operation.path
+        ));
+    };
     item.insert(
         operation.method.to_ascii_lowercase(),
         openapi_operation(operation),
     );
+    Ok(())
 }
 
 fn openapi_operation(operation: &ApiOperation) -> Value {
-    let mut value = json!({
-        "operationId": operation_id(&operation.method, &operation.path),
-        "summary": format!("{} {}", operation.method, operation.path),
-        "responses": {
+    let mut object = Map::new();
+    object.insert(
+        "operationId".to_string(),
+        Value::String(operation_id(&operation.method, &operation.path)),
+    );
+    object.insert(
+        "summary".to_string(),
+        Value::String(format!("{} {}", operation.method, operation.path)),
+    );
+    object.insert(
+        "responses".to_string(),
+        json!({
             "200": { "description": "Successful response" },
             "default": { "description": "Error response" }
-        },
-        "x-weltgewebe-auth": operation.auth.as_str(),
-        "x-weltgewebe-write-safety": operation.write_safety.as_str()
-    });
-    let object = value
-        .as_object_mut()
-        .expect("OpenAPI operation is always an object");
+        }),
+    );
+    object.insert(
+        "x-weltgewebe-auth".to_string(),
+        Value::String(operation.auth.clone()),
+    );
+    object.insert(
+        "x-weltgewebe-write-safety".to_string(),
+        Value::String(operation.write_safety.clone()),
+    );
 
     let mut parameters = path_parameters(&operation.path);
     if operation.write_safety == "if_match_required" {
@@ -394,7 +520,7 @@ fn openapi_operation(operation: &ApiOperation) -> Value {
         );
     }
 
-    value
+    Value::Object(object)
 }
 
 fn operation_id(method: &str, path: &str) -> String {
@@ -438,54 +564,31 @@ async fn federation_schema(Path(name): Path<String>) -> Response {
     schema_response(federation_schema_text(&name))
 }
 
-fn schema_response(schema: Option<&'static str>) -> Response {
-    let Some(schema) = schema else {
-        return StatusCode::NOT_FOUND.into_response();
-    };
+fn json_static_response(body: &'static str) -> Response {
+    let mut response = body.into_response();
+    response
+        .headers_mut()
+        .insert(CONTENT_TYPE, HeaderValue::from_static("application/json"));
+    response
+}
 
-    match serde_json::from_str::<Value>(schema) {
-        Ok(value) => Json(value).into_response(),
-        Err(error) => {
-            tracing::error!(%error, "embedded machine schema is invalid JSON");
-            StatusCode::INTERNAL_SERVER_ERROR.into_response()
-        }
+fn schema_response(schema: Option<&'static str>) -> Response {
+    match schema {
+        Some(schema) => json_static_response(schema),
+        None => StatusCode::NOT_FOUND.into_response(),
     }
 }
 
 fn domain_schema_text(name: &str) -> Option<&'static str> {
-    match name {
-        "account" => Some(include_str!(
-            "../../../../contracts/domain/account.schema.json"
-        )),
-        "conversation" => Some(include_str!(
-            "../../../../contracts/domain/conversation.schema.json"
-        )),
-        "edge" => Some(include_str!(
-            "../../../../contracts/domain/edge.schema.json"
-        )),
-        "message" => Some(include_str!(
-            "../../../../contracts/domain/message.schema.json"
-        )),
-        "node" => Some(include_str!(
-            "../../../../contracts/domain/node.schema.json"
-        )),
-        "role" => Some(include_str!(
-            "../../../../contracts/domain/role.schema.json"
-        )),
-        _ => None,
-    }
+    DOMAIN_SCHEMAS
+        .iter()
+        .find_map(|(schema_name, schema)| (*schema_name == name).then_some(*schema))
 }
 
 fn federation_schema_text(name: &str) -> Option<&'static str> {
-    match name {
-        "cell-descriptor" => Some(include_str!(
-            "../../../../contracts/federation/v1/cell-descriptor.schema.json"
-        )),
-        "event" => Some(include_str!(
-            "../../../../contracts/federation/v1/event.schema.json"
-        )),
-        _ => None,
-    }
+    FEDERATION_SCHEMAS.iter().find_map(|(schema_name, _, schema)| {
+        (*schema_name == name).then_some(*schema)
+    })
 }
 
 #[cfg(test)]
@@ -494,8 +597,13 @@ mod tests {
 
     use serde_json::Value;
 
-    use super::{machine_manifest, openapi_document, MACHINE_PROTOCOL};
+    use super::{
+        machine_manifest, openapi_document, DOMAIN_SCHEMAS, FEDERATION_SCHEMAS, MACHINE_PROTOCOL,
+    };
 
+    /// Best-effort source smoke guard for literal router path declarations.
+    /// It is intentionally not treated as a complete Rust/Axum parser; runtime
+    /// security tests independently cover all mutating routes.
     fn route_paths(source: &str) -> BTreeSet<String> {
         let mut paths = BTreeSet::new();
         let mut rest = source;
@@ -544,7 +652,7 @@ mod tests {
     }
 
     #[test]
-    fn router_paths_are_covered_by_operation_manifest() {
+    fn literal_router_paths_are_covered_by_operation_manifest() {
         let manifest = machine_manifest().expect("machine manifest must parse");
         let documented: BTreeSet<_> = manifest
             .operations
@@ -621,6 +729,19 @@ mod tests {
     }
 
     #[test]
+    fn embedded_schemas_are_valid_json() {
+        for (name, schema) in DOMAIN_SCHEMAS {
+            serde_json::from_str::<Value>(schema)
+                .unwrap_or_else(|error| panic!("domain schema {name} is invalid JSON: {error}"));
+        }
+        for (name, _, schema) in FEDERATION_SCHEMAS {
+            serde_json::from_str::<Value>(schema).unwrap_or_else(|error| {
+                panic!("federation schema {name} is invalid JSON: {error}")
+            });
+        }
+    }
+
+    #[test]
     fn openapi_contract_is_versioned() {
         let document = openapi_document().expect("OpenAPI contract must build");
         assert_eq!(document["openapi"], "3.1.0");
@@ -630,6 +751,6 @@ mod tests {
     #[test]
     fn openapi_paths_are_nonempty() {
         let document = openapi_document().expect("OpenAPI contract must build");
-        assert!(!openapi_paths(&document).is_empty());
+        assert!(!openapi_paths(document).is_empty());
     }
 }
