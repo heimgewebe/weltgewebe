@@ -65,29 +65,11 @@ after(() => {
   assert.equal(result.status, 0, result.stderr);
 });
 
-test("defaults local sovereign builds to the regional rollback variant", () => {
+test("defaults local sovereign builds to nationwide Germany", () => {
   const result = runGenerator();
   assert.equal(result.status, 0, result.stderr);
   assert.match(generatedConfig(), /mode: "local-sovereign"/);
-  assert.match(generatedConfig(), /variant: "regional"/);
-  assert.deepEqual(buildIdentity(), {
-    schema_version: 1,
-    mode: "local-sovereign",
-    variant: "regional",
-    style_path: "/local-basemap/style.json",
-    source_commit: sourceCommit,
-    style_sha256: sha256File(path.join(repoRoot, "map-style", "style.json")),
-  });
-});
-
-test("emits the Germany variant only when explicitly selected", () => {
-  const result = runGenerator({
-    PUBLIC_BASEMAP_MODE: "local-sovereign",
-    PUBLIC_BASEMAP_VARIANT: "germany",
-  });
-  assert.equal(result.status, 0, result.stderr);
   assert.match(generatedConfig(), /variant: "germany"/);
-  assert.doesNotMatch(generatedConfig(), /basemaps\.cartocdn\.com/);
   assert.deepEqual(buildIdentity(), {
     schema_version: 1,
     mode: "local-sovereign",
@@ -97,6 +79,24 @@ test("emits the Germany variant only when explicitly selected", () => {
     style_sha256: sha256File(
       path.join(repoRoot, "map-style", "style-germany.json"),
     ),
+  });
+});
+
+test("keeps the regional variant as an explicit rollback", () => {
+  const result = runGenerator({
+    PUBLIC_BASEMAP_MODE: "local-sovereign",
+    PUBLIC_BASEMAP_VARIANT: "regional",
+  });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(generatedConfig(), /variant: "regional"/);
+  assert.doesNotMatch(generatedConfig(), /basemaps\.cartocdn\.com/);
+  assert.deepEqual(buildIdentity(), {
+    schema_version: 1,
+    mode: "local-sovereign",
+    variant: "regional",
+    style_path: "/local-basemap/style.json",
+    source_commit: sourceCommit,
+    style_sha256: sha256File(path.join(repoRoot, "map-style", "style.json")),
   });
 });
 
@@ -186,15 +186,15 @@ test("on Vercel without explicit mode selects remote-style", () => {
 
 test("explicit local-sovereign on Vercel remains local when light and dark styles are delivered", () => {
   const deliveredDir = path.join(webRoot, "static", "local-basemap");
-  const deliveredStyle = path.join(deliveredDir, "style.json");
-  const deliveredDarkStyle = path.join(deliveredDir, "style-dark.json");
+  const deliveredStyle = path.join(deliveredDir, "style-germany.json");
+  const deliveredDarkStyle = path.join(deliveredDir, "style-germany-dark.json");
   fs.mkdirSync(deliveredDir, { recursive: true });
   fs.copyFileSync(
-    path.join(repoRoot, "map-style", "style.json"),
+    path.join(repoRoot, "map-style", "style-germany.json"),
     deliveredStyle,
   );
   fs.copyFileSync(
-    path.join(repoRoot, "map-style", "style-dark.json"),
+    path.join(repoRoot, "map-style", "style-germany-dark.json"),
     deliveredDarkStyle,
   );
   try {
@@ -204,7 +204,7 @@ test("explicit local-sovereign on Vercel remains local when light and dark style
     });
     assert.equal(result.status, 0, result.stderr);
     assert.match(generatedConfig(), /mode: "local-sovereign"/);
-    assert.match(generatedConfig(), /variant: "regional"/);
+    assert.match(generatedConfig(), /variant: "germany"/);
   } finally {
     fs.rmSync(deliveredStyle, { force: true });
     fs.rmSync(deliveredDarkStyle, { force: true });
@@ -221,13 +221,13 @@ test("explicit local-sovereign on Vercel fails closed without delivered style", 
     webRoot,
     "static",
     "local-basemap",
-    "style.json",
+    "style-germany.json",
   );
   const deliveredDarkStyle = path.join(
     webRoot,
     "static",
     "local-basemap",
-    "style-dark.json",
+    "style-germany-dark.json",
   );
   fs.rmSync(deliveredStyle, { force: true });
   fs.rmSync(deliveredDarkStyle, { force: true });

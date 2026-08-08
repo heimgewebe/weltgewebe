@@ -1,7 +1,7 @@
 // The active basemap mode and sovereign variant are decided at build time by
 // scripts/generate-basemap-config.js. A local-sovereign generated module carries
-// no remote (CARTO) URL. The Germany variant remains opt-in until its real
-// artifact and production proof are complete.
+// no remote (CARTO) URL. Nationwide Germany is the normal sovereign contract;
+// the Hamburg + Schleswig-Holstein variant is retained only as an explicit rollback.
 
 import {
   BUILD_BASEMAP_CONFIG,
@@ -34,7 +34,7 @@ export type RemoteStyleBasemapConfig = BaseBasemapConfig & {
 export type LocalSovereignBasemapConfig = BaseBasemapConfig & {
   mode: "local-sovereign";
   // Optional for compatibility with callers created before the nationwide
-  // variant existed. The resolver treats absence as the regional rollback path.
+  // variant existed. The resolver treats absence as the nationwide Germany path.
   variant?: LocalBasemapVariant;
   styleUrl?: never;
   darkStyleUrl?: never;

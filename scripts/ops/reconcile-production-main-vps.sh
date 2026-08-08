@@ -1077,7 +1077,7 @@ prune_releases() {
 getent passwd "$BUILD_USER" > /dev/null || fail "build user does not exist: $BUILD_USER"
 [[ "$MIN_FREE_KIB" =~ ^[0-9]+$ ]] || fail "minimum free space is invalid"
 
-for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath; do
+for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath tar; do
   require_command "$command_name"
 done
 
@@ -1132,6 +1132,52 @@ build_gid="$(id -g "$BUILD_USER")"
 commit_epoch="$(git -C "$SOURCE_CHECKOUT" show -s --format=%ct "$target_commit")"
 [[ "$commit_epoch" =~ ^[0-9]+$ ]] || fail "target commit timestamp is invalid"
 
+# Nationwide Germany is the production sovereign contract. Verify the exact
+# target commit contains both styles and persistent Germany PMTiles aliases are
+# safe before spending time on a frontend build.
+for germany_style in map-style/style-germany.json map-style/style-germany-dark.json; do
+  git -C "$SOURCE_CHECKOUT" cat-file -e "$target_commit:$germany_style" ||
+    fail "target commit is missing required nationwide Germany style: $germany_style"
+done
+expected_germany_style_sha="$(
+  git -C "$SOURCE_CHECKOUT" show "$target_commit:map-style/style-germany.json" |
+    sha256sum | awk '{print $1}'
+)"
+[[ "$expected_germany_style_sha" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "target nationwide Germany style hash is invalid"
+germany_basemap_root="$SOURCE_CHECKOUT/build/basemap"
+[[ -d "$germany_basemap_root" && ! -L "$germany_basemap_root" ]] ||
+  fail "nationwide Germany basemap artifact root is missing or unsafe"
+germany_basemap_real="$(realpath -e "$germany_basemap_root")" ||
+  fail "nationwide Germany basemap artifact root cannot be resolved"
+source_real="$(realpath -e "$SOURCE_CHECKOUT")" || fail "source checkout cannot be resolved"
+[[ "$germany_basemap_real" == "$source_real/build/basemap" ]] ||
+  fail "nationwide Germany basemap artifact root escaped the production checkout"
+[[ "$(stat --format=%u "$germany_basemap_real")" == "0" ]] ||
+  fail "nationwide Germany basemap artifact root is not root-owned"
+germany_basemap_mode="$(stat --format=%a "$germany_basemap_real")"
+(((8#$germany_basemap_mode & 022) == 0)) ||
+  fail "nationwide Germany basemap artifact root is group- or world-writable"
+for germany_alias in basemap-germany.pmtiles basemap-germany.meta.json; do
+  germany_path="$germany_basemap_real/$germany_alias"
+  [[ -e "$germany_path" || -L "$germany_path" ]] ||
+    fail "required nationwide Germany basemap alias is missing: $germany_alias"
+  germany_target="$(realpath -e "$germany_path")" ||
+    fail "required nationwide Germany basemap alias is broken: $germany_alias"
+  case "$germany_target" in
+    "$germany_basemap_real"/*) ;;
+    *) fail "nationwide Germany basemap alias escapes canonical data root: $germany_alias" ;;
+  esac
+  [[ -f "$germany_target" && -s "$germany_target" ]] ||
+    fail "nationwide Germany basemap alias is not a non-empty regular file: $germany_alias"
+  [[ "$(stat --format=%u "$germany_target")" == "0" ]] ||
+    fail "nationwide Germany basemap target is not root-owned: $germany_alias"
+  germany_target_mode="$(stat --format=%a "$germany_target")"
+  (((8#$germany_target_mode & 022) == 0)) ||
+    fail "nationwide Germany basemap target is group- or world-writable: $germany_alias"
+done
+write_state "building" "$target_commit" "nationwide Germany basemap pre-build guard passed"
+
 source_archive="$ARTIFACT_ROOT/source-$target_commit.tar"
 temporary_source="$source_archive.tmp.$$"
 git -C "$SOURCE_CHECKOUT" archive --format=tar --output="$temporary_source" "$target_commit"
@@ -1164,6 +1210,7 @@ temporary_artifact="$ARTIFACT_ROOT/.web-$target_commit.$$.tmp"
     --env SOURCE_DATE_EPOCH="$commit_epoch" \
     --env GIT_COMMIT_SHA="$target_commit" \
     --env PUBLIC_BASEMAP_MODE=local-sovereign \
+    --env PUBLIC_BASEMAP_VARIANT=germany \
     "$NODE_BUILD_IMAGE" \
     sh -lc '{ /usr/bin/tar -xf /source.tar -C /workspace && cd /workspace/apps/web && mkdir -p "$HOME" "$COREPACK_HOME" "$npm_config_cache" /tmp/bin && corepack enable --install-directory /tmp/bin pnpm && export PATH="/tmp/bin:$PATH" && pnpm install --frozen-lockfile && pnpm build; } >&2 && exec /usr/bin/tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -czf - build'
 ) > "$temporary_artifact"
@@ -1172,6 +1219,45 @@ source_archive=""
 
 [[ -s "$temporary_artifact" && ! -L "$temporary_artifact" ]] || fail "frontend build stream is missing or unsafe"
 "$ARCHIVE_VALIDATOR" "$temporary_artifact"
+
+# Prove that the immutable web bundle was actually built for nationwide
+# Germany. A correct environment variable is not enough; the bundle's own
+# machine-readable identity must match the exact commit and Germany style.
+basemap_identity_json="$(
+  tar -xOzf "$temporary_artifact" build/_app/basemap-build.json 2>/dev/null
+)" || fail "frontend artifact is missing readable basemap build identity"
+[[ -n "$basemap_identity_json" ]] || fail "frontend basemap build identity is empty"
+BASEMAP_IDENTITY_JSON="$basemap_identity_json" run_ops_python "$target_commit" "$expected_germany_style_sha" <<'PY_BASEMAP_IDENTITY' ||
+  fail "frontend basemap build identity mismatch"
+import json
+import os
+import re
+import sys
+
+commit, style_sha = sys.argv[1:3]
+try:
+    payload = json.loads(os.environ["BASEMAP_IDENTITY_JSON"])
+except (KeyError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"invalid basemap identity JSON: {exc}")
+expected = {
+    "schema_version": 1,
+    "mode": "local-sovereign",
+    "variant": "germany",
+    "style_path": "/local-basemap/style-germany.json",
+    "source_commit": commit,
+    "style_sha256": style_sha,
+}
+if not isinstance(payload, dict) or payload != expected:
+    raise SystemExit(
+        "basemap identity differs from expected nationwide Germany contract: "
+        + json.dumps(payload, sort_keys=True)
+    )
+if not re.fullmatch(r"[0-9a-f]{40}", commit):
+    raise SystemExit("expected source commit is malformed")
+if not re.fullmatch(r"[0-9a-f]{64}", style_sha):
+    raise SystemExit("expected style hash is malformed")
+PY_BASEMAP_IDENTITY
+
 artifact="$ARTIFACT_ROOT/web-$target_commit.tar.gz"
 mv "$temporary_artifact" "$artifact"
 temporary_artifact=""

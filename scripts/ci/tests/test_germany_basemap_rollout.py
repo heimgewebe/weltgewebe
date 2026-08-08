@@ -110,10 +110,10 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("style-germany.json", module)
         self.assertIn("style-germany-dark.json", module)
 
-    def test_build_generator_defaults_to_regional_and_binds_identity(self) -> None:
+    def test_build_generator_defaults_to_germany_and_binds_identity(self) -> None:
         generator = GENERATOR.read_text(encoding="utf-8")
         self.assertIn(
-            'const DEFAULT_LOCAL_BASEMAP_VARIANT = "regional"', generator
+            'const DEFAULT_LOCAL_BASEMAP_VARIANT = "germany"', generator
         )
         self.assertIn('["regional", "germany"]', generator)
         self.assertIn("PUBLIC_BASEMAP_VARIANT", generator)
@@ -124,6 +124,49 @@ class GermanyBasemapRolloutTest(unittest.TestCase):
         self.assertIn("style-germany-dark.json", generator)
         self.assertIn("PUBLIC_SOURCE_COMMIT", generator)
         self.assertIn("basemap-build.json", generator)
+
+    def test_production_reconciler_binds_and_gates_nationwide_germany(self) -> None:
+        reconciler = (REPO / "scripts" / "ops" / "reconcile-production-main-vps.sh").read_text(
+            encoding="utf-8"
+        )
+        guard = reconciler.index("# Nationwide Germany is the production sovereign contract.")
+        build = reconciler.index("docker run --rm", guard)
+        self.assertLess(guard, build)
+        for marker in (
+            "basemap-germany.pmtiles",
+            "basemap-germany.meta.json",
+            "style-germany.json",
+            "style-germany-dark.json",
+        ):
+            self.assertIn(marker, reconciler[guard:build])
+        self.assertIn("--env PUBLIC_BASEMAP_MODE=local-sovereign", reconciler)
+        self.assertIn("--env PUBLIC_BASEMAP_VARIANT=germany", reconciler)
+
+    def test_direct_deploy_defaults_to_germany_but_keeps_regional_rollback(self) -> None:
+        deploy = (REPO / "scripts" / "weltgewebe-up").read_text(encoding="utf-8")
+        self.assertIn('export PUBLIC_BASEMAP_VARIANT="germany"', deploy)
+        self.assertIn('"" | "regional" | "germany"', deploy)
+        self.assertIn("Nationwide Germany Basemap Pre-Build Guard", deploy)
+        self.assertIn('[[ -d "$GERMANY_BASEMAP_DIR" ]]', deploy)
+        self.assertNotIn(
+            '[[ -d "$GERMANY_BASEMAP_DIR" && ! -L "$GERMANY_BASEMAP_DIR" ]]', deploy
+        )
+        self.assertIn("Regional Basemap Artifact Guard (explicit rollback)", deploy)
+        self.assertLess(
+            deploy.index("Nationwide Germany Basemap Pre-Build Guard"),
+            deploy.index("# 6b. Frontend Build"),
+        )
+
+    def test_rollout_runbook_declares_germany_default_and_regional_rollback(self) -> None:
+        runbook = (REPO / "docs" / "deploy" / "germany-basemap-rollout.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("ist `germany` die", runbook)
+        self.assertIn("expliziter Rückfallpfad", runbook)
+        self.assertIn("ein nicht gesetzter Variant-Wert", runbook)
+        self.assertIn("`PUBLIC_BASEMAP_VARIANT=regional` ist die bewusste Rückfallwahl", runbook)
+        self.assertNotIn("bleibt Standard und Rückfallpfad", runbook)
+        self.assertNotIn("Ohne `PUBLIC_BASEMAP_VARIANT` bleibt `regional` aktiv", runbook)
 
     def test_germany_workflow_binds_the_dark_style_transitively(self) -> None:
         workflow = WORKFLOW.read_text(encoding="utf-8")

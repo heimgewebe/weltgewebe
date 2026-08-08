@@ -14,8 +14,8 @@ import {
 // local-sovereign build, PUBLIC_BASEMAP_VARIANT selects which independently
 // published style/PMTiles contract is used:
 //
-//   regional (default) -> style.json (+ style-dark.json), Hamburg + SH aliases
-//   germany            -> style-germany.json (+ style-germany-dark.json)
+//   germany (default) -> style-germany.json (+ style-germany-dark.json)
+//   regional          -> style.json (+ style-dark.json), explicit Hamburg + SH rollback
 //
 // When PUBLIC_BASEMAP_MODE is unset/empty and VERCEL=1, the generator selects
 // remote-style because Vercel does not ship the local basemap middleware or
@@ -29,7 +29,7 @@ const REMOTE_STYLE_URL =
 const REMOTE_DARK_STYLE_URL =
   "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json";
 const LOCAL_BASEMAP_VARIANTS = ["regional", "germany"];
-const DEFAULT_LOCAL_BASEMAP_VARIANT = "regional";
+const DEFAULT_LOCAL_BASEMAP_VARIANT = "germany";
 const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const webRoot = path.resolve(scriptDir, "..");
 const repoRoot = path.resolve(webRoot, "..", "..");

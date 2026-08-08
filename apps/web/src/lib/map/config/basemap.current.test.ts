@@ -35,7 +35,7 @@ describe("resolveBasemapMode", () => {
 });
 
 describe("resolveBasemapStyle", () => {
-  it("maps the default regional sovereign variant to style.json", () => {
+  it("maps the explicit regional rollback variant to style.json", () => {
     const style = resolveBasemapStyle(
       {
         mode: "local-sovereign",
@@ -88,9 +88,9 @@ describe("resolveBasemapStyle", () => {
     expect(dark).not.toContain(CARTO_HOST);
   });
 
-  it("keeps legacy local config objects on the regional rollback path", () => {
+  it("keeps legacy local config objects on the nationwide Germany path", () => {
     const style = resolveBasemapStyle({ mode: "local-sovereign" } as any);
-    expect(style).toContain("/local-basemap/style.json");
+    expect(style).toContain("/local-basemap/style-germany.json");
   });
 
   it("returns the explicit CARTO url only for remote-style light", () => {

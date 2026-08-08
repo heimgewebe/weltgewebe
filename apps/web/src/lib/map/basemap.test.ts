@@ -96,9 +96,20 @@ describe("resolveBasemapStyle", () => {
     ).toThrow("styleUrl required");
   });
 
-  it("returns local light path for local-sovereign regional", () => {
+  it("returns the nationwide light path for legacy local-sovereign config without a variant", () => {
     const result = resolveBasemapStyle(
       { mode: "local-sovereign" } as any,
+      "light",
+    );
+    expect(result).toMatch(
+      /^\/local-basemap\/style-germany\.json\?v=0\.4\.0&build=[^&]+$/,
+    );
+    expect(result).not.toContain("cartocdn");
+  });
+
+  it("returns the regional light path only when rollback is explicit", () => {
+    const result = resolveBasemapStyle(
+      { mode: "local-sovereign", variant: "regional" } as any,
       "light",
     );
     expect(result).toMatch(

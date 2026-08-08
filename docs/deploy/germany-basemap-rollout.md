@@ -15,20 +15,27 @@ relations:
 ## Ziel und Sicherheitsgrenze
 
 Die Deutschland-Basemap wird als eigenständiges, versioniertes PMTiles-Artefakt
-vorbereitet. Der bestehende Regionalpfad mit Hamburg und Schleswig-Holstein
-bleibt Standard und Rückfallpfad.
+vorbereitet. Nach der abgeschlossenen Produktionsfreigabe ist `germany` die
+normale `local-sovereign` Produktionsvariante. Der Regionalpfad mit Hamburg und
+Schleswig-Holstein bleibt als expliziter Rückfallpfad erhalten.
 
 Der Vorbereitungslauf veröffentlicht ausschließlich unveränderliche
 Versionsdateien. Er verändert weder `basemap-germany.pmtiles` noch
-`basemap-germany.meta.json`. Die stabilen Aliase werden erst innerhalb der
-getrennten Aktivierungstransaktion umgestellt.
+`basemap-germany.meta.json`. Das Umschalten dieser stabilen Aliase auf eine neue
+Deutschland-Version bleibt eine getrennte, beweisgebundene
+Aktivierungstransaktion. Ein normaler Frontend-Deploy aktiviert also keine neuen
+PMTiles-Bytes; er verwendet die bereits freigegebenen stabilen Germany-Aliase
+und bricht fehlgeschlossen ab, wenn diese oder die Germany-Stile fehlen.
 
-Die Clientaktivierung erfordert einen bewusst neu gebauten Frontend-Build mit:
+Normale Produktions-Builds verwenden:
 
 - `PUBLIC_BASEMAP_MODE=local-sovereign`
-- `PUBLIC_BASEMAP_VARIANT=germany`
+- `PUBLIC_BASEMAP_VARIANT=germany`, wobei ein nicht gesetzter Variant-Wert
+  ebenfalls zu `germany` aufgelöst wird.
 
-Ohne `PUBLIC_BASEMAP_VARIANT` bleibt `regional` aktiv.
+`PUBLIC_BASEMAP_VARIANT=regional` ist die bewusste Rückfallwahl. Damit kann ein
+Operator die kleinere Hamburg-/Schleswig-Holstein-Karte weiterhin explizit
+bauen, ohne dass ein gewöhnlicher Patch diese Variante versehentlich auswählt.
 
 ## Voraussetzungen
 
@@ -169,8 +176,10 @@ zulässige Belegalter kann über
 
 ## Phase 3: Aktivierungstransaktion
 
-`scripts/basemap/activate-germany-basemap.sh` ist der einzige vorgesehene
-Aktivierungspfad. Er verlangt
+`scripts/basemap/activate-germany-basemap.sh` ist der einzige vorgesehene Pfad,
+um die stabilen Germany-Aliase auf eine neue versionierte Deutschland-Basemap
+umzuschalten. Die Auswahl von `germany` für gewöhnliche Produktions-Builds
+benötigt dagegen keine erneute Alias-Aktivierung. Der Aktivierungspfad verlangt
 `GERMANY_BASEMAP_ACTIVATION_CONFIRM=deploy-germany-pmtiles` und arbeitet
 fail-closed. Ein separater Aktivierungs-Lock umfasst die vollständige
 Transaktion vom ersten Alias-Readback bis zum bestätigten Receipt. Sein

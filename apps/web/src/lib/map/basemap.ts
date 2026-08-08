@@ -49,14 +49,16 @@ function resolveLocalSovereignStyle(
   variant: "regional" | "germany" | undefined,
   scheme: ColorScheme,
 ): string {
-  if (variant === "germany") {
+  if (variant === "regional") {
     return scheme === "dark"
-      ? LOCAL_BASEMAP_GERMANY_STYLE_DARK_URL
-      : LOCAL_BASEMAP_GERMANY_STYLE_URL;
+      ? LOCAL_BASEMAP_STYLE_DARK_URL
+      : LOCAL_BASEMAP_STYLE_URL;
   }
+  // Germany is the sovereign default. Undefined is retained only for legacy
+  // callers and must never silently downgrade nationwide coverage.
   return scheme === "dark"
-    ? LOCAL_BASEMAP_STYLE_DARK_URL
-    : LOCAL_BASEMAP_STYLE_URL;
+    ? LOCAL_BASEMAP_GERMANY_STYLE_DARK_URL
+    : LOCAL_BASEMAP_GERMANY_STYLE_URL;
 }
 
 function resolveRemoteStyle(

@@ -1155,6 +1155,82 @@ else
   export PUBLIC_BASEMAP_MODE
 fi
 
+# Nationwide Germany is the normal sovereign deployment contract. The regional
+# Hamburg + Schleswig-Holstein map remains available only as an explicit rollback.
+case "${PUBLIC_BASEMAP_VARIANT:-}" in
+  "" | "regional" | "germany") ;;
+  *)
+    echo "ERROR: Invalid PUBLIC_BASEMAP_VARIANT='${PUBLIC_BASEMAP_VARIANT}'." >&2
+    echo "       Allowed values: germany, regional (or unset for Germany default)." >&2
+    exit 1
+    ;;
+esac
+
+BASEMAP_VARIANT_SOURCE="explicit PUBLIC_BASEMAP_VARIANT"
+if [[ "${PUBLIC_BASEMAP_MODE:-}" == "remote-style" ]]; then
+  if [[ -n "${PUBLIC_BASEMAP_VARIANT:-}" ]]; then
+    echo "ERROR: PUBLIC_BASEMAP_VARIANT is only valid with PUBLIC_BASEMAP_MODE=local-sovereign." >&2
+    exit 1
+  fi
+  BASEMAP_VARIANT_SOURCE="not applicable (remote-style)"
+elif [[ -z "${PUBLIC_BASEMAP_VARIANT:-}" ]]; then
+  export PUBLIC_BASEMAP_VARIANT="germany"
+  BASEMAP_VARIANT_SOURCE="sovereign production default"
+else
+  export PUBLIC_BASEMAP_VARIANT
+fi
+
+# Fail closed before a full nationwide frontend build. In plain language: if
+# the Germany map data is missing, stop the deploy instead of silently showing
+# only Hamburg + Schleswig-Holstein.
+if [[ "$DEPLOY_SCOPE" == "full" && "${PUBLIC_BASEMAP_MODE:-local-sovereign}" != "remote-style" && "$PUBLIC_BASEMAP_VARIANT" == "germany" ]]; then
+  echo
+  echo ">> Nationwide Germany Basemap Pre-Build Guard:"
+  for germany_style in map-style/style-germany.json map-style/style-germany-dark.json; do
+    [[ -s "$germany_style" && ! -L "$germany_style" ]] || {
+      echo "ERROR: Required nationwide Germany style is missing or unsafe: $germany_style" >&2
+      exit 1
+    }
+  done
+  GERMANY_BASEMAP_DIR="build/basemap"
+  # Exact-commit production releases intentionally receive build/basemap as a
+  # prevalidated symlink to the persistent, root-owned artifact directory.
+  # Follow that directory link, then constrain every Germany alias below its
+  # resolved root. Rejecting the directory symlink here would break the real
+  # production deploy path even though the deploy helper has already vetted it.
+  [[ -d "$GERMANY_BASEMAP_DIR" ]] || {
+    echo "ERROR: Nationwide Germany basemap artifact directory is missing: $GERMANY_BASEMAP_DIR" >&2
+    exit 1
+  }
+  GERMANY_BASEMAP_REAL="$(realpath -e "$GERMANY_BASEMAP_DIR")" || {
+    echo "ERROR: Cannot resolve nationwide Germany basemap artifact directory." >&2
+    exit 1
+  }
+  for germany_alias in basemap-germany.pmtiles basemap-germany.meta.json; do
+    germany_path="$GERMANY_BASEMAP_DIR/$germany_alias"
+    [[ -e "$germany_path" || -L "$germany_path" ]] || {
+      echo "ERROR: Required nationwide Germany basemap alias is missing: $germany_path" >&2
+      exit 1
+    }
+    germany_target="$(realpath -e "$germany_path")" || {
+      echo "ERROR: Required nationwide Germany basemap alias is broken: $germany_path" >&2
+      exit 1
+    }
+    case "$germany_target" in
+      "$GERMANY_BASEMAP_REAL"/*) ;;
+      *)
+        echo "ERROR: Nationwide Germany basemap alias escapes the canonical artifact root: $germany_path" >&2
+        exit 1
+        ;;
+    esac
+    [[ -f "$germany_target" && -s "$germany_target" ]] || {
+      echo "ERROR: Nationwide Germany basemap alias does not resolve to a non-empty regular file: $germany_path" >&2
+      exit 1
+    }
+  done
+  echo "   [✓] Nationwide Germany styles and PMTiles aliases are ready."
+fi
+
 # 6b. Frontend Build
 
 # Returns the 'version' string from a local version.json, or empty on any error.
@@ -1243,7 +1319,7 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
         echo "   Installing dependencies..."
         pnpm -C apps/web install --frozen-lockfile
       fi
-      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
+      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE}); variant=${PUBLIC_BASEMAP_VARIANT:-germany} (${BASEMAP_VARIANT_SOURCE})"
       echo "   Building..."
       pnpm -C apps/web build
     fi
@@ -1312,7 +1388,7 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
         echo "   Installing dependencies..."
         pnpm -C apps/web install --frozen-lockfile
       fi
-      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
+      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE}); variant=${PUBLIC_BASEMAP_VARIANT:-germany} (${BASEMAP_VARIANT_SOURCE})"
       echo "   Building..."
       pnpm -C apps/web build
 
@@ -1349,12 +1425,13 @@ fi
 
 if [[ "$DEPLOY_SCOPE" == "full" ]]; then
 
-  # 6c. Regional Basemap Artifact Guard (best effort)
+  # 6c. Regional Basemap Artifact Guard (explicit rollback only, best effort)
   # Each source referenced by map-style/style.json must exist independently.
   BASEMAP_DIR="build/basemap"
   BASEMAP_VERSION="0.1.0"
-  echo
-  echo ">> Regional Basemap Artifact Guard:"
+  if [[ "${PUBLIC_BASEMAP_MODE:-local-sovereign}" != "remote-style" && "${PUBLIC_BASEMAP_VARIANT:-germany}" == "regional" ]]; then
+    echo
+    echo ">> Regional Basemap Artifact Guard (explicit rollback):"
 
   ensure_regional_basemap() {
     local region="$1"
@@ -1401,11 +1478,12 @@ if [[ "$DEPLOY_SCOPE" == "full" ]]; then
   ensure_regional_basemap "schleswig-holstein" \
     "scripts/basemap/build-schleswig-holstein-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
 
-  if ((REGIONAL_BASEMAP_FAILURES > 0)); then
-    echo "   [X] WARNING: ${REGIONAL_BASEMAP_FAILURES} regional basemap artifact set(s) are incomplete."
-    echo "       Continuing because this guard remains best effort; local-sovereign mode may show gaps."
-  else
-    echo "   [✓] All regional PMTiles sources required by the sovereign style are ready."
+    if ((REGIONAL_BASEMAP_FAILURES > 0)); then
+      echo "   [X] WARNING: ${REGIONAL_BASEMAP_FAILURES} regional basemap artifact set(s) are incomplete."
+      echo "       Continuing because this explicit rollback guard remains best effort."
+    else
+      echo "   [✓] All regional PMTiles sources required by the rollback style are ready."
+    fi
   fi
   # 6c2. Basemap Glyphs Guard (best effort)
   # Try to ensure the local glyphs (fonts) exist for offline rendering

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -144,7 +145,14 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         (self.seed / "apps/web").mkdir(parents=True)
         (self.seed / "scripts").mkdir()
+        (self.seed / "map-style").mkdir()
         (self.seed / "apps/web/placeholder.txt").write_text("web\n", encoding="utf-8")
+        (self.seed / "map-style/style-germany.json").write_text(
+            '{"name":"Germany fixture"}\n', encoding="utf-8"
+        )
+        (self.seed / "map-style/style-germany-dark.json").write_text(
+            '{"name":"Germany dark fixture"}\n', encoding="utf-8"
+        )
         up_script = self.seed / "scripts/weltgewebe-up"
         up_script.write_text(
             textwrap.dedent(
@@ -208,6 +216,12 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
 
         (self.source / "build/basemap").mkdir(parents=True)
         (self.source / "build/basemap/map.pmtiles").write_bytes(b"pmtiles")
+        germany_pmtiles = self.source / "build/basemap/basemap-germany-fixture.pmtiles"
+        germany_meta = self.source / "build/basemap/basemap-germany-fixture.meta.json"
+        germany_pmtiles.write_bytes(b"germany-pmtiles")
+        germany_meta.write_text('{"fixture":true}\n', encoding="utf-8")
+        (self.source / "build/basemap/basemap-germany.pmtiles").symlink_to(germany_pmtiles.name)
+        (self.source / "build/basemap/basemap-germany.meta.json").symlink_to(germany_meta.name)
 
         self.make_artifact()
         self.make_command_shims()
@@ -274,13 +288,41 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             )
         return [sudo, "-n", *argv]
 
-    def make_artifact(self) -> None:
+    def make_artifact(self, *, basemap_variant: str = "germany") -> None:
         tree = self.root / "artifact-tree/build"
+        if tree.parent.exists():
+            shutil.rmtree(tree.parent)
         (tree / "_app").mkdir(parents=True)
         (tree / "index.html").write_text("<!doctype html>\n", encoding="utf-8")
         (tree / "_app/version.json").write_text(
             json.dumps({"commit": self.commit, "version": self.commit[:8]}) + "\n",
             encoding="utf-8",
+        )
+        germany_style_sha = hashlib.sha256(
+            (self.source / "map-style/style-germany.json").read_bytes()
+        ).hexdigest()
+        if basemap_variant == "germany":
+            identity = {
+                "schema_version": 1,
+                "mode": "local-sovereign",
+                "variant": "germany",
+                "style_path": "/local-basemap/style-germany.json",
+                "source_commit": self.commit,
+                "style_sha256": germany_style_sha,
+            }
+        elif basemap_variant == "regional":
+            identity = {
+                "schema_version": 1,
+                "mode": "local-sovereign",
+                "variant": "regional",
+                "style_path": "/local-basemap/style.json",
+                "source_commit": self.commit,
+                "style_sha256": "0" * 64,
+            }
+        else:
+            raise ValueError(f"unsupported fixture basemap variant: {basemap_variant}")
+        (tree / "_app/basemap-build.json").write_text(
+            json.dumps(identity, sort_keys=True) + "\n", encoding="utf-8"
         )
         self.artifact.parent.mkdir(parents=True)
         with tarfile.open(self.artifact, "w:gz") as bundle:
@@ -815,6 +857,14 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             ]
         )
         return run(argv, check=False)
+
+    def test_reconciler_rejects_a_regional_frontend_artifact(self) -> None:
+        self.make_artifact(basemap_variant="regional")
+        result = self.reconcile_stale_public_commit()
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("frontend basemap build identity mismatch", result.stderr)
+        self.assertFalse((self.root / "deploy-complete").exists())
 
     def test_reconciler_exports_private_docker_config_to_build(self) -> None:
         result = self.reconcile_stale_public_commit()
