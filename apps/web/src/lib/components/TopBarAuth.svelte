@@ -1,13 +1,160 @@
 <script lang="ts">
-  import { authStore } from "$lib/auth/store";
+  import { afterNavigate } from "$app/navigation";
+  import { onMount } from "svelte";
+  import {
+    listDirectConversations,
+    type DirectConversation,
+  } from "$lib/api/directMessages";
+  import { listProposals, type Proposal } from "$lib/api/governance";
+  import { authStore, type AuthStatus } from "$lib/auth/store";
   import { garnrolleIcon } from "$lib/ui/icons";
+  import {
+    countUnreadDirectMessages,
+    hasPendingWeberApplication,
+    unreadMessageBadgeLabel,
+  } from "./topBarAttentionState";
   import { deriveTopBarAuthView } from "./topBarAuthState";
 
+  const MESSAGE_POLL_MS = 30_000;
+
+  let observedAccountId = "";
+  let pendingWeberApplication = false;
+  let unreadMessageCount = 0;
+  let messageRequestRevision = 0;
+  let weberRequestRevision = 0;
+
   $: authView = deriveTopBarAuthView($authStore);
+  $: guestBadgeHref = pendingWeberApplication
+    ? "/antraege"
+    : "/antraege#antrag-stellen";
+  $: guestBadgeAction = pendingWeberApplication
+    ? "Weberstatus beantragt"
+    : "Weber werden";
+  $: guestBadgeTitle = pendingWeberApplication
+    ? "Weberstatus beantragt – Antrag ansehen"
+    : "Weberstatus beantragen";
+  $: messageBadgeLabel = unreadMessageBadgeLabel(unreadMessageCount);
+  $: messageAriaLabel =
+    unreadMessageCount === 1
+      ? "Private Nachrichten: 1 ungelesene Nachricht"
+      : unreadMessageCount > 1
+        ? `Private Nachrichten: ${unreadMessageCount} ungelesene Nachrichten`
+        : "Private Nachrichten";
 
   function retryAuth() {
     void authStore.checkAuth({ force: true });
   }
+
+  function resetAttention(accountId = "") {
+    observedAccountId = accountId;
+    pendingWeberApplication = false;
+    unreadMessageCount = 0;
+    messageRequestRevision += 1;
+    weberRequestRevision += 1;
+  }
+
+  function ownsAttentionResult(accountId: string): boolean {
+    return (
+      $authStore.authenticated &&
+      $authStore.account_id === accountId &&
+      observedAccountId === accountId
+    );
+  }
+
+  async function refreshMessages(status: AuthStatus) {
+    const accountId = status.account_id;
+    if (!status.authenticated || !accountId) return;
+
+    const revision = ++messageRequestRevision;
+    try {
+      const conversations: DirectConversation[] = await listDirectConversations();
+      if (
+        revision !== messageRequestRevision ||
+        !ownsAttentionResult(accountId)
+      ) {
+        return;
+      }
+      unreadMessageCount = countUnreadDirectMessages(conversations);
+    } catch {
+      // Keep the last confirmed count during transient API failures.
+    }
+  }
+
+  async function refreshWeberApplication(status: AuthStatus) {
+    const accountId = status.account_id;
+    if (!status.authenticated || !accountId || status.role !== "gast") {
+      weberRequestRevision += 1;
+      pendingWeberApplication = false;
+      return;
+    }
+
+    const revision = ++weberRequestRevision;
+    try {
+      const proposals: Proposal[] = await listProposals();
+      if (
+        revision !== weberRequestRevision ||
+        !ownsAttentionResult(accountId) ||
+        $authStore.role !== "gast"
+      ) {
+        return;
+      }
+      pendingWeberApplication = hasPendingWeberApplication(
+        proposals,
+        accountId,
+      );
+    } catch {
+      // Keep the last confirmed application state during transient API failures.
+    }
+  }
+
+  function refreshAttention(status: AuthStatus) {
+    const accountId = status.account_id;
+    if (!status.authenticated || !accountId) {
+      resetAttention();
+      return;
+    }
+    if (observedAccountId !== accountId) resetAttention(accountId);
+    void refreshMessages(status);
+    void refreshWeberApplication(status);
+  }
+
+  afterNavigate(() => {
+    refreshAttention($authStore);
+  });
+
+  onMount(() => {
+    let authKey = "";
+    const unsubscribe = authStore.subscribe((status) => {
+      const nextAuthKey = status.authenticated
+        ? `${status.account_id ?? ""}:${status.role}`
+        : "";
+      if (nextAuthKey === authKey) return;
+      authKey = nextAuthKey;
+      refreshAttention(status);
+    });
+
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshAttention($authStore);
+      }
+    };
+    const refreshOnFocus = () => refreshAttention($authStore);
+    const messagePoll = window.setInterval(() => {
+      if (document.visibilityState === "visible") {
+        void refreshMessages($authStore);
+      }
+    }, MESSAGE_POLL_MS);
+
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    window.addEventListener("focus", refreshOnFocus);
+
+    return () => {
+      unsubscribe();
+      window.clearInterval(messagePoll);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+      window.removeEventListener("focus", refreshOnFocus);
+    };
+  });
 </script>
 
 <div class="auth-slot">
@@ -15,10 +162,15 @@
     <a
       class="message-entry"
       href="/nachrichten"
-      aria-label="Private Nachrichten"
-      title="Private Nachrichten"
+      aria-label={messageAriaLabel}
+      title={messageAriaLabel}
     >
       <span aria-hidden="true">✉</span>
+      {#if unreadMessageCount > 0}
+        <span class="message-unread-badge" aria-hidden="true">
+          {messageBadgeLabel}
+        </span>
+      {/if}
     </a>
   {/if}
 
@@ -33,14 +185,15 @@
 
   {#if authView.isGuest}
     <a
+      class:pending={pendingWeberApplication}
       class="guest-badge"
-      href="/antraege#antrag-stellen"
+      href={guestBadgeHref}
       data-testid="topbar-guest-badge"
-      aria-label="Rolle: Gast – Weberstatus beantragen"
-      title="Weberstatus beantragen"
+      aria-label={`Rolle: Gast – ${guestBadgeAction}`}
+      title={guestBadgeTitle}
     >
       <span class="guest-badge-role">Gast</span>
-      <span class="guest-badge-cta">Weber werden</span>
+      <span class="guest-badge-cta">{guestBadgeAction}</span>
     </a>
   {/if}
 
@@ -128,6 +281,10 @@
     white-space: nowrap;
   }
 
+  .guest-badge.pending {
+    border-style: solid;
+  }
+
   .guest-badge-role {
     font-size: 0.75rem;
     text-transform: uppercase;
@@ -156,11 +313,32 @@
   }
 
   .message-entry {
+    position: relative;
     box-sizing: border-box;
     width: 44px;
     min-width: 44px;
     padding: 0;
+    overflow: visible;
     font-size: 1.15rem;
+    line-height: 1;
+  }
+
+  .message-unread-badge {
+    position: absolute;
+    top: -0.35rem;
+    right: -0.4rem;
+    box-sizing: border-box;
+    display: grid;
+    place-items: center;
+    min-width: 1.25rem;
+    height: 1.25rem;
+    padding: 0 0.2rem;
+    border: 2px solid var(--panel);
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast, #fff);
+    font-size: 0.65rem;
+    font-weight: 800;
     line-height: 1;
   }
 
@@ -206,6 +384,17 @@
 
     .guest-badge-cta {
       display: none;
+    }
+
+    .guest-badge.pending {
+      gap: 0.3rem;
+    }
+
+    .guest-badge.pending .guest-badge-cta {
+      display: inline;
+      max-width: 8.5rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
   }
 </style>
