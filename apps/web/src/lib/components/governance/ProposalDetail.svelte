@@ -55,7 +55,7 @@
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
       if (cause.status === 403)
-        return "Über den eigenen Weberantrag kannst du nicht selbst entscheiden.";
+        return "Über den eigenen Antrag kannst du nicht selbst entscheiden.";
       if (cause.status === 409)
         return "Die Aktion passt nicht mehr zur aktuellen Antragsphase.";
       if (cause.status === 503)
@@ -165,8 +165,14 @@
             >Noch {formatRemaining(proposal.remaining_seconds)}</strong
           >{/if}
       </div>
-      <p class="eyebrow">Weberantrag</p>
-      <h1>{proposal.applicant_title}</h1>
+      <p class="eyebrow">
+        {proposal.kind === "sachantrag" ? "Sachantrag" : "Weberantrag"}
+      </p>
+      <h1>
+        {proposal.kind === "sachantrag"
+          ? proposal.title || "Sachantrag"
+          : proposal.applicant_title}
+      </h1>
       {#if proposal.summary}<p class="summary">{proposal.summary}</p>{/if}
       <dl>
         <div>
@@ -175,8 +181,42 @@
         </div>
         <div>
           <dt>Verfahrensart</dt>
-          <dd>Aufnahme als Weber</dd>
+          <dd>
+            {proposal.kind === "sachantrag"
+              ? "Gemeinschaftlicher Beschluss"
+              : "Aufnahme als Weber"}
+          </dd>
         </div>
+        <div>
+          <dt>Gestellt von</dt>
+          <dd>{proposal.applicant_title}</dd>
+        </div>
+        <div>
+          <dt>Webgemeindezentrum</dt>
+          <dd>
+            <a
+              href={`/map?focus=${encodeURIComponent(
+                `webgemeindezentrum:${proposal.webgemeindezentrum_id}`,
+              )}`}>Zentrum auf der Karte öffnen</a
+            >
+          </dd>
+        </div>
+        {#if proposal.kind === "sachantrag" && proposal.target_node_title}
+          <div>
+            <dt>Knotenbezug</dt>
+            <dd>
+              {#if proposal.target_node_id}
+                <a
+                  href={`/map?focus=${encodeURIComponent(
+                    `node:${proposal.target_node_id}`,
+                  )}`}>{proposal.target_node_title}</a
+                >
+              {:else}
+                {proposal.target_node_title} (aus dem aktiven Gewebe entfernt)
+              {/if}
+            </dd>
+          </div>
+        {/if}
       </dl>
     </header>
 

@@ -75,6 +75,30 @@ async function mockCenter(page: Page) {
     await route.fallback();
   });
   await page.route("**/api/proposals", async (route) => {
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON() as Record<string, unknown>;
+      await route.fulfill({
+        status: 201,
+        contentType: "application/json",
+        body: JSON.stringify({
+          id: "center-sachantrag",
+          ...body,
+          webgemeindezentrum_id: CENTER.id,
+          applicant_account_id: "e2e-weber",
+          applicant_title: "E2E Weber",
+          status: "consent",
+          created_at: "2026-08-08T12:00:00Z",
+          consent_until: "2026-08-15T12:00:00Z",
+          veto_count: 0,
+          message_count: 0,
+          yes_votes: 0,
+          no_votes: 0,
+          abstain_votes: 0,
+          remaining_seconds: 604800,
+        }),
+      });
+      return;
+    }
     await route.fulfill({
       status: 200,
       contentType: "application/json",
@@ -221,6 +245,36 @@ test.describe("Webgemeindezentrum Hammer Park", () => {
         Math.abs(center.lat - 53.5585) < 0.0005 &&
         map.getZoom() >= 14
       );
+    });
+  });
+
+  test("Weber can create a center Sachantrag from the local Webrat", async ({
+    page,
+  }) => {
+    await page.goto(
+      "/map?focus=webgemeindezentrum:webgemeindezentrum-hammer-park&view=webgemeindezentrum",
+    );
+    const governance = page.getByTestId("center-governance").last();
+    await governance
+      .getByLabel("Sachantrag stellen")
+      .fill("Treffzeiten beschließen");
+    await governance
+      .getByLabel("Begründung")
+      .fill("Die Ortsweberei braucht verlässliche Zeiten.");
+    const requestPromise = page.waitForRequest(
+      (request) =>
+        new URL(request.url()).pathname === "/api/proposals" &&
+        request.method() === "POST",
+    );
+    await governance
+      .getByRole("button", { name: "Sachantrag stellen" })
+      .click();
+    const request = await requestPromise;
+    expect(request.postDataJSON()).toEqual({
+      kind: "sachantrag",
+      title: "Treffzeiten beschließen",
+      summary: "Die Ortsweberei braucht verlässliche Zeiten.",
+      webgemeindezentrum_id: CENTER.id,
     });
   });
 

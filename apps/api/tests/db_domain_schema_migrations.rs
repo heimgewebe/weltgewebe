@@ -230,6 +230,30 @@ async fn domain_schema_tables_exist_after_migration() {
         "every governance proposal must be anchored to a Webgemeindezentrum"
     );
     assert!(
+        column_exists(&pool, "governance_proposals", "title").await,
+        "Sachantraege must persist their decision title"
+    );
+    assert!(
+        column_exists(&pool, "governance_proposals", "target_node_id").await,
+        "Sachantraege must support an optional live node reference"
+    );
+    assert!(
+        column_exists(&pool, "governance_proposals", "target_node_title").await,
+        "Sachantraege must preserve the node title snapshot"
+    );
+    assert!(
+        index_exists(&pool, "governance_proposals_center_kind_status").await,
+        "center governance lists need a kind/status index"
+    );
+    assert!(
+        index_exists(&pool, "governance_proposals_target_node").await,
+        "node panels need an indexed proposal lookup"
+    );
+    assert!(
+        constraint_exists(&pool, "governance_proposals_kind_fields_check").await,
+        "proposal kinds must enforce their valid field combinations"
+    );
+    assert!(
         column_exists(&pool, "domain_conversations", "webgemeindezentrum_id").await,
         "center conversations must have an explicit subject"
     );

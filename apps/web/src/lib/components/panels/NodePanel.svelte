@@ -16,6 +16,7 @@
     type KnottingTopic,
   } from "$lib/knottingTopics";
   import KnottingTopicsSelector from "$lib/components/KnottingTopicsSelector.svelte";
+  import NodeGovernance from "$lib/components/governance/NodeGovernance.svelte";
   import NodeConversation from "./NodeConversation.svelte";
 
   type DomainChanged = {
@@ -34,9 +35,14 @@
     domainChanged: DomainChanged;
   }>();
 
-  type NodeTab = "uebersicht" | "gespraech" | "verlauf" | "bearbeiten";
+  type NodeTab =
+    | "uebersicht"
+    | "gespraech"
+    | "antraege"
+    | "verlauf"
+    | "bearbeiten";
   let activeTab: NodeTab = "uebersicht";
-  let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf"];
+  let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf", "antraege"];
   let overviewTab: HTMLButtonElement | null = null;
   let editTab: HTMLButtonElement | null = null;
   let titleInput: HTMLInputElement | null = null;
@@ -135,8 +141,8 @@
   }
 
   $: tabs = canMutate
-    ? ["uebersicht", "gespraech", "verlauf", "bearbeiten"]
-    : ["uebersicht", "gespraech", "verlauf"];
+    ? ["uebersicht", "gespraech", "verlauf", "antraege", "bearbeiten"]
+    : ["uebersicht", "gespraech", "verlauf", "antraege"];
   $: if (!canMutate) {
     const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
     if (activeTab === "bearbeiten") activeTab = "uebersicht";
@@ -482,6 +488,16 @@
           id="tab-verlauf"
           tabindex={activeTab === "verlauf" ? 0 : -1}>Verlauf</button
         >
+        <button
+          class:active={activeTab === "antraege"}
+          on:click={() => setTab("antraege")}
+          on:keydown={handleKeydown}
+          role="tab"
+          aria-selected={activeTab === "antraege"}
+          aria-controls="panel-antraege"
+          id="tab-antraege"
+          tabindex={activeTab === "antraege" ? 0 : -1}>Anträge</button
+        >
         {#if canMutate}
           <button
             class:active={activeTab === "bearbeiten"}
@@ -618,6 +634,26 @@
           {/if}
         </div>
 
+        <div
+          id="panel-antraege"
+          role="tabpanel"
+          aria-labelledby="tab-antraege"
+          tabindex={activeTab === "antraege" ? 0 : -1}
+          hidden={activeTab !== "antraege"}
+        >
+          {#if activeTab === "antraege"}
+            {#key nodeDetails?.id || $selection?.id || ""}
+              <NodeGovernance
+                nodeId={nodeDetails?.id || $selection?.id || ""}
+                nodeTitle={nodeDetails?.title ||
+                  $selection?.data?.title ||
+                  $selection?.id ||
+                  "Knoten"}
+              />
+            {/key}
+          {/if}
+        </div>
+
         {#if canMutate}
           <div
             class="mutation-actions"
@@ -672,6 +708,9 @@
     flex: 1 1 0;
     min-width: 0;
     padding-inline: 0.25rem;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    white-space: normal;
   }
   .tab-content > [hidden] {
     display: none;
@@ -858,9 +897,6 @@
   @media (max-width: 420px) {
     .node-tabs > button {
       padding-inline: 0.15rem;
-      line-height: 1.15;
-      overflow-wrap: anywhere;
-      white-space: normal;
     }
     .coordinate-grid,
     .form-actions {

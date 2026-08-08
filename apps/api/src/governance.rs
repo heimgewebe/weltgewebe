@@ -35,6 +35,8 @@ pub const VOTING_PHASE_DAYS: i64 = 7;
 
 /// Maximale Länge der Antragsbegründung (Spiegel des DB-Checks).
 pub const SUMMARY_MAX_CHARS: usize = 2000;
+/// Maximale Länge des Titels eines Sachantrags (Spiegel des DB-Checks).
+pub const PROPOSAL_TITLE_MAX_CHARS: usize = 200;
 /// Maximale Länge einer Veto-Begründung (Spiegel des DB-Checks).
 pub const VETO_REASON_MAX_CHARS: usize = 2000;
 /// Maximale Länge eines Gesprächsraum-Beitrags (Spiegel des DB-Checks).
@@ -111,6 +113,9 @@ pub struct ProposalWithCounts {
     pub id: String,
     pub kind: String,
     pub webgemeindezentrum_id: String,
+    pub title: Option<String>,
+    pub target_node_id: Option<String>,
+    pub target_node_title: Option<String>,
     pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     pub summary: Option<String>,
@@ -164,8 +169,12 @@ pub enum CreateProposalError {
     /// Nur eine aktive Gastidentität darf den Weberstatus beantragen.
     #[error("only an active guest account may create a Weber proposal")]
     NotGuest,
+    #[error("only an active Weber or administrator may create a Sachantrag")]
+    NotSachApplicant,
     #[error("no unique active Webgemeindezentrum is available for this proposal")]
     CenterUnavailable,
+    #[error("the target node does not exist")]
+    TargetNodeNotFound,
     #[error("failed to persist proposal: {0}")]
     Database(#[source] sqlx::Error),
 }
@@ -180,7 +189,7 @@ pub enum VetoError {
     /// Je Account höchstens ein Veto pro Antrag.
     #[error("this account already vetoed the proposal")]
     AlreadyVetoed,
-    #[error("the applicant cannot veto the own Weber proposal")]
+    #[error("the applicant cannot veto the own proposal")]
     ApplicantCannotDecide,
     #[error("veto actor account is not a Weber or administrator")]
     ActorNotEligible,
@@ -197,7 +206,7 @@ pub enum VoteError {
     /// Stimmen sind nur während der Beratungs- und Abstimmungsphase zulässig.
     #[error("proposal is not in an open voting phase")]
     WrongPhase,
-    #[error("the applicant cannot vote on the own Weber proposal")]
+    #[error("the applicant cannot vote on the own proposal")]
     ApplicantCannotDecide,
     #[error("vote actor account is not a Weber or administrator")]
     ActorNotEligible,
@@ -266,6 +275,46 @@ fn is_unique_violation(error: &sqlx::Error, constraint: &str) -> bool {
     )
 }
 
+/// Resolve and lock the active governance center used by every proposal kind.
+/// Without an explicit center, exactly one active center must exist; multiple
+/// active centers fail closed until nodes have a canonical center assignment.
+async fn resolve_active_center(
+    tx: &mut Transaction<'_, Postgres>,
+    requested_center_id: Option<&str>,
+) -> Result<Option<String>, sqlx::Error> {
+    if let Some(requested_center_id) = requested_center_id {
+        return sqlx::query_scalar(
+            "SELECT c.id \
+             FROM ortswebereien o \
+             JOIN gewebezellen g ON g.id = o.gewebezelle_id \
+             JOIN webgemeindezentren c \
+               ON c.id = o.active_webgemeindezentrum_id \
+              AND c.ortsweberei_id = o.id \
+             WHERE o.lifecycle_state = 'active' \
+               AND g.lifecycle_state = 'active' \
+               AND c.id = $1 \
+             FOR SHARE OF o, g, c",
+        )
+        .bind(requested_center_id)
+        .fetch_optional(&mut **tx)
+        .await;
+    }
+
+    let center_ids: Vec<String> = sqlx::query_scalar(
+        "SELECT c.id \
+         FROM ortswebereien o \
+         JOIN gewebezellen g ON g.id = o.gewebezelle_id \
+         JOIN webgemeindezentren c \
+           ON c.id = o.active_webgemeindezentrum_id \
+          AND c.ortsweberei_id = o.id \
+         WHERE o.lifecycle_state = 'active' AND g.lifecycle_state = 'active' \
+         ORDER BY c.id FOR SHARE OF o, g, c",
+    )
+    .fetch_all(&mut **tx)
+    .await?;
+    Ok((center_ids.len() == 1).then(|| center_ids[0].clone()))
+}
+
 /// Lege einen neuen Weberantrag an. Die Konsentphase beginnt mit `now` und
 /// endet nach [`CONSENT_PHASE_DAYS`]. Ein zweiter offener Antrag desselben
 /// Accounts wird über den partiellen Unique-Index abgewiesen.
@@ -314,39 +363,10 @@ pub async fn create_weber_proposal_at_center(
         return Err(CreateProposalError::NotGuest);
     }
 
-    let webgemeindezentrum_id: Option<String> =
-        if let Some(requested_center_id) = requested_center_id {
-            sqlx::query_scalar(
-                "SELECT c.id \
-             FROM ortswebereien o \
-             JOIN gewebezellen g ON g.id = o.gewebezelle_id \
-             JOIN webgemeindezentren c \
-               ON c.id = o.active_webgemeindezentrum_id \
-              AND c.ortsweberei_id = o.id \
-             WHERE o.lifecycle_state = 'active' \
-               AND g.lifecycle_state = 'active' \
-               AND c.id = $1",
-            )
-            .bind(requested_center_id)
-            .fetch_optional(&mut *tx)
-            .await
-            .map_err(CreateProposalError::Database)?
-        } else {
-            sqlx::query_scalar(
-                "SELECT CASE WHEN count(*) = 1 THEN min(c.id) END \
-             FROM ortswebereien o \
-             JOIN gewebezellen g ON g.id = o.gewebezelle_id \
-             JOIN webgemeindezentren c \
-               ON c.id = o.active_webgemeindezentrum_id \
-              AND c.ortsweberei_id = o.id \
-             WHERE o.lifecycle_state = 'active' AND g.lifecycle_state = 'active'",
-            )
-            .fetch_one(&mut *tx)
-            .await
-            .map_err(CreateProposalError::Database)?
-        };
-    let webgemeindezentrum_id =
-        webgemeindezentrum_id.ok_or(CreateProposalError::CenterUnavailable)?;
+    let webgemeindezentrum_id = resolve_active_center(&mut tx, requested_center_id)
+        .await
+        .map_err(CreateProposalError::Database)?
+        .ok_or(CreateProposalError::CenterUnavailable)?;
 
     sqlx::query(
         "INSERT INTO governance_proposals \
@@ -376,6 +396,131 @@ pub async fn create_weber_proposal_at_center(
         id,
         kind: "weberantrag".to_string(),
         webgemeindezentrum_id,
+        title: None,
+        target_node_id: None,
+        target_node_title: None,
+        applicant_account_id: Some(applicant_account_id.to_string()),
+        applicant_title: applicant_title.to_string(),
+        summary: summary.map(str::to_string),
+        status: ProposalStatus::Consent,
+        created_at: now,
+        consent_until,
+        voting_until: None,
+        finalized_at: None,
+        veto_count: 0,
+        message_count: 0,
+        yes_votes: 0,
+        no_votes: 0,
+        abstain_votes: 0,
+    })
+}
+
+/// Lege einen Sachantrag im selben Governance-Verfahren an. Der Antragsteller
+/// und ein optional referenzierter Knoten werden innerhalb derselben
+/// Transaktion geprüft und gesperrt. Der Knotentitel bleibt als Snapshot
+/// erhalten, wenn der Knoten später regulär aus dem Gewebe entfernt wird.
+pub async fn create_sach_proposal(
+    pool: &PgPool,
+    applicant_account_id: &str,
+    applicant_title: &str,
+    title: &str,
+    summary: Option<&str>,
+    target_node_id: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<ProposalWithCounts, CreateProposalError> {
+    create_sach_proposal_at_center(
+        pool,
+        applicant_account_id,
+        applicant_title,
+        title,
+        summary,
+        None,
+        target_node_id,
+        now,
+    )
+    .await
+}
+
+/// Center-gebundene Variante eines Sachantrags. Ein fehlender Center wird nur
+/// bei genau einem aktiven Center aufgelöst; Mehrdeutigkeit bleibt fail-closed.
+#[allow(clippy::too_many_arguments)]
+pub async fn create_sach_proposal_at_center(
+    pool: &PgPool,
+    applicant_account_id: &str,
+    applicant_title: &str,
+    title: &str,
+    summary: Option<&str>,
+    requested_center_id: Option<&str>,
+    target_node_id: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<ProposalWithCounts, CreateProposalError> {
+    let id = Uuid::new_v4().to_string();
+    let consent_until = now + Duration::days(CONSENT_PHASE_DAYS);
+    let mut tx = pool.begin().await.map_err(CreateProposalError::Database)?;
+
+    let applicant_role: Option<String> = sqlx::query_scalar(
+        "SELECT role FROM domain_accounts \
+         WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(applicant_account_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(CreateProposalError::Database)?;
+    if !matches!(applicant_role.as_deref(), Some("weber" | "admin")) {
+        return Err(CreateProposalError::NotSachApplicant);
+    }
+
+    let webgemeindezentrum_id = resolve_active_center(&mut tx, requested_center_id)
+        .await
+        .map_err(CreateProposalError::Database)?
+        .ok_or(CreateProposalError::CenterUnavailable)?;
+
+    let target_node_title = if let Some(target_node_id) = target_node_id {
+        sqlx::query("SELECT pg_advisory_xact_lock($1::bigint)")
+            .bind(node_mutation_lock_key(target_node_id))
+            .execute(&mut *tx)
+            .await
+            .map_err(CreateProposalError::Database)?;
+        Some(
+            sqlx::query_scalar("SELECT title FROM domain_nodes WHERE id = $1 FOR SHARE")
+                .bind(target_node_id)
+                .fetch_optional(&mut *tx)
+                .await
+                .map_err(CreateProposalError::Database)?
+                .ok_or(CreateProposalError::TargetNodeNotFound)?,
+        )
+    } else {
+        None
+    };
+
+    sqlx::query(
+        "INSERT INTO governance_proposals \
+             (id, kind, webgemeindezentrum_id, title, target_node_id, target_node_title, \
+              applicant_account_id, applicant_title, summary, status, created_at, consent_until) \
+         VALUES ($1::uuid, 'sachantrag', $2, $3, $4, $5, $6, $7, $8, 'consent', $9, $10)",
+    )
+    .bind(&id)
+    .bind(&webgemeindezentrum_id)
+    .bind(title)
+    .bind(target_node_id)
+    .bind(&target_node_title)
+    .bind(applicant_account_id)
+    .bind(applicant_title)
+    .bind(summary)
+    .bind(now)
+    .bind(consent_until)
+    .execute(&mut *tx)
+    .await
+    .map_err(CreateProposalError::Database)?;
+    tx.commit().await.map_err(CreateProposalError::Database)?;
+
+    Ok(ProposalWithCounts {
+        id,
+        kind: "sachantrag".to_string(),
+        webgemeindezentrum_id,
+        title: Some(title.to_string()),
+        target_node_id: target_node_id.map(str::to_string),
+        target_node_title,
         applicant_account_id: Some(applicant_account_id.to_string()),
         applicant_title: applicant_title.to_string(),
         summary: summary.map(str::to_string),
@@ -776,7 +921,8 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
 // ---------------------------------------------------------------------------
 
 const PROPOSAL_WITH_COUNTS_SELECT: &str = "SELECT p.id::text AS id, p.kind, \
-        p.webgemeindezentrum_id, p.applicant_account_id, p.applicant_title, p.summary, p.status, \
+        p.webgemeindezentrum_id, p.title, p.target_node_id, p.target_node_title, \
+        p.applicant_account_id, p.applicant_title, p.summary, p.status, \
         p.created_at, p.consent_until, p.voting_until, p.finalized_at, \
         (SELECT count(*) FROM governance_vetoes v \
             WHERE v.proposal_id = p.id) AS veto_count, \
@@ -795,6 +941,9 @@ fn proposal_from_row(row: &sqlx::postgres::PgRow) -> Result<ProposalWithCounts, 
         id: row.try_get("id")?,
         kind: row.try_get("kind")?,
         webgemeindezentrum_id: row.try_get("webgemeindezentrum_id")?,
+        title: row.try_get("title")?,
+        target_node_id: row.try_get("target_node_id")?,
+        target_node_title: row.try_get("target_node_title")?,
         applicant_account_id: row.try_get("applicant_account_id")?,
         applicant_title: row.try_get("applicant_title")?,
         summary: row.try_get("summary")?,
@@ -989,7 +1138,7 @@ async fn finalize_one(
     }
 
     let Some(row) = sqlx::query(
-        "SELECT status, applicant_account_id, consent_until, voting_until \
+        "SELECT kind, status, applicant_account_id, consent_until, voting_until \
          FROM governance_proposals WHERE id = $1::uuid FOR UPDATE",
     )
     .bind(proposal_id)
@@ -999,6 +1148,12 @@ async fn finalize_one(
         return Ok(None);
     };
 
+    let kind: String = row.try_get("kind")?;
+    if !matches!(kind.as_str(), "weberantrag" | "sachantrag") {
+        return Err(sqlx::Error::Decode(
+            format!("unknown governance proposal kind: {kind}").into(),
+        ));
+    }
     let status = ProposalStatus::from_db(row.try_get::<String, _>("status")?.as_str())?;
     let locked_applicant_account_id: Option<String> = row.try_get("applicant_account_id")?;
     if locked_applicant_account_id.as_deref() != Some(applicant_account_id.as_str()) {
@@ -1020,7 +1175,7 @@ async fn finalize_one(
             match consent_phase_outcome(veto_count) {
                 ProposalStatus::Accepted => {
                     let promoted =
-                        accept_weber_proposal(&mut tx, proposal_id, &applicant_account_id, now)
+                        accept_proposal(&mut tx, proposal_id, &kind, &applicant_account_id, now)
                             .await?;
                     Some(FinalizationOutcome {
                         proposal_id: proposal_id.to_string(),
@@ -1066,7 +1221,7 @@ async fn finalize_one(
             match voting_phase_outcome(yes_votes, no_votes) {
                 ProposalStatus::Accepted => {
                     let promoted =
-                        accept_weber_proposal(&mut tx, proposal_id, &applicant_account_id, now)
+                        accept_proposal(&mut tx, proposal_id, &kind, &applicant_account_id, now)
                             .await?;
                     Some(FinalizationOutcome {
                         proposal_id: proposal_id.to_string(),
@@ -1117,12 +1272,25 @@ async fn finalize_one(
 /// erhält `role = 'weber'`. Profil, Verortung und Identität bleiben unverändert.
 /// Fehlt die Gastidentität, bricht die Transaktion fail-closed ab. Replays sind
 /// No-ops (Rolle bereits `weber`), Admin-Rollen werden nie herabgestuft.
-async fn accept_weber_proposal(
+async fn accept_proposal(
     tx: &mut Transaction<'_, Postgres>,
     proposal_id: &str,
+    kind: &str,
     applicant_account_id: &str,
     now: DateTime<Utc>,
 ) -> Result<bool, sqlx::Error> {
+    if kind == "sachantrag" {
+        sqlx::query(
+            "UPDATE governance_proposals \
+             SET status = 'accepted', finalized_at = $2 WHERE id = $1::uuid",
+        )
+        .bind(proposal_id)
+        .bind(now)
+        .execute(&mut **tx)
+        .await?;
+        return Ok(false);
+    }
+
     let result = sqlx::query(
         "UPDATE domain_accounts \
          SET role = 'weber', disabled = FALSE, updated_at = $2 \
@@ -1164,10 +1332,8 @@ pub async fn apply_promotions_to_store(
     accounts: &Arc<RwLock<AccountStore>>,
     outcomes: &[FinalizationOutcome],
 ) {
-    let promoted: Vec<&FinalizationOutcome> = outcomes
-        .iter()
-        .filter(|outcome| outcome.status == ProposalStatus::Accepted)
-        .collect();
+    let promoted: Vec<&FinalizationOutcome> =
+        outcomes.iter().filter(|outcome| outcome.promoted).collect();
     if promoted.is_empty() {
         return;
     }

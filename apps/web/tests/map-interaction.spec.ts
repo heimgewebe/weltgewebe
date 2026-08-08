@@ -276,7 +276,7 @@ test.describe("Map Interaction & Context Panel", () => {
 
     const tabList = panel.getByRole("tablist", { name: "Knoten-Tabs" });
     const allTabs = tabList.getByRole("tab");
-    await expect(allTabs).toHaveCount(4);
+    await expect(allTabs).toHaveCount(5);
     const controlledPanelIds = await allTabs.evaluateAll((elements) =>
       elements.map((element) => element.getAttribute("aria-controls")),
     );
@@ -284,6 +284,7 @@ test.describe("Map Interaction & Context Panel", () => {
       "panel-uebersicht",
       "panel-gespraech",
       "panel-verlauf",
+      "panel-antraege",
       "panel-bearbeiten",
     ]);
     for (const panelId of controlledPanelIds) {
@@ -293,6 +294,7 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(panel.locator("#panel-uebersicht")).toBeVisible();
     await expect(panel.locator("#panel-gespraech")).toBeHidden();
     await expect(panel.locator("#panel-verlauf")).toBeHidden();
+    await expect(panel.locator("#panel-antraege")).toBeHidden();
     await expect(panel.locator("#panel-bearbeiten")).toBeHidden();
 
     // Focus the active tab (usually Übersicht by default)
@@ -340,9 +342,13 @@ test.describe("Map Interaction & Context Panel", () => {
       "0",
     );
 
-    const bearbeitenTab = panel.getByRole("tab", { name: "Bearbeiten" });
+    const antraegeTab = panel.getByRole("tab", { name: "Anträge" });
+    await page.keyboard.press("ArrowRight");
+    await expect(antraegeTab).toBeFocused();
+    await expect(antraegeTab).toHaveAttribute("aria-selected", "true");
+    await expect(panel.locator("#panel-antraege")).toBeVisible();
 
-    // ArrowRight reaches the new final edit tab.
+    const bearbeitenTab = panel.getByRole("tab", { name: "Bearbeiten" });
     await page.keyboard.press("ArrowRight");
     await expect(bearbeitenTab).toBeFocused();
     await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
@@ -351,7 +357,7 @@ test.describe("Map Interaction & Context Panel", () => {
       "panel-bearbeiten",
     );
     await expect(bearbeitenTab).toHaveAttribute("tabindex", "0");
-    await expect(verlaufTab).toHaveAttribute("tabindex", "-1");
+    await expect(antraegeTab).toHaveAttribute("tabindex", "-1");
     await expect(panel.locator("#panel-bearbeiten")).toBeVisible();
 
     const tabListBox = await tabList.boundingBox();
@@ -416,10 +422,10 @@ test.describe("Map Interaction & Context Panel", () => {
     await expect(bearbeitenTab).toBeFocused();
     await expect(bearbeitenTab).toHaveAttribute("aria-selected", "true");
 
-    // Reverse adjacent navigation returns from editing to history.
+    // Reverse adjacent navigation returns from editing to node proposals.
     await page.keyboard.press("ArrowLeft");
-    await expect(verlaufTab).toBeFocused();
-    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+    await expect(antraegeTab).toBeFocused();
+    await expect(antraegeTab).toHaveAttribute("aria-selected", "true");
 
     // Home and End address the first and last productive tabs explicitly.
     await page.keyboard.press("Home");

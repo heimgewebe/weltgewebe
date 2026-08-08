@@ -270,12 +270,14 @@ test.describe("Knoten bearbeiten und löschen", () => {
     const uebersichtTab = tabList.getByRole("tab", { name: "Übersicht" });
     const gespraechTab = tabList.getByRole("tab", { name: "Gespräch" });
     const verlaufTab = tabList.getByRole("tab", { name: "Verlauf" });
-    await expect(tabList.getByRole("tab")).toHaveCount(3);
+    const antraegeTab = tabList.getByRole("tab", { name: "Anträge" });
+    await expect(tabList.getByRole("tab")).toHaveCount(4);
 
     const tabContract = [
       [uebersichtTab, "panel-uebersicht"],
       [gespraechTab, "panel-gespraech"],
       [verlaufTab, "panel-verlauf"],
+      [antraegeTab, "panel-antraege"],
     ] as const;
     for (const [tab, panelId] of tabContract) {
       await expect(tab).toHaveAttribute("aria-controls", panelId);
@@ -284,6 +286,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await expect(panel.locator("#panel-uebersicht")).toBeVisible();
     await expect(panel.locator("#panel-gespraech")).toBeHidden();
     await expect(panel.locator("#panel-verlauf")).toBeHidden();
+    await expect(panel.locator("#panel-antraege")).toBeHidden();
 
     await uebersichtTab.focus();
     await page.keyboard.press("ArrowRight");
@@ -294,10 +297,10 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await expect(panel.locator("#panel-uebersicht")).toBeHidden();
 
     await page.keyboard.press("End");
-    await expect(verlaufTab).toBeFocused();
-    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
-    await expect(verlaufTab).toHaveAttribute("tabindex", "0");
-    await expect(panel.locator("#panel-verlauf")).toBeVisible();
+    await expect(antraegeTab).toBeFocused();
+    await expect(antraegeTab).toHaveAttribute("aria-selected", "true");
+    await expect(antraegeTab).toHaveAttribute("tabindex", "0");
+    await expect(panel.locator("#panel-antraege")).toBeVisible();
 
     await page.keyboard.press("Home");
     await expect(uebersichtTab).toBeFocused();
@@ -305,9 +308,69 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await expect(panel.locator("#panel-uebersicht")).toBeVisible();
 
     await page.keyboard.press("ArrowLeft");
-    await expect(verlaufTab).toBeFocused();
-    await expect(verlaufTab).toHaveAttribute("aria-selected", "true");
+    await expect(antraegeTab).toBeFocused();
+    await expect(antraegeTab).toHaveAttribute("aria-selected", "true");
     await expect(uebersichtTab).toHaveAttribute("tabindex", "-1");
+  });
+
+  test("Weber can create a node Sachantrag without a client-supplied center", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
+    });
+    const proposalRequests: Record<string, unknown>[] = [];
+    await page.route("**/api/proposals", async (route) => {
+      if (route.request().method() === "POST") {
+        const body = route.request().postDataJSON() as Record<string, unknown>;
+        proposalRequests.push(body);
+        await route.fulfill({
+          status: 201,
+          contentType: "application/json",
+          body: JSON.stringify({
+            id: "node-sachantrag",
+            ...body,
+            webgemeindezentrum_id: "resolved-by-api",
+            target_node_title: "Demo Node",
+            applicant_account_id: "e2e-weber",
+            applicant_title: "E2E Weber",
+            status: "consent",
+            created_at: "2026-08-08T12:00:00Z",
+            consent_until: "2026-08-15T12:00:00Z",
+            veto_count: 0,
+            message_count: 0,
+            yes_votes: 0,
+            no_votes: 0,
+            abstain_votes: 0,
+            remaining_seconds: 604800,
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      });
+    });
+    await page.goto("/map");
+
+    const panel = await openFirstNode(page);
+    await panel.getByRole("tab", { name: "Anträge" }).click();
+    await panel
+      .getByLabel(/Sachantrag zu/)
+      .fill("Nutzung des Knotens beschließen");
+    await panel.getByLabel("Begründung").fill("Gemeinsam und nachvollziehbar.");
+    await panel.getByRole("button", { name: "Sachantrag stellen" }).click();
+
+    await expect.poll(() => proposalRequests.length).toBe(1);
+    expect(proposalRequests[0]).toMatchObject({
+      kind: "sachantrag",
+      title: "Nutzung des Knotens beschließen",
+      summary: "Gemeinsam und nachvollziehbar.",
+    });
+    expect(proposalRequests[0]).toHaveProperty("target_node_id");
+    expect(proposalRequests[0]).not.toHaveProperty("webgemeindezentrum_id");
   });
 
   test("fällt bei Berechtigungsverlust aus dem offenen Formular sicher auf Übersicht zurück", async ({
