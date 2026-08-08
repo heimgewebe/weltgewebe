@@ -8,6 +8,7 @@
   import { listProposals, type Proposal } from "$lib/api/governance";
   import { authStore, type AuthStatus } from "$lib/auth/store";
   import { garnrolleIcon } from "$lib/ui/icons";
+  import { topBarAttentionRefresh } from "./topBarAttentionRefresh";
   import {
     countUnreadDirectMessages,
     hasPendingWeberApplication,
@@ -124,13 +125,22 @@
 
   onMount(() => {
     let authKey = "";
-    const unsubscribe = authStore.subscribe((status) => {
+    const unsubscribeAuth = authStore.subscribe((status) => {
       const nextAuthKey = status.authenticated
         ? `${status.account_id ?? ""}:${status.role}`
         : "";
       if (nextAuthKey === authKey) return;
       authKey = nextAuthKey;
       refreshAttention(status);
+    });
+
+    let attentionSignalPrimed = false;
+    const unsubscribeAttention = topBarAttentionRefresh.subscribe(() => {
+      if (!attentionSignalPrimed) {
+        attentionSignalPrimed = true;
+        return;
+      }
+      refreshAttention($authStore);
     });
 
     const refreshWhenVisible = () => {
@@ -149,7 +159,8 @@
     window.addEventListener("focus", refreshOnFocus);
 
     return () => {
-      unsubscribe();
+      unsubscribeAuth();
+      unsubscribeAttention();
       window.clearInterval(messagePoll);
       document.removeEventListener("visibilitychange", refreshWhenVisible);
       window.removeEventListener("focus", refreshOnFocus);
@@ -279,10 +290,6 @@
     font: inherit;
     font-weight: 700;
     white-space: nowrap;
-  }
-
-  .guest-badge.pending {
-    border-style: solid;
   }
 
   .guest-badge-role {
