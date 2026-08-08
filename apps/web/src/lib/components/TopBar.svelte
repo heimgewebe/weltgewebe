@@ -61,6 +61,12 @@
     }
   }
 
+  @media (max-width: 420px) {
+    .governance-slot {
+      transform: translateX(-10px);
+    }
+  }
+
   @media (prefers-reduced-motion: reduce) {
     .topbar {
       transition: none;
