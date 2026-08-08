@@ -6,7 +6,8 @@ use axum::{
     routing::{get, post},
     Extension, Json, Router,
 };
-use serde_json::{json, Value};
+use serde::Deserialize;
+use serde_json::{json, Map, Value};
 use uuid::Uuid;
 
 use crate::{
@@ -25,7 +26,22 @@ use super::{
 };
 
 pub const MACHINE_PROTOCOL: &str = "weltgewebe-machine/1";
-const OPENAPI_TEXT: &str = include_str!("../../../../contracts/machine/openapi.json");
+const OPERATION_MANIFEST: &str = include_str!("../../../../contracts/machine/operations.json");
+
+#[derive(Clone, Debug, Deserialize)]
+struct MachineManifest {
+    schema_version: u8,
+    contract: String,
+    operations: Vec<ApiOperation>,
+}
+
+#[derive(Clone, Debug, Deserialize)]
+struct ApiOperation {
+    method: String,
+    path: String,
+    auth: String,
+    write_safety: String,
+}
 
 pub fn api_routes() -> Router<ApiState> {
     Router::new()
@@ -69,6 +85,7 @@ fn canonical_operation_id(payload: &Value) -> bool {
     let Some(raw) = payload.get("operation_id").and_then(Value::as_str) else {
         return false;
     };
+
     Uuid::parse_str(raw)
         .ok()
         .is_some_and(|parsed| parsed.to_string() == raw)
@@ -157,11 +174,23 @@ async fn delete_machine_node(
     delete_node_serialized(State(state), Extension(auth), Path(id), headers).await
 }
 
-async fn machine_descriptor() -> Json<Value> {
+fn machine_manifest() -> Result<MachineManifest, serde_json::Error> {
+    serde_json::from_str(OPERATION_MANIFEST)
+}
+
+async fn machine_descriptor() -> Response {
+    let manifest = match machine_manifest() {
+        Ok(manifest) => manifest,
+        Err(error) => {
+            tracing::error!(%error, "embedded machine operation manifest is invalid JSON");
+            return StatusCode::INTERNAL_SERVER_ERROR.into_response();
+        }
+    };
     let build = BuildInfo::collect();
+
     Json(json!({
-        "protocol": MACHINE_PROTOCOL,
-        "schema_version": 1,
+        "protocol": manifest.contract,
+        "schema_version": manifest.schema_version,
         "build": {
             "version": build.version,
             "commit": build.commit,
@@ -170,7 +199,7 @@ async fn machine_descriptor() -> Json<Value> {
         "api": {
             "canonical_base": "/api",
             "openapi": "/openapi.json",
-            "operation_count": openapi_operation_count(),
+            "operation_count": manifest.operations.len(),
             "compatibility_root_alias": true,
         },
         "capabilities": [
@@ -220,43 +249,188 @@ async fn machine_descriptor() -> Json<Value> {
             "objects": "/federation/v1/objects"
         }
     }))
+    .into_response()
 }
 
 async fn openapi() -> Response {
     match openapi_document() {
         Ok(document) => Json(document).into_response(),
         Err(error) => {
-            tracing::error!(%error, "embedded OpenAPI machine contract is invalid JSON");
+            tracing::error!(%error, "failed to build OpenAPI machine contract");
             StatusCode::INTERNAL_SERVER_ERROR.into_response()
         }
     }
 }
 
 fn openapi_document() -> Result<Value, serde_json::Error> {
-    serde_json::from_str(OPENAPI_TEXT)
+    let manifest = machine_manifest()?;
+    let mut paths = Map::new();
+
+    for operation in &manifest.operations {
+        insert_openapi_operation(&mut paths, operation);
+    }
+
+    Ok(json!({
+        "openapi": "3.1.0",
+        "info": {
+            "title": "Weltgewebe Machine Surface",
+            "version": manifest.schema_version.to_string(),
+            "description": "Machine-discoverable operation surface. Handler-specific payloads are explicitly marked instead of guessed; canonical JSON Schemas are linked separately."
+        },
+        "servers": [{ "url": "/" }],
+        "paths": paths,
+        "components": {
+            "securitySchemes": {
+                "sessionCookie": {
+                    "type": "apiKey",
+                    "in": "cookie",
+                    "name": SESSION_COOKIE_NAME
+                }
+            },
+            "schemas": {
+                "Account": { "$ref": "/schemas/domain/account.json" },
+                "Conversation": { "$ref": "/schemas/domain/conversation.json" },
+                "Edge": { "$ref": "/schemas/domain/edge.json" },
+                "Message": { "$ref": "/schemas/domain/message.json" },
+                "Node": { "$ref": "/schemas/domain/node.json" },
+                "Role": { "$ref": "/schemas/domain/role.json" },
+                "FederationCell": {
+                    "$ref": "/schemas/federation/v1/cell-descriptor.json"
+                },
+                "FederationEvent": {
+                    "$ref": "/schemas/federation/v1/event.json"
+                }
+            }
+        },
+        "x-weltgewebe-contract": manifest.contract,
+        "x-weltgewebe-completeness": "operation-surface-plus-core-schemas",
+        "x-weltgewebe-discovery": "/.well-known/weltgewebe"
+    }))
 }
 
-fn openapi_operation_count() -> usize {
-    openapi_document()
-        .ok()
-        .and_then(|document| document.get("paths").and_then(Value::as_object).cloned())
-        .map(|paths| {
-            paths
-                .values()
-                .filter_map(Value::as_object)
-                .map(|path| {
-                    path.keys()
-                        .filter(|key| {
-                            matches!(
-                                key.as_str(),
-                                "get" | "post" | "put" | "patch" | "delete" | "options"
-                            )
-                        })
-                        .count()
-                })
-                .sum()
+fn insert_openapi_operation(paths: &mut Map<String, Value>, operation: &ApiOperation) {
+    let item = paths
+        .entry(operation.path.clone())
+        .or_insert_with(|| json!({}));
+    let item = item
+        .as_object_mut()
+        .expect("OpenAPI path entries are always objects");
+    item.insert(
+        operation.method.to_ascii_lowercase(),
+        openapi_operation(operation),
+    );
+}
+
+fn openapi_operation(operation: &ApiOperation) -> Value {
+    let mut value = json!({
+        "operationId": operation_id(&operation.method, &operation.path),
+        "summary": format!("{} {}", operation.method, operation.path),
+        "responses": {
+            "200": { "description": "Successful response" },
+            "default": { "description": "Error response" }
+        },
+        "x-weltgewebe-auth": operation.auth.as_str(),
+        "x-weltgewebe-write-safety": operation.write_safety.as_str()
+    });
+    let object = value
+        .as_object_mut()
+        .expect("OpenAPI operation is always an object");
+
+    let mut parameters = path_parameters(&operation.path);
+    if operation.write_safety == "if_match_required" {
+        parameters.push(json!({
+            "name": "If-Match",
+            "in": "header",
+            "required": true,
+            "description": "Current node ETag. Prevents lost updates.",
+            "schema": { "type": "string" }
+        }));
+    }
+    if !parameters.is_empty() {
+        object.insert("parameters".to_string(), Value::Array(parameters));
+    }
+
+    if matches!(
+        operation.auth.as_str(),
+        "session" | "admin" | "write_role" | "handler_enforced"
+    ) {
+        object.insert("security".to_string(), json!([{ "sessionCookie": [] }]));
+    }
+
+    if operation.method == "POST" && operation.path == "/api/machine/v1/nodes" {
+        object.insert(
+            "requestBody".to_string(),
+            json!({
+                "required": true,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "type": "object",
+                            "required": ["operation_id"],
+                            "properties": {
+                                "operation_id": {
+                                    "type": "string",
+                                    "format": "uuid"
+                                }
+                            },
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }),
+        );
+    }
+
+    if operation.method == "POST" && operation.path == "/federation/v1/events" {
+        object.insert(
+            "requestBody".to_string(),
+            json!({
+                "required": true,
+                "content": {
+                    "application/json": {
+                        "schema": {
+                            "$ref": "/schemas/federation/v1/event.json"
+                        }
+                    }
+                }
+            }),
+        );
+    }
+
+    value
+}
+
+fn operation_id(method: &str, path: &str) -> String {
+    let normalized: String = path
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '_'
+            }
         })
-        .unwrap_or(0)
+        .collect();
+
+    format!(
+        "{}_{}",
+        method.to_ascii_lowercase(),
+        normalized.trim_matches('_')
+    )
+}
+
+fn path_parameters(path: &str) -> Vec<Value> {
+    path.split('/')
+        .filter_map(|segment| segment.strip_prefix('{')?.strip_suffix('}'))
+        .map(|name| {
+            json!({
+                "name": name,
+                "in": "path",
+                "required": true,
+                "schema": { "type": "string" }
+            })
+        })
+        .collect()
 }
 
 async fn domain_schema(Path(name): Path<String>) -> Response {
@@ -323,7 +497,7 @@ mod tests {
 
     use serde_json::Value;
 
-    use super::{openapi_document, MACHINE_PROTOCOL};
+    use super::{machine_manifest, openapi_document, MACHINE_PROTOCOL};
 
     fn route_paths(source: &str) -> BTreeSet<String> {
         let mut paths = BTreeSet::new();
@@ -355,24 +529,35 @@ mod tests {
     }
 
     #[test]
-    fn openapi_contract_is_valid_and_versioned() {
-        let document = openapi_document().expect("OpenAPI contract must parse");
-        assert_eq!(document["openapi"], "3.1.0");
-        assert_eq!(document["x-weltgewebe-contract"], MACHINE_PROTOCOL);
+    fn operation_manifest_is_versioned_and_unique() {
+        let manifest = machine_manifest().expect("machine manifest must parse");
+        assert_eq!(manifest.schema_version, 1);
+        assert_eq!(manifest.contract, MACHINE_PROTOCOL);
+
+        let unique: BTreeSet<_> = manifest
+            .operations
+            .iter()
+            .map(|operation| (&operation.method, &operation.path))
+            .collect();
+        assert_eq!(unique.len(), manifest.operations.len());
     }
 
     #[test]
-    fn router_paths_are_covered_by_openapi_contract() {
-        let document = openapi_document().expect("OpenAPI contract must parse");
-        let documented = openapi_paths(&document);
+    fn router_paths_are_covered_by_operation_manifest() {
+        let manifest = machine_manifest().expect("machine manifest must parse");
+        let documented: BTreeSet<_> = manifest
+            .operations
+            .iter()
+            .map(|operation| operation.path.as_str())
+            .collect();
 
         for path in route_paths(include_str!("mod.rs"))
             .into_iter()
             .filter(|path| !path.contains("/testing/"))
         {
             assert!(
-                documented.contains(&format!("/api{path}")),
-                "API router path {path} is missing from OpenAPI"
+                documented.contains(format!("/api{path}").as_str()),
+                "API router path {path} is missing from machine manifest"
             );
         }
 
@@ -383,15 +568,37 @@ mod tests {
                 path.clone()
             };
             assert!(
-                documented.contains(&documented_path),
-                "machine router path {path} is missing from OpenAPI"
+                documented.contains(documented_path.as_str()),
+                "machine router path {path} is missing from machine manifest"
+            );
+        }
+    }
+
+    #[test]
+    fn openapi_contains_every_manifest_operation() {
+        let manifest = machine_manifest().expect("machine manifest must parse");
+        let document = openapi_document().expect("OpenAPI contract must build");
+        let paths = document["paths"]
+            .as_object()
+            .expect("OpenAPI paths must be an object");
+
+        for operation in &manifest.operations {
+            let item = paths
+                .get(&operation.path)
+                .expect("manifest path missing from OpenAPI");
+            let method = operation.method.to_ascii_lowercase();
+            assert!(
+                item.get(&method).is_some(),
+                "{} {} is missing from OpenAPI",
+                operation.method,
+                operation.path
             );
         }
     }
 
     #[test]
     fn machine_mutations_have_explicit_safety_contracts() {
-        let document = openapi_document().expect("OpenAPI contract must parse");
+        let document = openapi_document().expect("OpenAPI contract must build");
         let create = &document["paths"]["/api/machine/v1/nodes"]["post"];
         assert_eq!(
             create["x-weltgewebe-write-safety"],
@@ -413,5 +620,18 @@ mod tests {
                     && parameter["required"] == true
             }));
         }
+    }
+
+    #[test]
+    fn openapi_contract_is_versioned() {
+        let document = openapi_document().expect("OpenAPI contract must build");
+        assert_eq!(document["openapi"], "3.1.0");
+        assert_eq!(document["x-weltgewebe-contract"], MACHINE_PROTOCOL);
+    }
+
+    #[test]
+    fn openapi_paths_are_nonempty() {
+        let document = openapi_document().expect("OpenAPI contract must build");
+        assert!(!openapi_paths(&document).is_empty());
     }
 }
