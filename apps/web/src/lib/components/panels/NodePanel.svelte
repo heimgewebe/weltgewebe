@@ -705,11 +705,11 @@
     gap: 0;
   }
   .node-tabs > button {
-    /* Tabs stay readable as words; the existing tab strip scrolls horizontally
-     * when the panel is too narrow instead of breaking labels mid-word. */
-    flex: 1 0 auto;
-    min-width: max-content;
-    padding-inline: 0.25rem;
+    /* Let longer labels claim a little more width instead of forcing every
+     * tab into an equal column. Words stay intact and all tabs remain visible. */
+    flex: 1 1 auto;
+    min-width: 0;
+    padding-inline: 0.2rem;
     line-height: 1.15;
     overflow-wrap: normal;
     white-space: nowrap;
@@ -898,7 +898,8 @@
   }
   @media (max-width: 420px) {
     .node-tabs > button {
-      padding-inline: 0.15rem;
+      padding-inline: 0.1rem;
+      font-size: 0.75rem;
     }
     .coordinate-grid,
     .form-actions {
