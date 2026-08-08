@@ -63,10 +63,7 @@ pub fn root_routes() -> Router<ApiState> {
         .route("/.well-known/weltgewebe", get(machine_descriptor))
         .route("/openapi.json", get(openapi))
         .route("/schemas/domain/{name}.json", get(domain_schema))
-        .route(
-            "/schemas/federation/v1/{name}.json",
-            get(federation_schema),
-        )
+        .route("/schemas/federation/v1/{name}.json", get(federation_schema))
 }
 
 fn machine_problem(status: StatusCode, code: &'static str, message: &'static str) -> Response {
@@ -357,7 +354,7 @@ fn openapi_operation(operation: &ApiOperation) -> Value {
         object.insert("security".to_string(), json!([{ "sessionCookie": [] }]));
     }
 
-    if operation.method == "POST" && operation.path == "/api/machine/v1/nodes" {
+    if operation.method == "POST" && operation.write_safety == "operation_id_required" {
         object.insert(
             "requestBody".to_string(),
             json!({
@@ -600,10 +597,7 @@ mod tests {
     fn machine_mutations_have_explicit_safety_contracts() {
         let document = openapi_document().expect("OpenAPI contract must build");
         let create = &document["paths"]["/api/machine/v1/nodes"]["post"];
-        assert_eq!(
-            create["x-weltgewebe-write-safety"],
-            "operation_id_required"
-        );
+        assert_eq!(create["x-weltgewebe-write-safety"], "operation_id_required");
 
         let node = &document["paths"]["/api/machine/v1/nodes/{id}"];
         for method in ["patch", "put", "delete"] {
