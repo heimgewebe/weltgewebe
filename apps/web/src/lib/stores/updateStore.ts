@@ -25,31 +25,22 @@ function createUpdateStore() {
 
   async function fetchServerVersion(): Promise<VersionData | null> {
     const controller = new AbortController();
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-    const timeout = new Promise<null>((resolve) => {
-      timeoutId = setTimeout(() => {
-        controller.abort();
-        resolve(null);
-      }, UPDATE_CHECK_TIMEOUT_MS);
-    });
+    const timeoutId = setTimeout(
+      () => controller.abort(),
+      UPDATE_CHECK_TIMEOUT_MS,
+    );
 
     try {
-      const request = (async (): Promise<VersionData | null> => {
-        try {
-          const res = await fetch("/_app/version.json", {
-            cache: "no-store",
-            signal: controller.signal,
-          });
-          if (!res.ok) return null;
-          return await res.json();
-        } catch {
-          return null;
-        }
-      })();
-
-      return await Promise.race([request, timeout]);
+      const res = await fetch("/_app/version.json", {
+        cache: "no-store",
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      return await res.json();
+    } catch {
+      return null;
     } finally {
-      if (timeoutId !== undefined) clearTimeout(timeoutId);
+      clearTimeout(timeoutId);
     }
   }
 
@@ -136,11 +127,7 @@ function createUpdateStore() {
       updateDetected = false;
       pendingCheck = undefined;
       // For testing, we also reset initialization state so tests can cleanly re-init
-      if (
-        browser &&
-        typeof document !== "undefined" &&
-        typeof window !== "undefined"
-      ) {
+      if (browser && initialized) {
         document.removeEventListener(
           "visibilitychange",
           handleVisibilityChange,

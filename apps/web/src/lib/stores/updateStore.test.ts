@@ -43,7 +43,16 @@ describe("updateStore", () => {
 
   it("releases a stalled coalesced check after the timeout so later checks can retry", async () => {
     vi.useFakeTimers();
-    const fetcher = vi.fn<typeof fetch>(() => new Promise<Response>(() => {}));
+    const fetcher = vi.fn<typeof fetch>(
+      (_input, init) =>
+        new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener(
+            "abort",
+            () => reject(new Error("aborted")),
+            { once: true },
+          );
+        }),
+    );
     vi.stubGlobal("fetch", fetcher);
 
     const first = updateStore.checkForUpdate();
