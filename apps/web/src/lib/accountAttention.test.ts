@@ -1,7 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import {
-  accountAttentionInvalidation,
-} from "$lib/accountAttention";
+import { accountAttentionInvalidation } from "$lib/accountAttention";
 import { markDirectConversationRead } from "$lib/api/directMessages";
 import { createWeberProposal } from "$lib/api/governance";
 
