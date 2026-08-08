@@ -160,7 +160,10 @@ test.describe("Topbar — guest role visibility", () => {
     const authBox = await authSlot.boundingBox();
     const governanceBox = await governance.boundingBox();
     expect(authBox, "auth slot has no visible box").not.toBeNull();
-    expect(governanceBox, "governance trigger has no visible box").not.toBeNull();
+    expect(
+      governanceBox,
+      "governance trigger has no visible box",
+    ).not.toBeNull();
     expect(authBox!.x).toBeGreaterThanOrEqual(
       governanceBox!.x + governanceBox!.width,
     );
