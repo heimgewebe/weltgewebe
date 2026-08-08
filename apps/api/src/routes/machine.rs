@@ -88,9 +88,8 @@ struct ApiOperation {
     write_safety: String,
 }
 
-static MACHINE_MANIFEST: LazyLock<Result<MachineManifest, String>> = LazyLock::new(|| {
-    serde_json::from_str(OPERATION_MANIFEST).map_err(|error| error.to_string())
-});
+static MACHINE_MANIFEST: LazyLock<Result<MachineManifest, String>> =
+    LazyLock::new(|| serde_json::from_str(OPERATION_MANIFEST).map_err(|error| error.to_string()));
 
 static BUILD_INFO: LazyLock<BuildInfo> = LazyLock::new(BuildInfo::collect);
 
@@ -586,9 +585,9 @@ fn domain_schema_text(name: &str) -> Option<&'static str> {
 }
 
 fn federation_schema_text(name: &str) -> Option<&'static str> {
-    FEDERATION_SCHEMAS.iter().find_map(|(schema_name, _, schema)| {
-        (*schema_name == name).then_some(*schema)
-    })
+    FEDERATION_SCHEMAS
+        .iter()
+        .find_map(|(schema_name, _, schema)| (*schema_name == name).then_some(*schema))
 }
 
 #[cfg(test)]
