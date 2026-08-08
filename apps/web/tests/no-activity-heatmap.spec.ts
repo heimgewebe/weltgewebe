@@ -5,7 +5,7 @@ test.describe("Activity Heatmap Removal Guard", () => {
   test("activity-layer and heatmap layers should not exist on the map", async ({
     page,
   }) => {
-    // Setup API mocking, including the empty /local-basemap/style.json,
+    // Setup API mocking, including the empty /local-basemap/style-germany.json,
     // so MapLibre initializes fully without 'style could not be loaded' errors
     await mockApiResponses(page);
     await page.goto("/map");

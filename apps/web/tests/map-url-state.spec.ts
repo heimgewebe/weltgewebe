@@ -20,7 +20,7 @@ test.describe("Map URL addressing", () => {
       auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
     });
 
-    // mockApiResponses mocks the local-sovereign style (/local-basemap/style.json,
+    // mockApiResponses mocks the local-sovereign style (/local-basemap/style-germany.json,
     // the active mode in the e2e build). This extra route is a defensive mock for
     // the external MapLibre demo style so the test never depends on the network.
     await page.route(

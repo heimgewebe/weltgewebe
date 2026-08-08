@@ -8,36 +8,26 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
     // Setup generic mock routing
     await mockApiResponses(page);
 
-    // Override local-basemap/style.json for this specific test
+    // Override the default nationwide Germany style for this specific test
     // NOTE: This intentionally mocks the network path to verify client-side behavior
     // (MapLibre config and PMTiles protocol loading), not real Edge-routing delivery.
-    await page.route("**/local-basemap/style.json*", (route) => {
+    await page.route("**/local-basemap/style-germany.json*", (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
           version: 8,
           sources: {
-            basemap: {
+            "basemap-germany": {
               type: "vector",
-              url: "pmtiles://basemap-hamburg.pmtiles",
-            },
-            "basemap-schleswig-holstein": {
-              type: "vector",
-              url: "pmtiles://basemap-schleswig-holstein.pmtiles",
+              url: "pmtiles://basemap-germany.pmtiles",
             },
           },
           layers: [
             {
-              id: "hamburg-water",
+              id: "germany-water",
               type: "fill",
-              source: "basemap",
-              "source-layer": "water",
-            },
-            {
-              id: "schleswig-holstein-water",
-              type: "fill",
-              source: "basemap-schleswig-holstein",
+              source: "basemap-germany",
               "source-layer": "water",
             },
           ],
@@ -80,21 +70,18 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
     // Track network requests to confirm what MapLibre actually requests
     // and whether PMTiles correctly issues Range headers.
     const requestedUrls: string[] = [];
-    const pmtilesRangeRegions = new Set<string>();
+    const pmtilesRangeArtifacts = new Set<string>();
 
     page.on("request", (req) => {
       const url = req.url();
       requestedUrls.push(url);
 
-      const regionalArtifact = [
-        "basemap-hamburg.pmtiles",
-        "basemap-schleswig-holstein.pmtiles",
-      ].find((artifact) => url.includes(`/local-basemap/${artifact}`));
-      if (regionalArtifact) {
-        // PMTiles must request partial content via HTTP Range header
+      const germanyArtifact = "basemap-germany.pmtiles";
+      if (url.includes(`/local-basemap/${germanyArtifact}`)) {
+        // PMTiles must request partial content via HTTP Range header.
         const reqHeaders = req.headers();
         if (reqHeaders["range"]?.startsWith("bytes=")) {
-          pmtilesRangeRegions.add(regionalArtifact);
+          pmtilesRangeArtifacts.add(germanyArtifact);
         }
       }
     });
@@ -113,41 +100,38 @@ test.describe("Basemap Client Integration (local-sovereign)", () => {
       .poll(
         () =>
           requestedUrls.some((url) =>
-            url.includes("/local-basemap/style.json"),
+            url.includes("/local-basemap/style-germany.json"),
           ),
         {
-          message: "Client should request the local sovereign style.json",
+          message:
+            "Client should request the nationwide Germany sovereign style",
           timeout: 5000,
         },
       )
       .toBeTruthy();
 
-    // Both regional PMTiles sources must be resolved to local HTTP requests.
-    for (const artifact of [
-      "basemap-hamburg.pmtiles",
-      "basemap-schleswig-holstein.pmtiles",
-    ]) {
-      await expect
-        .poll(
-          () =>
-            requestedUrls.some((url) =>
-              url.includes(`/local-basemap/${artifact}`),
-            ),
-          {
-            message: `Client should request local regional artifact ${artifact}`,
-            timeout: 5000,
-          },
-        )
-        .toBeTruthy();
-    }
-
-    // Final semantic validation: both sources behave like PMTiles clients and
-    // request byte slices rather than fetching opaque whole files.
+    // The nationwide Germany PMTiles source must resolve to a local HTTP request.
+    const germanyArtifact = "basemap-germany.pmtiles";
     await expect
-      .poll(() => pmtilesRangeRegions.size, {
-        message: "Both regional PMTiles clients must issue Range headers",
+      .poll(
+        () =>
+          requestedUrls.some((url) =>
+            url.includes(`/local-basemap/${germanyArtifact}`),
+          ),
+        {
+          message: `Client should request nationwide Germany artifact ${germanyArtifact}`,
+          timeout: 5000,
+        },
+      )
+      .toBeTruthy();
+
+    // Final semantic validation: the PMTiles client requests byte slices rather
+    // than fetching the opaque whole Germany artifact.
+    await expect
+      .poll(() => pmtilesRangeArtifacts.size, {
+        message: "Germany PMTiles client must issue Range headers",
         timeout: 5000,
       })
-      .toBe(2);
+      .toBe(1);
   });
 });

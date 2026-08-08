@@ -63,7 +63,7 @@ test.describe("Basemap Sovereignty Verification (E2E-Test-Build Environment)", (
 
     // 2. ADD SPECIFIC MOCK LAST (evaluated first by Playwright)
     // Provide a valid empty local style mock to simulate the Caddy router serving the artifact
-    await page.route("**/local-basemap/style.json*", (route) => {
+    await page.route("**/local-basemap/style-germany.json*", (route) => {
       route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -76,7 +76,7 @@ test.describe("Basemap Sovereignty Verification (E2E-Test-Build Environment)", (
     });
 
     const styleResponsePromise = page.waitForResponse((response) =>
-      response.url().includes("/local-basemap/style.json"),
+      response.url().includes("/local-basemap/style-germany.json"),
     );
 
     // We navigate to the map.
@@ -86,7 +86,7 @@ test.describe("Basemap Sovereignty Verification (E2E-Test-Build Environment)", (
     const styleResponse = await styleResponsePromise;
     expect(
       styleResponse.ok(),
-      "style.json MUST be successfully fetched",
+      "style-germany.json MUST be successfully fetched",
     ).toBeTruthy();
 
     // 2. Wait until map container is present and loading spinner is gone

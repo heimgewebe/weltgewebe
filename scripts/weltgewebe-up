@@ -1183,7 +1183,10 @@ fi
 # Fail closed before a full nationwide frontend build. In plain language: if
 # the Germany map data is missing, stop the deploy instead of silently showing
 # only Hamburg + Schleswig-Holstein.
-if [[ "$DEPLOY_SCOPE" == "full" && "${PUBLIC_BASEMAP_MODE:-local-sovereign}" != "remote-style" && "$PUBLIC_BASEMAP_VARIANT" == "germany" ]]; then
+if [[ "$DEPLOY_SCOPE" == "full" &&
+  ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") &&
+  "${PUBLIC_BASEMAP_MODE:-local-sovereign}" != "remote-style" &&
+  "$PUBLIC_BASEMAP_VARIANT" == "germany" ]]; then
   echo
   echo ">> Nationwide Germany Basemap Pre-Build Guard:"
   for germany_style in map-style/style-germany.json map-style/style-germany-dark.json; do
@@ -1240,6 +1243,49 @@ _read_version_json() {
     head -n1 || true
 }
 
+_read_basemap_build_identity() {
+  local json_file="$1"
+  python3 - "$json_file" << 'PY_BASEMAP_BUILD_IDENTITY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    raise SystemExit(1)
+
+if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+    raise SystemExit(1)
+mode = payload.get("mode")
+variant = payload.get("variant", "")
+if not isinstance(mode, str) or not isinstance(variant, str):
+    raise SystemExit(1)
+print(f"{mode}\t{variant}")
+PY_BASEMAP_BUILD_IDENTITY
+}
+
+_basemap_build_matches_requested_contract() {
+  local json_file="$1"
+  local expected_mode="${PUBLIC_BASEMAP_MODE:-local-sovereign}"
+  local expected_variant=""
+  local identity actual_mode actual_variant
+
+  if [[ "$expected_mode" == "local-sovereign" ]]; then
+    expected_variant="${PUBLIC_BASEMAP_VARIANT:-germany}"
+  fi
+
+  identity="$(_read_basemap_build_identity "$json_file")" || return 1
+  IFS=$'\t' read -r actual_mode actual_variant <<< "$identity"
+  [[ "$actual_mode" == "$expected_mode" ]] || return 1
+  if [[ "$expected_mode" == "local-sovereign" ]]; then
+    [[ "$actual_variant" == "$expected_variant" ]]
+  else
+    [[ -z "$actual_variant" ]]
+  fi
+}
+
 if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]]; then
   NEEDS_WEB_BUILD=0
   WEB_MSG="OK"
@@ -1263,8 +1309,16 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
           _stale_hint="version stale ($_bv_no != $CURRENT_SHORT_SHA)"
         fi
       fi
+      if [[ -z "$_stale_hint" ]]; then
+        _bi_no="apps/web/build/_app/basemap-build.json"
+        if [[ ! -f "$_bi_no" ]]; then
+          _stale_hint="basemap build identity missing"
+        elif ! _basemap_build_matches_requested_contract "$_bi_no"; then
+          _stale_hint="basemap contract mismatch"
+        fi
+      fi
       if [[ -n "$_stale_hint" ]]; then
-        echo "WARNING: frontend build skipped by --no-build-web; stale version.json may fail guards. ($_stale_hint)"
+        echo "WARNING: frontend build skipped by --no-build-web; existing artifact may fail guards. ($_stale_hint)"
       fi
     fi
   else
@@ -1286,6 +1340,17 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
           NEEDS_WEB_BUILD=1
           WEB_MSG="Auto: version stale ($_bv != $CURRENT_SHORT_SHA)"
         fi
+      fi
+    fi
+
+    if [[ "$NEEDS_WEB_BUILD" == "0" && "$REQUIRE_FRONTEND" == "1" ]]; then
+      _bi="apps/web/build/_app/basemap-build.json"
+      if [[ ! -f "$_bi" ]]; then
+        NEEDS_WEB_BUILD=1
+        WEB_MSG="Auto: basemap build identity missing"
+      elif ! _basemap_build_matches_requested_contract "$_bi"; then
+        NEEDS_WEB_BUILD=1
+        WEB_MSG="Auto: basemap contract mismatch"
       fi
     fi
   fi
@@ -1334,7 +1399,9 @@ fi
 # In sovereign mode the bundle must not reference CARTO/remote basemaps and
 # must reference the local route. CSP stays hard; this catches build leaks early.
 # This ensures that even if an existing bundle is reused, it is verified.
-if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
+if [[ ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") &&
+  -d "apps/web/build" &&
+  "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
   WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
   echo
   echo ">> Verifying sovereign frontend build (no remote basemap leaks)..."
@@ -1364,10 +1431,17 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
   VERIFY_RESULT=$(verify_bundle)
   CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
   LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+  BASEMAP_CONTRACT_MATCH=0
+  if _basemap_build_matches_requested_contract "apps/web/build/_app/basemap-build.json"; then
+    BASEMAP_CONTRACT_MATCH=1
+  fi
 
-  # Determine if verification failed (either CARTO leak OR missing local-basemap)
+  # Determine if verification failed: no remote leak, local route present, and
+  # the immutable build identity must match the requested sovereign variant.
   VERIFICATION_FAILED=0
-  if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+  if [[ "$CARTO_LEAK_FOUND" == "1" ]] ||
+    [[ "$LOCAL_BASEMAP_FOUND" == "0" ]] ||
+    [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
     VERIFICATION_FAILED=1
   fi
 
@@ -1379,6 +1453,9 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
     fi
     if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
       echo "         - Missing local-basemap route"
+    fi
+    if [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
+      echo "         - Basemap build identity does not match requested variant ${PUBLIC_BASEMAP_VARIANT:-germany}"
     fi
     echo "         Forcing rebuild to ensure sovereignty..."
     NEEDS_WEB_BUILD=1
@@ -1397,8 +1474,14 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
       VERIFY_RESULT=$(verify_bundle)
       CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
       LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+      BASEMAP_CONTRACT_MATCH=0
+      if _basemap_build_matches_requested_contract "apps/web/build/_app/basemap-build.json"; then
+        BASEMAP_CONTRACT_MATCH=1
+      fi
       VERIFICATION_FAILED=0
-      if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+      if [[ "$CARTO_LEAK_FOUND" == "1" ]] ||
+        [[ "$LOCAL_BASEMAP_FOUND" == "0" ]] ||
+        [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
         VERIFICATION_FAILED=1
       fi
     else
@@ -1417,10 +1500,14 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
       echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
       echo "       The sovereign basemap route appears to be missing from the bundle."
     fi
+    if [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
+      echo "ERROR: Frontend basemap build identity does not match requested local-sovereign variant ${PUBLIC_BASEMAP_VARIANT:-germany}."
+      echo "       Refusing to reuse a stale regional or otherwise mismatched bundle."
+    fi
     exit 1
   fi
 
-  echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
+  echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present; build identity matches variant ${PUBLIC_BASEMAP_VARIANT:-germany}."
 fi
 
 if [[ "$DEPLOY_SCOPE" == "full" ]]; then
