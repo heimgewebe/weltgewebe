@@ -8,6 +8,13 @@ test.describe("Topbar — guest role visibility", () => {
     await mockApiResponses(page, {
       auth: { authenticated: true, account_id: "guest-topbar", role: "gast" },
     });
+    await page.route("**/api/proposals", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([]),
+      });
+    });
     await page.goto("/map");
 
     const badge = page.getByTestId("topbar-guest-badge");
