@@ -30,10 +30,12 @@ test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
   test("shows update banner when server version differs from local bundle version", async ({
     page,
   }) => {
+    let checkCount = 0;
     // Intercept version.json and mock a new server version
     // Playwright route matching is last-in-first-out, so this correctly overrides
     // the generic mock inside mockApiResponses for this specific test.
     await page.route("**/_app/version.json", async (route) => {
+      checkCount += 1;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -50,6 +52,20 @@ test.describe("Update Banner (Kontrollierte Selbstaktualisierung)", () => {
       page.locator("text=Eine neue Version ist verfügbar."),
     ).toBeVisible();
     await expect(page.locator("button:has-text('Neu laden')")).toBeVisible();
+
+    // Once an update is known, lifecycle events must not cause more requests.
+    await page.evaluate(() => {
+      Object.defineProperty(document, "visibilityState", {
+        get: () => "visible",
+        configurable: true,
+      });
+      document.dispatchEvent(new Event("visibilitychange"));
+      window.dispatchEvent(
+        new PageTransitionEvent("pageshow", { persisted: true }),
+      );
+    });
+    await page.waitForTimeout(100);
+    expect(checkCount).toBe(1);
   });
 
   test("does not show update banner when server version is identical to local bundle version", async ({
