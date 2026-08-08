@@ -499,9 +499,10 @@ mod tests {
     fn route_paths(source: &str) -> BTreeSet<String> {
         let mut paths = BTreeSet::new();
         let mut rest = source;
+        let marker = concat!(".rou", "te(");
 
-        while let Some(index) = rest.find(".route(") {
-            rest = &rest[index + ".route(".len()..];
+        while let Some(index) = rest.find(marker) {
+            rest = &rest[index + marker.len()..];
             let trimmed = rest.trim_start();
             let Some(quoted) = trimmed.strip_prefix('"') else {
                 continue;
@@ -509,7 +510,10 @@ mod tests {
             let Some(end) = quoted.find('"') else {
                 break;
             };
-            paths.insert(quoted[..end].to_string());
+            let candidate = &quoted[..end];
+            if candidate.starts_with('/') {
+                paths.insert(candidate.to_string());
+            }
             rest = &quoted[end + 1..];
         }
 
