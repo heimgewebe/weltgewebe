@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-domain
 owner: product-domain
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-08
 review_after: 2026-11-02
 depends_on:
   - specs.garnrolle-knoten-faden
@@ -176,6 +176,19 @@ Ortsweberei auffindbar. Bezieht sich ein Sachantrag zusätzlich auf einen
 konkreten Knoten, darf derselbe Antrag auch von dort aus erreichbar sein. Es
 entsteht dabei kein zweiter Antrag.
 
+Ein Knotenbezug ersetzt die Zuständigkeit des Zentrums nicht. Der Node-Antrag
+ist derselbe Center-Antrag mit einem zusätzlichen Ziel und einem dauerhaften
+Knotentitel-Snapshot. Seine Annahme ist ein Beschluss; sie mutiert den Knoten
+nicht automatisch.
+
+Eine kanonische Zuordnung jedes gewöhnlichen Knotens zu genau einer
+Ortsweberei existiert in diesem Vertragsstand noch nicht. Deshalb gilt für die
+Anlage ohne ausdrücklich übergebene Zentrum-ID: Sie ist nur zulässig, wenn
+genau ein aktives Webgemeindezentrum eindeutig aufgelöst werden kann. Bei
+mehreren aktiven Zentren bleibt die Anlage fail-closed, bis eine kanonische
+Node→Ortsweberei-Zuordnung beschlossen und implementiert ist. Ein Client darf
+diese Zuständigkeit nicht aus Koordinaten oder Kartenentfernung raten.
+
 ## Fäden
 
 Antragstellung, Veto, Stimme, Gesprächsbeitrag und Verfahrensphase bleiben
@@ -211,10 +224,13 @@ Leseendpunkte, Kartenprojektion und Standortchronik ein. Die erste Instanz wird
 nicht im Client erfunden, sondern durch die PostgreSQL-Migration als
 Primärwahrheit angelegt.
 
-Noch nicht Teil dieses Schnitts sind Webrat-Schreibbefehle, Trefftermine,
-Gewebekonto, mehrere Betreiber oder die Bestätigung der tatsächlichen Nutzung im
-Hammer Park. Diese Bereiche dürfen nicht als funktionsfähige Schaltflächen oder
-als bestätigte Zugänglichkeit simuliert werden.
+Produktiv freigeschaltet sind inzwischen die bestehenden Weberanträge sowie
+Sachanträge im Webrat des Zentrums und mit optionalem Knotenbezug. Noch nicht
+Teil dieses Schnitts sind dagegen automatische Ausführungsbefehle aus einem
+angenommenen Sachantrag, Trefftermine, Gewebekonto, mehrere Betreiber oder die
+Bestätigung der tatsächlichen Nutzung im Hammer Park. Diese offenen Bereiche
+dürfen nicht als funktionsfähige Schaltflächen oder als bestätigte
+Zugänglichkeit simuliert werden.
 
 ## Abnahmekriterien für die Runtime
 

@@ -243,6 +243,18 @@ async fn governance_writes_fail_closed_without_database() {
         .expect("response");
     assert_eq!(create.status(), StatusCode::SERVICE_UNAVAILABLE);
 
+    let create_sach = app
+        .clone()
+        .oneshot(request(
+            "POST",
+            "/proposals",
+            Some(&weber_cookie),
+            Some(r#"{"kind":"sachantrag","title":"Treffzeit beschließen"}"#),
+        ))
+        .await
+        .expect("response");
+    assert_eq!(create_sach.status(), StatusCode::SERVICE_UNAVAILABLE);
+
     let exit = app
         .clone()
         .oneshot(request(
