@@ -10,10 +10,10 @@ review_after: 2026-09-29
 created: 2026-06-29
 lang: de
 summary: >
-  Abschlussbericht zu OPT-CI-005: Direkt ausgeführte Workflows mit bekannten
-  JavaScript-Actions setzen FORCE_JAVASCRIPT_ACTIONS_TO_NODE24; der lokale
-  Scanner findet keine fehlende Force-Variable mehr. Stage B klassifiziert die
-  wiederverwendbaren externen Workflows nach Pinning-Policy.
+  Abschluss- und Auditbericht zu OPT-CI-005. Stage A war abgeschlossen; ein
+  frischer Readback vom 2026-08-08 zeigt jedoch neue Missing-Force-Findings in
+  zwei direkten Workflows. Stage B klassifiziert die wiederverwendbaren
+  externen Workflows nach Pinning-Policy.
 relations:
   - type: relates_to
     target: scripts/ci/check_actions_node24_readiness.py
@@ -31,41 +31,43 @@ relations:
 
 ## Kurzurteil
 
-OPT-CI-005 ist im definierten Stage-A-Scope abgeschlossen.
+OPT-CI-005 war im definierten Stage-A-Scope abgeschlossen. Der aktive Audit ist
+jedoch nicht mehr vollständig grün: Ein frischer Lauf von
+`scripts/ci/check_actions_node24_readiness.py` am 2026-08-08 meldet fehlendes
+`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24` in zwei direkten Workflows:
 
-Direkt ausgeführte Workflows mit bekannten JavaScript-Actions setzen
-`FORCE_JAVASCRIPT_ACTIONS_TO_NODE24`. Der Scanner meldet nach diesem Slice:
+- `.github/workflows/germany-basemap-rollout.yml`
+- `.github/workflows/kubernetes-proof-oci-mirror.yml`
 
-```text
-rc 0
-missing_force False
-reusable_calls True
-```
+Diese Baseline-Regression ist unabhängig vom WGX→Metarepo-Cutover. Die dabei
+geänderten Guard-/Smoke-Caller werden vom selben Scanner korrekt als
+SHA-gepinnte reusable Workflows klassifiziert.
 
-Damit ist die harte Readiness-Lücke geschlossen: Es gibt keinen bekannten direkt
-ausgeführten JavaScript-Action-Schritt mehr, dem die Force-Variable fehlt.
+## Was ursprünglich geändert wurde
 
-## Was geändert wurde
-
-`.github/workflows/opt-arc-001-db-proof-matrix.yml` setzt nun ebenfalls:
+`.github/workflows/opt-arc-001-db-proof-matrix.yml` setzt ebenfalls:
 
 ```yaml
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 ```
 
-Dieser Workflow war die letzte vom Scanner gemeldete direkte Workflow-Lücke.
+Dieser Workflow war zum damaligen Abschlusszeitpunkt die letzte vom Scanner
+gemeldete direkte Workflow-Lücke. Der neue Auditbefund vom 2026-08-08 zeigt,
+dass dieser historische Abschluss nicht als dauerhafte Grün-Garantie gelesen
+werden darf.
 
 ## Was belegt ist
 
 - `scripts/ci/check_actions_node24_readiness.py` erkennt direkt ausgeführte bekannte JavaScript-Actions.
 - `scripts/ci/tests/test_check_actions_node24_readiness.py` deckt positive und negative Fälle ab.
-- Der Scanner läuft lokal gegen `.github/workflows` ohne Missing-Force-Finding.
-- Mehrere aktuelle PR-CI-Läufe wurden unter erzwungener Node-24-Action-Runtime ausgeführt und GitHub hat die Merges akzeptiert.
+- Der frische Scannerlauf vom 2026-08-08 reproduziert Missing-Force-Findings in genau den beiden oben genannten Workflows.
+- Die WGX-Kompatibilitätscaller für Guard und Smoke werden nach dem Boundary-v2-Cutover als `pinned-sha` auf Metarepo erkannt.
+- Mehrere frühere PR-CI-Läufe wurden unter erzwungener Node-24-Action-Runtime ausgeführt und GitHub hat die Merges akzeptiert.
 
 ## Stage-B-Audit
 
-Der Scanner klassifiziert wiederverwendbare Workflows jetzt explizit nach
+Der Scanner klassifiziert wiederverwendbare Workflows explizit nach
 Referenztyp und Policy. Ein Caller-`env` beweist weiterhin nicht, dass der
 aufgerufene externe Workflow intern Node-24-ready ist; Stage B ist daher ein
 lokaler Risiko- und Pinning-Audit, kein Runtime-Beweis für fremde Repositories.
@@ -76,8 +78,8 @@ Aktueller Befund:
 | --- | --- | --- | --- | --- |
 | `.github/workflows/metrics.yml` | `metrics` | `heimgewebe/metarepo/.github/workflows/wgx-metrics.yml@5c86ca69c0e2ae78a736c151f8d851e5cdda811e` | sha | pinned-sha |
 | `.github/workflows/pr-heimgewebe-commands.yml` | `dispatch` | `heimgewebe/metarepo/.github/workflows/heimgewebe-command-dispatch.yml@a1984186a98a1e4214769f87649c5affc9686a53` | sha | pinned-sha |
-| `.github/workflows/wgx-guard.yml` | `guard` | `heimgewebe/wgx/.github/workflows/wgx-guard.yml@17e349d872e16f927bdd8e0d770d2295f8b6e663` | sha | pinned-sha |
-| `.github/workflows/wgx-smoke.yml` | `smoke` | `heimgewebe/wgx/.github/workflows/wgx-smoke.yml@814d5e9102e4020c786d6bb7e1c377004cf2bbea` | sha | pinned-sha |
+| `.github/workflows/wgx-guard.yml` | `guard` | `heimgewebe/metarepo/.github/workflows/reusable-repo-verify.yml@fe6950616b2d06343e284a56a8944e0a36f1f972` | sha | pinned-sha |
+| `.github/workflows/wgx-smoke.yml` | `smoke` | `heimgewebe/metarepo/.github/workflows/reusable-repo-verify.yml@fe6950616b2d06343e284a56a8944e0a36f1f972` | sha | pinned-sha |
 
 Bewertung:
 
@@ -85,11 +87,15 @@ Bewertung:
 - Der Scanner bleibt nicht-blockierend für reusable Workflows, weil die
   Semantik fremder Workflows nicht aus dem Caller-Repository bewiesen werden
   kann.
-- Die gepinnten SHAs wurden gegen die jeweilige `main`-Branch-Spitze und den
-  vorhandenen Workflow-Pfad im Callee-Repository geprüft.
+- Die gepinnten SHAs wurden gegen den vorhandenen Workflow-Pfad in den
+  jeweiligen Callee-Repositories geprüft; Guard und Smoke delegieren die
+  Verifikations-Policy revisionsfest an Metarepo.
+- Stage B ist grün; Stage A hat aktuell die separat zu behebende
+  Missing-Force-Regression in zwei direkten Workflows.
 
-Damit ist Stage B als lokaler Audit und Pinning-Härtung abgeschlossen. Nicht behauptet wird eine
-inhaltliche Node-24-Readiness der externen Callee-Workflows.
+Damit bleibt Stage B als lokaler Audit und Pinning-Härtung belastbar. Nicht
+behauptet wird eine inhaltliche Node-24-Readiness der externen
+Callee-Workflows oder ein aktuell vollständig grüner Stage-A-Scan.
 
 ## Nicht-Ziele
 
