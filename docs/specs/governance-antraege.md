@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: governance
 owner: governance
-last_reviewed: 2026-08-02
+last_reviewed: 2026-08-08
 review_after: 2026-10-12
 depends_on:
   - specs.garnrolle-knoten-faden
@@ -40,6 +40,11 @@ mitwirkenden Gast nach gemeinschaftlicher Prüfung in den Weberstatus. Die
 Garnrolle besteht bereits vorher; die Annahme verleiht zusätzliche Pflege- und
 Entscheidungsrechte.
 
+Der zweite produktive Antragstyp ist der **Sachantrag**. Er hält einen
+gemeinschaftlichen Beschluss der zuständigen Ortsweberei fest. Er verwendet
+denselben Konsent-, Veto-, Gesprächs-, Abstimmungs- und Finalisierungspfad wie
+der Weberantrag; es gibt keine zweite Entscheidungsengine.
+
 ## Gast und Weber
 
 Ein neu registrierter Account beginnt als `gast` und besitzt genau eine
@@ -69,7 +74,9 @@ PostgreSQL unter dem Account-Lock geprüft; ein idempotenter Retry derselben
 von dieser Gastgrenze nicht betroffen.
 
 Ein Weber darf zusätzlich fremde und gemeinschaftliche Knoten pflegen sowie bei
-fremden Weberanträgen ein begründetes Veto einlegen und abstimmen.
+fremden Anträgen ein begründetes Veto einlegen und abstimmen. Weber und
+Administratoren dürfen Sachanträge stellen; Gäste dürfen weiterhin nur den
+eigenen Weberstatus beantragen.
 
 Administratoren besitzen darüber hinaus moderative Rechte.
 
@@ -88,6 +95,27 @@ offener Weberantrag bestehen. Der Antrag enthält:
 
 Der Antragsteller darf im eigenen Verfahren mitreden, aber weder ein formales
 Veto gegen den eigenen Antrag einlegen noch über die eigene Aufnahme abstimmen.
+
+## Sachantrag
+
+Ein Sachantrag gehört genau zu einem aktiven Webgemeindezentrum und enthält:
+
+- einen Titel mit höchstens 200 Zeichen;
+- Antragsteller und Anzeigename-Snapshot;
+- eine optionale Begründung;
+- optional genau einen konkreten, bei Antragstellung existierenden Knoten;
+- bei Knotenbezug dessen ID und Titelsnapshot;
+- denselben Verfahrenszustand, dieselben Fristen und denselben Gesprächsraum wie
+  ein Weberantrag.
+
+Mehrere offene Sachanträge desselben Antragstellers sind zulässig. Der
+Antragsteller darf auch beim eigenen Sachantrag weder Veto noch Stimme abgeben.
+Ein Knoten-Sachantrag ist kein zweiter Antrag: Derselbe Datensatz ist über den
+Webrat des Zentrums und zusätzlich über den Knoten erreichbar.
+
+Wird der referenzierte Knoten später regulär aus dem aktiven Gewebe entfernt,
+wird die aktive Knotenbindung gelöst. Der Titelsnapshot und der Sachantrag
+bleiben als Verfahrens- und Beschlussspur erhalten.
 
 ## Erste Phase: sieben Tage Konsent
 
@@ -150,6 +178,17 @@ Nicht verändert werden:
 
 Wiederholte Fristenauswertung ist idempotent. Es darf weder ein angenommener
 Antrag ohne Weberrolle noch eine zweite Garnrolle entstehen.
+
+## Wirkung eines angenommenen Sachantrags
+
+Ein angenommener Sachantrag wechselt in derselben Finalisierungsengine auf
+`accepted`, ohne eine Accountrolle zu verändern. Er ist in diesem Schnitt ein
+**Beschluss**, kein automatischer allgemeiner Datenmutator. Insbesondere ruft
+die Annahme keinen direkten `PATCH`, `PUT` oder `DELETE` auf einem Knoten auf und
+umgeht weder dessen Autorisierung noch Konflikt-, Audit- oder
+`collective_write_guard`-Grenzen. Eine spätere beschlussspezifische Ausführung
+benötigt einen eigenen eng typisierten Vertrag; der Sachantrag selbst ist kein
+beliebiger Mutations-Executor.
 
 ## Fristenauswertung
 
@@ -220,7 +259,9 @@ Die Oberfläche bietet:
 - für angemeldete Accounts das Beitragsfeld;
 - für Weber und Administratoren bei fremden Anträgen die kontextabhängigen
   Veto- und Abstimmungsaktionen;
-- für Gäste Weberantrag und Gast-Austritt.
+- für Gäste Weberantrag und Gast-Austritt;
+- für Weber und Administratoren Sachanträge im Webrat eines Zentrums und,
+  sofern ein Knoten Ziel ist, zusätzlich im Antragsbereich dieses Knotens.
 
 `GET /api/proposals` liefert für jeden Antrag `message_count`. Solange die
 Governance-Gespräche noch nicht auf die kanonische Release-B-Konversation
@@ -243,11 +284,11 @@ Selbstentscheidung und den atomaren Rollenwechsel unter Beibehaltung der
 Account-ID. Seine Hilfsrouten werden ausschließlich mit dem Cargo-Feature
 `integration-testing` kompiliert und existieren nicht im Produktions-Binary.
 
-## Erweiterung auf weitere Antragstypen
+## Antragstypen
 
-Das Zustandsmodell und die Fristen sind allgemein angelegt. Der aktuelle
-Datenbankvertrag lässt zunächst ausschließlich `weberantrag` zu, damit nicht
-spezifizierte Antragstypen nicht versehentlich produktiv werden.
+Der Datenbankvertrag lässt ausschließlich `weberantrag` und `sachantrag` zu.
+Beide verwenden dieselbe Zustandsmaschine. Weitere Antragstypen bleiben ohne
+eigene Spezifikation und Migration fail-closed ausgeschlossen.
 
 ## Nicht-Ziele dieses Schnitts
 
@@ -256,5 +297,7 @@ spezifizierte Antragstypen nicht versehentlich produktiv werden.
 - keine gewichteten Stimmen;
 - keine automatische Beförderung nach Zeit oder Aktivität;
 - keine direkte Vergabe des Weberstatus durch einzelne Administratoren;
+- kein automatischer beliebiger Mutations-Executor aus angenommenen
+  Sachanträgen;
 - keine zweite Governance-Wahrheit außerhalb PostgreSQL;
 - noch kein allgemeiner Austrittsprozess für Weber.

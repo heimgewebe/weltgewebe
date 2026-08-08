@@ -4,13 +4,13 @@
   import { page } from "$app/stores";
   import { authStore } from "$lib/auth/store";
   import "$lib/styles/page-system.css";
-  import ProposalDetail from "$lib/components/governance/ProposalDetail.svelte";
   import {
     GovernanceApiError,
     createWeberProposal,
     exitGuestAccount,
     formatRemaining,
     listProposals,
+    proposalTitle,
     statusLabel,
     type Proposal,
   } from "$lib/api/governance";
@@ -27,12 +27,16 @@
   let applicationSection: HTMLElement | null = null;
   let pendingApplicationFocus: ApplicationFocusRequest | null = null;
 
+  let ProposalDetail: typeof import("$lib/components/governance/ProposalDetail.svelte").default | null = null;
   let detailProposalId: string | null = null;
   let requestedDetailProposalId: string | null = null;
   let detailRebindVersion = 0;
 
   $: selectedProposalId = $page.url.searchParams.get("id");
-  $: if (selectedProposalId !== requestedDetailProposalId) {
+  $: if (
+    typeof window !== "undefined" &&
+    selectedProposalId !== requestedDetailProposalId
+  ) {
     requestedDetailProposalId = selectedProposalId;
     void rebindProposalDetail(selectedProposalId);
   }
@@ -170,6 +174,13 @@
   ): Promise<void> {
     const version = ++detailRebindVersion;
     detailProposalId = null;
+    if (proposalId && !ProposalDetail) {
+      const module = await import(
+        "$lib/components/governance/ProposalDetail.svelte"
+      );
+      if (version !== detailRebindVersion) return;
+      ProposalDetail = module.default;
+    }
     await tick();
     if (version === detailRebindVersion) detailProposalId = proposalId;
   }
@@ -222,11 +233,15 @@
 </svelte:head>
 
 {#if selectedProposalId}
-  {#if detailProposalId}
+  {#if ProposalDetail && detailProposalId}
     <ProposalDetail
       proposalId={detailProposalId}
       on:messagecountchange={updateProposalMessageCount}
     />
+  {:else}
+    <main class="wg-page wg-page--paper">
+      <p class="wg-state wg-state--muted" role="status">Antrag wird geladen…</p>
+    </main>
   {/if}
 {:else}
   <main class="wg-page wg-page--paper" data-testid="applications-page">
@@ -364,10 +379,7 @@
           {:else}
             <div class="proposal-list">
               {#each visibleProposals as proposal}
-                <a
-                  class="wg-card proposal-card"
-                  href={`/antraege?id=${encodeURIComponent(proposal.id)}`}
-                >
+                <article class="wg-card proposal-card">
                   <div class="wg-inline-spread proposal-topline">
                     <span
                       class:open={proposal.status === "consent" ||
@@ -380,8 +392,31 @@
                       )}</time
                     >
                   </div>
-                  <h3>Weberstatus für {proposal.applicant_title}</h3>
+                  <p class="proposal-kind">
+                    {proposal.kind === "sachantrag"
+                      ? "Sachantrag"
+                      : "Weberantrag"}
+                  </p>
+                  <h3>
+                    <a href={`/antraege?id=${encodeURIComponent(proposal.id)}`}>
+                      {proposalTitle(proposal)}
+                    </a>
+                  </h3>
                   {#if proposal.summary}<p>{proposal.summary}</p>{/if}
+                  {#if proposal.kind === "sachantrag" && proposal.target_node_title}
+                    <p class="node-reference">
+                      <strong>Knoten:</strong>
+                      {#if proposal.target_node_id}
+                        <a
+                          href={`/map?focus=${encodeURIComponent(
+                            `node:${proposal.target_node_id}`,
+                          )}`}>{proposal.target_node_title}</a
+                        >
+                      {:else}
+                        {proposal.target_node_title} (entfernt)
+                      {/if}
+                    </p>
+                  {/if}
                   <div class="facts">
                     <span
                       >{proposal.veto_count} Veto{proposal.veto_count === 1
@@ -389,9 +424,8 @@
                         : "s"}</span
                     >
                     <span
-                      >{proposalMessageCount(proposal)} {proposalMessageCount(
-                        proposal,
-                      ) === 1
+                      >{proposalMessageCount(proposal)}
+                      {proposalMessageCount(proposal) === 1
                         ? "Beitrag"
                         : "Beiträge"}</span
                     >
@@ -404,7 +438,7 @@
                         )}</span
                       >{/if}
                   </div>
-                </a>
+                </article>
               {/each}
             </div>
           {/if}
@@ -467,17 +501,30 @@
     display: grid;
     gap: 12px;
     padding: 20px;
-    color: inherit;
-    text-decoration: none;
     transition:
       transform 120ms ease,
       border-color 120ms ease;
   }
 
-  .proposal-card:hover,
-  .proposal-card:focus-visible {
+  .proposal-card:hover {
     transform: translateY(-2px);
     border-color: var(--wg-border-strong);
+  }
+
+  .proposal-card a {
+    color: inherit;
+  }
+
+  .proposal-card h3 a {
+    text-decoration: none;
+  }
+
+  .proposal-kind {
+    color: var(--wg-muted);
+    font-size: 0.78rem;
+    font-weight: 720;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
   }
 
   .proposal-topline {
@@ -520,8 +567,7 @@
       transition: none;
     }
 
-    .proposal-card:hover,
-    .proposal-card:focus-visible {
+    .proposal-card:hover {
       transform: none;
     }
   }

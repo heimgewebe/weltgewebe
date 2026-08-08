@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  createSachProposal,
   createWeberProposal,
   formatRemaining,
   statusLabel,
@@ -54,6 +55,31 @@ describe("governance API", () => {
       kind: "weberantrag",
       summary: "Ich möchte vor Ort mitweben.",
       webgemeindezentrum_id: "webgemeindezentrum-hammer-park",
+    });
+  });
+
+  it("creates a node-addressed Sachantrag without requiring a center", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "s1", kind: "sachantrag" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await createSachProposal(
+      "  Neue Nutzung beschließen  ",
+      "  Gemeinsam beraten.  ",
+      undefined,
+      "node-1",
+    );
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(init.body))).toEqual({
+      kind: "sachantrag",
+      title: "Neue Nutzung beschließen",
+      summary: "Gemeinsam beraten.",
+      target_node_id: "node-1",
     });
   });
 

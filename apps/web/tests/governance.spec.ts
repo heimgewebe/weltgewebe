@@ -13,6 +13,7 @@ function proposal(
   return {
     id: PROPOSAL_ID,
     kind: "weberantrag",
+    webgemeindezentrum_id: "webgemeindezentrum-hammer-park",
     applicant_account_id: GUEST_ID,
     applicant_title: "Gast im Test",
     summary: "Ich möchte Verantwortung im Weltgewebe übernehmen.",
@@ -37,6 +38,20 @@ function proposal(
             },
           ]
         : [],
+  };
+}
+
+function sachProposal() {
+  return {
+    ...proposal("consent", 0),
+    kind: "sachantrag",
+    title: "Werkstatt dauerhaft öffnen",
+    target_node_id: "node-werkstatt",
+    target_node_title: "Offene Werkstatt",
+    applicant_account_id: WEBER_ID,
+    applicant_title: "Weber im Test",
+    summary: "Die Ortsweberei soll verlässliche Öffnungszeiten beschließen.",
+    vetoes: [],
   };
 }
 
@@ -294,6 +309,56 @@ test("veto and conversation links resolve to their factual governance views", as
   await expect(page.getByRole("heading", { name: "Gespräche" })).toBeVisible();
   await expect(page.getByText("Weberstatus für Gast im Test")).toBeVisible();
   await expect(page.getByText("1 Beitrag", { exact: true })).toBeVisible();
+});
+
+test("Sachantrag list and detail keep the same center decision linked to its node", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: "other-weber", role: "weber" },
+  });
+  await page.route("**/api/proposals**", async (route) => {
+    const url = new URL(route.request().url());
+    if (url.pathname === "/api/proposals") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([sachProposal()]),
+      });
+    }
+    if (url.pathname === `/api/proposals/${PROPOSAL_ID}`) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(sachProposal()),
+      });
+    }
+    if (url.pathname === `/api/proposals/${PROPOSAL_ID}/messages`) {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: "[]",
+      });
+    }
+    return route.fulfill({ status: 404 });
+  });
+
+  await page.goto("/antraege");
+  await expect(
+    page.getByRole("heading", { name: "Werkstatt dauerhaft öffnen" }),
+  ).toBeVisible();
+  await expect(page.getByText("Knoten:").locator("..")).toContainText(
+    "Offene Werkstatt",
+  );
+  await expect(
+    page.getByRole("link", { name: "Offene Werkstatt" }),
+  ).toHaveAttribute("href", "/map?focus=node%3Anode-werkstatt");
+
+  await page.getByRole("link", { name: "Werkstatt dauerhaft öffnen" }).click();
+  await expect(page.getByText("Gemeinschaftlicher Beschluss")).toBeVisible();
+  await expect(
+    page.getByRole("link", { name: "Offene Werkstatt" }),
+  ).toHaveAttribute("href", "/map?focus=node%3Anode-werkstatt");
 });
 
 test("the conversation view treats a legacy API without message_count as empty", async ({
