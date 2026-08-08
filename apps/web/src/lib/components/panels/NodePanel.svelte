@@ -705,12 +705,14 @@
     gap: 0;
   }
   .node-tabs > button {
-    flex: 1 1 0;
+    /* Let longer labels claim a little more width instead of forcing every
+     * tab into an equal column. Words stay intact and all tabs remain visible. */
+    flex: 1 1 auto;
     min-width: 0;
-    padding-inline: 0.25rem;
+    padding-inline: 0.2rem;
     line-height: 1.15;
-    overflow-wrap: anywhere;
-    white-space: normal;
+    overflow-wrap: normal;
+    white-space: nowrap;
   }
   .tab-content > [hidden] {
     display: none;
@@ -896,7 +898,8 @@
   }
   @media (max-width: 420px) {
     .node-tabs > button {
-      padding-inline: 0.15rem;
+      padding-inline: 0.1rem;
+      font-size: 0.75rem;
     }
     .coordinate-grid,
     .form-actions {
