@@ -1224,11 +1224,10 @@ source_archive=""
 # Germany. A correct environment variable is not enough; the bundle's own
 # machine-readable identity must match the exact commit and Germany style.
 basemap_identity_json="$(
-  tar -xOzf "$temporary_artifact" build/_app/basemap-build.json 2>/dev/null
+  tar -xOzf "$temporary_artifact" build/_app/basemap-build.json 2> /dev/null
 )" || fail "frontend artifact is missing readable basemap build identity"
 [[ -n "$basemap_identity_json" ]] || fail "frontend basemap build identity is empty"
-BASEMAP_IDENTITY_JSON="$basemap_identity_json" run_ops_python "$target_commit" "$expected_germany_style_sha" <<'PY_BASEMAP_IDENTITY' ||
-  fail "frontend basemap build identity mismatch"
+if ! BASEMAP_IDENTITY_JSON="$basemap_identity_json" run_ops_python "$target_commit" "$expected_germany_style_sha" << 'PY_BASEMAP_IDENTITY'; then
 import json
 import os
 import re
@@ -1257,6 +1256,9 @@ if not re.fullmatch(r"[0-9a-f]{40}", commit):
 if not re.fullmatch(r"[0-9a-f]{64}", style_sha):
     raise SystemExit("expected style hash is malformed")
 PY_BASEMAP_IDENTITY
+
+  fail "frontend basemap build identity mismatch"
+fi
 
 artifact="$ARTIFACT_ROOT/web-$target_commit.tar.gz"
 mv "$temporary_artifact" "$artifact"

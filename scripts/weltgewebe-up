@@ -1433,50 +1433,50 @@ if [[ "$DEPLOY_SCOPE" == "full" ]]; then
     echo
     echo ">> Regional Basemap Artifact Guard (explicit rollback):"
 
-  ensure_regional_basemap() {
-    local region="$1"
-    local build_script="$2"
-    local versioned_pmtiles="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.pmtiles"
-    local versioned_meta="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.meta.json"
-    local alias_pmtiles="$BASEMAP_DIR/basemap-${region}.pmtiles"
-    local alias_meta="$BASEMAP_DIR/basemap-${region}.meta.json"
+    ensure_regional_basemap() {
+      local region="$1"
+      local build_script="$2"
+      local versioned_pmtiles="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.pmtiles"
+      local versioned_meta="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.meta.json"
+      local alias_pmtiles="$BASEMAP_DIR/basemap-${region}.pmtiles"
+      local alias_meta="$BASEMAP_DIR/basemap-${region}.meta.json"
 
-    if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
-      echo "   [!] ${region}: versioned artifact missing; attempting best-effort build."
-      if [[ ! -x "$build_script" ]]; then
-        echo "   [X] WARNING: ${region}: build script missing or not executable: ${build_script}"
+      if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
+        echo "   [!] ${region}: versioned artifact missing; attempting best-effort build."
+        if [[ ! -x "$build_script" ]]; then
+          echo "   [X] WARNING: ${region}: build script missing or not executable: ${build_script}"
+          return 1
+        fi
+        if ! bash "$build_script"; then
+          echo "   [X] WARNING: ${region}: PMTiles build failed."
+          return 1
+        fi
+      fi
+
+      if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
+        echo "   [X] WARNING: ${region}: build completed without both versioned files."
         return 1
       fi
-      if ! bash "$build_script"; then
-        echo "   [X] WARNING: ${region}: PMTiles build failed."
+
+      if ! bash scripts/basemap/publish-basemap.sh \
+        "$versioned_pmtiles" "$versioned_meta" "$BASEMAP_DIR"; then
+        echo "   [X] WARNING: ${region}: atomic alias publication failed."
         return 1
       fi
-    fi
 
-    if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
-      echo "   [X] WARNING: ${region}: build completed without both versioned files."
-      return 1
-    fi
+      if [[ ! -e "$alias_pmtiles" || ! -e "$alias_meta" ]]; then
+        echo "   [X] WARNING: ${region}: stable PMTiles/meta aliases are missing after publication."
+        return 1
+      fi
 
-    if ! bash scripts/basemap/publish-basemap.sh \
-      "$versioned_pmtiles" "$versioned_meta" "$BASEMAP_DIR"; then
-      echo "   [X] WARNING: ${region}: atomic alias publication failed."
-      return 1
-    fi
+      echo "   [✓] ${region}: versioned artifact and stable aliases ready."
+    }
 
-    if [[ ! -e "$alias_pmtiles" || ! -e "$alias_meta" ]]; then
-      echo "   [X] WARNING: ${region}: stable PMTiles/meta aliases are missing after publication."
-      return 1
-    fi
-
-    echo "   [✓] ${region}: versioned artifact and stable aliases ready."
-  }
-
-  REGIONAL_BASEMAP_FAILURES=0
-  ensure_regional_basemap "hamburg" \
-    "scripts/basemap/build-hamburg-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
-  ensure_regional_basemap "schleswig-holstein" \
-    "scripts/basemap/build-schleswig-holstein-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
+    REGIONAL_BASEMAP_FAILURES=0
+    ensure_regional_basemap "hamburg" \
+      "scripts/basemap/build-hamburg-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
+    ensure_regional_basemap "schleswig-holstein" \
+      "scripts/basemap/build-schleswig-holstein-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
 
     if ((REGIONAL_BASEMAP_FAILURES > 0)); then
       echo "   [X] WARNING: ${REGIONAL_BASEMAP_FAILURES} regional basemap artifact set(s) are incomplete."

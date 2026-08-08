@@ -324,7 +324,7 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         (tree / "_app/basemap-build.json").write_text(
             json.dumps(identity, sort_keys=True) + "\n", encoding="utf-8"
         )
-        self.artifact.parent.mkdir(parents=True)
+        self.artifact.parent.mkdir(parents=True, exist_ok=True)
         with tarfile.open(self.artifact, "w:gz") as bundle:
             bundle.add(tree, arcname="build")
         self.artifact_sha = run(["sha256sum", str(self.artifact)]).stdout.split()[0]
