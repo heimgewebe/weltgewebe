@@ -1,3 +1,4 @@
+import { invalidateAccountAttention } from "$lib/accountAttention";
 import type {
   ConversationMessage,
   MessagePage,
@@ -87,17 +88,18 @@ export function openDirectConversation(
   });
 }
 
-export function markDirectConversationRead(
+export async function markDirectConversationRead(
   conversationId: string,
   throughMessageId: string,
 ): Promise<void> {
-  return request<void>(
+  await request<void>(
     `/api/direct-conversations/${encodeURIComponent(conversationId)}/read`,
     {
       method: "POST",
       body: JSON.stringify({ through_message_id: throughMessageId }),
     },
   );
+  invalidateAccountAttention();
 }
 
 /**
