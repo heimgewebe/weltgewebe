@@ -3,6 +3,7 @@ import type { DirectConversation } from "$lib/api/directMessages";
 import type { Proposal } from "$lib/api/governance";
 import {
   countUnreadDirectMessages,
+  hasAcceptedWeberApplication,
   hasPendingWeberApplication,
   unreadMessageBadgeLabel,
 } from "./topBarAttentionState";
@@ -30,6 +31,25 @@ describe("topBarAttentionState", () => {
     expect(hasPendingWeberApplication(proposals, "guest-a")).toBe(true);
     expect(hasPendingWeberApplication(proposals, "guest-c")).toBe(false);
     expect(hasPendingWeberApplication(proposals, undefined)).toBe(false);
+  });
+
+  it("recognizes an accepted application only for its own account", () => {
+    const proposals = [
+      {
+        kind: "weberantrag",
+        applicant_account_id: "guest-a",
+        status: "accepted",
+      },
+      {
+        kind: "weberantrag",
+        applicant_account_id: "guest-b",
+        status: "rejected",
+      },
+    ] as Proposal[];
+
+    expect(hasAcceptedWeberApplication(proposals, "guest-a")).toBe(true);
+    expect(hasAcceptedWeberApplication(proposals, "guest-b")).toBe(false);
+    expect(hasAcceptedWeberApplication(proposals, undefined)).toBe(false);
   });
 
   it("sums unread messages without letting negative counts reduce the badge", () => {
