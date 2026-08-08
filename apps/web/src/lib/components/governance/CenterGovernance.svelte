@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
+  import { requestTopBarAttentionRefresh } from "../topBarAttentionRefresh";
   import {
     createSachProposal,
     createWeberProposal,
@@ -83,6 +84,7 @@
         ...proposals.filter((item) => item.id !== proposal.id),
       ];
       summary = "";
+      requestTopBarAttentionRefresh();
     } catch (submitFailure) {
       submitError =
         submitFailure instanceof GovernanceApiError &&
