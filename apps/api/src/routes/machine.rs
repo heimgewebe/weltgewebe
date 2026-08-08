@@ -62,8 +62,8 @@ pub fn root_routes() -> Router<ApiState> {
     Router::new()
         .route("/.well-known/weltgewebe", get(machine_descriptor))
         .route("/openapi.json", get(openapi))
-        .route("/schemas/domain/{name}.json", get(domain_schema))
-        .route("/schemas/federation/v1/{name}.json", get(federation_schema))
+        .route("/schemas/domain/{name}", get(domain_schema))
+        .route("/schemas/federation/v1/{name}", get(federation_schema))
 }
 
 fn machine_problem(status: StatusCode, code: &'static str, message: &'static str) -> Response {
@@ -210,16 +210,16 @@ async fn machine_descriptor() -> Response {
         ],
         "schemas": {
             "domain": {
-                "account": "/schemas/domain/account.json",
-                "conversation": "/schemas/domain/conversation.json",
-                "edge": "/schemas/domain/edge.json",
-                "message": "/schemas/domain/message.json",
-                "node": "/schemas/domain/node.json",
-                "role": "/schemas/domain/role.json"
+                "account": "/schemas/domain/account",
+                "conversation": "/schemas/domain/conversation",
+                "edge": "/schemas/domain/edge",
+                "message": "/schemas/domain/message",
+                "node": "/schemas/domain/node",
+                "role": "/schemas/domain/role"
             },
             "federation": {
-                "cell_descriptor": "/schemas/federation/v1/cell-descriptor.json",
-                "event": "/schemas/federation/v1/event.json"
+                "cell_descriptor": "/schemas/federation/v1/cell-descriptor",
+                "event": "/schemas/federation/v1/event"
             }
         },
         "write_profiles": {
@@ -285,17 +285,17 @@ fn openapi_document() -> Result<Value, serde_json::Error> {
                 }
             },
             "schemas": {
-                "Account": { "$ref": "/schemas/domain/account.json" },
-                "Conversation": { "$ref": "/schemas/domain/conversation.json" },
-                "Edge": { "$ref": "/schemas/domain/edge.json" },
-                "Message": { "$ref": "/schemas/domain/message.json" },
-                "Node": { "$ref": "/schemas/domain/node.json" },
-                "Role": { "$ref": "/schemas/domain/role.json" },
+                "Account": { "$ref": "/schemas/domain/account" },
+                "Conversation": { "$ref": "/schemas/domain/conversation" },
+                "Edge": { "$ref": "/schemas/domain/edge" },
+                "Message": { "$ref": "/schemas/domain/message" },
+                "Node": { "$ref": "/schemas/domain/node" },
+                "Role": { "$ref": "/schemas/domain/role" },
                 "FederationCell": {
-                    "$ref": "/schemas/federation/v1/cell-descriptor.json"
+                    "$ref": "/schemas/federation/v1/cell-descriptor"
                 },
                 "FederationEvent": {
-                    "$ref": "/schemas/federation/v1/event.json"
+                    "$ref": "/schemas/federation/v1/event"
                 }
             }
         },
@@ -386,7 +386,7 @@ fn openapi_operation(operation: &ApiOperation) -> Value {
                 "content": {
                     "application/json": {
                         "schema": {
-                            "$ref": "/schemas/federation/v1/event.json"
+                            "$ref": "/schemas/federation/v1/event"
                         }
                     }
                 }
