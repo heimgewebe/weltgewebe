@@ -10,6 +10,8 @@ export interface VersionData {
   release?: string;
 }
 
+const UPDATE_CHECK_TIMEOUT_MS = 10_000;
+
 // Ensure the store is only initialized once
 function createUpdateStore() {
   const { subscribe, set } = writable(false);
@@ -22,12 +24,32 @@ function createUpdateStore() {
   const localVersion = buildVersion.version;
 
   async function fetchServerVersion(): Promise<VersionData | null> {
+    const controller = new AbortController();
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const timeout = new Promise<null>((resolve) => {
+      timeoutId = setTimeout(() => {
+        controller.abort();
+        resolve(null);
+      }, UPDATE_CHECK_TIMEOUT_MS);
+    });
+
     try {
-      const res = await fetch("/_app/version.json", { cache: "no-store" });
-      if (!res.ok) return null;
-      return await res.json();
-    } catch {
-      return null;
+      const request = (async (): Promise<VersionData | null> => {
+        try {
+          const res = await fetch("/_app/version.json", {
+            cache: "no-store",
+            signal: controller.signal,
+          });
+          if (!res.ok) return null;
+          return await res.json();
+        } catch {
+          return null;
+        }
+      })();
+
+      return await Promise.race([request, timeout]);
+    } finally {
+      if (timeoutId !== undefined) clearTimeout(timeoutId);
     }
   }
 
@@ -114,7 +136,11 @@ function createUpdateStore() {
       updateDetected = false;
       pendingCheck = undefined;
       // For testing, we also reset initialization state so tests can cleanly re-init
-      if (browser) {
+      if (
+        browser &&
+        typeof document !== "undefined" &&
+        typeof window !== "undefined"
+      ) {
         document.removeEventListener(
           "visibilitychange",
           handleVisibilityChange,
