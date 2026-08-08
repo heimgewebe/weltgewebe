@@ -30,6 +30,46 @@ test.describe("Topbar — guest role visibility", () => {
     ).toBeVisible();
   });
 
+  test("a pending Weber application replaces the CTA and unread messages get a visible count", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: { authenticated: true, account_id: "guest-topbar", role: "gast" },
+    });
+    await page.route("**/api/proposals", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          {
+            kind: "weberantrag",
+            applicant_account_id: "guest-topbar",
+            status: "consent",
+          },
+        ]),
+      });
+    });
+    await page.route("**/api/direct-conversations", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: [{ unread_count: 3 }] }),
+      });
+    });
+
+    await page.goto("/map");
+
+    const badge = page.getByTestId("topbar-guest-badge");
+    await expect(badge).toContainText("Weberstatus beantragt");
+    await expect(badge).toHaveAttribute("href", "/antraege");
+
+    const messages = page.getByRole("link", {
+      name: "Private Nachrichten: 3 ungelesene Nachrichten",
+    });
+    await expect(messages).toBeVisible();
+    await expect(messages.locator(".message-unread-badge")).toHaveText("3");
+  });
+
   test("the guest badge stays reachable and preserves the messages entry on a 320 pixel viewport", async ({
     page,
   }) => {
