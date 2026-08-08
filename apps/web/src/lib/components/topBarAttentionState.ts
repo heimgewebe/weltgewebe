@@ -58,3 +58,12 @@ export function unreadMessageBadgeLabel(count: number): string {
   const bounded = boundedUnreadCount(count);
   return bounded >= UNREAD_COUNT_OVERFLOW ? "99+" : String(bounded);
 }
+
+export function unreadMessageAccessibleCount(count: number): string {
+  const bounded = boundedUnreadCount(count);
+  if (bounded >= UNREAD_COUNT_OVERFLOW) {
+    return "99 oder mehr ungelesene Nachrichten";
+  }
+  if (bounded === 1) return "1 ungelesene Nachricht";
+  return `${bounded} ungelesene Nachrichten`;
+}
