@@ -705,12 +705,14 @@
     gap: 0;
   }
   .node-tabs > button {
-    flex: 1 1 0;
-    min-width: 0;
+    /* Tabs stay readable as words; the existing tab strip scrolls horizontally
+     * when the panel is too narrow instead of breaking labels mid-word. */
+    flex: 1 0 auto;
+    min-width: max-content;
     padding-inline: 0.25rem;
     line-height: 1.15;
-    overflow-wrap: anywhere;
-    white-space: normal;
+    overflow-wrap: normal;
+    white-space: nowrap;
   }
   .tab-content > [hidden] {
     display: none;

@@ -9,6 +9,10 @@
   border-radius: 0;
   background: transparent;
   display: grid;
+  /* Keep the grid track pinned to the 44px geographic anchor box.
+   * Larger marker artwork may overflow, but must stay centered on the same point. */
+  grid-template-columns: 100%;
+  grid-template-rows: 100%;
   place-items: center;
   color: var(--bg);
   cursor: pointer;
