@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import shutil
@@ -144,7 +145,14 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         )
         (self.seed / "apps/web").mkdir(parents=True)
         (self.seed / "scripts").mkdir()
+        (self.seed / "map-style").mkdir()
         (self.seed / "apps/web/placeholder.txt").write_text("web\n", encoding="utf-8")
+        (self.seed / "map-style/style-germany.json").write_text(
+            '{"name":"Germany fixture"}\n', encoding="utf-8"
+        )
+        (self.seed / "map-style/style-germany-dark.json").write_text(
+            '{"name":"Germany dark fixture"}\n', encoding="utf-8"
+        )
         up_script = self.seed / "scripts/weltgewebe-up"
         up_script.write_text(
             textwrap.dedent(
@@ -203,11 +211,17 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 "refs/heads/main",
             ]
         )
-        run(["git", "clone", "--branch", "main", str(self.remote), str(self.source)])
+        run(["git", "clone", "--no-local", "--branch", "main", str(self.remote), str(self.source)])
         self.commit = run(["git", "rev-parse", "HEAD"], cwd=self.source).stdout.strip()
 
         (self.source / "build/basemap").mkdir(parents=True)
         (self.source / "build/basemap/map.pmtiles").write_bytes(b"pmtiles")
+        germany_pmtiles = self.source / "build/basemap/basemap-germany-fixture.pmtiles"
+        germany_meta = self.source / "build/basemap/basemap-germany-fixture.meta.json"
+        germany_pmtiles.write_bytes(b"PMTiles" + b"\0" * 120)
+        germany_meta.write_text('{"fixture":true}\n', encoding="utf-8")
+        (self.source / "build/basemap/basemap-germany.pmtiles").symlink_to(germany_pmtiles.name)
+        (self.source / "build/basemap/basemap-germany.meta.json").symlink_to(germany_meta.name)
 
         self.make_artifact()
         self.make_command_shims()
@@ -274,18 +288,69 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             )
         return [sudo, "-n", *argv]
 
-    def make_artifact(self) -> None:
+    def make_artifact(self, *, basemap_variant: str = "germany") -> None:
         tree = self.root / "artifact-tree/build"
+        if tree.parent.exists():
+            shutil.rmtree(tree.parent)
         (tree / "_app").mkdir(parents=True)
         (tree / "index.html").write_text("<!doctype html>\n", encoding="utf-8")
         (tree / "_app/version.json").write_text(
             json.dumps({"commit": self.commit, "version": self.commit[:8]}) + "\n",
             encoding="utf-8",
         )
-        self.artifact.parent.mkdir(parents=True)
-        with tarfile.open(self.artifact, "w:gz") as bundle:
+        germany_style_sha = hashlib.sha256(
+            (self.source / "map-style/style-germany.json").read_bytes()
+        ).hexdigest()
+        if basemap_variant == "germany":
+            identity = {
+                "schema_version": 1,
+                "mode": "local-sovereign",
+                "variant": "germany",
+                "style_path": "/local-basemap/style-germany.json",
+                "source_commit": self.commit,
+                "style_sha256": germany_style_sha,
+            }
+        elif basemap_variant == "regional":
+            identity = {
+                "schema_version": 1,
+                "mode": "local-sovereign",
+                "variant": "regional",
+                "style_path": "/local-basemap/style.json",
+                "source_commit": self.commit,
+                "style_sha256": "0" * 64,
+            }
+        else:
+            raise ValueError(f"unsupported fixture basemap variant: {basemap_variant}")
+        (tree / "_app/basemap-build.json").write_text(
+            json.dumps(identity, sort_keys=True) + "\n", encoding="utf-8"
+        )
+        self.artifact.parent.mkdir(parents=True, exist_ok=True)
+        staged_artifact = self.root / "web-artifact-staging.tar.gz"
+        with tarfile.open(staged_artifact, "w:gz") as bundle:
             bundle.add(tree, arcname="build")
-        self.artifact_sha = run(["sha256sum", str(self.artifact)]).stdout.split()[0]
+        staged_artifact_sha = run(
+            ["sha256sum", str(staged_artifact)]
+        ).stdout.split()[0]
+        if os.access(self.artifact.parent, os.W_OK):
+            staged_artifact.replace(self.artifact)
+        else:
+            run(
+                self.privileged(
+                    [
+                        "install",
+                        "-o",
+                        "root",
+                        "-g",
+                        "root",
+                        "-m",
+                        "0600",
+                        str(staged_artifact),
+                        str(self.artifact),
+                    ]
+                )
+            )
+            staged_artifact.unlink()
+        self.artifact_sha = staged_artifact_sha
 
     def make_command_shims(self) -> None:
         docker = self.bin / "docker"
@@ -321,14 +386,20 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 #!/usr/bin/env bash
                 set -euo pipefail
                 headers=""
+                range=""
                 url="${!#}"
                 while (($#)); do
-                  if [[ "$1" == "-D" ]]; then
-                    headers="$2"
-                    shift 2
-                  else
-                    shift
-                  fi
+                  case "$1" in
+                    -D)
+                      headers="$2"
+                      shift 2
+                      ;;
+                    --range)
+                      range="$2"
+                      shift 2
+                      ;;
+                    *) shift ;;
+                  esac
                 done
                 public_commit="${PUBLIC_COMMIT:-$TEST_COMMIT}"
                 if [[ -n "${TEST_DEPLOY_MARKER:-}" && -e "$TEST_DEPLOY_MARKER" ]]; then
@@ -344,6 +415,53 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                     } > "$headers"
                   fi
                   printf '{"commit":"%s","version":"0.1.0"}\\n' "$public_commit"
+                elif [[ "$url" == *"/_app/basemap-build.json" ]]; then
+                  public_variant="${TEST_PUBLIC_BASEMAP_VARIANT:-germany}"
+                  if [[ -n "${TEST_DEPLOY_MARKER:-}" && -e "$TEST_DEPLOY_MARKER" ]]; then
+                    public_variant="germany"
+                  fi
+                  if [[ "$public_variant" == "germany" ]]; then
+                    style_sha="$(sha256sum "$WELTGEWEBE_SOURCE_CHECKOUT/map-style/style-germany.json" | awk '{print $1}')"
+                    printf '{"schema_version":1,"mode":"local-sovereign","variant":"germany","style_path":"/local-basemap/style-germany.json","source_commit":"%s","style_sha256":"%s"}\\n' \
+                      "$public_commit" "$style_sha"
+                  else
+                    printf '{"schema_version":1,"mode":"local-sovereign","variant":"regional","style_path":"/local-basemap/style.json","source_commit":"%s","style_sha256":"%064d"}\\n' \
+                      "$public_commit" 0
+                  fi
+                elif [[ "$url" == *"/local-basemap/style-germany.json" ]]; then
+                  if [[ "${TEST_PUBLIC_LIGHT_STYLE_BROKEN:-0}" == "1" ]]; then
+                    printf '{"name":"broken light style"}\\n'
+                  else
+                    cat "$WELTGEWEBE_SOURCE_CHECKOUT/map-style/style-germany.json"
+                  fi
+                elif [[ "$url" == *"/local-basemap/style-germany-dark.json" ]]; then
+                  if [[ "${TEST_PUBLIC_DARK_STYLE_BROKEN:-0}" == "1" ]]; then
+                    printf '{"name":"broken dark style"}\\n'
+                  else
+                    cat "$WELTGEWEBE_SOURCE_CHECKOUT/map-style/style-germany-dark.json"
+                  fi
+                elif [[ "$url" == *"/local-basemap/basemap-germany.pmtiles" ]]; then
+                  [[ "$range" == "0-126" ]] || exit 98
+                  pmtiles="$WELTGEWEBE_SOURCE_CHECKOUT/build/basemap/basemap-germany.pmtiles"
+                  size="$(stat -Lc %s "$pmtiles")"
+                  if [[ "${TEST_PUBLIC_PMTILES_RANGE_BROKEN:-0}" == "1" ]]; then
+                    {
+                      printf 'HTTP/1.1 200 OK\\r\\n'
+                      printf 'Content-Type: application/octet-stream\\r\\n'
+                      printf 'Content-Length: 127\\r\\n'
+                      printf '\\r\\n'
+                    } > "$headers"
+                  else
+                    {
+                      printf 'HTTP/1.1 206 Partial Content\\r\\n'
+                      printf 'Content-Type: application/octet-stream\\r\\n'
+                      printf 'Accept-Ranges: bytes\\r\\n'
+                      printf 'Content-Range: bytes 0-126/%s\\r\\n' "$size"
+                      printf 'Content-Length: 127\\r\\n'
+                      printf '\\r\\n'
+                    } > "$headers"
+                  fi
+                  head -c 127 "$pmtiles"
                 else
                   printf '{"commit":"%s","version":"%s"}\\n' \
                     "$public_commit" "${public_commit:0:8}"
@@ -635,6 +753,18 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             "WELTGEWEBE_FRONTEND_VERSION_URL": (
                 "https://example.invalid/_app/version.json"
             ),
+            "WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL": (
+                "https://example.invalid/_app/basemap-build.json"
+            ),
+            "WELTGEWEBE_FRONTEND_BASEMAP_LIGHT_STYLE_URL": (
+                "https://example.invalid/local-basemap/style-germany.json"
+            ),
+            "WELTGEWEBE_FRONTEND_BASEMAP_DARK_STYLE_URL": (
+                "https://example.invalid/local-basemap/style-germany-dark.json"
+            ),
+            "WELTGEWEBE_FRONTEND_BASEMAP_PMTILES_URL": (
+                "https://example.invalid/local-basemap/basemap-germany.pmtiles"
+            ),
             "WELTGEWEBE_API_VERSION_URL": "https://example.invalid/api/version",
             "TEST_COMMIT": self.commit,
             "TEST_REMOTE": str(self.remote),
@@ -815,6 +945,122 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
             ]
         )
         return run(argv, check=False)
+
+    def test_reconciler_repairs_same_commit_regional_public_bundle(self) -> None:
+        marker = self.root / "deploy-complete"
+        result = self.reconcile_existing_public_commit(
+            extra_env={
+                "WELTGEWEBE_DEPLOY_HELPER": str(DEPLOY_SCRIPT),
+                "PUBLIC_COMMIT": self.commit,
+                "TEST_PUBLIC_BASEMAP_VARIANT": "regional",
+                "TEST_DEPLOY_MARKER": str(marker),
+            }
+        )
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(marker.exists())
+        self.assertIn("reason=basemap_identity_drift", result.stdout)
+        self.assertIn("production_reconcile=verified", result.stdout)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
+
+    def test_reconciler_keeps_same_commit_germany_public_bundle_as_noop(self) -> None:
+        result = self.reconcile_existing_public_commit(
+            extra_env={"PUBLIC_COMMIT": self.commit}
+        )
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("production_reconcile=noop", result.stdout)
+        self.assertIn("basemap_variant=germany", result.stdout)
+        self.assertNotIn("reason=basemap_identity_drift", result.stdout)
+
+    def assert_reconciler_rejects_broken_public_germany_delivery(
+        self, environment_flag: str
+    ) -> None:
+        result = self.reconcile_existing_public_commit(
+            extra_env={"PUBLIC_COMMIT": self.commit, environment_flag: "1"}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("reason=basemap_identity_drift", result.stdout)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
+
+    def test_reconciler_rejects_same_commit_with_broken_public_germany_light_style(
+        self,
+    ) -> None:
+        self.assert_reconciler_rejects_broken_public_germany_delivery(
+            "TEST_PUBLIC_LIGHT_STYLE_BROKEN"
+        )
+
+    def test_reconciler_rejects_same_commit_with_broken_public_germany_dark_style(
+        self,
+    ) -> None:
+        self.assert_reconciler_rejects_broken_public_germany_delivery(
+            "TEST_PUBLIC_DARK_STYLE_BROKEN"
+        )
+
+    def test_reconciler_rejects_same_commit_without_public_germany_pmtiles_range(
+        self,
+    ) -> None:
+        self.assert_reconciler_rejects_broken_public_germany_delivery(
+            "TEST_PUBLIC_PMTILES_RANGE_BROKEN"
+        )
+
+    def test_reconciler_rejects_same_commit_public_bundle_with_missing_germany_pmtiles_alias(
+        self,
+    ) -> None:
+        run(
+            self.privileged(
+                [
+                    "rm",
+                    "-f",
+                    str(self.source / "build/basemap/basemap-germany.pmtiles"),
+                ]
+            )
+        )
+        result = self.reconcile_existing_public_commit(
+            extra_env={"PUBLIC_COMMIT": self.commit}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
+        self.assertIn(
+            "required nationwide Germany basemap alias is missing: basemap-germany.pmtiles",
+            result.stderr,
+        )
+
+    def test_reconciler_rejects_same_commit_public_bundle_with_broken_germany_meta_alias(
+        self,
+    ) -> None:
+        meta_alias = self.source / "build/basemap/basemap-germany.meta.json"
+        run(self.privileged(["rm", "-f", str(meta_alias)]))
+        run(
+            self.privileged(
+                [
+                    "ln",
+                    "-s",
+                    "missing-germany.meta.json",
+                    str(meta_alias),
+                ]
+            )
+        )
+        result = self.reconcile_existing_public_commit(
+            extra_env={"PUBLIC_COMMIT": self.commit}
+        )
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
+        self.assertIn(
+            "required nationwide Germany basemap alias is broken: basemap-germany.meta.json",
+            result.stderr,
+        )
+
+    def test_reconciler_rejects_a_regional_frontend_artifact(self) -> None:
+        self.make_artifact(basemap_variant="regional")
+        result = self.reconcile_stale_public_commit()
+        self.restore_test_ownership()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("frontend basemap build identity mismatch", result.stderr)
+        self.assertFalse((self.root / "deploy-complete").exists())
 
     def test_reconciler_exports_private_docker_config_to_build(self) -> None:
         result = self.reconcile_stale_public_commit()

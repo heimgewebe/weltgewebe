@@ -94,6 +94,42 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn('api_body_file="$(mktemp', script)
         self.assertIn("awk -F':'", script)
 
+    def test_reconciler_requires_germany_artifacts_before_frontend_build(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        guard = script.index("# Nationwide Germany is the production sovereign contract.")
+        docker_build = script.index("docker run --rm", guard)
+        self.assertLess(guard, docker_build)
+        for marker in (
+            "basemap-germany.pmtiles",
+            "basemap-germany.meta.json",
+            "map-style/style-germany.json",
+            "map-style/style-germany-dark.json",
+            "--env PUBLIC_BASEMAP_VARIANT=germany",
+        ):
+            self.assertIn(marker, script)
+        self.assertIn("nationwide Germany basemap alias escapes canonical data root", script)
+        self.assertIn("nationwide Germany basemap target is group- or world-writable", script)
+        self.assertIn("build/_app/basemap-build.json", script)
+        self.assertIn("frontend basemap build identity mismatch", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_LIGHT_STYLE_URL", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_DARK_STYLE_URL", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_PMTILES_URL", script)
+        self.assertIn("verify_public_germany_basemap_delivery", script)
+        self.assertEqual(script.count("verify_public_germany_basemap_delivery"), 3)
+        self.assertIn(
+            "<< 'PY_PUBLIC_BASEMAP_IDENTITY' || return 1", script
+        )
+        self.assertIn("reason=basemap_identity_drift", script)
+        self.assertIn(
+            "public nationwide Germany basemap delivery mismatch after deploy", script
+        )
+        self.assertIn("/local-basemap/style-germany.json", script)
+        self.assertIn("/local-basemap/style-germany-dark.json", script)
+        self.assertIn("/local-basemap/basemap-germany.pmtiles", script)
+        self.assertIn("--range 0-126", script)
+        self.assertIn("public Germany PMTiles range response is not HTTP 206", script)
+
     def test_deploy_helper_runs_bounded_migrations_before_full_deploy(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
         migration = script.index("run_release_deploy migration")

@@ -1155,6 +1155,85 @@ else
   export PUBLIC_BASEMAP_MODE
 fi
 
+# Nationwide Germany is the normal sovereign deployment contract. The regional
+# Hamburg + Schleswig-Holstein map remains available only as an explicit rollback.
+case "${PUBLIC_BASEMAP_VARIANT:-}" in
+  "" | "regional" | "germany") ;;
+  *)
+    echo "ERROR: Invalid PUBLIC_BASEMAP_VARIANT='${PUBLIC_BASEMAP_VARIANT}'." >&2
+    echo "       Allowed values: germany, regional (or unset for Germany default)." >&2
+    exit 1
+    ;;
+esac
+
+BASEMAP_VARIANT_SOURCE="explicit PUBLIC_BASEMAP_VARIANT"
+if [[ "${PUBLIC_BASEMAP_MODE:-}" == "remote-style" ]]; then
+  if [[ -n "${PUBLIC_BASEMAP_VARIANT:-}" ]]; then
+    echo "ERROR: PUBLIC_BASEMAP_VARIANT is only valid with PUBLIC_BASEMAP_MODE=local-sovereign." >&2
+    exit 1
+  fi
+  BASEMAP_VARIANT_SOURCE="not applicable (remote-style)"
+elif [[ -z "${PUBLIC_BASEMAP_VARIANT:-}" ]]; then
+  export PUBLIC_BASEMAP_VARIANT="germany"
+  BASEMAP_VARIANT_SOURCE="sovereign production default"
+else
+  export PUBLIC_BASEMAP_VARIANT
+fi
+
+# Fail closed before a full nationwide frontend build. In plain language: if
+# the Germany map data is missing, stop the deploy instead of silently showing
+# only Hamburg + Schleswig-Holstein.
+if [[ "$DEPLOY_SCOPE" == "full" &&
+  ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") &&
+  "${PUBLIC_BASEMAP_MODE:-local-sovereign}" != "remote-style" &&
+  "$PUBLIC_BASEMAP_VARIANT" == "germany" ]]; then
+  echo
+  echo ">> Nationwide Germany Basemap Pre-Build Guard:"
+  for germany_style in map-style/style-germany.json map-style/style-germany-dark.json; do
+    [[ -s "$germany_style" && ! -L "$germany_style" ]] || {
+      echo "ERROR: Required nationwide Germany style is missing or unsafe: $germany_style" >&2
+      exit 1
+    }
+  done
+  GERMANY_BASEMAP_DIR="build/basemap"
+  # Exact-commit production releases intentionally receive build/basemap as a
+  # prevalidated symlink to the persistent, root-owned artifact directory.
+  # Follow that directory link, then constrain every Germany alias below its
+  # resolved root. Rejecting the directory symlink here would break the real
+  # production deploy path even though the deploy helper has already vetted it.
+  [[ -d "$GERMANY_BASEMAP_DIR" ]] || {
+    echo "ERROR: Nationwide Germany basemap artifact directory is missing: $GERMANY_BASEMAP_DIR" >&2
+    exit 1
+  }
+  GERMANY_BASEMAP_REAL="$(realpath -e "$GERMANY_BASEMAP_DIR")" || {
+    echo "ERROR: Cannot resolve nationwide Germany basemap artifact directory." >&2
+    exit 1
+  }
+  for germany_alias in basemap-germany.pmtiles basemap-germany.meta.json; do
+    germany_path="$GERMANY_BASEMAP_DIR/$germany_alias"
+    [[ -e "$germany_path" || -L "$germany_path" ]] || {
+      echo "ERROR: Required nationwide Germany basemap alias is missing: $germany_path" >&2
+      exit 1
+    }
+    germany_target="$(realpath -e "$germany_path")" || {
+      echo "ERROR: Required nationwide Germany basemap alias is broken: $germany_path" >&2
+      exit 1
+    }
+    case "$germany_target" in
+      "$GERMANY_BASEMAP_REAL"/*) ;;
+      *)
+        echo "ERROR: Nationwide Germany basemap alias escapes the canonical artifact root: $germany_path" >&2
+        exit 1
+        ;;
+    esac
+    [[ -f "$germany_target" && -s "$germany_target" ]] || {
+      echo "ERROR: Nationwide Germany basemap alias does not resolve to a non-empty regular file: $germany_path" >&2
+      exit 1
+    }
+  done
+  echo "   [✓] Nationwide Germany styles and PMTiles aliases are ready."
+fi
+
 # 6b. Frontend Build
 
 # Returns the 'version' string from a local version.json, or empty on any error.
@@ -1162,6 +1241,49 @@ _read_version_json() {
   local json_file="$1"
   python3 "$REPO_DIR/scripts/lib/parse-version-json.py" "$json_file" 2> /dev/null |
     head -n1 || true
+}
+
+_read_basemap_build_identity() {
+  local json_file="$1"
+  python3 - "$json_file" << 'PY_BASEMAP_BUILD_IDENTITY'
+import json
+import pathlib
+import sys
+
+path = pathlib.Path(sys.argv[1])
+try:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError):
+    raise SystemExit(1)
+
+if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+    raise SystemExit(1)
+mode = payload.get("mode")
+variant = payload.get("variant", "")
+if not isinstance(mode, str) or not isinstance(variant, str):
+    raise SystemExit(1)
+print(f"{mode}\t{variant}")
+PY_BASEMAP_BUILD_IDENTITY
+}
+
+_basemap_build_matches_requested_contract() {
+  local json_file="$1"
+  local expected_mode="${PUBLIC_BASEMAP_MODE:-local-sovereign}"
+  local expected_variant=""
+  local identity actual_mode actual_variant
+
+  if [[ "$expected_mode" == "local-sovereign" ]]; then
+    expected_variant="${PUBLIC_BASEMAP_VARIANT:-germany}"
+  fi
+
+  identity="$(_read_basemap_build_identity "$json_file")" || return 1
+  IFS=$'\t' read -r actual_mode actual_variant <<< "$identity"
+  [[ "$actual_mode" == "$expected_mode" ]] || return 1
+  if [[ "$expected_mode" == "local-sovereign" ]]; then
+    [[ "$actual_variant" == "$expected_variant" ]]
+  else
+    [[ -z "$actual_variant" ]]
+  fi
 }
 
 if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]]; then
@@ -1187,8 +1309,16 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
           _stale_hint="version stale ($_bv_no != $CURRENT_SHORT_SHA)"
         fi
       fi
+      if [[ -z "$_stale_hint" ]]; then
+        _bi_no="apps/web/build/_app/basemap-build.json"
+        if [[ ! -f "$_bi_no" ]]; then
+          _stale_hint="basemap build identity missing"
+        elif ! _basemap_build_matches_requested_contract "$_bi_no"; then
+          _stale_hint="basemap contract mismatch"
+        fi
+      fi
       if [[ -n "$_stale_hint" ]]; then
-        echo "WARNING: frontend build skipped by --no-build-web; stale version.json may fail guards. ($_stale_hint)"
+        echo "WARNING: frontend build skipped by --no-build-web; existing artifact may fail guards. ($_stale_hint)"
       fi
     fi
   else
@@ -1210,6 +1340,17 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
           NEEDS_WEB_BUILD=1
           WEB_MSG="Auto: version stale ($_bv != $CURRENT_SHORT_SHA)"
         fi
+      fi
+    fi
+
+    if [[ "$NEEDS_WEB_BUILD" == "0" && "$REQUIRE_FRONTEND" == "1" ]]; then
+      _bi="apps/web/build/_app/basemap-build.json"
+      if [[ ! -f "$_bi" ]]; then
+        NEEDS_WEB_BUILD=1
+        WEB_MSG="Auto: basemap build identity missing"
+      elif ! _basemap_build_matches_requested_contract "$_bi"; then
+        NEEDS_WEB_BUILD=1
+        WEB_MSG="Auto: basemap contract mismatch"
       fi
     fi
   fi
@@ -1243,7 +1384,7 @@ if [[ -d "apps/web" && ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") ]
         echo "   Installing dependencies..."
         pnpm -C apps/web install --frozen-lockfile
       fi
-      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
+      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE}); variant=${PUBLIC_BASEMAP_VARIANT:-germany} (${BASEMAP_VARIANT_SOURCE})"
       echo "   Building..."
       pnpm -C apps/web build
     fi
@@ -1258,7 +1399,9 @@ fi
 # In sovereign mode the bundle must not reference CARTO/remote basemaps and
 # must reference the local route. CSP stays hard; this catches build leaks early.
 # This ensures that even if an existing bundle is reused, it is verified.
-if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
+if [[ ("$REQUIRE_FRONTEND" == "1" || "$BUILD_WEB" == "force") &&
+  -d "apps/web/build" &&
+  "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]]; then
   WEB_IMMUTABLE_DIR="apps/web/build/_app/immutable"
   echo
   echo ">> Verifying sovereign frontend build (no remote basemap leaks)..."
@@ -1288,10 +1431,17 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
   VERIFY_RESULT=$(verify_bundle)
   CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
   LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+  BASEMAP_CONTRACT_MATCH=0
+  if _basemap_build_matches_requested_contract "apps/web/build/_app/basemap-build.json"; then
+    BASEMAP_CONTRACT_MATCH=1
+  fi
 
-  # Determine if verification failed (either CARTO leak OR missing local-basemap)
+  # Determine if verification failed: no remote leak, local route present, and
+  # the immutable build identity must match the requested sovereign variant.
   VERIFICATION_FAILED=0
-  if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+  if [[ "$CARTO_LEAK_FOUND" == "1" ]] ||
+    [[ "$LOCAL_BASEMAP_FOUND" == "0" ]] ||
+    [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
     VERIFICATION_FAILED=1
   fi
 
@@ -1304,6 +1454,9 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
     if [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
       echo "         - Missing local-basemap route"
     fi
+    if [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
+      echo "         - Basemap build identity does not match requested variant ${PUBLIC_BASEMAP_VARIANT:-germany}"
+    fi
     echo "         Forcing rebuild to ensure sovereignty..."
     NEEDS_WEB_BUILD=1
 
@@ -1312,7 +1465,7 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
         echo "   Installing dependencies..."
         pnpm -C apps/web install --frozen-lockfile
       fi
-      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE})"
+      echo "   Frontend basemap mode: ${PUBLIC_BASEMAP_MODE:-<web app default>} (${BASEMAP_MODE_SOURCE}); variant=${PUBLIC_BASEMAP_VARIANT:-germany} (${BASEMAP_VARIANT_SOURCE})"
       echo "   Building..."
       pnpm -C apps/web build
 
@@ -1321,8 +1474,14 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
       VERIFY_RESULT=$(verify_bundle)
       CARTO_LEAK_FOUND="${VERIFY_RESULT%%:*}"
       LOCAL_BASEMAP_FOUND="${VERIFY_RESULT##*:}"
+      BASEMAP_CONTRACT_MATCH=0
+      if _basemap_build_matches_requested_contract "apps/web/build/_app/basemap-build.json"; then
+        BASEMAP_CONTRACT_MATCH=1
+      fi
       VERIFICATION_FAILED=0
-      if [[ "$CARTO_LEAK_FOUND" == "1" ]] || [[ "$LOCAL_BASEMAP_FOUND" == "0" ]]; then
+      if [[ "$CARTO_LEAK_FOUND" == "1" ]] ||
+        [[ "$LOCAL_BASEMAP_FOUND" == "0" ]] ||
+        [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
         VERIFICATION_FAILED=1
       fi
     else
@@ -1341,71 +1500,77 @@ if [[ -d "apps/web/build" && "${PUBLIC_BASEMAP_MODE:-}" == "local-sovereign" ]];
       echo "ERROR: Frontend build is in local-sovereign mode but contains no '/local-basemap' references."
       echo "       The sovereign basemap route appears to be missing from the bundle."
     fi
+    if [[ "$BASEMAP_CONTRACT_MATCH" == "0" ]]; then
+      echo "ERROR: Frontend basemap build identity does not match requested local-sovereign variant ${PUBLIC_BASEMAP_VARIANT:-germany}."
+      echo "       Refusing to reuse a stale regional or otherwise mismatched bundle."
+    fi
     exit 1
   fi
 
-  echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present."
+  echo "[✓] Sovereign frontend build verified: no remote basemap references; local-basemap present; build identity matches variant ${PUBLIC_BASEMAP_VARIANT:-germany}."
 fi
 
 if [[ "$DEPLOY_SCOPE" == "full" ]]; then
 
-  # 6c. Regional Basemap Artifact Guard (best effort)
+  # 6c. Regional Basemap Artifact Guard (explicit rollback only, best effort)
   # Each source referenced by map-style/style.json must exist independently.
   BASEMAP_DIR="build/basemap"
   BASEMAP_VERSION="0.1.0"
-  echo
-  echo ">> Regional Basemap Artifact Guard:"
+  if [[ "${PUBLIC_BASEMAP_MODE:-local-sovereign}" != "remote-style" && "${PUBLIC_BASEMAP_VARIANT:-germany}" == "regional" ]]; then
+    echo
+    echo ">> Regional Basemap Artifact Guard (explicit rollback):"
 
-  ensure_regional_basemap() {
-    local region="$1"
-    local build_script="$2"
-    local versioned_pmtiles="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.pmtiles"
-    local versioned_meta="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.meta.json"
-    local alias_pmtiles="$BASEMAP_DIR/basemap-${region}.pmtiles"
-    local alias_meta="$BASEMAP_DIR/basemap-${region}.meta.json"
+    ensure_regional_basemap() {
+      local region="$1"
+      local build_script="$2"
+      local versioned_pmtiles="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.pmtiles"
+      local versioned_meta="$BASEMAP_DIR/basemap-${region}-v${BASEMAP_VERSION}.meta.json"
+      local alias_pmtiles="$BASEMAP_DIR/basemap-${region}.pmtiles"
+      local alias_meta="$BASEMAP_DIR/basemap-${region}.meta.json"
 
-    if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
-      echo "   [!] ${region}: versioned artifact missing; attempting best-effort build."
-      if [[ ! -x "$build_script" ]]; then
-        echo "   [X] WARNING: ${region}: build script missing or not executable: ${build_script}"
+      if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
+        echo "   [!] ${region}: versioned artifact missing; attempting best-effort build."
+        if [[ ! -x "$build_script" ]]; then
+          echo "   [X] WARNING: ${region}: build script missing or not executable: ${build_script}"
+          return 1
+        fi
+        if ! bash "$build_script"; then
+          echo "   [X] WARNING: ${region}: PMTiles build failed."
+          return 1
+        fi
+      fi
+
+      if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
+        echo "   [X] WARNING: ${region}: build completed without both versioned files."
         return 1
       fi
-      if ! bash "$build_script"; then
-        echo "   [X] WARNING: ${region}: PMTiles build failed."
+
+      if ! bash scripts/basemap/publish-basemap.sh \
+        "$versioned_pmtiles" "$versioned_meta" "$BASEMAP_DIR"; then
+        echo "   [X] WARNING: ${region}: atomic alias publication failed."
         return 1
       fi
+
+      if [[ ! -e "$alias_pmtiles" || ! -e "$alias_meta" ]]; then
+        echo "   [X] WARNING: ${region}: stable PMTiles/meta aliases are missing after publication."
+        return 1
+      fi
+
+      echo "   [✓] ${region}: versioned artifact and stable aliases ready."
+    }
+
+    REGIONAL_BASEMAP_FAILURES=0
+    ensure_regional_basemap "hamburg" \
+      "scripts/basemap/build-hamburg-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
+    ensure_regional_basemap "schleswig-holstein" \
+      "scripts/basemap/build-schleswig-holstein-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
+
+    if ((REGIONAL_BASEMAP_FAILURES > 0)); then
+      echo "   [X] WARNING: ${REGIONAL_BASEMAP_FAILURES} regional basemap artifact set(s) are incomplete."
+      echo "       Continuing because this explicit rollback guard remains best effort."
+    else
+      echo "   [✓] All regional PMTiles sources required by the rollback style are ready."
     fi
-
-    if [[ ! -s "$versioned_pmtiles" || ! -s "$versioned_meta" ]]; then
-      echo "   [X] WARNING: ${region}: build completed without both versioned files."
-      return 1
-    fi
-
-    if ! bash scripts/basemap/publish-basemap.sh \
-      "$versioned_pmtiles" "$versioned_meta" "$BASEMAP_DIR"; then
-      echo "   [X] WARNING: ${region}: atomic alias publication failed."
-      return 1
-    fi
-
-    if [[ ! -e "$alias_pmtiles" || ! -e "$alias_meta" ]]; then
-      echo "   [X] WARNING: ${region}: stable PMTiles/meta aliases are missing after publication."
-      return 1
-    fi
-
-    echo "   [✓] ${region}: versioned artifact and stable aliases ready."
-  }
-
-  REGIONAL_BASEMAP_FAILURES=0
-  ensure_regional_basemap "hamburg" \
-    "scripts/basemap/build-hamburg-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
-  ensure_regional_basemap "schleswig-holstein" \
-    "scripts/basemap/build-schleswig-holstein-pmtiles.sh" || REGIONAL_BASEMAP_FAILURES=$((REGIONAL_BASEMAP_FAILURES + 1))
-
-  if ((REGIONAL_BASEMAP_FAILURES > 0)); then
-    echo "   [X] WARNING: ${REGIONAL_BASEMAP_FAILURES} regional basemap artifact set(s) are incomplete."
-    echo "       Continuing because this guard remains best effort; local-sovereign mode may show gaps."
-  else
-    echo "   [✓] All regional PMTiles sources required by the sovereign style are ready."
   fi
   # 6c2. Basemap Glyphs Guard (best effort)
   # Try to ensure the local glyphs (fonts) exist for offline rendering

@@ -122,7 +122,7 @@ test.describe("Farbschema", () => {
     await expect(themeRoot(page)).toHaveAttribute("data-color-scheme", "dark");
     await expect
       .poll(() =>
-        basemapStyleUrls.some((url) => url.includes("style-dark.json")),
+        basemapStyleUrls.some((url) => url.includes("style-germany-dark.json")),
       )
       .toBe(true);
     await expect(
@@ -188,14 +188,17 @@ test.describe("Farbschema", () => {
       releaseDarkSource = resolve;
     });
 
-    await page.route("**/local-basemap/style-dark.json*", async (route) => {
-      markDarkRequested();
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: darkStyleBody,
-      });
-    });
+    await page.route(
+      "**/local-basemap/style-germany-dark.json*",
+      async (route) => {
+        markDarkRequested();
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: darkStyleBody,
+        });
+      },
+    );
     await page.route("**/test-dark-delayed-source.geojson", async (route) => {
       markDarkSourceRequested();
       await darkSourceRelease;
@@ -209,7 +212,7 @@ test.describe("Farbschema", () => {
         // A full style swap is expected to abort this obsolete source request.
       }
     });
-    await page.route("**/local-basemap/style.json*", async (route) => {
+    await page.route("**/local-basemap/style-germany.json*", async (route) => {
       markLightRequested();
       await route.fulfill({
         status: 200,
@@ -287,7 +290,7 @@ test.describe("Farbschema", () => {
     });
 
     const lightRequestsBeforeRapidSwitch = styleRequests.filter((url) =>
-      /\/style\.json(?:\?|$)/.test(url),
+      /\/style-germany\.json(?:\?|$)/.test(url),
     ).length;
     await page.evaluate(async () => {
       const root = document.documentElement;
@@ -300,13 +303,16 @@ test.describe("Farbschema", () => {
       root.dataset.colorScheme = "dark";
     });
     await expect
-      .poll(() => styleRequests.some((url) => url.includes("style-dark.json")))
+      .poll(() =>
+        styleRequests.some((url) => url.includes("style-germany-dark.json")),
+      )
       .toBe(true);
     await expect
       .poll(
         () =>
-          styleRequests.filter((url) => /\/style\.json(?:\?|$)/.test(url))
-            .length,
+          styleRequests.filter((url) =>
+            /\/style-germany\.json(?:\?|$)/.test(url),
+          ).length,
       )
       .toBeGreaterThan(lightRequestsBeforeRapidSwitch);
     await page.waitForFunction(() => {
@@ -341,7 +347,7 @@ test.describe("Farbschema", () => {
     expect(afterDark.pitch).toBeCloseTo(before.pitch, 7);
 
     const lightRequestsBeforeSwitchBack = styleRequests.filter((url) =>
-      /\/style\.json(?:\?|$)/.test(url),
+      /\/style-germany\.json(?:\?|$)/.test(url),
     ).length;
     await page.evaluate(() => {
       document.documentElement.dataset.colorScheme = "light";
@@ -349,8 +355,9 @@ test.describe("Farbschema", () => {
     await expect
       .poll(
         () =>
-          styleRequests.filter((url) => /\/style\.json(?:\?|$)/.test(url))
-            .length,
+          styleRequests.filter((url) =>
+            /\/style-germany\.json(?:\?|$)/.test(url),
+          ).length,
       )
       .toBeGreaterThan(lightRequestsBeforeSwitchBack);
     await page.waitForFunction(() => {

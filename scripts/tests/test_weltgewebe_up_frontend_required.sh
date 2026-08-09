@@ -54,7 +54,11 @@ new_repo() {
     git config user.name "Weltgewebe Test"
     git config user.email "tests@weltgewebe.local"
 
-    mkdir -p infra/compose scripts apps/web
+    mkdir -p infra/compose scripts apps/web map-style build/basemap
+    printf '{}\n' > map-style/style-germany.json
+    printf '{}\n' > map-style/style-germany-dark.json
+    printf 'pmtiles\n' > build/basemap/basemap-germany.pmtiles
+    printf '{}\n' > build/basemap/basemap-germany.meta.json
     cp "$SCRIPT_SOURCE" scripts/weltgewebe-up
     chmod +x scripts/weltgewebe-up
 
@@ -251,7 +255,36 @@ out_not_required_missing_tool="$(run_up "$repo_not_required_missing_tool" 0 0 2>
 set -e
 assert_contains "$out_not_required_missing_tool" "WARNING: Frontend artifact missing but frontend delivery is not required for this deploy run."
 assert_not_contains "$out_not_required_missing_tool" "ERROR: Frontend build required for DEPLOY_FRONTEND_MODE"
+assert_not_contains "$out_not_required_missing_tool" "Nationwide Germany Basemap Pre-Build Guard"
 
-echo "PASS: REQUIRE_FRONTEND=0 + missing node/pnpm only warns and continues"
+echo "PASS: REQUIRE_FRONTEND=0 + missing node/pnpm skips Germany frontend prerequisites and continues"
+
+# 4) An existing bundle from the explicit regional rollback must never be reused
+#    when the normal Germany contract is requested on a later run of the same
+#    commit. The basemap build identity, not just version.json/local route text,
+#    decides whether the artifact is reusable.
+repo_regional_stale="$(new_repo regional-stale)"
+mkdir -p \
+  "$repo_regional_stale/map-style" \
+  "$repo_regional_stale/build/basemap" \
+  "$repo_regional_stale/apps/web/build/_app/immutable"
+printf '{}\n' > "$repo_regional_stale/map-style/style-germany.json"
+printf '{}\n' > "$repo_regional_stale/map-style/style-germany-dark.json"
+printf 'pmtiles\n' > "$repo_regional_stale/build/basemap/basemap-germany.pmtiles"
+printf '{}\n' > "$repo_regional_stale/build/basemap/basemap-germany.meta.json"
+printf '<!doctype html>\n' > "$repo_regional_stale/apps/web/build/index.html"
+printf 'local-basemap\n' > "$repo_regional_stale/apps/web/build/_app/immutable/app.js"
+cat > "$repo_regional_stale/apps/web/build/_app/basemap-build.json" << 'EOF'
+{"schema_version":1,"mode":"local-sovereign","variant":"regional"}
+EOF
+
+set +e
+out_regional_stale="$(run_up "$repo_regional_stale" 1 1 2>&1)"
+rc_regional_stale=$?
+set -e
+[[ "$rc_regional_stale" -ne 0 ]] || fail "mocked build should still fail after leaving the stale regional identity unchanged"
+assert_contains "$out_regional_stale" ">> Frontend Build (Auto: basemap contract mismatch)"
+
+echo "PASS: normal Germany run rebuilds instead of reusing same-commit regional rollback bundle"
 
 echo "test_weltgewebe_up_frontend_required: OK"

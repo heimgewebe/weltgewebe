@@ -79,7 +79,7 @@ test.describe("resolveBasemapStyle", () => {
     };
 
     expect(resolveBasemapStyle(config, "light")).toMatch(
-      /^\/local-basemap\/style\.json\?v=0\.4\.0&build=[^&]+$/,
+      /^\/local-basemap\/style-germany\.json\?v=0\.4\.0&build=[^&]+$/,
     );
   });
 
@@ -91,7 +91,7 @@ test.describe("resolveBasemapStyle", () => {
     };
 
     expect(resolveBasemapStyle(config, "dark")).toMatch(
-      /^\/local-basemap\/style-dark\.json\?v=0\.4\.0&build=[^&]+$/,
+      /^\/local-basemap\/style-germany-dark\.json\?v=0\.4\.0&build=[^&]+$/,
     );
   });
 });
