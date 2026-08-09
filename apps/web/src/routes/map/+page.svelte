@@ -32,7 +32,7 @@
     lastCreatedNodeId,
   } from "$lib/stores/uiView";
   import {
-    activeFilters,
+    mapContentFilters,
     isFilterOpen,
     closeFilter,
   } from "$lib/stores/filterStore";
@@ -53,15 +53,18 @@
   } from "$lib/map/urlState";
   import {
     deriveMarkerCounts,
-    deriveAvailableFilterTypes,
-    deriveFilteredMarkers,
     deriveSearchResults,
     deriveSearchMatchIds,
     deriveWeaveEdges,
     deriveLineEdges,
     selectMapEntity,
   } from "$lib/stores/mapView";
+  import {
+    evaluateMapContentFilters,
+    getMapContentType,
+  } from "$lib/map/contentFilters";
   import { get } from "svelte/store";
+  import { knottingTopicTag } from "$lib/knottingTopics";
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
   import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
@@ -120,8 +123,13 @@
   $: diagnostics = scene.diagnostics;
   $: markersData = scene.entities;
   $: markerCounts = deriveMarkerCounts(markersData);
-  $: availableTypes = deriveAvailableFilterTypes(markersData);
-  $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
+  $: filterEvaluation = evaluateMapContentFilters(
+    markersData,
+    $mapContentFilters,
+  );
+  $: availableTypes = filterEvaluation.contentTypes;
+  $: availableTopics = filterEvaluation.topics;
+  $: filteredMarkersData = filterEvaluation.entities;
   $: showNodes = $view.showNodes;
   // T007: node search comes from the authorized T006 server contract. Public
   // non-node structures (Garnrollen and Webgemeindezentren) are searched only
@@ -152,6 +160,7 @@
   function scheduleNodeSearch(
     query: string,
     kinds: string[],
+    tags: string[],
     enabled: boolean,
     open: boolean,
   ) {
@@ -169,6 +178,7 @@
           await import("$lib/api/search");
         const response = await searchNodes(normalizedQuery, {
           kinds,
+          tags,
           signal: controller.signal,
         });
         if (controller.signal.aborted || sequence !== nodeSearchSequence)
@@ -189,25 +199,39 @@
   }
 
   onDestroy(resetNodeSearch);
-  $: activeSearchKinds = Array.from($activeFilters).filter(
-    (filter) => filter !== "Garnrolle",
+  $: nodeContentTypes = new Set(
+    markersData
+      .filter((marker) => marker.type === "node")
+      .map(getMapContentType),
+  );
+  $: activeSearchKinds = Array.from(
+    $mapContentFilters.contentTypes,
+  ).filter((filter) => nodeContentTypes.has(filter));
+  $: activeSearchTags = Array.from($mapContentFilters.topics).map(
+    knottingTopicTag,
   );
   $: nodeSearchEnabled =
-    $activeFilters.size === 0 || activeSearchKinds.length > 0;
+    $mapContentFilters.contentTypes.size === 0 || activeSearchKinds.length > 0;
   $: scheduleNodeSearch(
     $searchQuery,
     activeSearchKinds,
+    activeSearchTags,
     nodeSearchEnabled,
     $isSearchOpen,
   );
-  $: searchBaseMarkers =
-    $activeFilters.size === 0 ? markersData : filteredMarkersData;
   $: localPublicStructureResults = deriveSearchResults(
-    searchBaseMarkers.filter((item) => item.type !== "node"),
+    filteredMarkersData.filter((item) => item.type !== "node"),
     $searchQuery,
     $isSearchOpen,
   );
-  $: filteredResults = [...nodeSearchItems, ...localPublicStructureResults];
+  $: filteredNodeSearchItems = evaluateMapContentFilters(
+    nodeSearchItems,
+    $mapContentFilters,
+  ).entities;
+  $: filteredResults = [
+    ...filteredNodeSearchItems,
+    ...localPublicStructureResults,
+  ];
   $: searchMatchIds = deriveSearchMatchIds(filteredResults);
   // Fachlich absichtliche Asymmetrie: Der sichtbare Zielkörper trägt sein
   // Gewebe auch dann, wenn die Quelle ausgefiltert ist. Eine Linie benötigt
@@ -1139,7 +1163,10 @@
       if (shouldExposeTestMap) {
         (window as any).__TEST_MAP__ = map;
         (window as any).__TEST_SET_ACTIVE_FILTERS__ = (types: string[]) => {
-          activeFilters.set(new Set(types));
+          mapContentFilters.set({
+            contentTypes: new Set(types),
+            topics: new Set(),
+          });
         };
         (window as any).__TEST_REFRESH_EDGE_PROJECTION__ =
           refreshEdgeProjection;
@@ -1258,7 +1285,13 @@
     indicators={searchDirectionIndicators}
     on:select={handleSearchDirectionSelect}
   />
-  <FilterOverlay {availableTypes} filteredResults={filteredMarkersData} />
+  <FilterOverlay
+    {availableTypes}
+    {availableTopics}
+    resultCount={filteredMarkersData.length}
+    totalCount={filterEvaluation.totalCount}
+    allTopicsCount={filterEvaluation.allTopicsCount}
+  />
   <ToolFan />
   {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
     <div class="debug-badge" data-testid="debug-badge">

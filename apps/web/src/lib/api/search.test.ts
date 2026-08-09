@@ -50,6 +50,21 @@ describe("searchNodes", () => {
     expect(init).toMatchObject({ credentials: "include" });
   });
 
+  it("passes stable topic tags to the server before result limiting", async () => {
+    const fetcher = vi.fn<typeof fetch>(async () => searchResponse());
+
+    await searchNodes("Fahrrad", {
+      tags: ["thema:natur", " thema:bildung ", "thema:natur"],
+      apiBase: "https://api.example.test",
+      fetcher: fetcher as typeof fetch,
+    });
+
+    const [url] = fetcher.mock.calls[0];
+    expect(String(url)).toBe(
+      "https://api.example.test/api/search?q=Fahrrad&limit=10&tags=thema%3Abildung%2Cthema%3Anatur",
+    );
+  });
+
   it("bounds overlong queries before they reach the server contract", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => searchResponse());
 

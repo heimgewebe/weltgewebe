@@ -9,12 +9,12 @@ import { setupUiInvariantWatcher } from "./uiInvariants";
  * uiView (this file)   | systemState, selection,        | —
  *                      | kompositionDraft, contextPanel  |
  * searchStore          | isSearchOpen, searchQuery       | —
- * filterStore          | isFilterOpen, activeFilters     | —
+ * filterStore          | isFilterOpen, mapContentFilters | —
  * scene.ts             | MapSceneModel (entities, edges, | route data
  *                      | loadState, diagnostics)         |
  * mapView              | pure presentation derivations   | (args only:
- *                      | (deriveFilteredMarkers, search, | scene, markers,
- *                      | edges, filter types) +          | filters, query);
+ *                      | (search, edges) +               | scene, markers,
+ * map/contentFilters   | filter + topic evaluation       | filters, query);
  *                      | selectMapEntity() -> enterFokus | uiView (effect)
  * +page.svelte         | request-scoped scene, map       | all stores +
  *                      | instance, overlay lifecycle,    | local scene
