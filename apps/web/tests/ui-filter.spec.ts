@@ -20,6 +20,7 @@ test.describe("Sicht mode", () => {
               kind: "Event",
               location: { lat: 53.5, lon: 10.0 },
               summary: "A test event node.",
+              tags: ["thema:natur"],
             },
             {
               id: "node-2",
@@ -27,6 +28,7 @@ test.describe("Sicht mode", () => {
               kind: "Place",
               location: { lat: 53.6, lon: 10.1 },
               summary: "A test place node.",
+              tags: ["thema:kunst"],
             },
           ]),
         ),
@@ -49,7 +51,7 @@ test.describe("Sicht mode", () => {
           kind: "Event",
           location: { lat: 53.5, lon: 10.0 },
           summary: "A test event node.",
-          tags: [],
+          tags: ["thema:natur"],
           created_at: "2026-07-23T00:00:00Z",
           updated_at: "2026-07-23T00:00:00Z",
         },
@@ -59,7 +61,7 @@ test.describe("Sicht mode", () => {
           kind: "Place",
           location: { lat: 53.6, lon: 10.1 },
           summary: "A test place node.",
-          tags: [],
+          tags: ["thema:kunst"],
           created_at: "2026-07-23T00:00:00Z",
           updated_at: "2026-07-23T00:00:00Z",
         },
@@ -310,5 +312,46 @@ test.describe("Sicht mode", () => {
     await expect(
       page.getByRole("button", { name: "Alles wieder zeigen" }),
     ).toBeVisible();
+  });
+
+  test("topics use loaded canonical tags, OR semantics, counts and Alle Themen", async ({
+    page,
+  }) => {
+    await activateToolFanAction(page, "sight");
+    const sichtOverlay = page.getByTestId("filter-overlay");
+    const markerSelector = ".map-marker, .marker-account";
+
+    await expect(
+      sichtOverlay.locator("label.filter-item", { hasText: "Natur" }),
+    ).toContainText("1");
+    await expect(
+      sichtOverlay.locator("label.filter-item", { hasText: "Kunst" }),
+    ).toContainText("1");
+
+    await sichtOverlay
+      .locator("label.filter-item", { hasText: "Natur" })
+      .click();
+    await expect(page.locator(markerSelector)).toHaveCount(1);
+    await expect(
+      sichtOverlay.getByText("1 Auswahl aktiv · 1 von 3 Elementen sichtbar"),
+    ).toBeVisible();
+
+    await sichtOverlay
+      .locator("label.filter-item", { hasText: "Kunst" })
+      .click();
+    await expect(page.locator(markerSelector)).toHaveCount(2);
+    await expect(
+      sichtOverlay.getByText("2 Auswahlen aktiv · 2 von 3 Elementen sichtbar"),
+    ).toBeVisible();
+
+    const allTopics = sichtOverlay.getByRole("button", {
+      name: /Alle Themen/,
+    });
+    await allTopics.click();
+    await expect(allTopics).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(markerSelector)).toHaveCount(3);
+    await expect(
+      page.getByRole("button", { name: "Alles wieder zeigen" }),
+    ).toHaveCount(0);
   });
 });

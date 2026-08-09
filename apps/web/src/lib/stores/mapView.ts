@@ -9,10 +9,9 @@
  *
  * This module decouples three concerns out of the route:
  *  - Auswahlzustand (selection)   -> `selectMapEntity()` delegates to uiView.
- *  - Markerbeschreibung (markers) -> `deriveFilteredMarkers`,
- *                                    `deriveAvailableFilterTypes`,
- *                                    `deriveSearchMatchIds`, `deriveWeaveEdges`,
- *                                    `deriveLineEdges`.
+ *  - Markerbeschreibung (markers) -> `deriveSearchMatchIds`,
+ *                                    `deriveWeaveEdges`, `deriveLineEdges`.
+ *  - Kartenfilter + Topic-Facetten -> `lib/map/contentFilters.ts`.
  *  - Paneldaten (panel feed)      -> the selected entity travels via uiView's
  *                                    `selection.data`; this module only feeds it
  *                                    through `toMapSelection` / `selectMapEntity`.
@@ -63,43 +62,6 @@ export function deriveMarkerCounts(markers: MapEntityViewModel[]): {
       (entity) => entity.type === "webgemeindezentrum",
     ).length,
   };
-}
-
-/** The filter bucket an entity belongs to (node kind, or "Garnrolle"). */
-export function getFilterTypeKey(m: MapEntityViewModel): string {
-  if (m.type === "node") return m.kind || "Knoten";
-  if (m.type === "webgemeindezentrum") return "Webgemeindezentrum";
-  return "Garnrolle";
-}
-
-export type FilterType = { id: string; label: string; count: number };
-
-/** Filterable type buckets with counts, sorted by label. */
-export function deriveAvailableFilterTypes(
-  markers: MapEntityViewModel[],
-): FilterType[] {
-  const counts = new Map<string, number>();
-  for (const m of markers) {
-    const typeKey = getFilterTypeKey(m);
-    counts.set(typeKey, (counts.get(typeKey) || 0) + 1);
-  }
-  return Array.from(counts.entries())
-    .map(([id, count]) => ({
-      id,
-      label: id.charAt(0).toUpperCase() + id.slice(1),
-      count,
-    }))
-    .sort((a, b) => a.label.localeCompare(b.label));
-}
-
-/** Markers visible under the active filter set. */
-export function deriveFilteredMarkers(
-  markers: MapEntityViewModel[],
-  activeFilters: Set<string>,
-): MapEntityViewModel[] {
-  return activeFilters.size === 0
-    ? markers
-    : markers.filter((m) => activeFilters.has(getFilterTypeKey(m)));
 }
 
 /**

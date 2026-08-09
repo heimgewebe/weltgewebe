@@ -10,16 +10,18 @@ import type {
 } from "$lib/map/types";
 import {
   deriveMarkerCounts,
-  deriveAvailableFilterTypes,
-  deriveFilteredMarkers,
   deriveSearchResults,
   deriveSearchMatchIds,
   deriveWeaveEdges,
   deriveLineEdges,
-  getFilterTypeKey,
   toMapSelection,
   selectMapEntity,
 } from "./mapView";
+import {
+  createEmptyMapContentFilters,
+  evaluateMapContentFilters,
+  getMapContentType,
+} from "$lib/map/contentFilters";
 import { selection, systemState, leaveToNavigation } from "./uiView";
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
@@ -119,7 +121,10 @@ describe("mapView presentation helpers", () => {
       accounts: 0,
       webgemeindezentren: 1,
     });
-    expect(deriveAvailableFilterTypes(scene.entities)).toEqual([
+    expect(
+      evaluateMapContentFilters(scene.entities, createEmptyMapContentFilters())
+        .contentTypes,
+    ).toEqual([
       {
         id: "Webgemeindezentrum",
         label: "Webgemeindezentrum",
@@ -144,7 +149,10 @@ describe("mapView presentation helpers", () => {
       [makeAccount()],
     );
 
-    expect(deriveAvailableFilterTypes(scene.entities)).toEqual([
+    expect(
+      evaluateMapContentFilters(scene.entities, createEmptyMapContentFilters())
+        .contentTypes,
+    ).toEqual([
       { id: "Garnrolle", label: "Garnrolle", count: 1 },
       { id: "werkstatt", label: "Werkstatt", count: 2 },
     ]);
@@ -153,12 +161,15 @@ describe("mapView presentation helpers", () => {
   it("filters markers by the active filter set", () => {
     const scene = sceneFrom([makeNode({ kind: "Werkstatt" })], [makeAccount()]);
 
-    expect(deriveFilteredMarkers(scene.entities, new Set())).toHaveLength(2);
+    expect(
+      evaluateMapContentFilters(scene.entities, createEmptyMapContentFilters())
+        .entities,
+    ).toHaveLength(2);
 
-    const filtered = deriveFilteredMarkers(
-      scene.entities,
-      new Set(["Garnrolle"]),
-    );
+    const filtered = evaluateMapContentFilters(scene.entities, {
+      contentTypes: new Set(["Garnrolle"]),
+      topics: new Set(),
+    }).entities;
     expect(filtered).toHaveLength(1);
     expect(filtered[0].type).toBe("garnrolle");
   });
@@ -284,10 +295,10 @@ describe("mapView presentation helpers", () => {
     );
 
     // With a filter active, the caller hands search only the visible markers.
-    const visible = deriveFilteredMarkers(
-      scene.entities,
-      new Set(["Garnrolle"]),
-    );
+    const visible = evaluateMapContentFilters(scene.entities, {
+      contentTypes: new Set(["Garnrolle"]),
+      topics: new Set(),
+    }).entities;
     const results = deriveSearchResults(visible, "findbar", true);
     expect(results).toHaveLength(1);
     expect(results[0].type).toBe("garnrolle");
@@ -316,7 +327,10 @@ describe("mapView presentation helpers", () => {
       },
     ];
 
-    const allVisible = deriveFilteredMarkers(scene.entities, new Set());
+    const allVisible = evaluateMapContentFilters(
+      scene.entities,
+      createEmptyMapContentFilters(),
+    ).entities;
     expect(deriveWeaveEdges(edges, allVisible).map((edge) => edge.id)).toEqual([
       "e1",
       "e2",
@@ -327,10 +341,10 @@ describe("mapView presentation helpers", () => {
 
     // Filtering out the Garnrolle removes the target body and therefore both
     // the Gewebekante and its strictere Linienkante.
-    const onlyNodes = deriveFilteredMarkers(
-      scene.entities,
-      new Set(["Werkstatt"]),
-    );
+    const onlyNodes = evaluateMapContentFilters(scene.entities, {
+      contentTypes: new Set(["Werkstatt"]),
+      topics: new Set(),
+    }).entities;
     expect(deriveWeaveEdges(edges, onlyNodes)).toHaveLength(0);
     expect(deriveLineEdges(edges, onlyNodes)).toHaveLength(0);
   });
@@ -354,7 +368,7 @@ describe("mapView presentation helpers", () => {
     expect(deriveLineEdges(edges, scene.entities)).toHaveLength(1);
   });
 
-  it("getFilterTypeKey distinguishes nodes, Garnrollen and Webgemeindezentren", () => {
+  it("getMapContentType distinguishes nodes, Garnrollen and Webgemeindezentren", () => {
     const nodeEntity: MapEntityViewModel = {
       type: "node",
       id: "node-1",
@@ -377,9 +391,9 @@ describe("mapView presentation helpers", () => {
     };
     const centerEntity = sceneFrom([], [], [], [makeCenter()]).entities[0];
 
-    expect(getFilterTypeKey(nodeEntity)).toBe("Werkstatt");
-    expect(getFilterTypeKey(garnrolleEntity)).toBe("Garnrolle");
-    expect(getFilterTypeKey(centerEntity)).toBe("Webgemeindezentrum");
+    expect(getMapContentType(nodeEntity)).toBe("Werkstatt");
+    expect(getMapContentType(garnrolleEntity)).toBe("Garnrolle");
+    expect(getMapContentType(centerEntity)).toBe("Webgemeindezentrum");
   });
 
   it("toMapSelection carries panel data and normalizes the type", () => {

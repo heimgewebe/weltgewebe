@@ -2,25 +2,29 @@
   import { tick } from "svelte";
   import {
     isFilterOpen,
-    activeFilters,
+    mapContentFilters,
+    activeFilterCount,
     closeFilter,
     toggleFilterType,
+    toggleFilterTopic,
+    clearTopicFilters,
     clearFilters,
   } from "$lib/stores/filterStore";
   import { contextPanelOpen } from "$lib/stores/uiView";
   import { restoreTarget } from "$lib/utils/focusManager";
-  import type { MapEntityViewModel } from "$lib/map/types";
+  import type { KnottingTopic } from "$lib/knottingTopics";
+  import type { MapFilterOption } from "$lib/map/contentFilters";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
 
-  export let availableTypes: { id: string; label: string; count: number }[] =
-    [];
-  export let filteredResults: MapEntityViewModel[] = [];
+  export let availableTypes: MapFilterOption[] = [];
+  export let availableTopics: MapFilterOption<KnottingTopic>[] = [];
+  export let resultCount = 0;
+  export let totalCount = 0;
+  export let allTopicsCount = 0;
 
   let overlayEl: HTMLDivElement;
   let closeBtnEl: HTMLButtonElement;
   let wasOpen = false;
-
-  $: activeCount = $activeFilters.size;
 
   $: {
     if ($isFilterOpen) {
@@ -76,25 +80,25 @@
     </div>
 
     <p class="filter-summary" aria-live="polite">
-      {activeCount === 0
-        ? `Alle ${filteredResults.length} Elemente auf der Karte`
-        : activeCount === 1
-          ? `1 Auswahl aktiv · ${filteredResults.length} Elemente auf der Karte`
-          : `${activeCount} Auswahlen aktiv · ${filteredResults.length} Elemente auf der Karte`}
+      {$activeFilterCount === 0
+        ? `Alle ${totalCount} Elemente auf der Karte`
+        : $activeFilterCount === 1
+          ? `1 Auswahl aktiv · ${resultCount} von ${totalCount} Elementen sichtbar`
+          : `${$activeFilterCount} Auswahlen aktiv · ${resultCount} von ${totalCount} Elementen sichtbar`}
     </p>
 
     {#if availableTypes.length > 0}
       <fieldset class="filter-group">
-        <legend>Was soll auf der Karte erscheinen?</legend>
+        <legend>Inhaltstypen</legend>
         <ul class="filter-list">
           {#each availableTypes as type}
             <li>
               <label
                 class="filter-item"
-                class:active={$activeFilters.has(type.id)}
+                class:active={$mapContentFilters.contentTypes.has(type.id)}
                 ><input
                   type="checkbox"
-                  checked={$activeFilters.has(type.id)}
+                  checked={$mapContentFilters.contentTypes.has(type.id)}
                   on:change={() => toggleFilterType(type.id)}
                 /><span class="filter-label">{filterLabel(type)}</span><span
                   class="filter-count">{type.count}</span
@@ -104,13 +108,51 @@
           {/each}
         </ul>
       </fieldset>
-    {:else}
+    {/if}
+
+    {#if availableTopics.length > 0}
+      <fieldset class="filter-group topic-group">
+        <legend>Themen</legend>
+        <p class="group-hint">Bei mehreren Themen reicht eines davon.</p>
+        <ul class="filter-list">
+          <li>
+            <button
+              type="button"
+              class="filter-item all-topics"
+              class:active={$mapContentFilters.topics.size === 0}
+              aria-pressed={$mapContentFilters.topics.size === 0}
+              on:click={clearTopicFilters}
+            >
+              <span class="filter-label">Alle Themen</span>
+              <span class="filter-count">{allTopicsCount}</span>
+            </button>
+          </li>
+          {#each availableTopics as topic}
+            <li>
+              <label
+                class="filter-item"
+                class:active={$mapContentFilters.topics.has(topic.id)}
+                ><input
+                  type="checkbox"
+                  checked={$mapContentFilters.topics.has(topic.id)}
+                  on:change={() => toggleFilterTopic(topic.id)}
+                /><span class="filter-label">{topic.label}</span><span
+                  class="filter-count">{topic.count}</span
+                ></label
+              >
+            </li>
+          {/each}
+        </ul>
+      </fieldset>
+    {/if}
+
+    {#if availableTypes.length === 0 && availableTopics.length === 0}
       <div class="no-filters" role="status">
         Keine auswählbaren Elemente vorhanden
       </div>
     {/if}
 
-    {#if activeCount > 0}
+    {#if $activeFilterCount > 0}
       <button class="clear-btn" type="button" on:click={clearFilters}
         >Alles wieder zeigen</button
       >
@@ -124,7 +166,7 @@
     top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 10px);
     right: calc(16px + env(safe-area-inset-right));
     width: min(380px, calc(100vw - 32px));
-    max-height: min(440px, calc(100dvh - 112px));
+    max-height: min(560px, calc(100dvh - 112px));
     z-index: var(--z-map-lens);
     padding: 0.9rem;
     border: 1px solid var(--panel-border-strong);
@@ -175,10 +217,20 @@
     padding: 0;
     margin: 0;
   }
+  .topic-group {
+    margin-top: 0.85rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--panel-border);
+  }
   .filter-group legend {
     margin: 0 0 0.55rem;
     color: var(--muted);
     font-size: 0.78rem;
+  }
+  .group-hint {
+    margin: -0.25rem 0 0.55rem;
+    color: var(--muted);
+    font-size: 0.72rem;
   }
   .filter-list {
     list-style: none;
@@ -189,6 +241,8 @@
     gap: 0.45rem;
   }
   .filter-item {
+    width: 100%;
+    box-sizing: border-box;
     min-height: 44px;
     padding: 0.45rem 0.6rem;
     border: 1px solid var(--panel-border);
@@ -198,6 +252,11 @@
     gap: 0.5rem;
     cursor: pointer;
     background: var(--panel-solid);
+  }
+  button.filter-item {
+    color: var(--text);
+    font: inherit;
+    text-align: left;
   }
   .filter-item.active {
     border-color: var(--accent);
