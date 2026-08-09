@@ -15,6 +15,7 @@ export interface NodeSearchResponse {
 
 export interface SearchNodesOptions {
   kinds?: string[];
+  tags?: string[];
   limit?: number;
   signal?: AbortSignal;
   fetcher?: typeof fetch;
@@ -49,6 +50,12 @@ export function normalizeSearchQuery(query: string): string {
   return Array.from(query.trim()).slice(0, MAX_SEARCH_QUERY_CHARS).join("");
 }
 
+function stableSearchFilterValues(values: readonly string[] | undefined): string[] {
+  return Array.from(
+    new Set((values ?? []).map((value) => value.trim()).filter(Boolean)),
+  ).sort();
+}
+
 export async function searchNodes(
   query: string,
   options: SearchNodesOptions = {},
@@ -62,10 +69,10 @@ export async function searchNodes(
     q: normalizedQuery,
     limit: String(options.limit ?? 10),
   });
-  const kinds = Array.from(
-    new Set((options.kinds ?? []).map((kind) => kind.trim()).filter(Boolean)),
-  ).sort();
+  const kinds = stableSearchFilterValues(options.kinds);
   if (kinds.length > 0) params.set("kinds", kinds.join(","));
+  const tags = stableSearchFilterValues(options.tags);
+  if (tags.length > 0) params.set("tags", tags.join(","));
 
   const apiBase =
     options.apiBase ?? import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";

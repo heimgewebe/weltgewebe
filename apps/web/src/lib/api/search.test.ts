@@ -32,11 +32,12 @@ function searchResponse(): Response {
 }
 
 describe("searchNodes", () => {
-  it("calls the authorized server search with credentials and stable kind filters", async () => {
+  it("calls the authorized server search with credentials and stable facet filters", async () => {
     const fetcher = vi.fn<typeof fetch>(async () => searchResponse());
 
     const response = await searchNodes("  Fahrrad Hilfe  ", {
       kinds: ["Werkstatt", "Treffpunkt", "Werkstatt"],
+      tags: ["thema:natur", "thema:kunst", "thema:natur", "  "],
       apiBase: "https://api.example.test",
       fetcher: fetcher as typeof fetch,
     });
@@ -45,7 +46,7 @@ describe("searchNodes", () => {
     expect(fetcher).toHaveBeenCalledOnce();
     const [url, init] = fetcher.mock.calls[0];
     expect(String(url)).toBe(
-      "https://api.example.test/api/search?q=Fahrrad+Hilfe&limit=10&kinds=Treffpunkt%2CWerkstatt",
+      "https://api.example.test/api/search?q=Fahrrad+Hilfe&limit=10&kinds=Treffpunkt%2CWerkstatt&tags=thema%3Akunst%2Cthema%3Anatur",
     );
     expect(init).toMatchObject({ credentials: "include" });
   });

@@ -11,6 +11,7 @@
   import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
   import FilterOverlay from "$lib/components/FilterOverlay.svelte";
   import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+  import { knottingTopicTag } from "$lib/knottingTopics";
   import {
     deriveSearchDirectionIndicators,
     resolveInitialMapCamera,
@@ -154,6 +155,7 @@
   function scheduleNodeSearch(
     query: string,
     kinds: string[],
+    tags: string[],
     enabled: boolean,
     open: boolean,
   ) {
@@ -171,6 +173,7 @@
           await import("$lib/api/search");
         const response = await searchNodes(normalizedQuery, {
           kinds,
+          tags,
           signal: controller.signal,
         });
         if (controller.signal.aborted || sequence !== nodeSearchSequence)
@@ -194,11 +197,13 @@
   $: activeSearchKinds = Array.from($filterState.contentTypes).filter(
     (filter) => filter !== "Garnrolle",
   );
+  $: activeSearchTags = Array.from($filterState.topics, knottingTopicTag);
   $: nodeSearchEnabled =
     $filterState.contentTypes.size === 0 || activeSearchKinds.length > 0;
   $: scheduleNodeSearch(
     $searchQuery,
     activeSearchKinds,
+    activeSearchTags,
     nodeSearchEnabled,
     $isSearchOpen,
   );
