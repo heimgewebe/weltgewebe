@@ -349,8 +349,10 @@ test.describe("Garnrolle marker rendering", () => {
               artworkHeight: artwork.height,
               haloWidth: haloBox.width,
               worldScale: Number.parseFloat(
-                visual.style.getPropertyValue("--map-object-scale"),
+                getComputedStyle(visual).getPropertyValue("--map-object-scale"),
               ),
+              inlineWorldScale:
+                visual.style.getPropertyValue("--map-object-scale"),
               outerIndividualScale: getComputedStyle(outerElement).scale,
               centerDelta: Math.hypot(outerCx - artworkCx, outerCy - artworkCy),
             };
@@ -405,6 +407,7 @@ test.describe("Garnrolle marker rendering", () => {
         expect(stage.outerWidth).toBeCloseTo(44, 1);
         expect(stage.outerHeight).toBeCloseTo(44, 1);
         expect(stage.outerIndividualScale).toBe("none");
+        expect(stage.inlineWorldScale).toBe("");
         expect(stage.centerDelta).toBeLessThanOrEqual(0.5);
       }
 
@@ -433,7 +436,10 @@ test.describe("Garnrolle marker rendering", () => {
       const measure = () => ({
         artworkWidth: visual.getBoundingClientRect().width,
         outerWidth: element.getBoundingClientRect().width,
-        worldScale: visual.style.getPropertyValue("--map-object-scale"),
+        worldScale: getComputedStyle(visual)
+          .getPropertyValue("--map-object-scale")
+          .trim(),
+        inlineWorldScale: visual.style.getPropertyValue("--map-object-scale"),
       });
       const before = measure();
 
@@ -455,6 +461,8 @@ test.describe("Garnrolle marker rendering", () => {
     expect(interaction.before.outerWidth).toBeCloseTo(44, 1);
     expect(interaction.selected.outerWidth).toBeCloseTo(44, 1);
     expect(interaction.selected.worldScale).toBe(interaction.before.worldScale);
+    expect(interaction.before.inlineWorldScale).toBe("");
+    expect(interaction.selected.inlineWorldScale).toBe("");
     await expect(node).not.toHaveClass(/is-selected/);
   });
 });

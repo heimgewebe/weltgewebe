@@ -23,7 +23,6 @@
 }
 
 .map-marker__visual {
-  --map-object-scale: 1;
   grid-area: 1 / 1;
   box-sizing: border-box;
   display: grid;
@@ -36,7 +35,7 @@
   transform-origin: center center;
   /* Individual scale composes the geographic world scale with the interaction
    * transform below without touching MapLibre's outer marker transform. */
-  scale: var(--map-object-scale);
+  scale: var(--map-object-scale, 1);
   transition:
     scale 0.18s ease-out,
     transform 0.18s ease-out;

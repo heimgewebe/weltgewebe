@@ -35,6 +35,15 @@ export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
 export const MARKER_GEO_ANCHOR = "center" as const;
 const WEAVE_DETAIL_ZOOM = 13.5;
 const MARKER_SCALE_WRITE_EPSILON = 0.001;
+type MapObjectScaleOwnership = {
+  owners: Set<symbol>;
+  previousValue: string;
+  previousPriority: string;
+};
+const MAP_OBJECT_SCALE_OWNERS = new WeakMap<
+  HTMLElement,
+  MapObjectScaleOwnership
+>();
 
 export class NodesOverlay {
   private activeMarkers = new Map<
@@ -42,7 +51,6 @@ export class NodesOverlay {
     {
       marker: Marker;
       element: HTMLElement;
-      visual: HTMLElement;
       item: MapEntityViewModel;
       weaveRoot: HTMLElement | null;
       weaveSignature: string | null;
@@ -53,6 +61,9 @@ export class NodesOverlay {
   private selectedMarkerId: string | null = null;
   private compactWeave = false;
   private markerScale = 1;
+  private markerScaleInitialized = false;
+  private mapScaleContainer: HTMLElement | null = null;
+  private readonly mapScaleOwner = Symbol("nodes-overlay-map-scale");
   private readonly handleZoom = () => {
     if (this.map) this.updateZoom(this.map.getZoom());
   };
@@ -62,6 +73,21 @@ export class NodesOverlay {
     private MarkerClass: MarkerConstructor,
     private readonly runtime: WeaveRuntime = weaveRuntime,
   ) {
+    if (this.map && typeof this.map.getContainer === "function") {
+      const container = this.map.getContainer();
+      this.mapScaleContainer = container;
+      let ownership = MAP_OBJECT_SCALE_OWNERS.get(container);
+      if (!ownership) {
+        ownership = {
+          owners: new Set(),
+          previousValue: container.style.getPropertyValue("--map-object-scale"),
+          previousPriority:
+            container.style.getPropertyPriority("--map-object-scale"),
+        };
+        MAP_OBJECT_SCALE_OWNERS.set(container, ownership);
+      }
+      ownership.owners.add(this.mapScaleOwner);
+    }
     if (
       this.map &&
       typeof this.map.getZoom === "function" &&
@@ -77,8 +103,12 @@ export class NodesOverlay {
     root.dataset.weaveDetail = this.compactWeave ? "compact" : "detail";
   }
 
-  private syncMarkerScale(visual: HTMLElement) {
-    visual.style.setProperty("--map-object-scale", this.markerScale.toFixed(3));
+  private syncMapObjectScale() {
+    if (!this.mapScaleContainer) return;
+    this.mapScaleContainer.style.setProperty(
+      "--map-object-scale",
+      this.markerScale.toFixed(3),
+    );
   }
 
   public updateZoom(zoom: number) {
@@ -86,16 +116,21 @@ export class NodesOverlay {
     const nextMarkerScale = getMapMarkerScale(zoom);
     const compactChanged = compact !== this.compactWeave;
     const markerScaleChanged =
+      !this.markerScaleInitialized ||
       Math.abs(nextMarkerScale - this.markerScale) >=
-      MARKER_SCALE_WRITE_EPSILON;
+        MARKER_SCALE_WRITE_EPSILON;
     if (!compactChanged && !markerScaleChanged) return;
 
-    this.compactWeave = compact;
-    if (markerScaleChanged) this.markerScale = nextMarkerScale;
-
-    for (const { visual, weaveRoot } of this.activeMarkers.values()) {
-      if (compactChanged && weaveRoot) this.syncWeaveDetail(weaveRoot);
-      if (markerScaleChanged) this.syncMarkerScale(visual);
+    if (compactChanged) {
+      this.compactWeave = compact;
+      for (const { weaveRoot } of this.activeMarkers.values()) {
+        if (weaveRoot) this.syncWeaveDetail(weaveRoot);
+      }
+    }
+    if (markerScaleChanged) {
+      this.markerScale = nextMarkerScale;
+      this.syncMapObjectScale();
+      this.markerScaleInitialized = true;
     }
   }
 
@@ -210,7 +245,6 @@ export class NodesOverlay {
               ? "map-marker__visual marker-webgemeindezentrum__visual"
               : "map-marker__visual marker-node__visual";
         visual.setAttribute("aria-hidden", "true");
-        this.syncMarkerScale(visual);
 
         let weaveRoot: HTMLElement | null = null;
         let weaveSignature: string | null = null;
@@ -275,7 +309,6 @@ export class NodesOverlay {
         this.activeMarkers.set(item.id, {
           marker,
           element,
-          visual,
           item,
           weaveRoot,
           weaveSignature,
@@ -353,6 +386,26 @@ export class NodesOverlay {
     if (this.map && typeof this.map.off === "function") {
       this.map.off("zoom", this.handleZoom);
     }
+    if (this.mapScaleContainer) {
+      const container = this.mapScaleContainer;
+      const ownership = MAP_OBJECT_SCALE_OWNERS.get(container);
+      if (
+        ownership?.owners.delete(this.mapScaleOwner) &&
+        !ownership.owners.size
+      ) {
+        if (ownership.previousValue) {
+          container.style.setProperty(
+            "--map-object-scale",
+            ownership.previousValue,
+            ownership.previousPriority,
+          );
+        } else {
+          container.style.removeProperty("--map-object-scale");
+        }
+        MAP_OBJECT_SCALE_OWNERS.delete(container);
+      }
+    }
+    this.mapScaleContainer = null;
     this.activeMarkers.forEach(({ cleanup }) => cleanup());
     this.activeMarkers.clear();
     this.searchMatchIds.clear();

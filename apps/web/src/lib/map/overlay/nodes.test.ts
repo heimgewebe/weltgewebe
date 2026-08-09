@@ -49,10 +49,30 @@ class FakeClassList {
 }
 
 class FakeStyle {
-  [key: string]: string | ((name: string, value: string) => void);
+  [key: string]: unknown;
 
-  setProperty(name: string, value: string) {
+  setProperty(name: string, value: string, priority = "") {
     this[name] = value;
+    const priorityKey = `${name}:priority`;
+    if (priority) this[priorityKey] = priority;
+    else delete this[priorityKey];
+  }
+
+  getPropertyValue(name: string) {
+    const value = this[name];
+    return typeof value === "string" ? value : "";
+  }
+
+  getPropertyPriority(name: string) {
+    const priority = this[`${name}:priority`];
+    return typeof priority === "string" ? priority : "";
+  }
+
+  removeProperty(name: string) {
+    const value = this.getPropertyValue(name);
+    delete this[name];
+    delete this[`${name}:priority`];
+    return value;
   }
 }
 
@@ -329,6 +349,23 @@ function makeOverlay() {
     FakeMarker as unknown as MarkerConstructor,
     weaveRuntime,
   );
+}
+
+function makeOverlayWithContainer(container = new FakeElement()) {
+  vi.stubGlobal("document", {
+    createElement: () => new FakeElement(),
+  });
+  const map = {
+    getContainer: () => container as unknown as HTMLElement,
+  } as unknown as MapLibreMap;
+  return {
+    container,
+    overlay: new NodesOverlay(
+      map,
+      FakeMarker as unknown as MarkerConstructor,
+      weaveRuntime,
+    ),
+  };
 }
 
 afterEach(() => {
@@ -665,32 +702,38 @@ describe("NodesOverlay woven node marker", () => {
     expect(centerRoot?.dataset.weaveDetail).toBe("detail");
   });
 
-  it("applies one continuous world scale to all marker categories", () => {
-    const overlay = makeOverlay();
+  it("inherits one continuous world scale with O(1) zoom DOM writes", () => {
+    const { overlay, container } = makeOverlayWithContainer();
     overlay.updateZoom(7);
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe(
+      "0.620",
+    );
+    const containerSetProperty = vi.spyOn(container.style, "setProperty");
+
     overlay.update(
       [makeNode("node"), makeCenter("center"), makeAccount("spool")],
       true,
     );
-
     const visualFor = (id: string) =>
       overlay.getActiveMarker(id)?.element.children[0] as
         | FakeElement
         | undefined;
-    const scaleFor = (id: string) => visualFor(id)?.style["--map-object-scale"];
-
     for (const id of ["node", "center", "spool"]) {
-      expect(scaleFor(id)).toBe("0.620");
+      expect(visualFor(id)?.style.getPropertyValue("--map-object-scale")).toBe(
+        "",
+      );
     }
+    expect(containerSetProperty).not.toHaveBeenCalled();
 
-    // Both zooms stay in compact mode. Scale must still update continuously.
+    // All active markers share one inherited write even within compact mode.
     overlay.updateZoom(10);
     const zoomTenScale = getMapMarkerScale(10).toFixed(3);
-    for (const id of ["node", "center", "spool"]) {
-      expect(scaleFor(id)).toBe(zoomTenScale);
-    }
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe(
+      zoomTenScale,
+    );
+    expect(containerSetProperty).toHaveBeenCalledTimes(1);
 
-    // A marker created after the zoom event receives the stored scale at once.
+    // A later marker inherits automatically; creation adds no scale mutation.
     overlay.update(
       [
         makeNode("node"),
@@ -700,22 +743,87 @@ describe("NodesOverlay woven node marker", () => {
       ],
       true,
     );
-    expect(scaleFor("new-node")).toBe(zoomTenScale);
+    expect(
+      visualFor("new-node")?.style.getPropertyValue("--map-object-scale"),
+    ).toBe("");
+    expect(containerSetProperty).toHaveBeenCalledTimes(1);
+
+    overlay.destroy();
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe("");
   });
 
-  it("skips scale DOM writes below the material-change threshold", () => {
-    const overlay = makeOverlay();
-    overlay.update([makeNode("node")], true);
-    const visual = overlay.getActiveMarker("node")?.element
-      .children[0] as unknown as FakeElement;
-    const setProperty = vi.spyOn(visual.style, "setProperty");
-
+  it("skips shared scale DOM writes below the material-change threshold", () => {
+    const { overlay, container } = makeOverlayWithContainer();
     overlay.updateZoom(13.5);
+    const setProperty = vi.spyOn(container.style, "setProperty");
+
     overlay.updateZoom(13.51);
     expect(setProperty).not.toHaveBeenCalled();
 
     overlay.updateZoom(14.5);
     expect(setProperty).toHaveBeenCalledTimes(1);
+  });
+
+  it("writes the reference scale on initial map attachment", () => {
+    vi.stubGlobal("document", {
+      createElement: () => new FakeElement(),
+    });
+    const container = new FakeElement();
+    const on = vi.fn();
+    const map = {
+      getContainer: () => container as unknown as HTMLElement,
+      getZoom: () => 13.5,
+      on,
+      off: vi.fn(),
+    } as unknown as MapLibreMap;
+
+    const overlay = new NodesOverlay(
+      map,
+      FakeMarker as unknown as MarkerConstructor,
+      weaveRuntime,
+    );
+
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe(
+      "1.000",
+    );
+    expect(on).toHaveBeenCalledWith("zoom", expect.any(Function));
+    overlay.destroy();
+  });
+
+  it("restores a pre-existing container scale when the last overlay leaves", () => {
+    const container = new FakeElement();
+    container.style.setProperty("--map-object-scale", "0.777");
+    const { overlay } = makeOverlayWithContainer(container);
+
+    overlay.updateZoom(7);
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe(
+      "0.620",
+    );
+    overlay.destroy();
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe(
+      "0.777",
+    );
+  });
+
+  it("does not let an older overlay clear a newer shared scale owner", () => {
+    const container = new FakeElement();
+    const older = makeOverlayWithContainer(container).overlay;
+    const newer = makeOverlayWithContainer(container).overlay;
+
+    older.updateZoom(7);
+    newer.updateZoom(10);
+    const newerScale = getMapMarkerScale(10).toFixed(3);
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe(
+      newerScale,
+    );
+
+    older.destroy();
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe(
+      newerScale,
+    );
+
+    newer.destroy();
+    expect(container.style.getPropertyValue("--map-object-scale")).toBe("");
   });
 
   it("uses a fixed render signature instead of serializing unrelated fields", () => {
