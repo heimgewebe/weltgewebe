@@ -6,7 +6,10 @@ import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
 import { weaveRuntime, type WeaveRuntime } from "./weaveRuntime";
 
-export { projectMarkersForWeave } from "./weaveRuntime";
+export {
+  projectMapMarkerViewsForWeave,
+  projectMarkersForWeave,
+} from "./weaveRuntime";
 
 export function diffSearchMatchIds(
   previous: ReadonlySet<string>,

@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { MapEntityWeave, WeaveProposalArc } from "$lib/map/types";
+import type {
+  MapEdge,
+  MapEntityViewModel,
+  MapEntityWeave,
+  WeaveProposalArc,
+} from "$lib/map/types";
 import { WEAVE_ARMS } from "$lib/map/types";
 import {
   MAX_VISIBLE_ARM_OVERLAYS,
@@ -13,6 +18,8 @@ import {
   applyWeaveDynamicProperties,
   conversationRingInsetPercent,
   countRenderedWeaveDomNodes,
+  projectMapMarkerViewsForWeave,
+  projectMarkersForWeave,
   weaveRenderSignature,
   weaveRuntime,
 } from "./weaveRuntime";
@@ -85,6 +92,116 @@ afterEach(() => {
 });
 
 describe("weaveRuntime DOM safety and budget", () => {
+  it("projects the maximum edge set once and reuses it for visible markers", () => {
+    const points: MapEntityViewModel[] = [
+      {
+        type: "garnrolle",
+        id: "visible",
+        title: "Visible",
+        tags: [],
+        created_at: "2026-08-01T00:00:00Z",
+        lat: 53.5,
+        lon: 10,
+      },
+      {
+        type: "garnrolle",
+        id: "hidden",
+        title: "Hidden",
+        tags: [],
+        created_at: "2026-08-01T00:00:00Z",
+        lat: 53.6,
+        lon: 10.1,
+      },
+    ];
+    let indexedEdges = 0;
+    const edges = Array.from({ length: 10_000 }, (_, index) => {
+      const edge = {
+        id: `edge-${index}`,
+        source_id: "outside",
+        target_id: "outside",
+        edge_kind: "reference",
+      } as MapEdge;
+      Object.defineProperty(edge, "faden_type", {
+        get() {
+          indexedEdges += 1;
+          return undefined;
+        },
+      });
+      return edge;
+    });
+
+    const filtered = projectMapMarkerViewsForWeave(
+      points,
+      [points[0]],
+      edges,
+      0,
+    );
+    expect(indexedEdges).toBe(edges.length);
+    expect(filtered.visible).toHaveLength(1);
+    expect(filtered.visible[0]).toBe(filtered.motion[0]);
+
+    const unfiltered = projectMapMarkerViewsForWeave(points, points, [], 0);
+    expect(unfiltered.visible).toBe(unfiltered.motion);
+  });
+
+  it("preserves the filtered target weave while reusing the full projection", () => {
+    const points: MapEntityViewModel[] = [
+      {
+        type: "node",
+        id: "visible",
+        title: "Visible",
+        kind: "Werkstatt",
+        tags: [],
+        created_at: "2026-08-01T00:00:00Z",
+        lat: 53.5,
+        lon: 10,
+      },
+      {
+        type: "node",
+        id: "hidden",
+        title: "Hidden",
+        kind: "Werkstatt",
+        tags: [],
+        created_at: "2026-08-01T00:00:00Z",
+        lat: 53.6,
+        lon: 10.1,
+      },
+    ];
+    const edges: MapEdge[] = [
+      {
+        id: "visible-thread",
+        source_id: "outside",
+        target_id: "visible",
+        edge_kind: "reference",
+        faden_type: "conversation",
+        lifecycle: { kind: "legacy" },
+      },
+      {
+        id: "hidden-thread",
+        source_id: "outside",
+        target_id: "hidden",
+        edge_kind: "reference",
+        faden_type: "conversation",
+        lifecycle: { kind: "legacy" },
+      },
+    ];
+
+    const result = projectMapMarkerViewsForWeave(points, [points[0]], edges, 0);
+    const previousFilteredProjection = projectMarkersForWeave(
+      [points[0]],
+      [edges[0]],
+      0,
+    );
+
+    const visible = result.visible[0];
+    const previousVisible = previousFilteredProjection[0];
+    if (visible.type !== "node" || previousVisible.type !== "node") {
+      throw new Error("expected node projections");
+    }
+    expect(visible.weave).toEqual(previousVisible.weave);
+    expect(visible).toBe(result.motion[0]);
+  });
+
   it("renders arm overlay ids/labels through attribute APIs without injection", () => {
     installDom();
     const weave = maximalWeave();

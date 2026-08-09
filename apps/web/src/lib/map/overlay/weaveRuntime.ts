@@ -48,6 +48,36 @@ export function projectMarkersForWeave(
   return projectEntityWeaves(points, weaveEdges, nowMs);
 }
 
+export type ProjectedMapMarkerViews = {
+  visible: MapEntityViewModel[];
+  motion: MapEntityViewModel[];
+};
+
+/**
+ * Build the expensive full weave projection once, then select the filtered
+ * marker view from those already-projected entities. The filter evaluator
+ * preserves scene order, so the no-filter path can reuse the array itself and
+ * a filtered path can retain the same projected object identities.
+ */
+export function projectMapMarkerViewsForWeave(
+  points: MapEntityViewModel[],
+  visiblePoints: MapEntityViewModel[],
+  edges: MapEdge[],
+  nowMs: number,
+): ProjectedMapMarkerViews {
+  const motion = projectMarkersForWeave(points, edges, nowMs);
+  const allVisible =
+    points.length === visiblePoints.length &&
+    points.every((point, index) => point.id === visiblePoints[index]?.id);
+  if (allVisible) return { visible: motion, motion };
+
+  const visibleIds = new Set(visiblePoints.map((point) => point.id));
+  return {
+    visible: motion.filter((point) => visibleIds.has(point.id)),
+    motion,
+  };
+}
+
 /**
  * Structural signature: only values whose change actually rebuilds the woven
  * DOM. Ageing conversation and proposal threads change their opacity on every

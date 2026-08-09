@@ -239,15 +239,20 @@
   $: weaveEdges = deriveWeaveEdges(scene.edges, filteredMarkersData);
   // Null until the weave projector is loaded. Never fall back to raw markers:
   // without `weave` multi-theme edges and motion collapse to a single colour.
-  $: projectedMarkersData = projectMarkersForWeave
-    ? projectMarkersForWeave(filteredMarkersData, weaveEdges, edgeProjectionNow)
-    : null;
   // Motion resolves geometry against the unfiltered projected set so filter
   // visibility can hide transitions without inventing monochrome from raw
-  // markers or losing endpoints that are only temporarily filtered out.
-  $: motionMarkersData = projectMarkersForWeave
-    ? projectMarkersForWeave(markersData, scene.edges, edgeProjectionNow)
+  // markers or losing endpoints that are only temporarily filtered out. The
+  // visible view reuses that projection instead of rebuilding every weave.
+  $: markerWeaveViews = projectMapMarkerViewsForWeave
+    ? projectMapMarkerViewsForWeave(
+        markersData,
+        filteredMarkersData,
+        scene.edges,
+        edgeProjectionNow,
+      )
     : null;
+  $: projectedMarkersData = markerWeaveViews?.visible ?? null;
+  $: motionMarkersData = markerWeaveViews?.motion ?? null;
   $: lineEdges = projectedMarkersData
     ? deriveLineEdges(weaveEdges, projectedMarkersData)
     : [];
@@ -298,8 +303,8 @@
   let lastFocusedElement: HTMLElement | null = null;
 
   let nodesOverlay: NodesOverlayController | null = null;
-  let projectMarkersForWeave:
-    | typeof import("$lib/map/overlay/nodes").projectMarkersForWeave
+  let projectMapMarkerViewsForWeave:
+    | typeof import("$lib/map/overlay/nodes").projectMapMarkerViewsForWeave
     | null = null;
   let edgeMotion: EdgeMotionController | null = null;
   let resolveMotionInput:
@@ -877,7 +882,7 @@
       searchDirectionIndicators = [];
       nodesOverlay?.destroy();
       nodesOverlay = null;
-      projectMarkersForWeave = null;
+      projectMapMarkerViewsForWeave = null;
       edgeMotion?.destroy();
       edgeMotion = null;
       resolveMotionInput = null;
@@ -1036,7 +1041,7 @@
       ]);
       const initialAuth = { authenticated: false };
       if (destroyed || mapInitTerminated) return;
-      projectMarkersForWeave = nodesModule.projectMarkersForWeave;
+      projectMapMarkerViewsForWeave = nodesModule.projectMapMarkerViewsForWeave;
       const container = mapContainer;
       if (!container) {
         return;
