@@ -6,7 +6,7 @@
     closeSearch,
   } from "$lib/stores/searchStore";
   import { contextPanelOpen } from "$lib/stores/uiView";
-  import { activeFilters } from "$lib/stores/filterStore";
+  import { activeFilterCount } from "$lib/stores/filterStore";
   import type { MapEntityViewModel } from "$lib/map/types";
   import { MAX_SEARCH_QUERY_CHARS } from "$lib/api/search";
   import type { NodeSearchStatus } from "$lib/api/search";
@@ -163,7 +163,7 @@
       {/if}
       {#if visibleResults.length > 0}
         <div class="result-meta" aria-live="polite">
-          {#if $activeFilters.size > 0}
+          {#if $activeFilterCount > 0}
             {filteredResults.length === 1
               ? "1 gefilterter Treffer"
               : `${filteredResults.length} gefilterte Treffer`}

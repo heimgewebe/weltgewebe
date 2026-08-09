@@ -9,7 +9,7 @@ import { setupUiInvariantWatcher } from "./uiInvariants";
  * uiView (this file)   | systemState, selection,        | —
  *                      | kompositionDraft, contextPanel  |
  * searchStore          | isSearchOpen, searchQuery       | —
- * filterStore          | isFilterOpen, activeFilters     | —
+ * filterStore          | isFilterOpen, filterState       | —
  * scene.ts             | MapSceneModel (entities, edges, | route data
  *                      | loadState, diagnostics)         |
  * mapView              | pure presentation derivations   | (args only:

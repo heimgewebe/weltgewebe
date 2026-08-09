@@ -9,7 +9,7 @@
   import { isSearchOpen, closeSearch } from "$lib/stores/searchStore";
   import {
     isFilterOpen,
-    activeFilters,
+    activeFilterCount,
     closeFilter,
   } from "$lib/stores/filterStore";
   import {
@@ -148,7 +148,7 @@
     searchOpen={$isSearchOpen}
     filterOpen={$isFilterOpen}
     compositionActive={$systemState === "komposition"}
-    activeFilterCount={$activeFilters.size}
+    activeFilterCount={$activeFilterCount}
     {canCreateNode}
     {canCreateProposal}
     {hasWeavingAction}

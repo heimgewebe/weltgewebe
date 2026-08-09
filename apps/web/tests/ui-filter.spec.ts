@@ -20,6 +20,7 @@ test.describe("Sicht mode", () => {
               kind: "Event",
               location: { lat: 53.5, lon: 10.0 },
               summary: "A test event node.",
+              tags: ["thema:natur"],
             },
             {
               id: "node-2",
@@ -27,6 +28,7 @@ test.describe("Sicht mode", () => {
               kind: "Place",
               location: { lat: 53.6, lon: 10.1 },
               summary: "A test place node.",
+              tags: ["thema:wohnen"],
             },
           ]),
         ),
@@ -49,7 +51,7 @@ test.describe("Sicht mode", () => {
           kind: "Event",
           location: { lat: 53.5, lon: 10.0 },
           summary: "A test event node.",
-          tags: [],
+          tags: ["thema:natur"],
           created_at: "2026-07-23T00:00:00Z",
           updated_at: "2026-07-23T00:00:00Z",
         },
@@ -59,7 +61,7 @@ test.describe("Sicht mode", () => {
           kind: "Place",
           location: { lat: 53.6, lon: 10.1 },
           summary: "A test place node.",
-          tags: [],
+          tags: ["thema:wohnen"],
           created_at: "2026-07-23T00:00:00Z",
           updated_at: "2026-07-23T00:00:00Z",
         },
@@ -310,5 +312,44 @@ test.describe("Sicht mode", () => {
     await expect(
       page.getByRole("button", { name: "Alles wieder zeigen" }),
     ).toBeVisible();
+  });
+
+  test("topic choices stay stable and combine OR within Themen, AND with Inhalte", async ({
+    page,
+  }) => {
+    const markerSelector = ".map-marker, .marker-account";
+    await activateToolFanAction(page, "sight");
+    const sichtOverlay = page.getByTestId("filter-overlay");
+    const contentGroup = sichtOverlay.getByRole("group", { name: "Inhalte" });
+    const topicGroup = sichtOverlay.getByRole("group", { name: "Themen" });
+
+    await expect(contentGroup).toBeVisible();
+    await expect(topicGroup).toBeVisible();
+    const nature = topicGroup.locator("label.filter-item", {
+      hasText: "Natur",
+    });
+    const housing = topicGroup.locator("label.filter-item", {
+      hasText: "Wohnen",
+    });
+    await expect(nature).toContainText("1");
+    await expect(housing).toContainText("1");
+
+    await nature.click();
+    await expect(page.locator(markerSelector)).toHaveCount(1);
+    // Counts and choices come from the complete scene, not the filtered result.
+    await expect(housing).toBeVisible();
+    await expect(housing).toContainText("1");
+
+    await housing.click();
+    await expect(page.locator(markerSelector)).toHaveCount(2);
+
+    await contentGroup
+      .locator("label.filter-item", { hasText: "Ereignis" })
+      .click();
+    await expect(page.locator(markerSelector)).toHaveCount(1);
+    await expect(sichtOverlay.getByText(/^3 Auswahlen aktiv/)).toBeVisible();
+
+    await page.getByRole("button", { name: "Alles wieder zeigen" }).click();
+    await expect(page.locator(markerSelector)).toHaveCount(3);
   });
 });

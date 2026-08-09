@@ -2,25 +2,29 @@
   import { tick } from "svelte";
   import {
     isFilterOpen,
-    activeFilters,
+    filterState,
+    activeFilterCount,
     closeFilter,
-    toggleFilterType,
+    toggleContentType,
+    toggleTopic,
     clearFilters,
   } from "$lib/stores/filterStore";
   import { contextPanelOpen } from "$lib/stores/uiView";
   import { restoreTarget } from "$lib/utils/focusManager";
   import type { MapEntityViewModel } from "$lib/map/types";
+  import type { FilterTopic } from "$lib/stores/mapView";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
 
   export let availableTypes: { id: string; label: string; count: number }[] =
     [];
+  export let availableTopics: FilterTopic[] = [];
   export let filteredResults: MapEntityViewModel[] = [];
 
   let overlayEl: HTMLDivElement;
   let closeBtnEl: HTMLButtonElement;
   let wasOpen = false;
 
-  $: activeCount = $activeFilters.size;
+  $: activeCount = $activeFilterCount;
 
   $: {
     if ($isFilterOpen) {
@@ -83,19 +87,19 @@
           : `${activeCount} Auswahlen aktiv · ${filteredResults.length} Elemente auf der Karte`}
     </p>
 
-    {#if availableTypes.length > 0}
-      <fieldset class="filter-group">
-        <legend>Was soll auf der Karte erscheinen?</legend>
+    <fieldset class="filter-group">
+      <legend>Inhalte</legend>
+      {#if availableTypes.length > 0}
         <ul class="filter-list">
           {#each availableTypes as type}
             <li>
               <label
                 class="filter-item"
-                class:active={$activeFilters.has(type.id)}
+                class:active={$filterState.contentTypes.has(type.id)}
                 ><input
                   type="checkbox"
-                  checked={$activeFilters.has(type.id)}
-                  on:change={() => toggleFilterType(type.id)}
+                  checked={$filterState.contentTypes.has(type.id)}
+                  on:change={() => toggleContentType(type.id)}
                 /><span class="filter-label">{filterLabel(type)}</span><span
                   class="filter-count">{type.count}</span
                 ></label
@@ -103,12 +107,39 @@
             </li>
           {/each}
         </ul>
-      </fieldset>
-    {:else}
-      <div class="no-filters" role="status">
-        Keine auswählbaren Elemente vorhanden
-      </div>
-    {/if}
+      {:else}
+        <div class="no-filters" role="status">
+          Keine auswählbaren Inhalte vorhanden
+        </div>
+      {/if}
+    </fieldset>
+
+    <fieldset class="filter-group">
+      <legend>Themen</legend>
+      {#if availableTopics.length > 0}
+        <ul class="filter-list">
+          {#each availableTopics as topic}
+            <li>
+              <label
+                class="filter-item"
+                class:active={$filterState.topics.has(topic.id)}
+                ><input
+                  type="checkbox"
+                  checked={$filterState.topics.has(topic.id)}
+                  on:change={() => toggleTopic(topic.id)}
+                /><span class="filter-label">{topic.label}</span><span
+                  class="filter-count">{topic.count}</span
+                ></label
+              >
+            </li>
+          {/each}
+        </ul>
+      {:else}
+        <div class="no-filters" role="status">
+          Keine Themen auf der Karte vorhanden
+        </div>
+      {/if}
+    </fieldset>
 
     {#if activeCount > 0}
       <button class="clear-btn" type="button" on:click={clearFilters}
@@ -175,10 +206,14 @@
     padding: 0;
     margin: 0;
   }
+  .filter-group + .filter-group {
+    margin-top: 0.8rem;
+  }
   .filter-group legend {
     margin: 0 0 0.55rem;
-    color: var(--muted);
-    font-size: 0.78rem;
+    color: var(--text);
+    font-size: 0.88rem;
+    font-weight: 700;
   }
   .filter-list {
     list-style: none;

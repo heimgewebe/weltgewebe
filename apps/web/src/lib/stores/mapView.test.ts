@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { get } from "svelte/store";
 import { buildMapScene, type MapSceneModel } from "$lib/map/scene";
+import type { KnottingTopic } from "$lib/knottingTopics";
 import type {
   Account,
   Edge,
@@ -11,6 +12,7 @@ import type {
 import {
   deriveMarkerCounts,
   deriveAvailableFilterTypes,
+  deriveAvailableFilterTopics,
   deriveFilteredMarkers,
   deriveSearchResults,
   deriveSearchMatchIds,
@@ -20,6 +22,7 @@ import {
   toMapSelection,
   selectMapEntity,
 } from "./mapView";
+import type { MapFilterState } from "./filterStore";
 import { selection, systemState, leaveToNavigation } from "./uiView";
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
@@ -44,6 +47,16 @@ const makeAccount = (overrides: Partial<Account> = {}): Account => ({
   public_pos: { lat: 53.56, lon: 10.06 },
   ...overrides,
 });
+
+function filters(
+  contentTypes: string[] = [],
+  topics: KnottingTopic[] = [],
+): MapFilterState {
+  return {
+    contentTypes: new Set(contentTypes),
+    topics: new Set(topics),
+  };
+}
 
 const makeCenter = (
   overrides: Partial<Webgemeindezentrum> = {},
@@ -150,17 +163,116 @@ describe("mapView presentation helpers", () => {
     ]);
   });
 
-  it("filters markers by the active filter set", () => {
+  it("preserves content-type filtering for nodes and Garnrollen", () => {
     const scene = sceneFrom([makeNode({ kind: "Werkstatt" })], [makeAccount()]);
 
-    expect(deriveFilteredMarkers(scene.entities, new Set())).toHaveLength(2);
+    expect(deriveFilteredMarkers(scene.entities, filters())).toHaveLength(2);
 
     const filtered = deriveFilteredMarkers(
       scene.entities,
-      new Set(["Garnrolle"]),
+      filters(["Garnrolle"]),
     );
     expect(filtered).toHaveLength(1);
     expect(filtered[0].type).toBe("garnrolle");
+  });
+
+  it("keeps Garnrolle and Webgemeindezentrum as independent OR type buckets", () => {
+    const scene = sceneFrom([makeNode()], [makeAccount()], [], [makeCenter()]);
+
+    expect(
+      deriveFilteredMarkers(
+        scene.entities,
+        filters(["Garnrolle", "Webgemeindezentrum"]),
+      ).map((item) => item.type),
+    ).toEqual(["garnrolle", "webgemeindezentrum"]);
+  });
+
+  it("derives stable canonical topic counts from the full scene", () => {
+    const scene = sceneFrom(
+      [
+        makeNode({ id: "nature", tags: ["thema:natur"] }),
+        makeNode({ id: "both", tags: ["thema:wohnen", "thema:natur"] }),
+        makeNode({ id: "missing", tags: [] }),
+      ],
+      [makeAccount({ tags: ["thema:wohnen"] })],
+    );
+
+    expect(deriveAvailableFilterTopics(scene.entities)).toEqual([
+      { id: "Wohnen", label: "Wohnen", count: 2 },
+      { id: "Natur", label: "Natur", count: 2 },
+    ]);
+
+    const selected = deriveFilteredMarkers(
+      scene.entities,
+      filters([], ["Natur"]),
+    );
+    expect(deriveAvailableFilterTopics(scene.entities)).toEqual([
+      { id: "Wohnen", label: "Wohnen", count: 2 },
+      { id: "Natur", label: "Natur", count: 2 },
+    ]);
+    expect(selected.map((item) => item.id)).toEqual(["nature", "both"]);
+  });
+
+  it("combines topics with OR inside the facet", () => {
+    const scene = sceneFrom(
+      [
+        makeNode({ id: "housing", tags: ["thema:wohnen"] }),
+        makeNode({ id: "nature", tags: ["thema:natur"] }),
+        makeNode({ id: "art", tags: ["thema:kunst"] }),
+      ],
+      [],
+    );
+
+    expect(
+      deriveFilteredMarkers(
+        scene.entities,
+        filters([], ["Wohnen", "Natur"]),
+      ).map((item) => item.id),
+    ).toEqual(["housing", "nature"]);
+  });
+
+  it("combines content types and topics with AND", () => {
+    const scene = sceneFrom(
+      [
+        makeNode({
+          id: "project-nature",
+          kind: "Projekt",
+          tags: ["thema:natur"],
+        }),
+        makeNode({ id: "place-nature", kind: "Ort", tags: ["thema:natur"] }),
+        makeNode({ id: "project-art", kind: "Projekt", tags: ["thema:kunst"] }),
+      ],
+      [makeAccount({ id: "profile-nature", tags: ["thema:natur"] })],
+    );
+
+    expect(
+      deriveFilteredMarkers(
+        scene.entities,
+        filters(["Projekt"], ["Natur"]),
+      ).map((item) => item.id),
+    ).toEqual(["project-nature"]);
+  });
+
+  it("keeps missing-topic entities visible while the topic facet is unrestricted", () => {
+    const scene = sceneFrom(
+      [
+        makeNode({ id: "missing", tags: [] }),
+        makeNode({ id: "unknown-other", tags: ["other", "thema:other"] }),
+        makeNode({ id: "nature", tags: ["thema:natur"] }),
+      ],
+      [],
+    );
+
+    expect(
+      deriveFilteredMarkers(scene.entities, filters(["Werkstatt"])).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["missing", "unknown-other", "nature"]);
+    expect(
+      deriveFilteredMarkers(scene.entities, filters([], ["Natur"])).map(
+        (item) => item.id,
+      ),
+    ).toEqual(["nature"]);
   });
 
   it("returns search matches only when search is open with a query", () => {
@@ -286,7 +398,7 @@ describe("mapView presentation helpers", () => {
     // With a filter active, the caller hands search only the visible markers.
     const visible = deriveFilteredMarkers(
       scene.entities,
-      new Set(["Garnrolle"]),
+      filters(["Garnrolle"]),
     );
     const results = deriveSearchResults(visible, "findbar", true);
     expect(results).toHaveLength(1);
@@ -316,7 +428,7 @@ describe("mapView presentation helpers", () => {
       },
     ];
 
-    const allVisible = deriveFilteredMarkers(scene.entities, new Set());
+    const allVisible = deriveFilteredMarkers(scene.entities, filters());
     expect(deriveWeaveEdges(edges, allVisible).map((edge) => edge.id)).toEqual([
       "e1",
       "e2",
@@ -329,10 +441,35 @@ describe("mapView presentation helpers", () => {
     // the Gewebekante and its strictere Linienkante.
     const onlyNodes = deriveFilteredMarkers(
       scene.entities,
-      new Set(["Werkstatt"]),
+      filters(["Werkstatt"]),
     );
     expect(deriveWeaveEdges(edges, onlyNodes)).toHaveLength(0);
     expect(deriveLineEdges(edges, onlyNodes)).toHaveLength(0);
+  });
+
+  it("preserves target-body weave when a topic facet hides the source marker", () => {
+    const scene = sceneFrom(
+      [makeNode({ tags: ["thema:natur"] })],
+      [makeAccount({ tags: ["thema:kunst"] })],
+    );
+    const edges: Edge[] = [
+      {
+        id: "account-to-node",
+        source_id: "acc-1",
+        target_id: "node-1",
+        edge_kind: "reference",
+      },
+    ];
+    const natureOnly = deriveFilteredMarkers(
+      scene.entities,
+      filters([], ["Natur"]),
+    );
+
+    expect(natureOnly.map((item) => item.id)).toEqual(["node-1"]);
+    expect(deriveWeaveEdges(edges, natureOnly).map((edge) => edge.id)).toEqual([
+      "account-to-node",
+    ]);
+    expect(deriveLineEdges(edges, natureOnly)).toEqual([]);
   });
 
   it("keeps governance Fäden visible through the center endpoint alias", () => {

@@ -31,7 +31,7 @@
     lastCreatedNodeId,
   } from "$lib/stores/uiView";
   import {
-    activeFilters,
+    filterState,
     isFilterOpen,
     closeFilter,
   } from "$lib/stores/filterStore";
@@ -53,6 +53,7 @@
   import {
     deriveMarkerCounts,
     deriveAvailableFilterTypes,
+    deriveAvailableFilterTopics,
     deriveFilteredMarkers,
     deriveSearchResults,
     deriveSearchMatchIds,
@@ -120,7 +121,8 @@
   $: markersData = scene.entities;
   $: markerCounts = deriveMarkerCounts(markersData);
   $: availableTypes = deriveAvailableFilterTypes(markersData);
-  $: filteredMarkersData = deriveFilteredMarkers(markersData, $activeFilters);
+  $: availableTopics = deriveAvailableFilterTopics(markersData);
+  $: filteredMarkersData = deriveFilteredMarkers(markersData, $filterState);
   $: showNodes = $view.showNodes;
   // T007: node search comes from the authorized T006 server contract. Public
   // non-node structures (Garnrollen and Webgemeindezentren) are searched only
@@ -188,25 +190,33 @@
   }
 
   onDestroy(resetNodeSearch);
-  $: activeSearchKinds = Array.from($activeFilters).filter(
+  $: activeSearchKinds = Array.from($filterState.contentTypes).filter(
     (filter) => filter !== "Garnrolle",
   );
   $: nodeSearchEnabled =
-    $activeFilters.size === 0 || activeSearchKinds.length > 0;
+    $filterState.contentTypes.size === 0 || activeSearchKinds.length > 0;
   $: scheduleNodeSearch(
     $searchQuery,
     activeSearchKinds,
     nodeSearchEnabled,
     $isSearchOpen,
   );
-  $: searchBaseMarkers =
-    $activeFilters.size === 0 ? markersData : filteredMarkersData;
+  $: filterActive =
+    $filterState.contentTypes.size > 0 || $filterState.topics.size > 0;
+  $: searchBaseMarkers = filterActive ? filteredMarkersData : markersData;
+  $: filteredNodeSearchItems = deriveFilteredMarkers(
+    nodeSearchItems,
+    $filterState,
+  );
   $: localPublicStructureResults = deriveSearchResults(
     searchBaseMarkers.filter((item) => item.type !== "node"),
     $searchQuery,
     $isSearchOpen,
   );
-  $: filteredResults = [...nodeSearchItems, ...localPublicStructureResults];
+  $: filteredResults = [
+    ...filteredNodeSearchItems,
+    ...localPublicStructureResults,
+  ];
   $: searchMatchIds = deriveSearchMatchIds(filteredResults);
   // Fachlich absichtliche Asymmetrie: Der sichtbare Zielkörper trägt sein
   // Gewebe auch dann, wenn die Quelle ausgefiltert ist. Eine Linie benötigt
@@ -1136,7 +1146,7 @@
       if (shouldExposeTestMap) {
         (window as any).__TEST_MAP__ = map;
         (window as any).__TEST_SET_ACTIVE_FILTERS__ = (types: string[]) => {
-          activeFilters.set(new Set(types));
+          filterState.set({ contentTypes: new Set(types), topics: new Set() });
         };
         (window as any).__TEST_REFRESH_EDGE_PROJECTION__ =
           refreshEdgeProjection;
@@ -1255,7 +1265,11 @@
     indicators={searchDirectionIndicators}
     on:select={handleSearchDirectionSelect}
   />
-  <FilterOverlay {availableTypes} filteredResults={filteredMarkersData} />
+  <FilterOverlay
+    {availableTypes}
+    {availableTopics}
+    filteredResults={filteredMarkersData}
+  />
   <ToolFan />
   {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
     <div class="debug-badge" data-testid="debug-badge">

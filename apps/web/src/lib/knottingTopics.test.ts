@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalizeKnottingTopics,
   combineKnottingTags,
+  extractKnottingTopics,
   KNOTTING_TOPICS,
   knottingTagDisplayLabel,
   knottingTopicTag,
@@ -56,6 +57,24 @@ describe("knotting topics", () => {
     expect(knottingTopicTag("Mobilität")).toBe("thema:mobilität");
     expect(knottingTagDisplayLabel("thema:ernährung")).toBe("Ernährung");
     expect(knottingTagDisplayLabel("Natur")).toBe("Natur");
+  });
+
+  it("extracts topics only from exact canonical namespace tags", () => {
+    expect(
+      extractKnottingTopics([
+        "Natur",
+        "thema:natur",
+        "thema:kunst",
+        "thema:natur:urban",
+        "thema:",
+      ]),
+    ).toEqual(["Natur", "Kunst"]);
+    expect(extractKnottingTopics(undefined)).toEqual([]);
+  });
+
+  it("does not reinterpret missing or unknown other metadata as a topic", () => {
+    expect(extractKnottingTopics([])).toEqual([]);
+    expect(extractKnottingTopics(["other", "thema:other"])).toEqual([]);
   });
 
   it("normalizes selector values without case-folding free text", () => {

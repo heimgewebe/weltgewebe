@@ -1,8 +1,8 @@
 import {
   combineKnottingTags,
+  extractKnottingTopics,
   knottingTagDisplayLabel,
   prioritizeKnottingTopics,
-  splitKnottingTags,
 } from "$lib/knottingTopics";
 import type {
   MapEntityNode,
@@ -160,7 +160,7 @@ export function weaveTopics(entity: WeaveEntity): string[] {
   if (entity.type === "webgemeindezentrum") {
     raw = ["Gemeinschaft", "Mitentscheiden"];
   } else {
-    const { topics } = splitKnottingTags(entity.tags ?? []);
+    const topics = extractKnottingTopics(entity.tags);
     const controlledTopicTags = combineKnottingTags(topics, []);
     raw = controlledTopicTags.length
       ? controlledTopicTags

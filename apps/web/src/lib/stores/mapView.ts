@@ -46,8 +46,14 @@ import {
   getMapSearchTermsNormalized,
   normalizeMapSearchTerm,
 } from "$lib/map/searchIndex";
+import {
+  extractKnottingTopics,
+  KNOTTING_TOPICS,
+  type KnottingTopic,
+} from "$lib/knottingTopics";
 import type { Edge, MapEntityViewModel } from "$lib/map/types";
 import { isRecord } from "$lib/utils/guards";
+import type { MapFilterState } from "./filterStore";
 import { enterFokus, type Selection } from "./uiView";
 
 /** Diagnostic counts for the debug badge (nodes vs. accounts). */
@@ -73,6 +79,11 @@ export function getFilterTypeKey(m: MapEntityViewModel): string {
 }
 
 export type FilterType = { id: string; label: string; count: number };
+export type FilterTopic = {
+  id: KnottingTopic;
+  label: KnottingTopic;
+  count: number;
+};
 
 /** Filterable type buckets with counts, sorted by label. */
 export function deriveAvailableFilterTypes(
@@ -92,14 +103,44 @@ export function deriveAvailableFilterTypes(
     .sort((a, b) => a.label.localeCompare(b.label));
 }
 
-/** Markers visible under the active filter set. */
+/** Canonical topic choices from the complete prepared scene. */
+export function deriveAvailableFilterTopics(
+  markers: MapEntityViewModel[],
+): FilterTopic[] {
+  const counts = new Map<KnottingTopic, number>();
+  for (const marker of markers) {
+    for (const topic of extractKnottingTopics(marker.tags)) {
+      counts.set(topic, (counts.get(topic) ?? 0) + 1);
+    }
+  }
+  return KNOTTING_TOPICS.filter((topic) => counts.has(topic)).map((topic) => ({
+    id: topic,
+    label: topic,
+    count: counts.get(topic) ?? 0,
+  }));
+}
+
+/**
+ * Markers visible under the faceted filter state. Empty facets are
+ * unrestricted, selections within a facet are OR, and facets combine by AND.
+ */
 export function deriveFilteredMarkers(
   markers: MapEntityViewModel[],
-  activeFilters: Set<string>,
+  filters: MapFilterState,
 ): MapEntityViewModel[] {
-  return activeFilters.size === 0
-    ? markers
-    : markers.filter((m) => activeFilters.has(getFilterTypeKey(m)));
+  if (filters.contentTypes.size === 0 && filters.topics.size === 0) {
+    return markers;
+  }
+  return markers.filter((marker) => {
+    const contentTypeMatches =
+      filters.contentTypes.size === 0 ||
+      filters.contentTypes.has(getFilterTypeKey(marker));
+    if (!contentTypeMatches) return false;
+    if (filters.topics.size === 0) return true;
+    return extractKnottingTopics(marker.tags).some((topic) =>
+      filters.topics.has(topic),
+    );
+  });
 }
 
 /**

@@ -124,6 +124,17 @@ export function splitKnottingTags(values: readonly string[]): {
 }
 
 /**
+ * Read the controlled topics from an entity's canonical `tags` source field.
+ * Keeping this projection here means map filters and weave theming recognise
+ * exactly the same `thema:<slug>` identities and never reinterpret free tags.
+ */
+export function extractKnottingTopics(
+  tags: readonly string[] | null | undefined,
+): KnottingTopic[] {
+  return splitKnottingTags(tags ?? []).topics;
+}
+
+/**
  * Persist controlled topics first, followed by free keywords. The server keeps
  * its established `tags: string[]` contract; the namespace supplies the stable
  * semantic identity without a database migration.
