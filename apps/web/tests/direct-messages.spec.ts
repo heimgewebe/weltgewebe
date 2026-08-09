@@ -1,0 +1,208 @@
+import { expect, test, type Page, type Route } from "@playwright/test";
+import { resolve } from "node:path";
+import { mockApiResponses } from "./fixtures/mockApi";
+
+const ALICE_CONVERSATION_ID = "11111111-1111-4111-8111-111111111111";
+const BOB_CONVERSATION_ID = "22222222-2222-4222-8222-222222222222";
+
+const conversations = [
+  {
+    id: ALICE_CONVERSATION_ID,
+    counterpart_account_id: "alice-account",
+    counterpart_title: "Alice",
+    created_at: "2026-08-09T10:00:00Z",
+    updated_at: "2026-08-09T10:02:00Z",
+    unread_count: 2,
+    last_message_preview: "Nachricht von Alice",
+    last_message_at: "2026-08-09T10:02:00Z",
+    blocked_by_me: false,
+    can_send: true,
+  },
+  {
+    id: BOB_CONVERSATION_ID,
+    counterpart_account_id: "bob-account",
+    counterpart_title: "Bob",
+    created_at: "2026-08-09T10:00:00Z",
+    updated_at: "2026-08-09T10:01:00Z",
+    unread_count: 1,
+    last_message_preview: "Nachricht von Bob",
+    last_message_at: "2026-08-09T10:01:00Z",
+    blocked_by_me: false,
+    can_send: true,
+  },
+];
+
+function message(
+  conversationId: string,
+  authorAccountId: string,
+  authorTitle: string,
+  content: string,
+) {
+  return {
+    id: `${conversationId.slice(0, 8)}-3333-4333-8333-333333333333`,
+    conversation_id: conversationId,
+    author_account_id: authorAccountId,
+    author_title: authorTitle,
+    content,
+    created_at: "2026-08-09T10:03:00Z",
+    updated_at: "2026-08-09T10:03:00Z",
+    deleted_at: null,
+  };
+}
+
+async function installStaticBuildFallback(page: Page) {
+  if (process.env.PLAYWRIGHT_STATIC_BUILD !== "1") return;
+
+  await page.route("**/nachrichten", (route) =>
+    route.fulfill({ path: resolve("build/nachrichten.html") }),
+  );
+  await page.route("**/_app/immutable/**", (route) => {
+    const path = new URL(route.request().url()).pathname.slice(1);
+    return route.fulfill({ path: resolve("build", path) });
+  });
+  await page.route("**/theme-init.js", (route) =>
+    route.fulfill({ path: resolve("build/theme-init.js") }),
+  );
+}
+
+async function installDirectMessagesApi(page: Page) {
+  let releaseAliceResponse: (() => void) | undefined;
+  const aliceResponseReleased = new Promise<void>((resolve) => {
+    releaseAliceResponse = resolve;
+  });
+  const requestedConversationIds: string[] = [];
+  const markedReadConversationIds: string[] = [];
+
+  await page.route("**/api/**", async (route: Route) => {
+    const request = route.request();
+    const path = new URL(request.url()).pathname;
+    const method = request.method();
+
+    if (path === "/api/direct-conversations" && method === "GET") {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: conversations }),
+      });
+    }
+
+    const messagesMatch = path.match(
+      /^\/api\/conversations\/([^/]+)\/messages$/,
+    );
+    if (messagesMatch && method === "GET") {
+      const conversationId = decodeURIComponent(messagesMatch[1]);
+      requestedConversationIds.push(conversationId);
+      if (conversationId === ALICE_CONVERSATION_ID) {
+        await aliceResponseReleased;
+      }
+      const item =
+        conversationId === ALICE_CONVERSATION_ID
+          ? message(
+              ALICE_CONVERSATION_ID,
+              "alice-account",
+              "Alice",
+              "Verspätete Nachricht von Alice",
+            )
+          : message(
+              BOB_CONVERSATION_ID,
+              "bob-account",
+              "Bob",
+              "Aktuelle Nachricht von Bob",
+            );
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [item],
+          page: { limit: 50, next_cursor: null, has_more: false },
+        }),
+      });
+    }
+
+    const readMatch = path.match(
+      /^\/api\/direct-conversations\/([^/]+)\/read$/,
+    );
+    if (readMatch && method === "POST") {
+      markedReadConversationIds.push(decodeURIComponent(readMatch[1]));
+      return route.fulfill({ status: 204 });
+    }
+
+    return route.fallback();
+  });
+
+  return {
+    requestedConversationIds,
+    markedReadConversationIds,
+    releaseAliceResponse: () => releaseAliceResponse?.(),
+  };
+}
+
+test("eine verspätete Alice-Antwort überschreibt die ausgewählte Bob-Unterhaltung nicht", async ({
+  page,
+}) => {
+  await installStaticBuildFallback(page);
+  await mockApiResponses(page, {
+    auth: {
+      authenticated: true,
+      account_id: "current-account",
+      role: "weber",
+    },
+  });
+  const directMessagesApi = await installDirectMessagesApi(page);
+
+  await page.goto("/nachrichten");
+  const aliceButton = page.getByRole("button", { name: /Alice/ });
+  const bobButton = page.getByRole("button", { name: /Bob/ });
+  await aliceButton.click();
+  await expect
+    .poll(() => directMessagesApi.requestedConversationIds)
+    .toEqual([ALICE_CONVERSATION_ID]);
+
+  await bobButton.click();
+  try {
+    await expect
+      .poll(() => directMessagesApi.requestedConversationIds)
+      .toEqual([ALICE_CONVERSATION_ID, BOB_CONVERSATION_ID]);
+    await expect(page.locator(".conversation .message-list")).toContainText(
+      "Aktuelle Nachricht von Bob",
+    );
+  } catch (cause) {
+    directMessagesApi.releaseAliceResponse();
+    throw cause;
+  }
+
+  const delayedAliceResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `/api/conversations/${ALICE_CONVERSATION_ID}/messages` &&
+      response.request().method() === "GET"
+    );
+  });
+  directMessagesApi.releaseAliceResponse();
+  await delayedAliceResponse;
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+
+  await expect(page.getByRole("heading", { name: "Bob" })).toBeVisible();
+  await expect(bobButton).toHaveAttribute("aria-current", "true");
+  await expect(aliceButton).not.toHaveAttribute("aria-current", "true");
+  await expect(page.locator(".conversation .message-list")).toContainText(
+    "Aktuelle Nachricht von Bob",
+  );
+  await expect(page.locator(".conversation .message-list")).not.toContainText(
+    "Verspätete Nachricht von Alice",
+  );
+  await expect(
+    aliceButton.getByLabel("2 ungelesene Nachrichten"),
+  ).toBeVisible();
+  await expect(bobButton.getByLabel("1 ungelesene Nachrichten")).toHaveCount(0);
+  await expect(page.getByText("Lade Nachrichten…")).toHaveCount(0);
+  await expect(page.getByRole("alert")).toHaveCount(0);
+  expect(directMessagesApi.markedReadConversationIds).toEqual([
+    BOB_CONVERSATION_ID,
+  ]);
+});

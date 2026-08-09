@@ -30,6 +30,7 @@
   let initialized = false;
   let handledRecipient: string | null = null;
   let messageList: HTMLElement | null = null;
+  let selectionGeneration = 0;
 
   $: requestedRecipient = $page.url.searchParams.get("mit");
   $: if (
@@ -109,21 +110,23 @@
     }
   }
 
-  async function scrollToNewest(): Promise<void> {
+  async function scrollToNewest(generation?: number): Promise<void> {
     await tick();
+    if (generation !== undefined && generation !== selectionGeneration) return;
     messageList?.scrollTo({ top: messageList.scrollHeight });
   }
 
   async function selectConversation(
     conversation: DirectConversation,
   ): Promise<void> {
-    if (loadingConversation) return;
+    const generation = ++selectionGeneration;
     selected = conversation;
     messages = [];
     loadingConversation = true;
     error = "";
     try {
       const response = await listDirectMessages(conversation.id);
+      if (generation !== selectionGeneration) return;
       messages = sortMessages(response.items);
       const newestLoadedMessage = messages.at(-1);
       if (newestLoadedMessage) {
@@ -131,16 +134,21 @@
           conversation.id,
           newestLoadedMessage.id,
         );
+        if (generation !== selectionGeneration) return;
       }
       conversations = conversations.map((item) =>
         item.id === conversation.id ? { ...item, unread_count: 0 } : item,
       );
       selected = selected ? { ...selected, unread_count: 0 } : selected;
-      await scrollToNewest();
+      await scrollToNewest(generation);
     } catch (cause) {
-      error = describeError(cause);
+      if (generation === selectionGeneration) {
+        error = describeError(cause);
+      }
     } finally {
-      loadingConversation = false;
+      if (generation === selectionGeneration) {
+        loadingConversation = false;
+      }
     }
   }
 
