@@ -182,6 +182,63 @@ test.describe("Sicht mode", () => {
     );
   });
 
+  test("active topic reaches server search before the top-ten cut", async ({
+    page,
+  }) => {
+    let observedTags = "";
+    await page.route("**/api/search**", async (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      observedTags = params.get("tags") ?? "";
+      const items = observedTags.split(",").includes("thema:natur")
+        ? [
+            {
+              id: "node-1",
+              title: "Test Node 1",
+              kind: "Event",
+              location: { lat: 53.5, lon: 10.0 },
+              summary: "A test event node.",
+              tags: ["thema:natur"],
+              created_at: "2026-07-23T00:00:00Z",
+              updated_at: "2026-07-23T00:00:00Z",
+            },
+          ]
+        : Array.from({ length: 10 }, (_, index) => ({
+            id: `off-topic-${index}`,
+            title: `Test Fremdtreffer ${index}`,
+            kind: "Event",
+            location: { lat: 52 + index * 0.001, lon: 9 },
+            summary: "Higher-ranked but off-topic",
+            tags: ["thema:kunst"],
+            created_at: "2026-07-23T00:00:00Z",
+            updated_at: "2026-07-23T00:00:00Z",
+          }));
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items,
+          mode: "hybrid",
+          generation_id: "mock-search-generation",
+          offset: 0,
+        }),
+      });
+    });
+
+    await activateToolFanAction(page, "sight");
+    const sichtOverlay = page.getByTestId("filter-overlay");
+    await sichtOverlay
+      .locator("label.filter-item", { hasText: "Natur" })
+      .click();
+
+    await activateToolFanAction(page, "find");
+    await page.getByRole("searchbox", { name: "Suchbegriff" }).fill("Test");
+
+    await expect(
+      page.getByRole("option", { name: /Test Node 1/ }),
+    ).toBeVisible();
+    expect(observedTags).toBe("thema:natur");
+  });
+
   test("Sicht narrows the map, and the narrowed marker stays selectable on the map", async ({
     page,
   }) => {

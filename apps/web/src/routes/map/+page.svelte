@@ -64,6 +64,7 @@
     getMapContentType,
   } from "$lib/map/contentFilters";
   import { get } from "svelte/store";
+  import { knottingTopicTag } from "$lib/knottingTopics";
 
   import { currentBasemap } from "$lib/map/config/basemap.current";
   import { resolveBasemapStyle, rewritePmtilesUrl } from "$lib/map/basemap";
@@ -159,6 +160,7 @@
   function scheduleNodeSearch(
     query: string,
     kinds: string[],
+    tags: string[],
     enabled: boolean,
     open: boolean,
   ) {
@@ -176,6 +178,7 @@
           await import("$lib/api/search");
         const response = await searchNodes(normalizedQuery, {
           kinds,
+          tags,
           signal: controller.signal,
         });
         if (controller.signal.aborted || sequence !== nodeSearchSequence)
@@ -204,11 +207,15 @@
   $: activeSearchKinds = Array.from(
     $mapContentFilters.contentTypes,
   ).filter((filter) => nodeContentTypes.has(filter));
+  $: activeSearchTags = Array.from($mapContentFilters.topics).map(
+    knottingTopicTag,
+  );
   $: nodeSearchEnabled =
     $mapContentFilters.contentTypes.size === 0 || activeSearchKinds.length > 0;
   $: scheduleNodeSearch(
     $searchQuery,
     activeSearchKinds,
+    activeSearchTags,
     nodeSearchEnabled,
     $isSearchOpen,
   );

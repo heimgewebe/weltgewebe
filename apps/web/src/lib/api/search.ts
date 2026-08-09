@@ -15,6 +15,7 @@ export interface NodeSearchResponse {
 
 export interface SearchNodesOptions {
   kinds?: string[];
+  tags?: string[];
   limit?: number;
   signal?: AbortSignal;
   fetcher?: typeof fetch;
@@ -66,6 +67,10 @@ export async function searchNodes(
     new Set((options.kinds ?? []).map((kind) => kind.trim()).filter(Boolean)),
   ).sort();
   if (kinds.length > 0) params.set("kinds", kinds.join(","));
+  const tags = Array.from(
+    new Set((options.tags ?? []).map((tag) => tag.trim()).filter(Boolean)),
+  ).sort();
+  if (tags.length > 0) params.set("tags", tags.join(","));
 
   const apiBase =
     options.apiBase ?? import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "";
