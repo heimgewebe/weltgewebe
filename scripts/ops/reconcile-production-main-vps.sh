@@ -124,6 +124,8 @@ verify_public_germany_basemap_delivery() {
   local commit="$1"
   local expected_style_sha="$2"
   local expected_dark_style_sha="$3"
+  local expected_artifact_size="$4"
+  local expected_range_sha="$5"
   local identity_json
   local public_style_sha
   local public_dark_style_sha
@@ -214,12 +216,23 @@ PY_PUBLIC_BASEMAP_IDENTITY
       --range 0-126 \
       -D "$range_headers" \
       "$BASEMAP_PMTILES_URL" > "$range_body" || exit 1
-    run_ops_python "$range_headers" "$range_body" << 'PY_PUBLIC_BASEMAP_RANGE' || exit 1
+    run_ops_python "$range_headers" "$range_body" "$expected_artifact_size" "$expected_range_sha" << 'PY_PUBLIC_BASEMAP_RANGE' || exit 1
+import hashlib
 import re
 import sys
 from pathlib import Path
 
-headers_path, body_path = map(Path, sys.argv[1:3])
+headers_path = Path(sys.argv[1])
+body_path = Path(sys.argv[2])
+expected_size_raw = sys.argv[3]
+expected_range_sha = sys.argv[4]
+if re.fullmatch(r"[1-9][0-9]*", expected_size_raw) is None:
+    raise SystemExit("selected Germany PMTiles size is invalid")
+expected_size = int(expected_size_raw)
+if expected_size < 127:
+    raise SystemExit("selected Germany PMTiles artifact is too small for the range proof")
+if re.fullmatch(r"[0-9a-f]{64}", expected_range_sha) is None:
+    raise SystemExit("selected Germany PMTiles range hash is invalid")
 raw_headers = headers_path.read_text(encoding="iso-8859-1")
 blocks = [
     block
@@ -241,7 +254,7 @@ content_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
 if content_type != "application/octet-stream":
     raise SystemExit("public Germany PMTiles range response has wrong content type")
 content_range = headers.get("content-range", "")
-if re.fullmatch(r"bytes 0-126/[1-9][0-9]*", content_range) is None:
+if content_range != f"bytes 0-126/{expected_size}":
     raise SystemExit("public Germany PMTiles range response has invalid Content-Range")
 if headers.get("content-length") != "127":
     raise SystemExit("public Germany PMTiles range response has invalid Content-Length")
@@ -252,6 +265,10 @@ if len(payload) != 127:
     raise SystemExit("public Germany PMTiles range response has wrong payload length")
 if not payload.startswith(b"PMTiles"):
     raise SystemExit("public Germany PMTiles range response lacks PMTiles signature")
+if hashlib.sha256(payload).hexdigest() != expected_range_sha:
+    raise SystemExit(
+        "public Germany PMTiles range response does not match selected Germany artifact"
+    )
 PY_PUBLIC_BASEMAP_RANGE
   )
 }
@@ -1278,6 +1295,7 @@ source_real="$(realpath -e "$SOURCE_CHECKOUT")" || fail "source checkout cannot 
 germany_basemap_mode="$(stat --format=%a "$germany_basemap_real")"
 (((8#$germany_basemap_mode & 022) == 0)) ||
   fail "nationwide Germany basemap artifact root is group- or world-writable"
+germany_artifact_target=""
 for germany_alias in basemap-germany.pmtiles basemap-germany.meta.json; do
   germany_path="$germany_basemap_real/$germany_alias"
   [[ -e "$germany_path" || -L "$germany_path" ]] ||
@@ -1295,7 +1313,33 @@ for germany_alias in basemap-germany.pmtiles basemap-germany.meta.json; do
   germany_target_mode="$(stat --format=%a "$germany_target")"
   (((8#$germany_target_mode & 022) == 0)) ||
     fail "nationwide Germany basemap target is group- or world-writable: $germany_alias"
+  if [[ "$germany_alias" == "basemap-germany.pmtiles" ]]; then
+    germany_artifact_target="$germany_target"
+  fi
 done
+[[ -n "$germany_artifact_target" ]] ||
+  fail "nationwide Germany PMTiles target was not selected"
+expected_germany_artifact_size="$(stat --format=%s "$germany_artifact_target")"
+[[ "$expected_germany_artifact_size" =~ ^[0-9]+$ ]] ||
+  fail "selected nationwide Germany PMTiles size is invalid"
+((expected_germany_artifact_size >= 127)) ||
+  fail "selected nationwide Germany PMTiles artifact is too small for the range proof"
+expected_germany_range_sha="$(
+  run_ops_python "$germany_artifact_target" << 'PY_SELECTED_GERMANY_RANGE'
+import hashlib
+import sys
+from pathlib import Path
+
+artifact_path = Path(sys.argv[1])
+with artifact_path.open("rb") as artifact:
+    payload = artifact.read(127)
+if len(payload) != 127:
+    raise SystemExit("selected Germany PMTiles artifact has fewer than 127 bytes")
+print(hashlib.sha256(payload).hexdigest())
+PY_SELECTED_GERMANY_RANGE
+)" || fail "could not hash the selected nationwide Germany PMTiles range"
+[[ "$expected_germany_range_sha" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "selected nationwide Germany PMTiles range hash is invalid"
 
 initial_receipt="$RECEIPT_ROOT/observed-$target_commit.json"
 if "$LIVE_VERIFIER" \
@@ -1305,7 +1349,8 @@ if "$LIVE_VERIFIER" \
   --output "$initial_receipt"; then
   basemap_identity_matches=0
   if verify_public_germany_basemap_delivery \
-    "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha"; then
+    "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha" \
+    "$expected_germany_artifact_size" "$expected_germany_range_sha"; then
     basemap_identity_matches=1
   fi
   observed_main="$(fetch_main)"
@@ -1521,7 +1566,8 @@ final_receipt="$RECEIPT_ROOT/public-$target_commit.json"
   --poll-seconds 5 \
   --output "$final_receipt"
 verify_public_germany_basemap_delivery \
-  "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha" ||
+  "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha" \
+  "$expected_germany_artifact_size" "$expected_germany_range_sha" ||
   fail "public nationwide Germany basemap delivery mismatch after deploy"
 
 current_main="$(fetch_main)"
