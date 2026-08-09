@@ -117,6 +117,9 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_PMTILES_URL", script)
         self.assertIn("verify_public_germany_basemap_delivery", script)
         self.assertEqual(script.count("verify_public_germany_basemap_delivery"), 3)
+        self.assertIn(
+            "<< 'PY_PUBLIC_BASEMAP_IDENTITY' || return 1", script
+        )
         self.assertIn("reason=basemap_identity_drift", script)
         self.assertIn(
             "public nationwide Germany basemap delivery mismatch after deploy", script

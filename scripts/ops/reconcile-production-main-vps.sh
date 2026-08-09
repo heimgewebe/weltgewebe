@@ -138,7 +138,7 @@ verify_public_germany_basemap_delivery() {
   )" || return 1
   [[ -n "$identity_json" ]] || return 1
 
-  BASEMAP_IDENTITY_JSON="$identity_json" run_ops_python "$commit" "$expected_style_sha" << 'PY_PUBLIC_BASEMAP_IDENTITY'
+  BASEMAP_IDENTITY_JSON="$identity_json" run_ops_python "$commit" "$expected_style_sha" << 'PY_PUBLIC_BASEMAP_IDENTITY' || return 1
 import json
 import os
 import re
