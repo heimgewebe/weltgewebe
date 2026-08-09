@@ -2,14 +2,12 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.ci.tests.test_deploy_exact_commit_integration import (
-    DeployExactCommitIntegrationTests,
-)
+from scripts.ci.tests import test_deploy_exact_commit_integration as integration
 
 
 class ReconcilerPublicGermanyArtifactBindingTests(unittest.TestCase):
     def setUp(self) -> None:
-        self.fixture = DeployExactCommitIntegrationTests(
+        self.fixture = integration.DeployExactCommitIntegrationTests(
             methodName="test_reconciler_keeps_same_commit_germany_public_bundle_as_noop"
         )
         try:
@@ -22,11 +20,8 @@ class ReconcilerPublicGermanyArtifactBindingTests(unittest.TestCase):
     def test_reconciler_rejects_same_size_stale_public_pmtiles_payload(self) -> None:
         curl_shim = self.fixture.bin / "curl"
         shim = curl_shim.read_text(encoding="utf-8")
-        expected = '                  head -c 127 "$pmtiles"\n'
-        replacement = (
-            "                  printf 'PMTiles'\n"
-            "                  printf 'x%.0s' {1..120}\n"
-        )
+        expected = '  head -c 127 "$pmtiles"\n'
+        replacement = "  printf 'PMTiles'\n  printf 'x%.0s' {1..120}\n"
         self.assertIn(expected, shim)
         curl_shim.write_text(shim.replace(expected, replacement, 1), encoding="utf-8")
         curl_shim.chmod(0o755)
