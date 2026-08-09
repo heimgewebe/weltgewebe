@@ -16,6 +16,7 @@ export DOCKER_CONFIG
 BUILD_USER="${WELTGEWEBE_BUILD_USER:-alex}"
 FRONTEND_URL="${WELTGEWEBE_FRONTEND_VERSION_URL:-https://weltgewebe.net/_app/version.json}"
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://weltgewebe.net/api/version}"
+BASEMAP_IDENTITY_URL="${WELTGEWEBE_BASEMAP_IDENTITY_URL:-https://weltgewebe.net/_app/basemap-build.json}"
 NODE_BUILD_IMAGE="${WELTGEWEBE_NODE_BUILD_IMAGE:-docker.io/library/node@sha256:8898f8ed3c0126667837b678979b4ed83306c856a1227c8bf5f5f77740c25cd6}"
 DEPLOY_HELPER="${WELTGEWEBE_DEPLOY_HELPER:-/usr/local/libexec/weltgewebe-deploy-exact-commit}"
 LIVE_VERIFIER="${WELTGEWEBE_LIVE_VERIFIER:-/usr/local/libexec/weltgewebe-verify-public-release}"
@@ -37,6 +38,7 @@ target_commit=""
 artifact_sha=""
 state_result=""
 deploy_invocation_id=""
+active_basemap_variant=""
 
 fail() {
   echo "ERROR: $*" >&2
@@ -115,6 +117,80 @@ fetch_main() {
     "+refs/heads/main:refs/remotes/origin/main" || return 1
   git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
 }
+
+resolve_active_basemap_variant() (
+  set -Eeuo pipefail
+  local frontend_identity basemap_identity
+  frontend_identity="$(mktemp "$STATE_ROOT/.active-frontend.XXXXXX")"
+  basemap_identity="$(mktemp "$STATE_ROOT/.active-basemap.XXXXXX")"
+  trap 'rm -f -- "$frontend_identity" "$basemap_identity"' EXIT
+
+  curl --fail --silent --show-error --max-redirs 0 \
+    --connect-timeout 5 --max-time 15 --max-filesize 1048576 \
+    --retry 2 --retry-all-errors \
+    --output "$frontend_identity" "$FRONTEND_URL"
+  curl --fail --silent --show-error --max-redirs 0 \
+    --connect-timeout 5 --max-time 15 --max-filesize 1048576 \
+    --retry 2 --retry-all-errors \
+    --output "$basemap_identity" "$BASEMAP_IDENTITY_URL"
+
+  run_ops_python "$frontend_identity" "$basemap_identity" << 'PY'
+import json
+import sys
+from pathlib import Path
+
+
+def is_lower_hex(value: object, length: int) -> bool:
+    return (
+        isinstance(value, str)
+        and len(value) == length
+        and all(character in "0123456789abcdef" for character in value)
+    )
+
+
+frontend_path = Path(sys.argv[1])
+basemap_path = Path(sys.argv[2])
+try:
+    frontend = json.loads(frontend_path.read_text(encoding="utf-8"))
+    basemap = json.loads(basemap_path.read_text(encoding="utf-8"))
+except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"active basemap identity is unreadable: {exc}") from exc
+
+if not isinstance(frontend, dict) or not isinstance(basemap, dict):
+    raise SystemExit("active basemap identity must be JSON objects")
+commit = frontend.get("commit")
+if not is_lower_hex(commit, 40):
+    raise SystemExit("active frontend identity has no canonical commit")
+if frontend.get("version") != commit[:8]:
+    raise SystemExit("active frontend identity short version does not match commit")
+
+expected_basemap_keys = {
+    "schema_version",
+    "mode",
+    "variant",
+    "style_path",
+    "source_commit",
+    "style_sha256",
+}
+if set(basemap) != expected_basemap_keys:
+    raise SystemExit("active basemap identity field matrix is invalid")
+variant = basemap.get("variant")
+style_paths = {
+    "regional": "/local-basemap/style.json",
+    "germany": "/local-basemap/style-germany.json",
+}
+if (
+    basemap.get("schema_version") != 1
+    or basemap.get("mode") != "local-sovereign"
+    or variant not in style_paths
+    or basemap.get("style_path") != style_paths[variant]
+    or basemap.get("source_commit") != commit
+    or not is_lower_hex(basemap.get("style_sha256"), 64)
+):
+    raise SystemExit("active basemap identity is inconsistent with the live frontend")
+print(variant)
+PY
+)
 
 write_state() {
   local result="$1"
@@ -1077,7 +1153,7 @@ prune_releases() {
 getent passwd "$BUILD_USER" > /dev/null || fail "build user does not exist: $BUILD_USER"
 [[ "$MIN_FREE_KIB" =~ ^[0-9]+$ ]] || fail "minimum free space is invalid"
 
-for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath; do
+for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath curl mktemp; do
   require_command "$command_name"
 done
 
@@ -1126,6 +1202,10 @@ if "$LIVE_VERIFIER" \
   exit 0
 fi
 
+active_basemap_variant="$(resolve_active_basemap_variant)"
+[[ "$active_basemap_variant" == "regional" || "$active_basemap_variant" == "germany" ]] ||
+  fail "active basemap variant resolution returned an invalid value"
+
 build_uid="$(id -u "$BUILD_USER")"
 build_gid="$(id -g "$BUILD_USER")"
 [[ "$build_uid" =~ ^[0-9]+$ && "$build_gid" =~ ^[0-9]+$ ]] || fail "build user IDs are invalid"
@@ -1164,6 +1244,7 @@ temporary_artifact="$ARTIFACT_ROOT/.web-$target_commit.$$.tmp"
     --env SOURCE_DATE_EPOCH="$commit_epoch" \
     --env GIT_COMMIT_SHA="$target_commit" \
     --env PUBLIC_BASEMAP_MODE=local-sovereign \
+    --env PUBLIC_BASEMAP_VARIANT="$active_basemap_variant" \
     "$NODE_BUILD_IMAGE" \
     sh -lc '{ /usr/bin/tar -xf /source.tar -C /workspace && cd /workspace/apps/web && mkdir -p "$HOME" "$COREPACK_HOME" "$npm_config_cache" /tmp/bin && corepack enable --install-directory /tmp/bin pnpm && export PATH="/tmp/bin:$PATH" && pnpm install --frozen-lockfile && pnpm build; } >&2 && exec /usr/bin/tar --sort=name --mtime="@$SOURCE_DATE_EPOCH" --owner=0 --group=0 --numeric-owner -czf - build'
 ) > "$temporary_artifact"

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -168,6 +169,73 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("web artifact changed during validation", script)
         self.assertGreaterEqual(script.count('sha256sum "$artifact_real"'), 2)
         self.assertIn('write_deploy_receipt \\\n      "failed"', script)
+
+    def test_reconciler_preserves_active_public_basemap_variant(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        self.assertIn(
+            'BASEMAP_IDENTITY_URL="${WELTGEWEBE_BASEMAP_IDENTITY_URL:-https://weltgewebe.net/_app/basemap-build.json}"',
+            script,
+        )
+        self.assertIn("resolve_active_basemap_variant() (", script)
+        self.assertIn('active_basemap_variant="$(resolve_active_basemap_variant)"', script)
+        self.assertIn(
+            '--env PUBLIC_BASEMAP_VARIANT="$active_basemap_variant"', script
+        )
+        self.assertIn('basemap.get("source_commit") != commit', script)
+        self.assertIn(
+            '"germany": "/local-basemap/style-germany.json"', script
+        )
+        self.assertIn('"regional": "/local-basemap/style.json"', script)
+        self.assertIn("active basemap identity field matrix is invalid", script)
+        self.assertIn("active basemap identity is inconsistent with the live frontend", script)
+        self.assertIn("--max-filesize 1048576", script)
+        self.assertIn("--max-redirs 0", script)
+
+    def test_reconciler_basemap_variant_parser_is_commit_bound(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        function_start = script.index("resolve_active_basemap_variant() (")
+        parser_start = script.index("import json\n", function_start)
+        parser_end = script.index("\nPY\n)", parser_start)
+        parser = script[parser_start:parser_end]
+        commit = "a" * 40
+        frontend = {"commit": commit, "version": commit[:8]}
+        basemap = {
+            "schema_version": 1,
+            "mode": "local-sovereign",
+            "variant": "germany",
+            "style_path": "/local-basemap/style-germany.json",
+            "source_commit": commit,
+            "style_sha256": "b" * 64,
+        }
+
+        with tempfile.TemporaryDirectory(prefix="weltgewebe-basemap-variant-") as tmp:
+            root = Path(tmp)
+            frontend_path = root / "version.json"
+            basemap_path = root / "basemap-build.json"
+            frontend_path.write_text(json.dumps(frontend), encoding="utf-8")
+            basemap_path.write_text(json.dumps(basemap), encoding="utf-8")
+            valid = subprocess.run(
+                [sys.executable, "-c", parser, str(frontend_path), str(basemap_path)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(valid.returncode, 0, valid.stderr)
+            self.assertEqual(valid.stdout.strip(), "germany")
+
+            basemap["source_commit"] = "c" * 40
+            basemap_path.write_text(json.dumps(basemap), encoding="utf-8")
+            mismatch = subprocess.run(
+                [sys.executable, "-c", parser, str(frontend_path), str(basemap_path)],
+                check=False,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotEqual(mismatch.returncode, 0)
+            self.assertIn(
+                "active basemap identity is inconsistent with the live frontend",
+                mismatch.stderr,
+            )
 
     def run_release_cleanup(self, release: Path) -> subprocess.CompletedProcess[str]:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")
