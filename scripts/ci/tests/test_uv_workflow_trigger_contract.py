@@ -47,7 +47,7 @@ class UvWorkflowTriggerContractTest(unittest.TestCase):
         self.assertIn('python-version-file: ".python-version"', publish_job)
         self.assertNotIn('python-version: "3.10"', publish_job)
         self.assertIn(
-            "uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990",
+            "uses: astral-sh/setup-uv@696e4e1bf2f38a7ac027afc72ca9d963427412ae",
             publish_job,
         )
         self.assertIn("uv sync --project tools/py --locked", publish_job)
@@ -67,7 +67,7 @@ class UvWorkflowTriggerContractTest(unittest.TestCase):
     def test_core_guard_job_bootstraps_uv_before_fixture_suites(self) -> None:
         text = (ROOT / ".github/workflows/ci.yml").read_text(encoding="utf-8")
         guard_job = text.split("\n  guard-tests:\n", 1)[1].split("\n  ci:\n", 1)[0]
-        setup_uv = "uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990"
+        setup_uv = "uses: astral-sh/setup-uv@696e4e1bf2f38a7ac027afc72ca9d963427412ae"
         fixture_step = "- name: Run guard fixture suites"
         self.assertIn("python-version-file: '.python-version'", guard_job)
         self.assertIn(setup_uv, guard_job)
