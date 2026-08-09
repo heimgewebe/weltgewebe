@@ -11,7 +11,7 @@ import {
   BASEMAP_MODE_POLICY,
   type BasemapMode,
 } from "../../generated/basemapModePolicy";
-import { MAP_MIN_ZOOM } from "../markerScale";
+import { MAP_MAX_ZOOM, MAP_MIN_ZOOM } from "../markerScale";
 
 export type { BasemapMode, LocalBasemapVariant };
 
@@ -63,7 +63,7 @@ const baseConfig: BaseBasemapConfig = {
   center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
   zoom: 15,
   minZoom: MAP_MIN_ZOOM,
-  maxZoom: 18,
+  maxZoom: MAP_MAX_ZOOM,
 };
 
 export const currentBasemap: BasemapConfig =

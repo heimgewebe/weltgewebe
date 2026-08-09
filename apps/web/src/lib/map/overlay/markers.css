@@ -33,7 +33,12 @@
   z-index: 2;
   /* Geographic anchor, MapLibre marker center, and visible knot center coincide. */
   transform-origin: center center;
-  transition: transform 0.18s ease-out;
+  /* Individual scale composes the geographic world scale with the interaction
+   * transform below without touching MapLibre's outer marker transform. */
+  scale: var(--map-object-scale, 1);
+  transition:
+    scale 0.18s ease-out,
+    transform 0.18s ease-out;
   pointer-events: none;
 }
 
@@ -45,6 +50,7 @@
   background: transparent;
   filter: drop-shadow(0 2px 2px rgba(35, 22, 15, 0.4));
   transition:
+    scale 0.18s ease-out,
     transform 0.18s ease-out,
     filter 0.18s ease-out;
 }
@@ -416,10 +422,7 @@
   width: 100%;
   height: 100%;
   object-fit: contain;
-  transform: scale(var(--garnrolle-marker-scale, 1));
-  transform-origin: center center;
   filter: drop-shadow(0 1px 1px rgba(34, 24, 16, 0.42));
-  transition: transform 0.2s ease-out;
   pointer-events: none;
   user-select: none;
   -webkit-user-drag: none;
