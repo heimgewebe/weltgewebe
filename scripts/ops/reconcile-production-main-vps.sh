@@ -1305,8 +1305,7 @@ if "$LIVE_VERIFIER" \
   --output "$initial_receipt"; then
   basemap_identity_matches=0
   if verify_public_germany_basemap_delivery \
-    "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha";
-  then
+    "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha"; then
     basemap_identity_matches=1
   fi
   observed_main="$(fetch_main)"
