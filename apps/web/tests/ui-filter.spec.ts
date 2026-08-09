@@ -2,12 +2,42 @@ import { test, expect } from "@playwright/test";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
+const CENTER = {
+  type: "webgemeindezentrum" as const,
+  id: "webgemeindezentrum-hammer-park",
+  title: "Webgemeindezentrum Hammer Park",
+  ortsweberei: {
+    id: "ortsweberei-hamm",
+    slug: "hamm",
+    name: "Ortsweberei Hamm",
+    gewebezelle_id: "hamm.weltgewebe.net",
+  },
+  location_state: "desired" as const,
+  location_state_label: "Gewünschter Treffort",
+  faden_endpoint_id: "22222222-2222-5222-8222-222222222222",
+  conversation_id: "33333333-3333-5333-8333-333333333333",
+  location: { lat: 53.5585, lon: 10.058 },
+  location_label: "Hammer Park – gewünschter Treffpunkt",
+  meeting_note: "Ein bewusst gewählter öffentlicher Treffpunkt.",
+  access_note: "Nutzung und Zugänglichkeit sind noch nicht bestätigt.",
+  created_at: "2026-08-02T10:08:00.000Z",
+  updated_at: "2026-08-02T10:08:00.000Z",
+};
+
 test.describe("Sicht mode", () => {
   test.beforeEach(async ({ page }) => {
     // 1. Load the base mock API to prevent CartoCDN errors, etc.
     await mockApiResponses(page);
 
     // 2. Explicit, deterministic mock data overrides
+    await page.route("**/api/webgemeindezentren*", async (route) => {
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockListResponse(route.request().url(), [CENTER])),
+      });
+    });
+
     await page.route("**/api/nodes*", async (route) => {
       route.fulfill({
         status: 200,
@@ -192,13 +222,25 @@ test.describe("Sicht mode", () => {
     });
   });
 
+  test("labels Webgemeindezentren as a distinct content type", async ({
+    page,
+  }) => {
+    await activateToolFanAction(page, "sight");
+
+    await expect(
+      page
+        .getByTestId("filter-overlay")
+        .locator("label.filter-item", { hasText: "Webgemeindezentren" }),
+    ).toBeVisible();
+  });
+
   test("Case B & E: Active Sicht -> Search strictly bounded, and reset", async ({
     page,
   }) => {
     const markerSelector = ".map-marker, .marker-account";
 
-    // Initial marker count is 3
-    await expect(page.locator(markerSelector)).toHaveCount(3);
+    // Initial marker count is 4
+    await expect(page.locator(markerSelector)).toHaveCount(4);
 
     // Open Sicht
     await activateToolFanAction(page, "sight");
@@ -249,7 +291,7 @@ test.describe("Sicht mode", () => {
     const clearBtn = page.getByRole("button", { name: "Alles wieder zeigen" });
     await clearBtn.click();
     await expect(clearBtn).not.toBeVisible();
-    await expect(page.locator(markerSelector)).toHaveCount(3);
+    await expect(page.locator(markerSelector)).toHaveCount(4);
   });
 
   test("Case C: Overlay exclusivity and focus shift", async ({ page }) => {
@@ -333,7 +375,7 @@ test.describe("Sicht mode", () => {
       .click();
     await expect(page.locator(markerSelector)).toHaveCount(1);
     await expect(
-      sichtOverlay.getByText("1 Auswahl aktiv · 1 von 3 Elementen sichtbar"),
+      sichtOverlay.getByText("1 Auswahl aktiv · 1 von 4 Elementen sichtbar"),
     ).toBeVisible();
 
     await sichtOverlay
@@ -341,7 +383,7 @@ test.describe("Sicht mode", () => {
       .click();
     await expect(page.locator(markerSelector)).toHaveCount(2);
     await expect(
-      sichtOverlay.getByText("2 Auswahlen aktiv · 2 von 3 Elementen sichtbar"),
+      sichtOverlay.getByText("2 Auswahlen aktiv · 2 von 4 Elementen sichtbar"),
     ).toBeVisible();
 
     const allTopics = sichtOverlay.getByRole("button", {
@@ -349,7 +391,7 @@ test.describe("Sicht mode", () => {
     });
     await allTopics.click();
     await expect(allTopics).toHaveAttribute("aria-pressed", "true");
-    await expect(page.locator(markerSelector)).toHaveCount(3);
+    await expect(page.locator(markerSelector)).toHaveCount(4);
     await expect(
       page.getByRole("button", { name: "Alles wieder zeigen" }),
     ).toHaveCount(0);

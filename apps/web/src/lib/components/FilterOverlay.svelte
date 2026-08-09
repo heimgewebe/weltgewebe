@@ -43,7 +43,9 @@
   }
 
   function filterLabel(type: { id: string; label: string }): string {
-    return type.id === "Garnrolle" ? "Garnrollen" : nodeKindLabel(type.id);
+    if (type.id === "Garnrolle") return "Garnrollen";
+    if (type.id === "Webgemeindezentrum") return "Webgemeindezentren";
+    return nodeKindLabel(type.id);
   }
   function handleGlobalKeydown(e: KeyboardEvent) {
     if (!$isFilterOpen || e.defaultPrevented || e.repeat) return;
