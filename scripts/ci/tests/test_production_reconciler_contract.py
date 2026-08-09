@@ -112,12 +112,20 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("build/_app/basemap-build.json", script)
         self.assertIn("frontend basemap build identity mismatch", script)
         self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL", script)
-        self.assertIn("verify_public_germany_basemap_identity", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_LIGHT_STYLE_URL", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_DARK_STYLE_URL", script)
+        self.assertIn("WELTGEWEBE_FRONTEND_BASEMAP_PMTILES_URL", script)
+        self.assertIn("verify_public_germany_basemap_delivery", script)
+        self.assertEqual(script.count("verify_public_germany_basemap_delivery"), 3)
         self.assertIn("reason=basemap_identity_drift", script)
         self.assertIn(
-            "public nationwide Germany basemap identity mismatch after deploy", script
+            "public nationwide Germany basemap delivery mismatch after deploy", script
         )
         self.assertIn("/local-basemap/style-germany.json", script)
+        self.assertIn("/local-basemap/style-germany-dark.json", script)
+        self.assertIn("/local-basemap/basemap-germany.pmtiles", script)
+        self.assertIn("--range 0-126", script)
+        self.assertIn("public Germany PMTiles range response is not HTTP 206", script)
 
     def test_deploy_helper_runs_bounded_migrations_before_full_deploy(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")

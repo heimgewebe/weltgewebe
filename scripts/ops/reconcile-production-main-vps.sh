@@ -16,6 +16,9 @@ export DOCKER_CONFIG
 BUILD_USER="${WELTGEWEBE_BUILD_USER:-alex}"
 FRONTEND_URL="${WELTGEWEBE_FRONTEND_VERSION_URL:-https://weltgewebe.net/_app/version.json}"
 BASEMAP_IDENTITY_URL="${WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL:-https://weltgewebe.net/_app/basemap-build.json}"
+BASEMAP_LIGHT_STYLE_URL="${WELTGEWEBE_FRONTEND_BASEMAP_LIGHT_STYLE_URL:-https://weltgewebe.net/local-basemap/style-germany.json}"
+BASEMAP_DARK_STYLE_URL="${WELTGEWEBE_FRONTEND_BASEMAP_DARK_STYLE_URL:-https://weltgewebe.net/local-basemap/style-germany-dark.json}"
+BASEMAP_PMTILES_URL="${WELTGEWEBE_FRONTEND_BASEMAP_PMTILES_URL:-https://weltgewebe.net/local-basemap/basemap-germany.pmtiles}"
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://weltgewebe.net/api/version}"
 NODE_BUILD_IMAGE="${WELTGEWEBE_NODE_BUILD_IMAGE:-docker.io/library/node@sha256:8898f8ed3c0126667837b678979b4ed83306c856a1227c8bf5f5f77740c25cd6}"
 DEPLOY_HELPER="${WELTGEWEBE_DEPLOY_HELPER:-/usr/local/libexec/weltgewebe-deploy-exact-commit}"
@@ -117,10 +120,13 @@ fetch_main() {
   git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
 }
 
-verify_public_germany_basemap_identity() {
+verify_public_germany_basemap_delivery() {
   local commit="$1"
   local expected_style_sha="$2"
+  local expected_dark_style_sha="$3"
   local identity_json
+  local public_style_sha
+  local public_dark_style_sha
 
   identity_json="$(
     curl --fail --silent --show-error \
@@ -161,6 +167,93 @@ if not re.fullmatch(r"[0-9a-f]{40}", commit):
 if not re.fullmatch(r"[0-9a-f]{64}", style_sha):
     raise SystemExit("expected public style hash is malformed")
 PY_PUBLIC_BASEMAP_IDENTITY
+
+  public_style_sha="$(
+    curl --fail --silent --show-error \
+      --proto '=https' \
+      --connect-timeout 5 \
+      --max-time 15 \
+      --max-filesize 1048576 \
+      --header 'Accept-Encoding: identity' \
+      "$BASEMAP_LIGHT_STYLE_URL" |
+      sha256sum | awk '{print $1}'
+  )" || return 1
+  if [[ "$public_style_sha" != "$expected_style_sha" ]]; then
+    echo "public nationwide Germany light style hash mismatch" >&2
+    return 1
+  fi
+
+  public_dark_style_sha="$(
+    curl --fail --silent --show-error \
+      --proto '=https' \
+      --connect-timeout 5 \
+      --max-time 15 \
+      --max-filesize 1048576 \
+      --header 'Accept-Encoding: identity' \
+      "$BASEMAP_DARK_STYLE_URL" |
+      sha256sum | awk '{print $1}'
+  )" || return 1
+  if [[ "$public_dark_style_sha" != "$expected_dark_style_sha" ]]; then
+    echo "public nationwide Germany dark style hash mismatch" >&2
+    return 1
+  fi
+
+  (
+    range_headers="$(mktemp)" || exit 1
+    range_body="$(mktemp)" || {
+      rm -f -- "$range_headers"
+      exit 1
+    }
+    trap 'rm -f -- "$range_headers" "$range_body"' EXIT
+    curl --fail --silent --show-error \
+      --proto '=https' \
+      --connect-timeout 5 \
+      --max-time 15 \
+      --max-filesize 127 \
+      --header 'Accept-Encoding: identity' \
+      --range 0-126 \
+      -D "$range_headers" \
+      "$BASEMAP_PMTILES_URL" > "$range_body" || exit 1
+    run_ops_python "$range_headers" "$range_body" << 'PY_PUBLIC_BASEMAP_RANGE' || exit 1
+import re
+import sys
+from pathlib import Path
+
+headers_path, body_path = map(Path, sys.argv[1:3])
+raw_headers = headers_path.read_text(encoding="iso-8859-1")
+blocks = [
+    block
+    for block in raw_headers.replace("\r\n", "\n").split("\n\n")
+    if block.strip()
+]
+if not blocks:
+    raise SystemExit("public Germany PMTiles range response has no headers")
+lines = blocks[-1].splitlines()
+if not lines or re.fullmatch(r"HTTP/\S+ 206(?: .*)?", lines[0]) is None:
+    raise SystemExit("public Germany PMTiles range response is not HTTP 206")
+headers = {}
+for line in lines[1:]:
+    if ":" not in line:
+        continue
+    name, value = line.split(":", 1)
+    headers[name.strip().lower()] = value.strip()
+content_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
+if content_type != "application/octet-stream":
+    raise SystemExit("public Germany PMTiles range response has wrong content type")
+content_range = headers.get("content-range", "")
+if re.fullmatch(r"bytes 0-126/[1-9][0-9]*", content_range) is None:
+    raise SystemExit("public Germany PMTiles range response has invalid Content-Range")
+if headers.get("content-length") != "127":
+    raise SystemExit("public Germany PMTiles range response has invalid Content-Length")
+if "bytes" not in headers.get("accept-ranges", "").lower():
+    raise SystemExit("public Germany PMTiles range response lacks Accept-Ranges: bytes")
+payload = body_path.read_bytes()
+if len(payload) != 127:
+    raise SystemExit("public Germany PMTiles range response has wrong payload length")
+if not payload.startswith(b"PMTiles"):
+    raise SystemExit("public Germany PMTiles range response lacks PMTiles signature")
+PY_PUBLIC_BASEMAP_RANGE
+  )
 }
 
 write_state() {
@@ -1124,7 +1217,7 @@ prune_releases() {
 getent passwd "$BUILD_USER" > /dev/null || fail "build user does not exist: $BUILD_USER"
 [[ "$MIN_FREE_KIB" =~ ^[0-9]+$ ]] || fail "minimum free space is invalid"
 
-for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath tar curl; do
+for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath tar curl mktemp; do
   require_command "$command_name"
 done
 
@@ -1163,6 +1256,12 @@ expected_germany_style_sha="$(
 )"
 [[ "$expected_germany_style_sha" =~ ^[0-9a-f]{64}$ ]] ||
   fail "target nationwide Germany style hash is invalid"
+expected_germany_dark_style_sha="$(
+  git -C "$SOURCE_CHECKOUT" show "$target_commit:map-style/style-germany-dark.json" |
+    sha256sum | awk '{print $1}'
+)"
+[[ "$expected_germany_dark_style_sha" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "target nationwide Germany dark style hash is invalid"
 
 # The public build label alone is insufficient: the local data aliases that
 # serve nationwide Germany must also be intact before any same-commit no-op.
@@ -1205,7 +1304,9 @@ if "$LIVE_VERIFIER" \
   --api-url "$API_URL" \
   --output "$initial_receipt"; then
   basemap_identity_matches=0
-  if verify_public_germany_basemap_identity "$target_commit" "$expected_germany_style_sha"; then
+  if verify_public_germany_basemap_delivery \
+    "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha";
+  then
     basemap_identity_matches=1
   fi
   observed_main="$(fetch_main)"
@@ -1217,7 +1318,7 @@ if "$LIVE_VERIFIER" \
   if [[ "$basemap_identity_matches" == "1" ]]; then
     repair_observed_deployment_state "$initial_receipt"
     write_state "consistent_observed_unattested" "$target_commit" \
-      "public identity, artifact declaration, and Germany basemap identity matched; provenance remains unattested"
+      "public identity, artifact declaration, and Germany basemap delivery matched; provenance remains unattested"
     ln -sfn "reconcile-receipts/$target_commit.json" "$STATE_ROOT/reconcile-current.json"
     prune_artifacts
     prune_releases
@@ -1225,7 +1326,7 @@ if "$LIVE_VERIFIER" \
     exit 0
   fi
   write_state "basemap_identity_drift" "$target_commit" \
-    "public commit matched but nationwide Germany basemap identity did not; rebuild required"
+    "public commit matched but nationwide Germany basemap identity or delivery routes did not; rebuild required"
   echo "production_reconcile=repair_required commit=$target_commit reason=basemap_identity_drift"
 fi
 
@@ -1420,8 +1521,9 @@ final_receipt="$RECEIPT_ROOT/public-$target_commit.json"
   --wait-seconds 120 \
   --poll-seconds 5 \
   --output "$final_receipt"
-verify_public_germany_basemap_identity "$target_commit" "$expected_germany_style_sha" ||
-  fail "public nationwide Germany basemap identity mismatch after deploy"
+verify_public_germany_basemap_delivery \
+  "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha" ||
+  fail "public nationwide Germany basemap delivery mismatch after deploy"
 
 current_main="$(fetch_main)"
 if [[ "$current_main" != "$target_commit" ]]; then
