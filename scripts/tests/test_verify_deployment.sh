@@ -751,6 +751,10 @@ touch mock_edge_ca.crt
 export EDGE_CA="$PWD/mock_edge_ca.crt"
 export MOCK_HEALTH_EXISTS="1"
 export REQUIRE_FRONTEND="1"
+# These cache/header subtests are intentionally unrelated to sovereign map
+# delivery. Keep them in remote-style mode; Germany edge delivery has its own
+# fail-closed regression in test_weltgewebe_up_frontend_required.sh.
+export PUBLIC_BASEMAP_MODE="remote-style"
 
 set +e
 OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build 2>&1)
@@ -1090,6 +1094,7 @@ else
 fi
 
 unset REQUIRE_FRONTEND
+unset PUBLIC_BASEMAP_MODE
 unset EDGE_CA
 unset MOCK_HEALTH_EXISTS
 rm -f mock_edge_ca.crt
