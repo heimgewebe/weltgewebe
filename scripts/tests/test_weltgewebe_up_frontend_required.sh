@@ -57,7 +57,10 @@ new_repo() {
     mkdir -p infra/compose scripts apps/web map-style build/basemap
     printf '{}\n' > map-style/style-germany.json
     printf '{}\n' > map-style/style-germany-dark.json
-    printf 'pmtiles\n' > build/basemap/basemap-germany.pmtiles
+    {
+      printf 'PMTiles'
+      printf '0%.0s' {1..120}
+    } > build/basemap/basemap-germany.pmtiles
     printf '{}\n' > build/basemap/basemap-germany.meta.json
     cp "$SCRIPT_SOURCE" scripts/weltgewebe-up
     chmod +x scripts/weltgewebe-up
@@ -104,7 +107,11 @@ if [[ "$1" == "ps" ]]; then
   exit 0
 fi
 if [[ "$1" == "inspect" ]]; then
-  echo "{}"
+  if [[ "$ARGS" == *"Aliases"* ]]; then
+    echo "[weltgewebe-api]"
+  else
+    echo "{}"
+  fi
   exit 0
 fi
 if [[ "$1" == "compose" ]]; then
@@ -160,6 +167,40 @@ if [[ "$ARGS" == *"/_app/version.json"* ]]; then
   echo '{"version":"test-build","build_id":"test-build"}'
   exit 0
 fi
+if [[ "$ARGS" == *"/local-basemap/style-germany-dark.json"* ]]; then
+  if [[ "${MOCK_FAIL_GERMANY_DARK:-0}" == "1" ]]; then
+    exit 22
+  fi
+  printf '{}\n'
+  exit 0
+fi
+if [[ "$ARGS" == *"/local-basemap/style-germany.json"* ]]; then
+  printf '{}\n'
+  exit 0
+fi
+if [[ "$ARGS" == *"/local-basemap/basemap-germany.pmtiles"* ]]; then
+  if [[ "${MOCK_FAIL_GERMANY_PMTILES:-0}" == "1" ]]; then
+    exit 22
+  fi
+  D_FILE=""
+  O_FILE=""
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      -D) D_FILE="$2"; shift 2 ;;
+      -o) O_FILE="$2"; shift 2 ;;
+      *) shift ;;
+    esac
+  done
+  if [[ -n "$D_FILE" ]]; then
+    printf 'HTTP/2 206\r\nContent-Type: application/octet-stream\r\nContent-Range: bytes 0-126/127\r\nContent-Length: 127\r\nAccept-Ranges: bytes\r\n\r\n' > "$D_FILE"
+  fi
+  if [[ -n "$O_FILE" ]]; then
+    { printf 'PMTiles'; printf '0%.0s' {1..120}; } > "$O_FILE"
+  else
+    { printf 'PMTiles'; printf '0%.0s' {1..120}; }
+  fi
+  exit 0
+fi
 echo '{"status":"ok"}'
 exit 0
 EOF
@@ -212,6 +253,8 @@ run_up() {
       DEPLOY_TARGET=heimserver \
       REQUIRE_FRONTEND="$require_frontend" \
       WELTGEWEBE_STATE_DIR="$repo/.ops" \
+      MOCK_FAIL_GERMANY_DARK="${MOCK_FAIL_GERMANY_DARK:-0}" \
+      MOCK_FAIL_GERMANY_PMTILES="${MOCK_FAIL_GERMANY_PMTILES:-0}" \
       bash scripts/weltgewebe-up --no-pull "$@"
   )
 }
@@ -286,5 +329,48 @@ set -e
 assert_contains "$out_regional_stale" ">> Frontend Build (Auto: basemap contract mismatch)"
 
 echo "PASS: normal Germany run rebuilds instead of reusing same-commit regional rollback bundle"
+
+# 5) The non-VPS full-deploy postflight must fail closed when the new normal
+#    Germany contract is selected but an actual Germany edge route is broken.
+prepare_reusable_germany_build() {
+  local repo="$1"
+  mkdir -p "$repo/apps/web/build/_app/immutable"
+  printf '<!doctype html><script src="/_app/immutable/app.js"></script>\n' > "$repo/apps/web/build/index.html"
+  printf 'local-basemap\n' > "$repo/apps/web/build/_app/immutable/app.js"
+  cat > "$repo/apps/web/build/_app/basemap-build.json" << 'EOF'
+{"schema_version":1,"mode":"local-sovereign","variant":"germany"}
+EOF
+}
+
+repo_edge_dark_fail="$(new_repo edge-dark-fail)"
+prepare_reusable_germany_build "$repo_edge_dark_fail"
+set +e
+out_edge_dark_fail="$(MOCK_FAIL_GERMANY_DARK=1 run_up "$repo_edge_dark_fail" 1 1 --no-build-web 2>&1)"
+rc_edge_dark_fail=$?
+set -e
+[[ "$rc_edge_dark_fail" -ne 0 ]] || fail "broken Germany dark-style edge route must abort"
+assert_contains "$out_edge_dark_fail" "Nationwide Germany Basemap Edge Guard failed: Could not fetch style-germany-dark.json via Edge Route"
+
+echo "PASS: Germany postflight fails closed when the dark style edge route is missing"
+
+repo_edge_pmtiles_fail="$(new_repo edge-pmtiles-fail)"
+prepare_reusable_germany_build "$repo_edge_pmtiles_fail"
+set +e
+out_edge_pmtiles_fail="$(MOCK_FAIL_GERMANY_PMTILES=1 run_up "$repo_edge_pmtiles_fail" 1 1 --no-build-web 2>&1)"
+rc_edge_pmtiles_fail=$?
+set -e
+[[ "$rc_edge_pmtiles_fail" -ne 0 ]] || fail "broken Germany PMTiles edge route must abort"
+assert_contains "$out_edge_pmtiles_fail" "Nationwide Germany Basemap Edge Guard failed: Could not fetch the bounded basemap-germany.pmtiles range via Edge Route"
+
+echo "PASS: Germany postflight fails closed when the PMTiles edge route is missing"
+
+repo_edge_ok="$(new_repo edge-ok)"
+prepare_reusable_germany_build "$repo_edge_ok"
+set +e
+out_edge_ok="$(run_up "$repo_edge_ok" 1 1 --no-build-web 2>&1)"
+set -e
+assert_contains "$out_edge_ok" "OK (nationwide Germany light/dark styles and PMTiles range verified via Edge Route)"
+
+echo "PASS: Germany postflight accepts exact light/dark styles and bound PMTiles range"
 
 echo "test_weltgewebe_up_frontend_required: OK"

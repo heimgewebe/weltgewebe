@@ -2457,28 +2457,144 @@ if [[ "$DEPLOY_TARGET" != "vps" ]]; then
 
   echo
 
-  echo ">> Check 4b: Sovereign Basemap Route (Advisory Infrastructure Readiness)..."
+  echo ">> Guard 4b: Sovereign Basemap Edge Delivery..."
   if [[ "$REQUIRE_FRONTEND" == "1" ]]; then
-    echo "   (Note: weltgewebe-up cannot deterministically read PUBLIC_BASEMAP_MODE; sovereign route check is advisory only.)"
-    if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" https://weltgewebe.home.arpa/local-basemap/style.json > /dev/null 2>&1; then
-      msg="Sovereign Basemap Check skipped/failed: Could not fetch style.json via Edge Route (/local-basemap/style.json). Sovereign infrastructure routing is incomplete."
-      echo "   [!] WARNING: $msg"
-      echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
-    else
-      echo "OK (sovereign style.json reachable)"
-    fi
+    if [[ "${PUBLIC_BASEMAP_MODE:-local-sovereign}" == "remote-style" ]]; then
+      echo "OK (remote-style selected; local sovereign basemap edge guard not applicable)"
+    elif [[ "${PUBLIC_BASEMAP_VARIANT:-germany}" == "germany" ]]; then
+      echo "   Enforcing nationwide Germany edge delivery..."
+      for germany_style in style-germany.json style-germany-dark.json; do
+        germany_style_path="map-style/${germany_style}"
+        expected_germany_edge_style_sha="$(sha256sum "$germany_style_path" | awk '{print $1}')"
+        if ! public_germany_edge_style_sha="$(
+          curl -fsS --connect-timeout 2 --max-time 5 --max-filesize 1048576 \
+            --header 'Accept-Encoding: identity' --cacert "$EDGE_CA" \
+            "https://weltgewebe.home.arpa/local-basemap/${germany_style}" |
+            sha256sum | awk '{print $1}'
+        )"; then
+          msg="Nationwide Germany Basemap Edge Guard failed: Could not fetch ${germany_style} via Edge Route (/local-basemap/${germany_style})."
+          echo "ERROR: $msg"
+          generate_failure_bundle "$msg"
+          exit 1
+        fi
+        if [[ "$public_germany_edge_style_sha" != "$expected_germany_edge_style_sha" ]]; then
+          msg="Nationwide Germany Basemap Edge Guard failed: ${germany_style} differs from the deployed source checkout."
+          echo "ERROR: $msg"
+          generate_failure_bundle "$msg"
+          exit 1
+        fi
+        echo "OK (nationwide Germany ${germany_style} reachable and exact)"
+      done
 
-    for regional_meta in basemap-hamburg.meta.json basemap-schleswig-holstein.meta.json; do
-      if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" \
-        "https://weltgewebe.home.arpa/local-basemap/${regional_meta}" > /dev/null 2>&1; then
-        msg="Sovereign Basemap Check skipped/failed: Could not fetch ${regional_meta} via Edge Route (/local-basemap/${regional_meta}). PMTiles artifact volume or route is missing."
-        echo "   [!] WARNING: $msg"
-        echo "       This is completely OK if PUBLIC_BASEMAP_MODE=remote-style is intended. It only breaks local-sovereign mode."
-      else
-        echo "OK (sovereign ${regional_meta} reachable)"
+      germany_edge_pmtiles="build/basemap/basemap-germany.pmtiles"
+      germany_edge_pmtiles_target="$(realpath -e "$germany_edge_pmtiles")" || {
+        msg="Nationwide Germany Basemap Edge Guard failed: Cannot resolve local basemap-germany.pmtiles alias."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        exit 1
+      }
+      germany_edge_pmtiles_size="$(stat --format=%s "$germany_edge_pmtiles_target")"
+      if [[ ! "$germany_edge_pmtiles_size" =~ ^[0-9]+$ ]] || ((germany_edge_pmtiles_size < 127)); then
+        msg="Nationwide Germany Basemap Edge Guard failed: Local basemap-germany.pmtiles is too small for a bounded range proof."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        exit 1
       fi
-    done
-    echo "   (Note: This proves edge routing readiness, not E2E client usage)"
+      germany_edge_range_sha="$(
+        python3 - "$germany_edge_pmtiles_target" << 'PY_EDGE_GERMANY_RANGE'
+import hashlib
+import sys
+from pathlib import Path
+
+artifact = Path(sys.argv[1])
+with artifact.open("rb") as handle:
+    payload = handle.read(127)
+if len(payload) != 127:
+    raise SystemExit("local Germany PMTiles range is incomplete")
+print(hashlib.sha256(payload).hexdigest())
+PY_EDGE_GERMANY_RANGE
+      )" || {
+        msg="Nationwide Germany Basemap Edge Guard failed: Could not hash the selected local PMTiles range."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        exit 1
+      }
+
+      germany_edge_headers="$(mktemp)"
+      germany_edge_body="$(mktemp)"
+      if ! curl -fsS --connect-timeout 2 --max-time 5 --max-filesize 127 \
+        --header 'Accept-Encoding: identity' --range 0-126 --cacert "$EDGE_CA" \
+        -D "$germany_edge_headers" -o "$germany_edge_body" \
+        https://weltgewebe.home.arpa/local-basemap/basemap-germany.pmtiles; then
+        msg="Nationwide Germany Basemap Edge Guard failed: Could not fetch the bounded basemap-germany.pmtiles range via Edge Route."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$germany_edge_headers" "$germany_edge_body"
+        exit 1
+      fi
+      if ! python3 - "$germany_edge_headers" "$germany_edge_body" \
+        "$germany_edge_pmtiles_size" "$germany_edge_range_sha" << 'PY_EDGE_GERMANY_PUBLIC_RANGE'; then
+import hashlib
+import re
+import sys
+from pathlib import Path
+
+headers_path = Path(sys.argv[1])
+body_path = Path(sys.argv[2])
+expected_size = int(sys.argv[3])
+expected_sha = sys.argv[4]
+raw_headers = headers_path.read_text(encoding="iso-8859-1").replace("\r\n", "\n")
+blocks = [block for block in raw_headers.split("\n\n") if block.strip()]
+if not blocks:
+    raise SystemExit("edge Germany PMTiles response has no headers")
+lines = blocks[-1].splitlines()
+if not lines or re.fullmatch(r"HTTP/\S+ 206(?: .*)?", lines[0]) is None:
+    raise SystemExit("edge Germany PMTiles response is not HTTP 206")
+headers = {}
+for line in lines[1:]:
+    if ":" in line:
+        name, value = line.split(":", 1)
+        headers[name.strip().lower()] = value.strip()
+if headers.get("content-range") != f"bytes 0-126/{expected_size}":
+    raise SystemExit("edge Germany PMTiles Content-Range does not match selected artifact")
+if headers.get("content-length") != "127":
+    raise SystemExit("edge Germany PMTiles Content-Length is not 127")
+content_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
+if content_type != "application/octet-stream":
+    raise SystemExit("edge Germany PMTiles content type is not application/octet-stream")
+if "bytes" not in headers.get("accept-ranges", "").lower():
+    raise SystemExit("edge Germany PMTiles response lacks Accept-Ranges: bytes")
+payload = body_path.read_bytes()
+if len(payload) != 127 or not payload.startswith(b"PMTiles"):
+    raise SystemExit("edge Germany PMTiles bounded payload is not a PMTiles header")
+if hashlib.sha256(payload).hexdigest() != expected_sha:
+    raise SystemExit("edge Germany PMTiles bounded payload differs from selected artifact")
+PY_EDGE_GERMANY_PUBLIC_RANGE
+        msg="Nationwide Germany Basemap Edge Guard failed: Public basemap-germany.pmtiles does not match the selected local artifact."
+        echo "ERROR: $msg"
+        generate_failure_bundle "$msg"
+        rm -f "$germany_edge_headers" "$germany_edge_body"
+        exit 1
+      fi
+      rm -f "$germany_edge_headers" "$germany_edge_body"
+      echo "OK (nationwide Germany light/dark styles and PMTiles range verified via Edge Route)"
+    else
+      echo "   Explicit regional rollback selected; checking rollback routes advisory-only."
+      if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" \
+        https://weltgewebe.home.arpa/local-basemap/style.json > /dev/null 2>&1; then
+        echo "   [!] WARNING: regional rollback style.json is not reachable via Edge Route."
+      else
+        echo "OK (regional rollback style.json reachable)"
+      fi
+      for regional_meta in basemap-hamburg.meta.json basemap-schleswig-holstein.meta.json; do
+        if ! curl -fsS --connect-timeout 2 --max-time 5 --cacert "$EDGE_CA" \
+          "https://weltgewebe.home.arpa/local-basemap/${regional_meta}" > /dev/null 2>&1; then
+          echo "   [!] WARNING: regional rollback ${regional_meta} is not reachable via Edge Route."
+        else
+          echo "OK (regional rollback ${regional_meta} reachable)"
+        fi
+      done
+    fi
   fi
   echo
   echo ">> Guard 5: Frontend Reachability..."
