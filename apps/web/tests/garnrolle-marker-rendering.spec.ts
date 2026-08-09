@@ -1,9 +1,42 @@
 import { devices, expect, test } from "@playwright/test";
-import { getGarnrolleMarkerScale } from "../src/lib/map/markerScale";
-import { mockApiResponses } from "./fixtures/mockApi";
+import {
+  MAP_MARKER_MAX_SCALE,
+  MAP_MARKER_MIN_SCALE,
+  MAP_MARKER_REFERENCE_ZOOM,
+  MAP_MAX_ZOOM,
+  MAP_MIN_ZOOM,
+} from "../src/lib/map/markerScale";
+import type { Webgemeindezentrum } from "../src/lib/map/types";
+import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 
 const GARNROLLE_ID = "7d97a42e-3704-4a33-a61f-0e0a6b4d65d8";
 const KNOTEN_ID = "b52be17c-4ab7-4434-98ce-520f86290cf0";
+const WEBGEMEINDEZENTRUM_ID = "webgemeindezentrum-hammer-park";
+const SCALE_ALL_TEXTILE_OBJECTS_TEST =
+  "scales all textile objects with zoom while their touch anchors stay stable";
+const WEBGEMEINDEZENTRUM: Webgemeindezentrum = {
+  type: "webgemeindezentrum",
+  id: WEBGEMEINDEZENTRUM_ID,
+  title: "Webgemeindezentrum Hammer Park",
+  ortsweberei: {
+    id: "ortsweberei-hamm",
+    slug: "hamm",
+    name: "Ortsweberei Hamm",
+    gewebezelle_id: "hamm.weltgewebe.net",
+  },
+  location_state: "desired",
+  location_state_label: "Gewünschter Treffort",
+  faden_endpoint_id: "22222222-2222-5222-8222-222222222222",
+  conversation_id: "33333333-3333-5333-8333-333333333333",
+  location: { lat: 53.5585, lon: 10.058 },
+  location_label: "Hammer Park – gewünschter Treffpunkt auf der Grünfläche",
+  meeting_note:
+    "Ein bewusst gewählter öffentlicher Treffpunkt, an dem die Ortsweberei tatsächlich zusammenkommen kann. Die genaue Stelle kann später gemeinsam präzisiert werden.",
+  access_note:
+    "Gewünschter Treffort: Nutzung, Barrierefreiheit und regelmäßige Verfügbarkeit sind noch nicht bestätigt.",
+  created_at: "2026-08-02T10:08:00.000Z",
+  updated_at: "2026-08-02T10:08:00.000Z",
+};
 const IPAD_PRO_11_LANDSCAPE = {
   userAgent: devices["iPad Pro 11 landscape"].userAgent,
   viewport: devices["iPad Pro 11 landscape"].viewport,
@@ -13,8 +46,24 @@ const IPAD_PRO_11_LANDSCAPE = {
 };
 
 test.describe("Garnrolle marker rendering", () => {
-  test.beforeEach(async ({ page }) => {
+  test.beforeEach(async ({ page }, testInfo) => {
     await mockApiResponses(page);
+    if (testInfo.title === SCALE_ALL_TEXTILE_OBJECTS_TEST) {
+      await page.route("**/api/webgemeindezentren**", async (route) => {
+        const pathname = new URL(route.request().url()).pathname;
+        if (pathname === "/api/webgemeindezentren") {
+          await route.fulfill({
+            status: 200,
+            contentType: "application/json",
+            body: JSON.stringify(
+              mockListResponse(route.request().url(), [WEBGEMEINDEZENTRUM]),
+            ),
+          });
+          return;
+        }
+        await route.fallback();
+      });
+    }
     await page.goto(`/map?focus=garnrolle:${GARNROLLE_ID}`);
   });
 
@@ -30,7 +79,7 @@ test.describe("Garnrolle marker rendering", () => {
 
     const visual = marker.locator(".map-marker__visual");
     await expect(visual).toHaveCount(1);
-    await expect(visual).toHaveCSS("transition-property", "transform");
+    await expect(visual).toHaveCSS("transition-property", /scale.*transform/);
 
     const icon = marker.locator("img.marker-account__icon");
     await expect(icon).toHaveCount(1);
@@ -155,8 +204,10 @@ test.describe("Garnrolle marker rendering", () => {
 
     const marker = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
     const halo = marker.locator(".map-marker__halo");
+    const visual = marker.locator(".map-marker__visual");
     const icon = marker.locator(".marker-account__icon");
     await expect(halo).toHaveCSS("transition-duration", "0s");
+    await expect(visual).toHaveCSS("transition-duration", "0s");
     await expect(icon).toHaveCSS("transition-duration", "0s");
     await expect(halo).toHaveCSS("opacity", "1");
   });
@@ -222,30 +273,46 @@ test.describe("Garnrolle marker rendering", () => {
     expect(errorPx).toBeLessThanOrEqual(2);
   });
 
-  test("allows regional zoom-out while keeping the touch target stable", async ({
-    page,
-  }) => {
-    const marker = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
-    await expect(marker).toBeVisible();
+  test(SCALE_ALL_TEXTILE_OBJECTS_TEST, async ({ page }) => {
+    const garnrolle = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
+    await expect(garnrolle).toBeVisible();
 
     const metrics = await page.evaluate(
-      async ({ markerId }) => {
+      async ({
+        garnrolleId,
+        nodeId,
+        centerId,
+        minZoom,
+        referenceZoom,
+        maxZoom,
+      }) => {
         type TestMap = {
           getMinZoom(): number;
+          getMaxZoom(): number;
           getZoom(): number;
           jumpTo(options: { zoom: number }): void;
         };
         const map = (window as typeof window & { __TEST_MAP__?: TestMap })
           .__TEST_MAP__;
-        const markerElement = document.querySelector<HTMLElement>(
-          `[data-testid="marker-garnrolle-${markerId}"]`,
-        );
-        const icon = markerElement?.querySelector<HTMLElement>(
-          ".marker-account__icon",
-        );
-        if (!map || !markerElement || !icon) {
-          throw new Error("test map or Garnrolle marker unavailable");
-        }
+        if (!map) throw new Error("test map unavailable");
+
+        const targets = [
+          {
+            kind: "garnrolle",
+            testId: `marker-garnrolle-${garnrolleId}`,
+            baseSize: 44,
+          },
+          {
+            kind: "node",
+            testId: `marker-node-${nodeId}`,
+            baseSize: 46,
+          },
+          {
+            kind: "webgemeindezentrum",
+            testId: `marker-webgemeindezentrum-${centerId}`,
+            baseSize: 52,
+          },
+        ];
 
         const settle = async () => {
           await new Promise((resolve) => setTimeout(resolve, 220));
@@ -254,67 +321,141 @@ test.describe("Garnrolle marker rendering", () => {
           );
         };
         const measure = () => {
-          const outer = markerElement.getBoundingClientRect();
-          const visibleIcon = icon.getBoundingClientRect();
-          const transform = new DOMMatrixReadOnly(
-            getComputedStyle(icon).transform,
-          );
-          const outerCx = outer.left + outer.width / 2;
-          const outerCy = outer.top + outer.height / 2;
-          const iconCx = visibleIcon.left + visibleIcon.width / 2;
-          const iconCy = visibleIcon.top + visibleIcon.height / 2;
-          return {
-            zoom: map.getZoom(),
-            outerWidth: outer.width,
-            outerHeight: outer.height,
-            visualWidth: visibleIcon.width,
-            visualHeight: visibleIcon.height,
-            transformScaleX: transform.a,
-            transformScaleY: transform.d,
-            // Center-origin scale: icon midpoint stays on the geographic pin.
-            centerDelta: Math.hypot(outerCx - iconCx, outerCy - iconCy),
-          };
+          const objects = targets.map(({ kind, testId, baseSize }) => {
+            const outerElement = document.querySelector<HTMLElement>(
+              `[data-testid="${testId}"]`,
+            );
+            const visual = outerElement?.querySelector<HTMLElement>(
+              ".map-marker__visual",
+            );
+            const halo =
+              outerElement?.querySelector<HTMLElement>(".map-marker__halo");
+            if (!outerElement || !visual || !halo) {
+              throw new Error(`${kind} marker artwork unavailable`);
+            }
+            const outer = outerElement.getBoundingClientRect();
+            const artwork = visual.getBoundingClientRect();
+            const haloBox = halo.getBoundingClientRect();
+            const outerCx = outer.left + outer.width / 2;
+            const outerCy = outer.top + outer.height / 2;
+            const artworkCx = artwork.left + artwork.width / 2;
+            const artworkCy = artwork.top + artwork.height / 2;
+            return {
+              kind,
+              baseSize,
+              outerWidth: outer.width,
+              outerHeight: outer.height,
+              artworkWidth: artwork.width,
+              artworkHeight: artwork.height,
+              haloWidth: haloBox.width,
+              worldScale: Number.parseFloat(
+                visual.style.getPropertyValue("--map-object-scale"),
+              ),
+              outerIndividualScale: getComputedStyle(outerElement).scale,
+              centerDelta: Math.hypot(outerCx - artworkCx, outerCy - artworkCy),
+            };
+          });
+          return { zoom: map.getZoom(), objects };
         };
 
-        map.jumpTo({ zoom: 13 });
+        map.jumpTo({ zoom: referenceZoom });
         await settle();
-        const local = measure();
+        const reference = measure();
 
-        map.jumpTo({ zoom: 7 });
+        map.jumpTo({ zoom: maxZoom });
+        await settle();
+        const near = measure();
+
+        map.jumpTo({ zoom: minZoom });
         await settle();
         const regional = measure();
 
-        return { minZoom: map.getMinZoom(), local, regional };
+        return {
+          minZoom: map.getMinZoom(),
+          maxZoom: map.getMaxZoom(),
+          reference,
+          near,
+          regional,
+        };
       },
-      { markerId: GARNROLLE_ID },
+      {
+        garnrolleId: GARNROLLE_ID,
+        nodeId: KNOTEN_ID,
+        centerId: WEBGEMEINDEZENTRUM_ID,
+        minZoom: MAP_MIN_ZOOM,
+        referenceZoom: MAP_MARKER_REFERENCE_ZOOM,
+        maxZoom: MAP_MAX_ZOOM,
+      },
     );
 
-    expect(metrics.minZoom).toBe(7);
-    expect(metrics.local.zoom).toBeCloseTo(13, 5);
-    expect(metrics.regional.zoom).toBeCloseTo(7, 5);
-    for (const stage of [metrics.local, metrics.regional]) {
-      expect(stage.outerWidth).toBeGreaterThanOrEqual(43.9);
-      expect(stage.outerWidth).toBeLessThanOrEqual(44.1);
-      expect(stage.outerHeight).toBeGreaterThanOrEqual(43.9);
-      expect(stage.outerHeight).toBeLessThanOrEqual(44.1);
+    expect(metrics.minZoom).toBe(MAP_MIN_ZOOM);
+    expect(metrics.maxZoom).toBe(MAP_MAX_ZOOM);
+    expect(metrics.reference.zoom).toBeCloseTo(MAP_MARKER_REFERENCE_ZOOM, 5);
+    expect(metrics.near.zoom).toBeCloseTo(MAP_MAX_ZOOM, 5);
+    expect(metrics.regional.zoom).toBeCloseTo(MAP_MIN_ZOOM, 5);
+
+    for (let index = 0; index < metrics.reference.objects.length; index += 1) {
+      const reference = metrics.reference.objects[index];
+      const near = metrics.near.objects[index];
+      const regional = metrics.regional.objects[index];
+      expect(near.kind).toBe(reference.kind);
+      expect(regional.kind).toBe(reference.kind);
+
+      for (const stage of [reference, near, regional]) {
+        expect(stage.outerWidth).toBeCloseTo(44, 1);
+        expect(stage.outerHeight).toBeCloseTo(44, 1);
+        expect(stage.outerIndividualScale).toBe("none");
+        expect(stage.centerDelta).toBeLessThanOrEqual(0.5);
+      }
+
+      expect(reference.worldScale).toBeCloseTo(1, 3);
+      expect(regional.worldScale).toBeCloseTo(MAP_MARKER_MIN_SCALE, 3);
+      expect(near.worldScale).toBeCloseTo(MAP_MARKER_MAX_SCALE, 3);
+      expect(reference.artworkWidth).toBeCloseTo(reference.baseSize, 1);
+      expect(regional.artworkWidth / reference.artworkWidth).toBeCloseTo(
+        MAP_MARKER_MIN_SCALE,
+        2,
+      );
+      expect(near.artworkWidth / reference.artworkWidth).toBeCloseTo(
+        MAP_MARKER_MAX_SCALE,
+        2,
+      );
+      expect(regional.haloWidth).toBeCloseTo(reference.haloWidth, 1);
+      expect(near.haloWidth).toBeCloseTo(reference.haloWidth, 1);
     }
-    expect(metrics.local.transformScaleX).toBeGreaterThanOrEqual(0.995);
-    expect(metrics.local.transformScaleX).toBeLessThanOrEqual(1.005);
-    expect(metrics.local.transformScaleY).toBeGreaterThanOrEqual(0.995);
-    expect(metrics.local.transformScaleY).toBeLessThanOrEqual(1.005);
-    // Fachlicher Zoom-Vertrag: regional scale tracks getGarnrolleMarkerScale.
-    // Subpixel matrix readout may drift slightly across engines/devices.
-    const expectedRegional = getGarnrolleMarkerScale(metrics.regional.zoom);
-    expect(metrics.regional.transformScaleX).toBeCloseTo(expectedRegional, 2);
-    expect(metrics.regional.transformScaleY).toBeCloseTo(expectedRegional, 2);
-    const widthRatio = metrics.regional.visualWidth / metrics.local.visualWidth;
-    expect(widthRatio).toBeGreaterThanOrEqual(0.62);
-    expect(widthRatio).toBeLessThanOrEqual(0.68);
+
+    // Interaction transform and world scale are independent transform layers.
+    const node = page.getByTestId(`marker-node-${KNOTEN_ID}`);
+    const interaction = await node.evaluate(async (element) => {
+      const visual = element.querySelector<HTMLElement>(".map-marker__visual");
+      if (!visual) throw new Error("node marker artwork unavailable");
+
+      const measure = () => ({
+        artworkWidth: visual.getBoundingClientRect().width,
+        outerWidth: element.getBoundingClientRect().width,
+        worldScale: visual.style.getPropertyValue("--map-object-scale"),
+      });
+      const before = measure();
+
+      element.classList.add("is-selected");
+      try {
+        await new Promise((resolve) => setTimeout(resolve, 220));
+        await new Promise<void>((resolve) =>
+          requestAnimationFrame(() => resolve()),
+        );
+        return { before, selected: measure() };
+      } finally {
+        element.classList.remove("is-selected");
+      }
+    });
+
     expect(
-      Math.abs(metrics.regional.visualWidth - metrics.regional.visualHeight),
-    ).toBeLessThanOrEqual(0.25);
-    expect(metrics.local.centerDelta).toBeLessThanOrEqual(0.5);
-    expect(metrics.regional.centerDelta).toBeLessThanOrEqual(0.5);
+      interaction.selected.artworkWidth / interaction.before.artworkWidth,
+    ).toBeCloseTo(1.13, 1);
+    expect(interaction.before.outerWidth).toBeCloseTo(44, 1);
+    expect(interaction.selected.outerWidth).toBeCloseTo(44, 1);
+    expect(interaction.selected.worldScale).toBe(interaction.before.worldScale);
+    await expect(node).not.toHaveClass(/is-selected/);
   });
 });
 

@@ -8,6 +8,7 @@ import type {
   MapEntityWebgemeindezentrum,
 } from "$lib/map/types";
 import { FADEN_LIFETIME_MS } from "$lib/map/edgeLifecycle";
+import { getMapMarkerScale } from "$lib/map/markerScale";
 import {
   MARKER_GEO_ANCHOR,
   NodesOverlay,
@@ -662,6 +663,59 @@ describe("NodesOverlay woven node marker", () => {
     expect(centerRoot?.classList.contains("woven-node--compact")).toBe(false);
     expect(nodeRoot?.dataset.weaveDetail).toBe("detail");
     expect(centerRoot?.dataset.weaveDetail).toBe("detail");
+  });
+
+  it("applies one continuous world scale to all marker categories", () => {
+    const overlay = makeOverlay();
+    overlay.updateZoom(7);
+    overlay.update(
+      [makeNode("node"), makeCenter("center"), makeAccount("spool")],
+      true,
+    );
+
+    const visualFor = (id: string) =>
+      overlay.getActiveMarker(id)?.element.children[0] as
+        | FakeElement
+        | undefined;
+    const scaleFor = (id: string) => visualFor(id)?.style["--map-object-scale"];
+
+    for (const id of ["node", "center", "spool"]) {
+      expect(scaleFor(id)).toBe("0.620");
+    }
+
+    // Both zooms stay in compact mode. Scale must still update continuously.
+    overlay.updateZoom(10);
+    const zoomTenScale = getMapMarkerScale(10).toFixed(3);
+    for (const id of ["node", "center", "spool"]) {
+      expect(scaleFor(id)).toBe(zoomTenScale);
+    }
+
+    // A marker created after the zoom event receives the stored scale at once.
+    overlay.update(
+      [
+        makeNode("node"),
+        makeCenter("center"),
+        makeAccount("spool"),
+        makeNode("new-node"),
+      ],
+      true,
+    );
+    expect(scaleFor("new-node")).toBe(zoomTenScale);
+  });
+
+  it("skips scale DOM writes below the material-change threshold", () => {
+    const overlay = makeOverlay();
+    overlay.update([makeNode("node")], true);
+    const visual = overlay.getActiveMarker("node")?.element
+      .children[0] as unknown as FakeElement;
+    const setProperty = vi.spyOn(visual.style, "setProperty");
+
+    overlay.updateZoom(13.5);
+    overlay.updateZoom(13.51);
+    expect(setProperty).not.toHaveBeenCalled();
+
+    overlay.updateZoom(14.5);
+    expect(setProperty).toHaveBeenCalledTimes(1);
   });
 
   it("uses a fixed render signature instead of serializing unrelated fields", () => {

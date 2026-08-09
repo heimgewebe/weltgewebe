@@ -81,7 +81,6 @@
     scheduleMapInitTimeout,
   } from "$lib/map/mapInitFailure";
   import { registerPmtilesProtocol } from "$lib/map/pmtilesProtocol";
-  import { getGarnrolleMarkerScale } from "$lib/map/markerScale";
   import { buildMapScene } from "$lib/map/scene";
 
   import type { NodesOverlay as NodesOverlayController } from "$lib/map/overlay/nodes";
@@ -447,15 +446,6 @@
       searchDirectionFrame = null;
       updateSearchDirectionIndicators();
     });
-  }
-
-  function updateGarnrolleMarkerScale() {
-    if (!map || !mapContainer) return;
-
-    mapContainer.style.setProperty(
-      "--garnrolle-marker-scale",
-      getGarnrolleMarkerScale(map.getZoom()).toFixed(3),
-    );
   }
 
   // Marker data and search highlighting have separate update paths. Filtering or
@@ -887,7 +877,6 @@
       edgeMotion = null;
       resolveMotionInput = null;
       if (map) {
-        map.off("zoom", updateGarnrolleMarkerScale);
         map.off("move", handleSearchMapMove);
         map.off("resize", handleSearchMapResize);
         map.off("styledata", handleMapStyleData);
@@ -1105,8 +1094,6 @@
       });
       resolveMotionInput = edgeMotionModule.resolveEdgeMotionInput;
       edgeMotion = new edgeMotionModule.EdgeMotionController(map);
-      updateGarnrolleMarkerScale();
-      map.on("zoom", updateGarnrolleMarkerScale);
       void import("$lib/map/authCameraConvergence")
         .then((module) => {
           if (!destroyed && map) {

@@ -2,6 +2,7 @@ import type { Map as MapLibreMap, Marker, MarkerOptions } from "maplibre-gl";
 import { hasRenderableMapPosition } from "$lib/map/coordinates";
 import type { MapEntityViewModel } from "$lib/map/types";
 import type { WeaveEntity } from "$lib/map/weaveTheme";
+import { getMapMarkerScale } from "$lib/map/markerScale";
 import "./markers.css";
 import { garnrolleIcon } from "$lib/ui/icons";
 import { weaveRuntime, type WeaveRuntime } from "./weaveRuntime";
@@ -32,6 +33,8 @@ export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
 
 /** Canonical MapLibre marker anchor for nodes, centers, and Garnrollen. */
 export const MARKER_GEO_ANCHOR = "center" as const;
+const WEAVE_DETAIL_ZOOM = 13.5;
+const MARKER_SCALE_WRITE_EPSILON = 0.001;
 
 export class NodesOverlay {
   private activeMarkers = new Map<
@@ -39,6 +42,7 @@ export class NodesOverlay {
     {
       marker: Marker;
       element: HTMLElement;
+      visual: HTMLElement;
       item: MapEntityViewModel;
       weaveRoot: HTMLElement | null;
       weaveSignature: string | null;
@@ -48,6 +52,7 @@ export class NodesOverlay {
   private searchMatchIds = new Set<string>();
   private selectedMarkerId: string | null = null;
   private compactWeave = false;
+  private markerScale = 1;
   private readonly handleZoom = () => {
     if (this.map) this.updateZoom(this.map.getZoom());
   };
@@ -72,12 +77,25 @@ export class NodesOverlay {
     root.dataset.weaveDetail = this.compactWeave ? "compact" : "detail";
   }
 
+  private syncMarkerScale(visual: HTMLElement) {
+    visual.style.setProperty("--map-object-scale", this.markerScale.toFixed(3));
+  }
+
   public updateZoom(zoom: number) {
-    const compact = zoom < 13.5;
-    if (compact === this.compactWeave) return;
+    const compact = zoom < WEAVE_DETAIL_ZOOM;
+    const nextMarkerScale = getMapMarkerScale(zoom);
+    const compactChanged = compact !== this.compactWeave;
+    const markerScaleChanged =
+      Math.abs(nextMarkerScale - this.markerScale) >=
+      MARKER_SCALE_WRITE_EPSILON;
+    if (!compactChanged && !markerScaleChanged) return;
+
     this.compactWeave = compact;
-    for (const { weaveRoot } of this.activeMarkers.values()) {
-      if (weaveRoot) this.syncWeaveDetail(weaveRoot);
+    if (markerScaleChanged) this.markerScale = nextMarkerScale;
+
+    for (const { visual, weaveRoot } of this.activeMarkers.values()) {
+      if (compactChanged && weaveRoot) this.syncWeaveDetail(weaveRoot);
+      if (markerScaleChanged) this.syncMarkerScale(visual);
     }
   }
 
@@ -192,6 +210,7 @@ export class NodesOverlay {
               ? "map-marker__visual marker-webgemeindezentrum__visual"
               : "map-marker__visual marker-node__visual";
         visual.setAttribute("aria-hidden", "true");
+        this.syncMarkerScale(visual);
 
         let weaveRoot: HTMLElement | null = null;
         let weaveSignature: string | null = null;
@@ -256,6 +275,7 @@ export class NodesOverlay {
         this.activeMarkers.set(item.id, {
           marker,
           element,
+          visual,
           item,
           weaveRoot,
           weaveSignature,
