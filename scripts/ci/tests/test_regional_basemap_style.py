@@ -278,9 +278,9 @@ class RegionalBasemapStyleTest(unittest.TestCase):
             "apps/web/basemap-mode.policy.json",
             "apps/web/scripts/basemap-mode-resolve.mjs",
             "apps/web/scripts/generate-basemap-config.js",
-            "apps/web/src/lib/map/**",
-            "apps/web/src/lib/utils/preloadRecovery.ts",
-            "apps/web/src/routes/map/**",
+            "apps/web/src/**",
+            "apps/web/tests/fixtures/**",
+            "apps/web/playwright.config.ts",
         ):
             with self.subTest(trigger_path=trigger_path):
                 self.assertEqual(
