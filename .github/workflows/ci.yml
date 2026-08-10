@@ -608,7 +608,7 @@ jobs:
           fi
 
       - name: Markdownlint
-        uses: DavidAnson/markdownlint-cli2-action@6bf21b07787794f89a243495939cd651942aeabe # tag: v24.1.0
+        uses: DavidAnson/markdownlint-cli2-action@83c6b49590003d85b71ea0e478b36aa0a9bb3cd4 # tag: v24.1.0
         with:
           globs: |
             **/*.md
