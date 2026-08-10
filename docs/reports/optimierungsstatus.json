@@ -195,19 +195,19 @@
       "id": "OPT-INF-001",
       "area": "Infrastruktur",
       "title": "Trivy Image Scanning",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "low",
       "evidence_status": "ci",
       "evidence": [
-        ".github/workflows/security.yml"
+        ".github/workflows/security.yml",
+        "scripts/ci/tests/test_security_workflow.py",
+        "GitHub Actions Run 31423551712 / Job 93569793842"
       ],
-      "missing_evidence": [
-        "Kein Trivy-Container-Scan-Schritt definiert"
-      ],
-      "next_action": "Trivy-Schritt in security.yml ergänzen",
-      "updated_at": "2026-04-27"
+      "missing_evidence": [],
+      "next_action": "keine — Produktions-API-Image erfolgreich gebaut und mit Trivy v0.36.0 auf behebbare HIGH/CRITICAL OS-/Library-Schwachstellen gescannt; JSON-Report als CI-Artefakt hochgeladen",
+      "updated_at": "2026-08-10"
     },
     {
       "id": "OPT-ARC-001",
