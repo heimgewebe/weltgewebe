@@ -163,13 +163,15 @@
       const existingIndex = conversations.findIndex(
         (item) => item.id === conversation.id,
       );
-      conversations =
-        existingIndex >= 0
-          ? conversations.map((item) =>
-              item.id === conversation.id ? conversation : item,
-            )
-          : [conversation, ...conversations];
-      if (generation !== selectionGeneration) return;
+      const isCurrentSelection = generation === selectionGeneration;
+      if (existingIndex < 0) {
+        conversations = [conversation, ...conversations];
+      } else if (isCurrentSelection) {
+        conversations = conversations.map((item) =>
+          item.id === conversation.id ? conversation : item,
+        );
+      }
+      if (!isCurrentSelection) return;
       await selectConversation(conversation, generation);
       if (generation !== selectionGeneration) return;
       await goto(`/nachrichten?id=${encodeURIComponent(conversation.id)}`, {

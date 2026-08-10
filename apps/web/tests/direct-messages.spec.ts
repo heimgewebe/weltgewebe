@@ -412,3 +412,63 @@ test("ein verspätetes Read-Receipt räumt nur den alten Ungelesen-Badge auf", a
   await expect(page.getByText("Lade Nachrichten…")).toHaveCount(0);
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
+
+test("ein verspätetes Öffnen überschreibt keinen neueren Sidebar-Zustand", async ({
+  page,
+}) => {
+  await installStaticBuildFallback(page);
+  await mockApiResponses(page, {
+    auth: {
+      authenticated: true,
+      account_id: "current-account",
+      role: "weber",
+    },
+  });
+  const directMessagesApi = await installDirectMessagesApi(page);
+
+  await page.goto("/nachrichten?mit=alice-account");
+  await expect
+    .poll(() => directMessagesApi.requestedOpenAccountIds)
+    .toEqual(["alice-account"]);
+
+  const aliceButton = page.getByRole("button", { name: /Alice/ });
+  await aliceButton.click();
+  await expect
+    .poll(() => directMessagesApi.requestedConversationIds)
+    .toEqual([ALICE_CONVERSATION_ID]);
+  directMessagesApi.releaseAliceResponse();
+  await expect
+    .poll(() => directMessagesApi.markedReadConversationIds)
+    .toEqual([ALICE_CONVERSATION_ID]);
+
+  const aliceReadResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname ===
+        `/api/direct-conversations/${ALICE_CONVERSATION_ID}/read` &&
+      response.request().method() === "POST"
+    );
+  });
+  directMessagesApi.releaseAliceReadResponse();
+  await aliceReadResponse;
+  await expect(aliceButton.getByLabel("2 ungelesene Nachrichten")).toHaveCount(
+    0,
+  );
+
+  const delayedAliceOpen = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/direct-conversations" &&
+      response.request().method() === "POST"
+    );
+  });
+  directMessagesApi.releaseAliceOpenResponse();
+  await delayedAliceOpen;
+
+  await expect(aliceButton.getByLabel("2 ungelesene Nachrichten")).toHaveCount(
+    0,
+  );
+  await expect(aliceButton).toHaveAttribute("aria-current", "true");
+  await expect(page.getByRole("heading", { name: "Alice" })).toBeVisible();
+  await expect(page.getByRole("alert")).toHaveCount(0);
+});
