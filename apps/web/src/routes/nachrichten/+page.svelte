@@ -118,8 +118,8 @@
 
   async function selectConversation(
     conversation: DirectConversation,
+    generation = ++selectionGeneration,
   ): Promise<void> {
-    const generation = ++selectionGeneration;
     selected = conversation;
     messages = [];
     loadingConversation = true;
@@ -155,9 +155,11 @@
   async function startConversation(accountId: string): Promise<void> {
     if (!$authStore.authenticated || accountId === $authStore.account_id)
       return;
+    const generation = ++selectionGeneration;
     error = "";
     try {
       const conversation = await openDirectConversation(accountId);
+      if (generation !== selectionGeneration) return;
       const existingIndex = conversations.findIndex(
         (item) => item.id === conversation.id,
       );
@@ -167,14 +169,17 @@
               item.id === conversation.id ? conversation : item,
             )
           : [conversation, ...conversations];
-      await selectConversation(conversation);
+      await selectConversation(conversation, generation);
+      if (generation !== selectionGeneration) return;
       await goto(`/nachrichten?id=${encodeURIComponent(conversation.id)}`, {
         replaceState: true,
         keepFocus: true,
         noScroll: true,
       });
     } catch (cause) {
-      error = describeError(cause);
+      if (generation === selectionGeneration) {
+        error = describeError(cause);
+      }
     }
   }
 

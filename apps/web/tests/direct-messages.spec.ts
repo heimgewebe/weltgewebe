@@ -66,10 +66,15 @@ async function installStaticBuildFallback(page: Page) {
 }
 
 async function installDirectMessagesApi(page: Page) {
+  let releaseAliceOpenResponse: (() => void) | undefined;
+  const aliceOpenResponseReleased = new Promise<void>((resolve) => {
+    releaseAliceOpenResponse = resolve;
+  });
   let releaseAliceResponse: (() => void) | undefined;
   const aliceResponseReleased = new Promise<void>((resolve) => {
     releaseAliceResponse = resolve;
   });
+  const requestedOpenAccountIds: string[] = [];
   const requestedConversationIds: string[] = [];
   const markedReadConversationIds: string[] = [];
 
@@ -83,6 +88,26 @@ async function installDirectMessagesApi(page: Page) {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({ items: conversations }),
+      });
+    }
+
+    if (path === "/api/direct-conversations" && method === "POST") {
+      const payload = request.postDataJSON() as {
+        recipient_account_id?: string;
+      };
+      const accountId = payload.recipient_account_id ?? "";
+      requestedOpenAccountIds.push(accountId);
+      if (accountId === "alice-account") {
+        await aliceOpenResponseReleased;
+      }
+      const conversation =
+        conversations.find(
+          (item) => item.counterpart_account_id === accountId,
+        ) ?? conversations[0];
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(conversation),
       });
     }
 
@@ -131,11 +156,67 @@ async function installDirectMessagesApi(page: Page) {
   });
 
   return {
+    requestedOpenAccountIds,
     requestedConversationIds,
     markedReadConversationIds,
+    releaseAliceOpenResponse: () => releaseAliceOpenResponse?.(),
     releaseAliceResponse: () => releaseAliceResponse?.(),
   };
 }
+
+test("ein verspätetes Öffnen per ?mit=Alice überschreibt eine spätere Bob-Auswahl nicht", async ({
+  page,
+}) => {
+  await installStaticBuildFallback(page);
+  await mockApiResponses(page, {
+    auth: {
+      authenticated: true,
+      account_id: "current-account",
+      role: "weber",
+    },
+  });
+  const directMessagesApi = await installDirectMessagesApi(page);
+
+  await page.goto("/nachrichten?mit=alice-account");
+  await expect
+    .poll(() => directMessagesApi.requestedOpenAccountIds)
+    .toEqual(["alice-account"]);
+
+  const bobButton = page.getByRole("button", { name: /Bob/ });
+  await bobButton.click();
+  await expect
+    .poll(() => directMessagesApi.requestedConversationIds)
+    .toEqual([BOB_CONVERSATION_ID]);
+  await expect(page.getByRole("heading", { name: "Bob" })).toBeVisible();
+  await expect(page.locator(".conversation .message-list")).toContainText(
+    "Aktuelle Nachricht von Bob",
+  );
+
+  const delayedAliceOpen = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === "/api/direct-conversations" &&
+      response.request().method() === "POST"
+    );
+  });
+  directMessagesApi.releaseAliceOpenResponse();
+  await delayedAliceOpen;
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+      ),
+  );
+
+  await expect(page.getByRole("heading", { name: "Bob" })).toBeVisible();
+  await expect(bobButton).toHaveAttribute("aria-current", "true");
+  await expect(page.locator(".conversation .message-list")).toContainText(
+    "Aktuelle Nachricht von Bob",
+  );
+  await expect(page).not.toHaveURL(
+    new RegExp(`\\?id=${ALICE_CONVERSATION_ID}`),
+  );
+});
 
 test("eine verspätete Alice-Antwort überschreibt die ausgewählte Bob-Unterhaltung nicht", async ({
   page,
