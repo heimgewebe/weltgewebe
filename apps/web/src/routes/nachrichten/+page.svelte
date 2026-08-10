@@ -30,6 +30,7 @@
   let initialized = false;
   let handledRecipient: string | null = null;
   let messageList: HTMLElement | null = null;
+  let selectionGeneration = 0;
 
   $: requestedRecipient = $page.url.searchParams.get("mit");
   $: if (
@@ -109,21 +110,24 @@
     }
   }
 
-  async function scrollToNewest(): Promise<void> {
+  async function scrollToNewest(generation?: number): Promise<void> {
     await tick();
+    if (generation !== undefined && generation !== selectionGeneration) return;
     messageList?.scrollTo({ top: messageList.scrollHeight });
   }
 
   async function selectConversation(
     conversation: DirectConversation,
+    generation = ++selectionGeneration,
   ): Promise<void> {
-    if (loadingConversation) return;
+    if (generation !== selectionGeneration) return;
     selected = conversation;
     messages = [];
     loadingConversation = true;
     error = "";
     try {
       const response = await listDirectMessages(conversation.id);
+      if (generation !== selectionGeneration) return;
       messages = sortMessages(response.items);
       const newestLoadedMessage = messages.at(-1);
       if (newestLoadedMessage) {
@@ -135,38 +139,50 @@
       conversations = conversations.map((item) =>
         item.id === conversation.id ? { ...item, unread_count: 0 } : item,
       );
-      selected = selected ? { ...selected, unread_count: 0 } : selected;
-      await scrollToNewest();
+      if (generation !== selectionGeneration) return;
+      selected = { ...conversation, unread_count: 0 };
+      await scrollToNewest(generation);
     } catch (cause) {
-      error = describeError(cause);
+      if (generation === selectionGeneration) {
+        error = describeError(cause);
+      }
     } finally {
-      loadingConversation = false;
+      if (generation === selectionGeneration) {
+        loadingConversation = false;
+      }
     }
   }
 
   async function startConversation(accountId: string): Promise<void> {
     if (!$authStore.authenticated || accountId === $authStore.account_id)
       return;
+    const generation = ++selectionGeneration;
     error = "";
     try {
       const conversation = await openDirectConversation(accountId);
       const existingIndex = conversations.findIndex(
         (item) => item.id === conversation.id,
       );
-      conversations =
-        existingIndex >= 0
-          ? conversations.map((item) =>
-              item.id === conversation.id ? conversation : item,
-            )
-          : [conversation, ...conversations];
-      await selectConversation(conversation);
+      const isCurrentSelection = generation === selectionGeneration;
+      if (existingIndex < 0) {
+        conversations = [conversation, ...conversations];
+      } else if (isCurrentSelection) {
+        conversations = conversations.map((item) =>
+          item.id === conversation.id ? conversation : item,
+        );
+      }
+      if (!isCurrentSelection) return;
+      await selectConversation(conversation, generation);
+      if (generation !== selectionGeneration) return;
       await goto(`/nachrichten?id=${encodeURIComponent(conversation.id)}`, {
         replaceState: true,
         keepFocus: true,
         noScroll: true,
       });
     } catch (cause) {
-      error = describeError(cause);
+      if (generation === selectionGeneration) {
+        error = describeError(cause);
+      }
     }
   }
 
