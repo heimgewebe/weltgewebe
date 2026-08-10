@@ -53,6 +53,12 @@ name: Basemap Runtime Proof
       - "apps/web/tests/proofs/**"
       - "apps/web/package.json"
       - "apps/web/pnpm-lock.yaml"
+      - "apps/web/basemap-mode.policy.json"
+      - "apps/web/scripts/basemap-mode-resolve.mjs"
+      - "apps/web/scripts/generate-basemap-config.js"
+      - "apps/web/src/lib/map/**"
+      - "apps/web/src/lib/utils/preloadRecovery.ts"
+      - "apps/web/src/routes/map/**"
       - "apps/web/scripts/validate-pmtiles.mjs"
       - "apps/web/scripts/validate-pmtiles.test.mjs"
       - "apps/web/playwright.proof.config.ts"
@@ -70,6 +76,12 @@ name: Basemap Runtime Proof
       - "apps/web/tests/proofs/**"
       - "apps/web/package.json"
       - "apps/web/pnpm-lock.yaml"
+      - "apps/web/basemap-mode.policy.json"
+      - "apps/web/scripts/basemap-mode-resolve.mjs"
+      - "apps/web/scripts/generate-basemap-config.js"
+      - "apps/web/src/lib/map/**"
+      - "apps/web/src/lib/utils/preloadRecovery.ts"
+      - "apps/web/src/routes/map/**"
       - "apps/web/scripts/validate-pmtiles.mjs"
       - "apps/web/scripts/validate-pmtiles.test.mjs"
       - "apps/web/playwright.proof.config.ts"
@@ -651,6 +663,8 @@ jobs:
     timeout-minutes: 60
     env:
       PUBLIC_BASEMAP_MODE: local-sovereign
+      # This job proves the explicit regional rollback contract; Germany is the sovereign default.
+      PUBLIC_BASEMAP_VARIANT: regional
       PLAYWRIGHT_HTML_REPORT_OPEN: never
       PUPPETEER_SKIP_DOWNLOAD: "true"
       NPM_CONFIG_AUDIT: "false"

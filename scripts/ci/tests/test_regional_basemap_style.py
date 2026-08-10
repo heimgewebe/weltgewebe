@@ -15,6 +15,7 @@ STYLE_VERSION_PATH = (
 COLORS_PATH = REPO / "map-style" / "colors.json"
 UP_SCRIPT_PATH = REPO / "scripts" / "weltgewebe-up"
 WORKFLOW_PATH = REPO / ".github" / "workflows" / "basemap-runtime-proof.yml"
+PACKAGE_PATH = REPO / "apps" / "web" / "package.json"
 CADDY_PATHS = (
     REPO / "infra" / "caddy" / "Caddyfile",
     REPO / "infra" / "caddy" / "Caddyfile.heim",
@@ -270,6 +271,42 @@ class RegionalBasemapStyleTest(unittest.TestCase):
                     'Content-Type "application/octet-stream"', text
                 )
 
+
+    def test_runtime_proof_triggers_on_basemap_runtime_inputs(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        for trigger_path in (
+            "apps/web/basemap-mode.policy.json",
+            "apps/web/scripts/basemap-mode-resolve.mjs",
+            "apps/web/scripts/generate-basemap-config.js",
+            "apps/web/src/lib/map/**",
+            "apps/web/src/lib/utils/preloadRecovery.ts",
+            "apps/web/src/routes/map/**",
+        ):
+            with self.subTest(trigger_path=trigger_path):
+                self.assertEqual(
+                    workflow.count(f'      - "{trigger_path}"'),
+                    2,
+                    f"expected pull_request and push coverage for {trigger_path}",
+                )
+
+    def test_regional_proof_command_pins_regional_build_variant(self) -> None:
+        package = json.loads(PACKAGE_PATH.read_text(encoding="utf-8"))
+        scripts = package["scripts"]
+        for script_name in (
+            "pretest:proof:basemap-real",
+            "test:proof:basemap-real",
+        ):
+            with self.subTest(script_name=script_name):
+                command = scripts[script_name]
+                self.assertIn("PUBLIC_BASEMAP_MODE=local-sovereign", command)
+                self.assertIn("PUBLIC_BASEMAP_VARIANT=regional", command)
+
+    def test_visual_proof_pins_regional_build_variant(self) -> None:
+        workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
+        visual_job = workflow[workflow.index("  basemap-visual-proof:") :]
+
+        self.assertIn("PUBLIC_BASEMAP_MODE: local-sovereign", visual_job)
+        self.assertIn("PUBLIC_BASEMAP_VARIANT: regional", visual_job)
 
     def test_visual_proof_materializes_both_regional_sources(self) -> None:
         workflow = WORKFLOW_PATH.read_text(encoding="utf-8")
