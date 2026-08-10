@@ -972,7 +972,9 @@ const SPAN_CURVATURE_SAMPLE_FRACTIONS = [0, 0.25, 0.5, 0.75, 1] as const;
  *   treated as invisible.
  *
  * Five samples / ten pairs is enough to catch a single interior inflection
- * deterministically while staying `O(1)` per span.
+ * deterministically while staying `O(1)` per span. Endpoint point/tangent
+ * evaluations are supplied by the caller's per-round cache, so each span only
+ * evaluates the three interior fractions here.
  */
 function spanCurvatureMetrics(
   p0: ProjectedPoint,
@@ -981,12 +983,20 @@ function spanCurvatureMetrics(
   p3: ProjectedPoint,
   a: number,
   b: number,
+  pointA: ProjectedPoint,
+  pointB: ProjectedPoint,
+  tangentA: ProjectedPoint,
+  tangentB: ProjectedPoint,
 ): { worstAngleDeg: number; arcLengthEstimateM: number } {
   const span = b - a;
   const count = SPAN_CURVATURE_SAMPLE_FRACTIONS.length;
-  const points: [number, number][] = new Array(count);
-  const tangents: [number, number][] = new Array(count);
-  for (let index = 0; index < count; index += 1) {
+  const points: ProjectedPoint[] = new Array(count);
+  const tangents: ProjectedPoint[] = new Array(count);
+  points[0] = pointA;
+  tangents[0] = tangentA;
+  points[count - 1] = pointB;
+  tangents[count - 1] = tangentB;
+  for (let index = 1; index < count - 1; index += 1) {
     const t = a + span * SPAN_CURVATURE_SAMPLE_FRACTIONS[index];
     points[index] = cubicBezierPoint2(p0, p1, p2, p3, t);
     tangents[index] = cubicBezierTangent2(p0, p1, p2, p3, t);
@@ -1011,21 +1021,18 @@ function spanCurvatureMetrics(
 /**
  * Conservative control-polygon length of the sub-Bézier over `[a, b]`.
  * Sum of sub-control polygon edges `||q1-q0|| + ||q2-q1|| + ||q3-q2||`.
- * Gives an upper bound on sub-curve arc length and spatial excursion.
+ * Gives an upper bound on sub-curve arc length and spatial excursion. Span
+ * endpoints and endpoint tangents come from the caller's per-round cache.
  */
 function spanControlPolygonLength(
-  p0: ProjectedPoint,
-  p1: ProjectedPoint,
-  p2: ProjectedPoint,
-  p3: ProjectedPoint,
   a: number,
   b: number,
+  q0: ProjectedPoint,
+  q3: ProjectedPoint,
+  tanA: ProjectedPoint,
+  tanB: ProjectedPoint,
 ): number {
   const span = b - a;
-  const q0 = cubicBezierPoint2(p0, p1, p2, p3, a);
-  const q3 = cubicBezierPoint2(p0, p1, p2, p3, b);
-  const tanA = cubicBezierTangent2(p0, p1, p2, p3, a);
-  const tanB = cubicBezierTangent2(p0, p1, p2, p3, b);
   const q1: [number, number] = [
     q0[0] + (span / 3) * tanA[0],
     q0[1] + (span / 3) * tanA[1],
@@ -1078,11 +1085,14 @@ export function threadCurveAdaptiveBreakpoints(
     let worstAngle = angleToleranceDeg;
 
     const count = ts.length;
-    const pts: [number, number][] = new Array(count);
+    const pts: ProjectedPoint[] = new Array(count);
+    const tangents: ProjectedPoint[] = new Array(count);
     const segmentLens: number[] = new Array(count - 1);
     const segmentVecs: [number, number][] = new Array(count - 1);
     for (let index = 0; index < count; index += 1) {
-      pts[index] = cubicBezierPoint2(p0, p1, p2, p3, ts[index]);
+      const t = ts[index];
+      pts[index] = cubicBezierPoint2(p0, p1, p2, p3, t);
+      tangents[index] = cubicBezierTangent2(p0, p1, p2, p3, t);
     }
     for (let index = 0; index < count - 1; index += 1) {
       const dx = pts[index + 1][0] - pts[index][0];
@@ -1101,8 +1111,19 @@ export function threadCurveAdaptiveBreakpoints(
         p3,
         a,
         b,
+        pts[index],
+        pts[index + 1],
+        tangents[index],
+        tangents[index + 1],
       );
-      const cpLenM = spanControlPolygonLength(p0, p1, p2, p3, a, b);
+      const cpLenM = spanControlPolygonLength(
+        a,
+        b,
+        pts[index],
+        pts[index + 1],
+        tangents[index],
+        tangents[index + 1],
+      );
 
       let kinkAngleDeg = 0;
       const prevLen = index > 0 ? segmentLens[index - 1] : 0;
