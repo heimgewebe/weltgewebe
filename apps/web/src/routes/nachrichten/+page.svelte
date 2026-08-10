@@ -120,6 +120,7 @@
     conversation: DirectConversation,
     generation = ++selectionGeneration,
   ): Promise<void> {
+    if (generation !== selectionGeneration) return;
     selected = conversation;
     messages = [];
     loadingConversation = true;
@@ -134,12 +135,12 @@
           conversation.id,
           newestLoadedMessage.id,
         );
-        if (generation !== selectionGeneration) return;
       }
       conversations = conversations.map((item) =>
         item.id === conversation.id ? { ...item, unread_count: 0 } : item,
       );
-      selected = selected ? { ...selected, unread_count: 0 } : selected;
+      if (generation !== selectionGeneration) return;
+      selected = { ...conversation, unread_count: 0 };
       await scrollToNewest(generation);
     } catch (cause) {
       if (generation === selectionGeneration) {
@@ -159,7 +160,6 @@
     error = "";
     try {
       const conversation = await openDirectConversation(accountId);
-      if (generation !== selectionGeneration) return;
       const existingIndex = conversations.findIndex(
         (item) => item.id === conversation.id,
       );
@@ -169,6 +169,7 @@
               item.id === conversation.id ? conversation : item,
             )
           : [conversation, ...conversations];
+      if (generation !== selectionGeneration) return;
       await selectConversation(conversation, generation);
       if (generation !== selectionGeneration) return;
       await goto(`/nachrichten?id=${encodeURIComponent(conversation.id)}`, {
