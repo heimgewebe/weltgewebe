@@ -59,7 +59,7 @@ jobs:
             exit 1
           fi
           printf 'uv_version=%s\n' "${UV_VERSION}" >> "${GITHUB_OUTPUT}"
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # tag: v8.3.2
+      - uses: astral-sh/setup-uv@b68407c192114b6e47cc45b98289832c3df00d5e # tag: v8.3.2
         with:
           version: ${{ steps.uv-version.outputs.uv_version }}
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
@@ -128,7 +128,7 @@ jobs:
             exit 1
           fi
           printf 'uv_version=%s\n' "${UV_VERSION}" >> "${GITHUB_OUTPUT}"
-      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # tag: v8.3.2
+      - uses: astral-sh/setup-uv@b68407c192114b6e47cc45b98289832c3df00d5e # tag: v8.3.2
         with:
           version: ${{ steps.uv-version.outputs.uv_version }}
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
