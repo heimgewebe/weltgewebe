@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 709 |
+| Relationen gesamt | 711 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 654 |
+| — relates_to | 656 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | relates_to Anteil | 92% |
@@ -32,12 +32,13 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (276 Dokumente):
+**Cluster 1** (278 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
 - `.github/workflows/opt-arc-001-db-proof-matrix.yml`
 - `.github/workflows/public-login-smtp-readiness.yml`
+- `.github/workflows/reusable-web-check.yml`
 - `AGENTS.md`
 - `agent-policy.yaml`
 - `apps/api/migrations/20260531000002_create_domain_edges.up.sql`
@@ -151,6 +152,7 @@ _Keine Lücken erkannt._
 - `docs/policies/orientierung.md`
 - `docs/process/README.md`
 - `docs/process/bash-tooling-guidelines.md`
+- `docs/process/ci-workflow-composition.md`
 - `docs/process/fahrplan.md`
 - `docs/process/report-lifecycle-contract-alignment.md`
 - `docs/process/report-lifecycle.md`

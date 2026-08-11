@@ -14,13 +14,13 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 197 |
-| Dokumente mit ausgehenden Relationen | 196 |
+| Dokumente gesamt | 198 |
+| Dokumente mit ausgehenden Relationen | 197 |
 | Dokumente als Ziel referenziert | 149 |
-| Relationen gesamt | 709 |
+| Relationen gesamt | 711 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 654 |
+| — relates_to | 656 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | Isolierte Dokumente | 0 |
@@ -42,8 +42,8 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (16): `docs/deploy/README.md` — central dependency, review carefully
 - ⚠️ High inbound count (15): `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — central dependency, review carefully
 - ⚠️ High inbound count (14): `docs/reports/auth-status-matrix.md` — central dependency, review carefully
+- ⚠️ High inbound count (14): `docs/reports/optimierungsstatus.md` — central dependency, review carefully
 - ⚠️ High inbound count (13): `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — central dependency, review carefully
-- ⚠️ High inbound count (13): `docs/reports/optimierungsstatus.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/blueprints/domain-data-postgres-cutover.md` — central dependency, review carefully
 - ⚠️ High inbound count (12): `docs/deployment.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
@@ -73,8 +73,8 @@ _Keine Zyklen gefunden._
 - `docs/deploy/README.md` — 16 eingehende Relationen
 - `docs/adr/ADR-0006__auth-magic-link-session-passkey.md` — 15 eingehende Relationen
 - `docs/reports/auth-status-matrix.md` — 14 eingehende Relationen
+- `docs/reports/optimierungsstatus.md` — 14 eingehende Relationen
 - `docs/adr/ADR-0007__auth-persistence-production-db-path.md` — 13 eingehende Relationen
-- `docs/reports/optimierungsstatus.md` — 13 eingehende Relationen
 - `docs/blueprints/domain-data-postgres-cutover.md` — 12 eingehende Relationen
 - `docs/deployment.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
