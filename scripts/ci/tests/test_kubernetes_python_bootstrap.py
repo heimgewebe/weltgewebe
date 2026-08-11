@@ -53,7 +53,19 @@ FOREIGN_INSTALLERS = re.compile(
 # paths are command wrappers too; plain words inside arguments/paths stay ignored.
 BARE_PYTHON = re.compile(
     r"(?:^|[|;&]\s*|\(\s*|\bthen\s+|\bdo\s+)"
-    r"(?:env(?:\s+(?:-[^\s;&|()]+|[A-Za-z_][A-Za-z0-9_]*=[^\s;&|()]+))*\s+)?"
+    # Common shell command wrappers must not hide the real executable.  Allow
+    # wrapper chains such as ``sudo env python`` and explicit wrapper paths.
+    r"(?:"
+    r"(?:(?:/|\./|\.\./)[^\s;&|()]*/)?"
+    r"(?:"
+    r"env(?:\s+(?:-[^\s;&|()]+|[A-Za-z_][A-Za-z0-9_]*=[^\s;&|()]+))*"
+    r"|command(?:\s+-p)?"
+    r"|exec(?:\s+-[cl])?"
+    r"|nohup"
+    r"|sudo(?:\s+(?:-[A-Za-z]+|--[A-Za-z-]+)(?:\s+(?!python3?\b)[^\s;&|()]+)?)*"
+    r"|time(?:\s+-p)?"
+    r")\s+"
+    r")*"
     r"(?:(?:/|\./|\.\./)[^\s;&|()]*/)?"
     r"(python3?)(?=$|\s|[;&|)])"
 )
@@ -440,6 +452,25 @@ class KubernetesPythonBootstrapGuardTests(unittest.TestCase):
             }
         }
         self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
+
+    def test_common_command_wrappers_cannot_hide_host_python(self) -> None:
+        commands = (
+            "command python x.py",
+            "command -p python x.py",
+            "exec python x.py",
+            "nohup python x.py",
+            "sudo python x.py",
+            "sudo -n python x.py",
+            "sudo -u root python x.py",
+            "time python x.py",
+            "time -p python x.py",
+            "/usr/bin/env python x.py",
+            "sudo env PYTHONUTF8=1 python x.py",
+        )
+        for command in commands:
+            with self.subTest(command=command):
+                workflow = {"jobs": {"contract": {"steps": [{"run": command}]}}}
+                self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
 
     def test_absolute_host_interpreter_is_reported(self) -> None:
         workflow = {
