@@ -38,11 +38,16 @@ REQUIRED_WORKFLOWS = frozenset(
 
 LOCKED_SYNC = "uv sync --project tools/py --locked"
 LOCKED_RUN = "uv run --project tools/py --locked"
+PROJECT_RUN = "uv run --project tools/py"
 UV_VERSION_EXPRESSION = re.compile(
-    r"^\$\{\{\s*steps\.[A-Za-z0-9_-]+\.outputs\.uv_version\s*\}\}$"
+    r"^\$\{\{\s*steps\.([A-Za-z0-9_-]+)\.outputs\.uv_version\s*\}\}$"
+)
+UV_VERSION_ASSIGNMENT = re.compile(
+    r"(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)=\$\([^\n]*toolchain\.versions\.yml[^\n]*\)\s*$"
 )
 FOREIGN_INSTALLERS = re.compile(
-    r"\b(?:pip|pip3|pipx|easy_install)\s+install\b|\bpython3?\s+-m\s+pip\b"
+    r"\b(?:pip|pip3|pipx|easy_install)\b[^;&|\n]*?\binstall\b"
+    r"|\bpython3?\s+-m\s+pip\b[^;&|\n]*?\binstall\b"
 )
 # A Python interpreter invoked as a command, not the word inside a path or flag.
 BARE_PYTHON = re.compile(r"(?:^|[|;&]\s*|\(\s*|\bthen\s+|\bdo\s+)(python3?)\b")
@@ -66,20 +71,37 @@ def _logical_lines(script: str) -> list[str]:
     return [line.strip() for line in joined.splitlines() if line.strip()]
 
 
+def _repository_python_step(step: dict[str, Any]) -> bool:
+    """Return whether a step invokes repository Python by any supported path."""
+
+    for line in _logical_lines(_run(step)):
+        if PROJECT_RUN in line or BARE_PYTHON.search(line):
+            return True
+    return False
+
+
 def bootstrap_violations(workflow: dict[str, Any], label: str) -> list[str]:
-    """Report jobs that run locked Python without syncing the lock first."""
+    """Report repository-Python jobs that escape or precede the locked bootstrap."""
 
     violations: list[str] = []
     for job_id, job in (workflow.get("jobs") or {}).items():
         steps = _steps(job)
-        runs = [index for index, step in enumerate(steps) if LOCKED_RUN in _run(step)]
+        runs = [index for index, step in enumerate(steps) if _repository_python_step(step)]
         if not runs:
             continue
+
+        for index in runs:
+            run = _run(steps[index])
+            if PROJECT_RUN in run and LOCKED_RUN not in run:
+                violations.append(
+                    f"{label}:{job_id} runs repository Python without the locked runner: {PROJECT_RUN!r}"
+                )
+
         syncs = [index for index, step in enumerate(steps) if LOCKED_SYNC in _run(step)]
         if not syncs:
             violations.append(f"{label}:{job_id} runs repository Python without {LOCKED_SYNC!r}")
         elif min(syncs) > min(runs):
-            violations.append(f"{label}:{job_id} runs locked Python before syncing the lock")
+            violations.append(f"{label}:{job_id} runs repository Python before syncing the lock")
     return violations
 
 
@@ -120,16 +142,47 @@ def bare_interpreter_violations(workflow: dict[str, Any], label: str) -> list[st
 
 
 def uv_version_violations(workflow: dict[str, Any], label: str) -> list[str]:
-    """Report setup-uv steps that pin uv inline instead of via the toolchain file."""
+    """Report setup-uv steps whose version is not derived from toolchain.versions.yml."""
 
     violations: list[str] = []
     for job_id, job in (workflow.get("jobs") or {}).items():
-        for step in _steps(job):
+        steps = _steps(job)
+        for step in steps:
             if not str(step.get("uses") or "").startswith("astral-sh/setup-uv@"):
                 continue
+
             version = str((step.get("with") or {}).get("version", ""))
-            if not UV_VERSION_EXPRESSION.fullmatch(version):
+            expression = UV_VERSION_EXPRESSION.fullmatch(version)
+            if not expression:
                 violations.append(f"{label}:{job_id} pins uv inline as {version!r}")
+                continue
+
+            producer_id = expression.group(1)
+            producers = [candidate for candidate in steps if str(candidate.get("id") or "") == producer_id]
+            if len(producers) != 1:
+                violations.append(
+                    f"{label}:{job_id} references uv-version output from non-unique step {producer_id!r}"
+                )
+                continue
+
+            producer_run = _run(producers[0])
+            assignment = UV_VERSION_ASSIGNMENT.search(producer_run)
+            if not assignment:
+                violations.append(
+                    f"{label}:{job_id} uv-version step {producer_id!r} does not derive its value from toolchain.versions.yml"
+                )
+                continue
+
+            variable = assignment.group(1)
+            writes_output = (
+                "GITHUB_OUTPUT" in producer_run
+                and "uv_version" in producer_run
+                and re.search(rf"\$\{{?{re.escape(variable)}\}}?", producer_run) is not None
+            )
+            if not writes_output:
+                violations.append(
+                    f"{label}:{job_id} uv-version step {producer_id!r} does not publish the derived value"
+                )
     return violations
 
 
@@ -159,7 +212,7 @@ class KubernetesPythonBootstrapTests(unittest.TestCase):
             covered += sum(
                 1
                 for job in (workflow.get("jobs") or {}).values()
-                if any(LOCKED_RUN in _run(step) for step in _steps(job))
+                if any(_repository_python_step(step) for step in _steps(job))
             )
         self.assertEqual(violations, [])
         self.assertGreaterEqual(
@@ -244,9 +297,42 @@ class KubernetesPythonBootstrapGuardTests(unittest.TestCase):
         self.assertEqual(bootstrap_violations(workflow, "w"), [])
         self.assertEqual(len(foreign_installer_violations(workflow, "w")), 1)
 
+    def test_pip_global_options_before_install_are_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [
+                        {
+                            "run": "python -m pip --disable-pip-version-check --no-input install pyyaml==6.0.3"
+                        }
+                    ]
+                }
+            }
+        }
+        self.assertEqual(len(foreign_installer_violations(workflow, "w")), 1)
+
     def test_missing_sync_is_reported(self) -> None:
         workflow = {
             "jobs": {"contract": {"steps": [{"run": f"{LOCKED_RUN} python -m unittest"}]}}
+        }
+        self.assertEqual(len(bootstrap_violations(workflow, "w")), 1)
+
+    def test_unlocked_project_runner_is_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [
+                        {"run": LOCKED_SYNC},
+                        {"run": "uv run --project tools/py python -m unittest"},
+                    ]
+                }
+            }
+        }
+        self.assertEqual(len(bootstrap_violations(workflow, "w")), 1)
+
+    def test_host_interpreter_without_sync_is_seen_by_bootstrap_guard(self) -> None:
+        workflow = {
+            "jobs": {"contract": {"steps": [{"run": "python scripts/platform/validate_platform.py"}]}}
         }
         self.assertEqual(len(bootstrap_violations(workflow, "w")), 1)
 
@@ -272,6 +358,44 @@ class KubernetesPythonBootstrapGuardTests(unittest.TestCase):
                             "uses": "astral-sh/setup-uv@" + "a" * 40,
                             "with": {"version": "0.9.11"},
                         }
+                    ]
+                }
+            }
+        }
+        self.assertEqual(len(uv_version_violations(workflow, "w")), 1)
+
+    def test_hard_coded_uv_output_is_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [
+                        {
+                            "id": "uv-version",
+                            "run": "echo 'uv_version=0.9.11' >> \"${GITHUB_OUTPUT}\"",
+                        },
+                        {
+                            "uses": "astral-sh/setup-uv@" + "a" * 40,
+                            "with": {"version": "${{ steps.uv-version.outputs.uv_version }}"},
+                        },
+                    ]
+                }
+            }
+        }
+        self.assertEqual(len(uv_version_violations(workflow, "w")), 1)
+
+    def test_mentioning_toolchain_file_without_deriving_output_is_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [
+                        {
+                            "id": "uv-version",
+                            "run": "cat toolchain.versions.yml >/dev/null\necho 'uv_version=0.9.11' >> \"${GITHUB_OUTPUT}\"",
+                        },
+                        {
+                            "uses": "astral-sh/setup-uv@" + "a" * 40,
+                            "with": {"version": "${{ steps.uv-version.outputs.uv_version }}"},
+                        },
                     ]
                 }
             }
