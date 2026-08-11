@@ -18,7 +18,8 @@ Erweiterungen sich anbieten.
 
 - **Installation im Devcontainer:** `.devcontainer/post-create.sh` installiert `uv`
   per offizieller Astral-Installroutine und macht das Binary direkt verfügbar.
-- **Toolchain-Pin:** `toolchain.versions.yml` pinnt `uv` aktuell auf v0.8.0.  \
+- **Toolchain-Pin:** `toolchain.versions.yml` ist die einzige Quelle des uv-Pins;
+  CI-Workflows lesen ihn von dort und pinnen ihn nicht inline.  \
   In CI wird `uv` deterministisch über das offizielle Install-Script installiert,
   sodass keine fehleranfälligen Release-Asset-URLs mehr nötig sind. Falls du
   lokal eine andere Version testen möchtest, kannst du das Script
@@ -48,6 +49,15 @@ Erweiterungen sich anbieten.
   `policycheck` und `docs-guard` binden Python-Tooling über dasselbe
   `tools/py/uv.lock` (nicht über ungebundene `pip install`-Versionen für diese
   Prüfungen).
+- **Maschineller Guard:** `scripts/ci/tests/test_kubernetes_python_bootstrap.py`
+  prüft diese Eigenschaft fail-closed für alle `.github/workflows/kubernetes*.yml`
+  (per Glob gefunden, damit ein neuer Workflow ab Tag eins erfasst ist): kein Schritt
+  ruft einen Host-Interpreter außerhalb von `uv run --project tools/py --locked` auf,
+  jeder Job mit Repository-Python synchronisiert den Lock vorher, kein Schritt nutzt
+  `pip`/`pipx` als zweiten Bootstrap, `setup-uv` liest seine Version aus
+  `toolchain.versions.yml`, und der PyYAML-Artefaktsatz ist im Lock an SHA-256
+  gebunden. Der Guard läuft in den `contract`-Jobs von `kubernetes-platform` und
+  `kubernetes-platform-proof`.
 
 Damit ist `uv` der einzige reproduzierbare Dependency-Pfad für den vollständigen
 Python-Validierungspfad (Agent, Vertrag, Plattform, CI-Tests) im Make- und CI-Pfad.

@@ -88,6 +88,7 @@ jobs:
           scripts.ci.tests.test_two_operator_cell_pilot
           scripts.ci.tests.test_kubernetes_ha_contract
           scripts.ci.tests.test_trivy_rendered_manifests
+          scripts.ci.tests.test_kubernetes_python_bootstrap
       - name: Render and validate all platform targets
         run: uv run --project tools/py --locked python scripts/platform/validate_platform.py --render
 
