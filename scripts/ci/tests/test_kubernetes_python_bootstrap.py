@@ -51,8 +51,20 @@ FOREIGN_INSTALLERS = re.compile(
 )
 # A host Python interpreter invoked as a command.  ``env`` and absolute/explicit
 # paths are command wrappers too; plain words inside arguments/paths stay ignored.
-SHELL_SEPARATORS = {";", "&&", "||", "|", "(", ")", "then", "do"}
-SUDO_VALUE_OPTIONS = {"-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt", "-C", "--close-from", "-T", "--command-timeout"}
+SUDO_VALUE_OPTIONS = {
+    "-u",
+    "--user",
+    "-g",
+    "--group",
+    "-h",
+    "--host",
+    "-p",
+    "--prompt",
+    "-C",
+    "--close-from",
+    "-T",
+    "--command-timeout",
+}
 
 
 def _command_tokens(line: str) -> list[list[str]]:
@@ -241,9 +253,9 @@ def bare_interpreter_violations(workflow: dict[str, Any], label: str) -> list[st
     for job_id, job in (workflow.get("jobs") or {}).items():
         for step in _steps(job):
             for line in _logical_lines(_run(step)):
-                # The regex is anchored to shell command positions, so the Python
-                # argument of LOCKED_RUN is not a host invocation.  Do not skip the
-                # whole line: ``LOCKED_RUN ... && python ...`` must still fail.
+                # The scanner only treats command-position Python as a host
+                # invocation. Do not skip the whole line: a locked runner followed
+                # by ``&& python ...`` must still fail.
                 executable = _bare_python_command(line)
                 if executable:
                     violations.append(
