@@ -11,13 +11,19 @@ name: security
       - "Cargo.lock"
       - "**/Cargo.toml"
       - "**/Cargo.lock"
+      - "apps/api/Dockerfile"
+      - "apps/api/entrypoint.sh"
+      - "policies/**"
+      - "scripts/dev/generate-demo-data.sh"
+      - "scripts/dev/bootstrap-first-account.sh"
+      - "scripts/ops/search-worker-loop.sh"
       - "deny.toml"
       - ".github/workflows/security.yml"
     types: [opened, synchronize, labeled]
   schedule:
     - cron: "45 2 * * *"   # nightly audit (02:45 UTC ≈ 04:45 Berlin)
     - cron: "10 3 * * 0"   # weekly deny (03:10 UTC ≈ 05:10 Berlin)
-    - cron: "25 3 * * 0"   # weekly SBOM (03:25 UTC ≈ 05:25 Berlin)
+    - cron: "25 3 * * 0"   # weekly SBOM + image scan (03:25 UTC ≈ 05:25 Berlin)
 
 permissions:
   contents: read
@@ -84,7 +90,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'security')) ||
-      (github.event_name == 'schedule' && github.event.schedule.cron == '10 3 * * 0')
+      (github.event_name == 'schedule' && github.event.schedule == '10 3 * * 0')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - name: Read Rust version
@@ -129,7 +135,7 @@ jobs:
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
        contains(github.event.pull_request.labels.*.name, 'security')) ||
-      (github.event_name == 'schedule' && github.event.schedule.cron == '25 3 * * 0')
+      (github.event_name == 'schedule' && github.event.schedule == '25 3 * * 0')
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
       - name: Generate SBOM with Syft
@@ -144,4 +150,51 @@ jobs:
         with:
           name: sbom-spdx
           path: sbom.spdx.json
+          retention-days: 21
+
+  image-scan:
+    name: trivy API image (weekly + relevant PRs)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      github.event_name == 'workflow_dispatch' ||
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'schedule' && github.event.schedule == '25 3 * * 0')
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+      - name: Derive reproducible image metadata
+        id: image-metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          BUILD_TIMESTAMP="$(git show -s --format=%cI "${GITHUB_SHA}")"
+          printf 'build_timestamp=%s\n' "${BUILD_TIMESTAMP}" >> "${GITHUB_OUTPUT}"
+      - name: Build production API image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker build \
+            --file apps/api/Dockerfile \
+            --tag weltgewebe-api:trivy-scan \
+            --build-arg "GIT_COMMIT_SHA=${GITHUB_SHA}" \
+            --build-arg "BUILD_TIMESTAMP=${{ steps.image-metadata.outputs.build_timestamp }}" \
+            .
+      - name: Scan production API image with Trivy
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # tag: v0.36.0
+        with:
+          scan-type: image
+          image-ref: weltgewebe-api:trivy-scan
+          scanners: vuln
+          vuln-type: os,library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          format: json
+          output: trivy-image-report.json
+          exit-code: "1"
+      - name: Upload Trivy image report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: trivy-api-image-report
+          path: trivy-image-report.json
           retention-days: 21

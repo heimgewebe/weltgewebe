@@ -154,12 +154,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "Runtime health, deployment health, or the correctness of claims inside individual reports."
   ],
-  "generated_at": "2026-08-08T08:06:49+02:00",
+  "generated_at": "2026-08-10T21:33:45+02:00",
   "limitations": [
     "The report reflects repository files only and does not execute product runtime checks."
   ],
   "schema_version": 1,
-  "source_revision": "70270bf28445fd178352efc4994f346c5981eb1e",
+  "source_revision": "a23b8422cc0bb4c8e5a59aab1ad83cfa3f8d9162",
   "sources": [
     {
       "path": "docs/reports/agent-readiness-audit.md",
@@ -335,7 +335,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/optimierungsstatus.md",
-      "sha256": "736bc5e9fc180e6d8535e95ceb1b039f6fbf6e9f834df53206987d8beebe083e"
+      "sha256": "47dc30280e18c7085185d2cab5ab04c418a1a71f7462684ddc9333fdc9456225"
     },
     {
       "path": "docs/reports/passkey-register-verify-prep.md",
