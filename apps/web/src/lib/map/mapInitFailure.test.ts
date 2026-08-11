@@ -158,7 +158,7 @@ describe("map page early init-timeout wiring", () => {
     expect(pageSource).toContain(
       'map.once("idle", () => finishInitialLoading(generation));',
     );
-    expect(pageSource).toContain("{ diff: false }");
+    expect(pageSource).toMatch(/\{\s*diff:\s*false,?\s*\}/);
     expect(pageSource).not.toContain("initialBasemapGeneration");
   });
 

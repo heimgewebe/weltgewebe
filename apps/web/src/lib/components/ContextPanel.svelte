@@ -14,29 +14,21 @@
     Selection,
     SystemState,
   } from "$lib/stores/uiView";
-  import type { MapEntityViewModel } from "$lib/map/types";
+  import type {
+    MapDomainChanged,
+    RelatedMapSelection,
+  } from "$lib/components/map/mapRouteEvents";
 
   import NodePanel from "./panels/NodePanel.svelte";
   import EdgePanel from "./panels/EdgePanel.svelte";
   import KompositionPanel from "./panels/KompositionPanel.svelte";
 
-  type RelatedSelection = {
-    type: "node" | "garnrolle";
-    id: string;
-    title?: string;
-    data?: MapEntityViewModel;
-  };
-  type DomainChanged = {
-    kind: "node";
-    id: string;
-    action: "updated" | "deleted" | "archived";
-  };
   type KompositionPanelHandle = { requestClose: () => void };
   type SheetStage = "compact" | "full";
 
   const dispatch = createEventDispatcher<{
-    selectRelated: RelatedSelection;
-    domainChanged: DomainChanged;
+    selectRelated: RelatedMapSelection;
+    domainChanged: MapDomainChanged;
   }>();
   const DRAG_THRESHOLD_PX = 6;
 
@@ -204,11 +196,11 @@
     leaveToNavigation();
   }
 
-  function handleRelated(event: CustomEvent<RelatedSelection>) {
+  function handleRelated(event: CustomEvent<RelatedMapSelection>) {
     dispatch("selectRelated", event.detail);
   }
 
-  function handleDomainChanged(event: CustomEvent<DomainChanged>) {
+  function handleDomainChanged(event: CustomEvent<MapDomainChanged>) {
     dispatch("domainChanged", event.detail);
   }
 
