@@ -145,7 +145,7 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
 | docs/reports/map-status-matrix.md | status-matrix | deprecated | archived |  |  |  |  | deprecated | 8 | 6 | 3 | lifecycle, owner_task, review_after |  |
 | docs/reports/map-status.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-08-12 |  | not_decision_relevant | 4 | 6 | 2 |  |  |
 | docs/reports/optimierungsbericht.md | report | active | active | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | not_decision_relevant | 2 | 4 | 4 |  |  |
-| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | not_decision_relevant | 23 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
+| docs/reports/optimierungsstatus.md | status-matrix | active |  |  |  |  |  | not_decision_relevant | 24 | 5 | 4 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/passkey-register-verify-prep.md | report | deprecated | archived | decision-prep | AUTH-PG-002 |  |  | deprecated | 1 | 5 | 4 | review_after |  |
 | docs/reports/planning-registration-findings.md | report | deprecated | archived | audit | TASK-CTL-005 |  |  | deprecated | 1 | 5 | 2 | review_after |  |
 | docs/reports/proof-matrix-generalization-decision.md | report | active | active | decision | DOCMETA-PROOF-001 | 2026-09-29 |  | not_decision_relevant | 1 | 4 | 6 |  |  |
@@ -434,6 +434,7 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
   - `docs/blueprints/doc-structure-task-control-roadmap.md`
   - `docs/blueprints/doc-structure-task-control.md`
   - `docs/blueprints/domain-data-postgres-cutover.md`
+  - `docs/process/ci-workflow-composition.md`
   - `docs/process/report-lifecycle-contract-alignment.md`
   - `docs/process/report-lifecycle.md`
   - `docs/reports/auth-persistence-direct-proof-diagnose-audit.md`
@@ -849,12 +850,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "The correctness of claims inside individual reports, runtime use of declared consumers, or deployment truth."
   ],
-  "generated_at": "2026-08-10T21:33:45+02:00",
+  "generated_at": "2026-08-11T07:21:33+02:00",
   "limitations": [
     "The inventory evaluates repository metadata, exact path references and declared control contracts, not runtime behaviour."
   ],
   "schema_version": 1,
-  "source_revision": "a23b8422cc0bb4c8e5a59aab1ad83cfa3f8d9162",
+  "source_revision": "2b596c5c771c93cc2804fec7a4e143770d16818c",
   "sources": [
     {
       "path": ".wgx/generated-artifacts.yml",
@@ -1034,7 +1035,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/optimierungsstatus.md",
-      "sha256": "47dc30280e18c7085185d2cab5ab04c418a1a71f7462684ddc9333fdc9456225"
+      "sha256": "5dc8e0ab46b46c913a0f0efc8769301ef8a3b17207582d6de0a44d12294f64af"
     },
     {
       "path": "docs/reports/passkey-register-verify-prep.md",

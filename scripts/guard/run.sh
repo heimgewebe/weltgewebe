@@ -24,6 +24,9 @@ echo "== guard: metrics ref consistency =="
 echo "== guard: GitHub Action pinning =="
 python3 "${REPO_ROOT}/scripts/ci/check_github_action_pinning.py"
 
+echo "== guard: CI workflow composition =="
+python3 "${REPO_ROOT}/scripts/ci/check_ci_workflow_structure.py"
+
 echo "== guard: security headers =="
 "${REPO_ROOT}/scripts/guard/security-headers-guard.sh"
 

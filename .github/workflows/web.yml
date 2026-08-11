@@ -1,5 +1,5 @@
 ---
-# Web Check (Gate A) — path-scoped web build, lint, typecheck and Playwright E2E.
+# Web Check (Gate A) — path-scoped web quality gates and Playwright E2E.
 # Pull requests and main pushes receive Vitest through `just ci`; non-main branch
 # pushes use the conditional fallback below because ci.yml does not cover them.
 name: Web Check (Gate A)
@@ -9,6 +9,7 @@ env:
 
 permissions:
   contents: read
+  actions: write
 
 "on":
   pull_request:
@@ -16,110 +17,31 @@ permissions:
     paths:
       - apps/web/**
       - .github/workflows/web.yml
+      - .github/workflows/reusable-web-check.yml
       - .node-version
   push:
     branches: [main, dev, 'feat/**', 'fix/**']
     paths:
       - apps/web/**
       - .github/workflows/web.yml
+      - .github/workflows/reusable-web-check.yml
       - .node-version
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
     name: Build & Lint
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-    permissions:
-      contents: read
-      actions: write   # required for npm cache restore
-    env:
-      PUPPETEER_SKIP_DOWNLOAD: "true"
-      NPM_CONFIG_AUDIT: "false"
-      NPM_CONFIG_FUND: "false"
-      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-    defaults:
-      run:
-        working-directory: apps/web
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
-
-      - name: Setup Node
-        uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
-        with:
-          node-version-file: '.node-version'
-          cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: SvelteKit prepare
-        run: pnpm sync
-
-      - name: Unit tests (non-main branch pushes)
-        if: github.event_name == 'push' && github.ref != 'refs/heads/main'
-        run: pnpm test:unit
-
-      - name: Typecheck
-        run: pnpm check
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Build
-        run: CI=true pnpm build
-
-      - name: Get Playwright version
-        shell: bash
-        run: |
-          PLAYWRIGHT_VERSION=$(pnpm exec playwright --version | awk '{print $2}')
-          echo "PLAYWRIGHT_VERSION=$PLAYWRIGHT_VERSION" >> $GITHUB_ENV
-
-      - name: Cache Playwright browsers
-        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
-        id: playwright-cache
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ env.PLAYWRIGHT_VERSION }}
-          restore-keys: |
-            ${{ runner.os }}-${{ runner.arch }}-playwright-
-
-      - name: "Playwright: setup browsers (CI)"
-        # WICHTIG: Nicht "0" setzen – jede nicht-leere Zeichenkette gilt als truthy
-        # und verhindert weiterhin den Download. Ein leerer String sorgt dafür,
-        # dass vorhandene job-/repo-/orgweite Defaults überschrieben werden.
-        env:
-          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ""
-        run: pnpm test:setup
-
-      - name: Debug Playwright cache path (temporary)
-        if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: ls -la ~/.cache/ms-playwright || true
-
-      - name: Test (CI)
-        run: pnpm test:ci
-
-      - name: Upload Playwright report (best-effort)
-        if: always()
-        run: |
-          if [ -d "playwright-report" ]; then
-            echo "Playwright report directory contents:"
-            ls -R playwright-report || true
-          else
-            echo "No Playwright report directory found at apps/web/playwright-report"
-          fi
-      - name: Upload Playwright report artifact
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report
-          if-no-files-found: ignore
+    uses: ./.github/workflows/reusable-web-check.yml
+    with:
+      job_name: Build & Lint
+      timeout_minutes: 30
+      run_unit_tests: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}
+      run_typecheck: true
+      run_lint: true
+      run_build: true
+      run_demo_api: false
+      suite: ci
+      artifact_name: playwright-report

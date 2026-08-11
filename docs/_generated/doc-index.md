@@ -113,6 +113,7 @@ Generated automatically. Do not edit.
 | policies.orientierung | Orientierung | reference | deprecated | docs/policies/orientierung.md |
 | process.README | Prozess-Übersicht | reference | active | docs/process/README.md |
 | process.bash-tooling-guidelines | Bash Tooling Guidelines | reference | active | docs/process/bash-tooling-guidelines.md |
+| process.ci-workflow-composition | CI-Workflow-Komposition | process | active | docs/process/ci-workflow-composition.md |
 | process.fahrplan | Fahrplan | reference | active | docs/process/fahrplan.md |
 | process.merge-quality-gate | Merge-Qualitätsgate | policy | active | docs/process/merge-quality-gate.md |
 | process.report-lifecycle | Report Lifecycle Policy | policy | active | docs/process/report-lifecycle.md |

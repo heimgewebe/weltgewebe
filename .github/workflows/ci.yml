@@ -393,82 +393,18 @@ jobs:
 
   web-e2e:
     name: Web E2E
-    runs-on: ubuntu-latest
     needs: ci
-    timeout-minutes: 20
-    env:
-      HEADLESS: "1"
-      NPM_CONFIG_AUDIT: "false"
-      NPM_CONFIG_FUND: "false"
-      FORCE_COLOR: "1"
-      PLAYWRIGHT_HTML_REPORT_OPEN: never
-      PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
-      PREVIEW_PORT: "5173"
-    defaults:
-      run:
-        shell: bash
-        working-directory: apps/web
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-        with:
-          fetch-depth: 0
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
-        with:
-          run_install: false
-
-      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
-        with:
-          node-version-file: '.node-version'
-          check-latest: false
-          cache: 'pnpm'
-          cache-dependency-path: |
-            pnpm-lock.yaml
-            apps/web/pnpm-lock.yaml
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: SvelteKit prepare
-        run: pnpm sync
-
-      - name: Cache Playwright browser binaries
-        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
-        with:
-          path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-ms-playwright-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-ms-playwright-
-
-      - name: Install Playwright browsers
-        run: pnpm playwright install --with-deps
-
-      - name: Generate demo data
-        run: scripts/dev/generate-demo-data.sh
-        working-directory: .
-
-      - name: Start demo API
-        run: |
-          PORT=8080 node scripts/dev/gewebe-demo-server.mjs > /tmp/demo-api.log 2>&1 &
-        working-directory: .
-
-      - name: Wait for API
-        run: scripts/ci/wait-for-api.sh
-        working-directory: .
-
-      - name: Run Playwright tests
-        env:
-          PLAYWRIGHT_HTML_REPORT: playwright-report
-        run: pnpm test:ci
-
-      - name: Upload Playwright report
-        if: ${{ always() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: playwright-report-${{ github.run_id }}-${{ github.job }}
-          path: apps/web/playwright-report
-          if-no-files-found: ignore
+    uses: ./.github/workflows/reusable-web-check.yml
+    with:
+      job_name: Web E2E
+      timeout_minutes: 20
+      run_unit_tests: false
+      run_typecheck: false
+      run_lint: false
+      run_build: false
+      run_demo_api: true
+      suite: ci
+      artifact_name: playwright-report-${{ github.run_id }}-web-e2e
 
   web-runtime-proof:
     name: Web runtime performance proof

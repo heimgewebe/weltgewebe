@@ -44,6 +44,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/vps.md
 
+## .github/workflows/reusable-web-check.yml
+
+- [relates_to] docs/process/ci-workflow-composition.md
+
 ## .github/workflows/review-evidence.yml
 
 - [relates_to] docs/process/merge-quality-gate.md
@@ -916,6 +920,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/doc-structure-task-control-roadmap.md
 - [relates_to] docs/blueprints/doc-structure-task-control.md
 - [relates_to] docs/blueprints/domain-data-postgres-cutover.md
+- [relates_to] docs/process/ci-workflow-composition.md
 - [relates_to] docs/reports/domain-account-write-path-proof.md
 - [relates_to] docs/reports/domain-edge-write-path-proof.md
 - [relates_to] docs/reports/domain-node-write-path-proof.md
