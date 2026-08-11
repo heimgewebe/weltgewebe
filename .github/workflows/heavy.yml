@@ -36,43 +36,17 @@ jobs:
           fi
 
   e2e:
+    name: Heavy Web E2E
     needs: gate
     if: needs.gate.outputs.run_heavy == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-    env:
-      CI: true
-      HEADLESS: "1"
-      NPM_CONFIG_AUDIT: "false"
-      NPM_CONFIG_FUND: "false"
-    defaults: {run: {working-directory: apps/web, shell: bash}}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
-      # pnpm muss vor setup-node verfügbar sein, sonst schlägt cache: 'pnpm'
-      # fehl (setup-node ruft `pnpm store path` auf). Gleiches Muster wie web.yml.
-      - name: Setup pnpm
-        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
-        with:
-          run_install: false
-      - uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
-        with:
-          node-version-file: '.node-version'
-          cache: 'pnpm'
-          cache-dependency-path: apps/web/pnpm-lock.yaml
-      - name: pnpm install
-        run: pnpm install --frozen-lockfile
-      - name: Install Playwright browsers
-        run: pnpm playwright install --with-deps
-      - name: Build (production)
-        run: pnpm build
-      - name: Run Playwright tests
-        run: pnpm test
-      - name: Upload Playwright report
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
-        with:
-          name: playwright-report
-          path: apps/web/playwright-report
-          if-no-files-found: ignore
+    uses: ./.github/workflows/reusable-web-check.yml
+    with:
+      job_name: Heavy Web E2E
+      timeout_minutes: 45
+      run_unit_tests: false
+      run_typecheck: false
+      run_lint: false
+      run_build: true
+      run_demo_api: false
+      suite: full
+      artifact_name: playwright-report

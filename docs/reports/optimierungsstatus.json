@@ -80,22 +80,24 @@
       "id": "OPT-CI-001",
       "area": "CI/CD",
       "title": "Workflow-Redundanz",
-      "status": "partial",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "medium",
-      "evidence_status": "ci",
+      "evidence_status": "code+test",
       "evidence": [
+        ".github/workflows/reusable-web-check.yml",
         ".github/workflows/ci.yml",
         ".github/workflows/web.yml",
-        ".github/workflows/heavy.yml"
+        ".github/workflows/heavy.yml",
+        "scripts/ci/check_ci_workflow_structure.py",
+        "scripts/ci/tests/test_ci_workflow_structure.py",
+        "scripts/guard/run.sh",
+        "docs/process/ci-workflow-composition.md"
       ],
-      "missing_evidence": [
-        "Konsolidierungskonzept via workflow_call fehlt",
-        "Redundanzkriterien und eigener CI-Strukturcheck fehlen"
-      ],
-      "next_action": "Konsolidierungskonzept erstellen",
-      "updated_at": "2026-04-27"
+      "missing_evidence": [],
+      "next_action": "keine — gemeinsame Web-/Playwright-Einrichtung via workflow_call konsolidiert; Redundanzkriterien dokumentiert; Struktur-Guard und Regressionstests vorhanden",
+      "updated_at": "2026-08-11"
     },
     {
       "id": "OPT-MAP-001",

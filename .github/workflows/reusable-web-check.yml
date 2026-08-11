@@ -1,0 +1,176 @@
+---
+name: Reusable Web Check
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+"on":
+  workflow_call:
+    inputs:
+      job_name:
+        description: Display name for the reusable web job.
+        required: false
+        type: string
+        default: Web Check
+      timeout_minutes:
+        description: Maximum runtime for the web job.
+        required: false
+        type: number
+        default: 30
+      run_unit_tests:
+        description: Run Vitest unit tests before browser checks.
+        required: false
+        type: boolean
+        default: false
+      run_typecheck:
+        description: Run Svelte typechecking.
+        required: false
+        type: boolean
+        default: false
+      run_lint:
+        description: Run web linting.
+        required: false
+        type: boolean
+        default: false
+      run_build:
+        description: Build the production web bundle before Playwright.
+        required: false
+        type: boolean
+        default: false
+      run_demo_api:
+        description: Start the deterministic demo API used by the canonical CI E2E lane.
+        required: false
+        type: boolean
+        default: false
+      suite:
+        description: Playwright suite. Supported values are ci and full.
+        required: false
+        type: string
+        default: ci
+      artifact_name:
+        description: Name of the uploaded Playwright report artifact.
+        required: false
+        type: string
+        default: playwright-report
+
+jobs:
+  web-check:
+    name: ${{ inputs.job_name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ inputs.timeout_minutes }}
+    env:
+      HEADLESS: "1"
+      PUPPETEER_SKIP_DOWNLOAD: "true"
+      NPM_CONFIG_AUDIT: "false"
+      NPM_CONFIG_FUND: "false"
+      FORCE_COLOR: "1"
+      PLAYWRIGHT_HTML_REPORT_OPEN: never
+      PLAYWRIGHT_JUNIT_OUTPUT_NAME: results.xml
+      PREVIEW_PORT: "5173"
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/web
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@b0f76dfb45f55f8421693e4803ac7bb65143bd34 # tag: v6
+        with:
+          run_install: false
+
+      - name: Setup Node
+        uses: actions/setup-node@e51e5fe84fc33b4c73ebe40526b2694712b5b858
+        with:
+          node-version-file: '.node-version'
+          check-latest: false
+          cache: 'pnpm'
+          cache-dependency-path: |
+            pnpm-lock.yaml
+            apps/web/pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: SvelteKit prepare
+        run: pnpm sync
+
+      - name: Unit tests
+        if: ${{ inputs.run_unit_tests }}
+        run: pnpm test:unit
+
+      - name: Typecheck
+        if: ${{ inputs.run_typecheck }}
+        run: pnpm check
+
+      - name: Lint
+        if: ${{ inputs.run_lint }}
+        run: pnpm lint
+
+      - name: Build
+        if: ${{ inputs.run_build }}
+        run: CI=true pnpm build
+
+      - name: Cache Playwright browser binaries
+        uses: actions/cache@3edfce9056124e459a23f683a21433670d47daca # provenance: untagged
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-${{ runner.arch }}-playwright-${{ hashFiles('apps/web/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-playwright-
+            ${{ runner.os }}-ms-playwright-
+
+      - name: Install Playwright browsers
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: ""
+        run: pnpm playwright install --with-deps
+
+      - name: Validate requested Playwright suite
+        env:
+          WEB_CHECK_SUITE: ${{ inputs.suite }}
+        run: |
+          set -euo pipefail
+          case "${WEB_CHECK_SUITE}" in
+            ci|full) ;;
+            *)
+              echo "unsupported reusable web suite: ${WEB_CHECK_SUITE}" >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Generate demo data
+        if: ${{ inputs.run_demo_api }}
+        run: scripts/dev/generate-demo-data.sh
+        working-directory: .
+
+      - name: Start demo API
+        if: ${{ inputs.run_demo_api }}
+        run: |
+          PORT=8080 node scripts/dev/gewebe-demo-server.mjs > /tmp/demo-api.log 2>&1 &
+        working-directory: .
+
+      - name: Wait for demo API
+        if: ${{ inputs.run_demo_api }}
+        run: scripts/ci/wait-for-api.sh
+        working-directory: .
+
+      - name: Run Playwright CI suite
+        if: ${{ inputs.suite == 'ci' }}
+        env:
+          PLAYWRIGHT_HTML_REPORT: playwright-report
+        run: pnpm test:ci
+
+      - name: Run full Playwright suite
+        if: ${{ inputs.suite == 'full' }}
+        run: pnpm test
+
+      - name: Upload Playwright report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: ${{ inputs.artifact_name }}
+          path: apps/web/playwright-report
+          if-no-files-found: ignore

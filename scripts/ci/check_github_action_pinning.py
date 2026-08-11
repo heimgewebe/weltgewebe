@@ -37,10 +37,10 @@ EXPECTED_ACTION_CONSUMERS: Mapping[str, Mapping[str, int]] = {
         ".github/workflows/api-smoke.yml": 1,
         ".github/workflows/auth-passkey-register-proof.yml": 1,
         ".github/workflows/auth-session-persistence-proof.yml": 1,
-        ".github/workflows/ci.yml": 4,
+        ".github/workflows/ci.yml": 3,
         ".github/workflows/kubernetes-platform-proof.yml": 4,
         ".github/workflows/python-tooling.yml": 1,
-        ".github/workflows/web.yml": 1,
+        ".github/workflows/reusable-web-check.yml": 1,
     }
 }
 

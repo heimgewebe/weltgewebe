@@ -12,6 +12,7 @@ JUSTFILE = ROOT / "Justfile"
 WEB_PACKAGE = ROOT / "apps" / "web" / "package.json"
 CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 WEB_WORKFLOW = ROOT / ".github" / "workflows" / "web.yml"
+REUSABLE_WEB_WORKFLOW = ROOT / ".github" / "workflows" / "reusable-web-check.yml"
 CONTINUATION = chr(92)
 SHELL_OPERATORS = {";", "&&", "||", "|"}
 PACKAGE_MANAGERS = {"pnpm", "npm"}
@@ -338,7 +339,9 @@ class JustfileContractTests(unittest.TestCase):
         self.assertIn("pull_request:", web_triggers)
 
         ci_steps = workflow_steps(CI_WORKFLOW)
-        web_steps = workflow_steps(WEB_WORKFLOW)
+        reusable_steps = workflow_steps(REUSABLE_WEB_WORKFLOW)
+        web_text = WEB_WORKFLOW.read_text(encoding="utf-8")
+        reusable_text = REUSABLE_WEB_WORKFLOW.read_text(encoding="utf-8")
         self.assertTrue(
             any(
                 any(tokens == ["just", "ci"] for tokens in shell_commands(step["run"]))
@@ -353,35 +356,43 @@ class JustfileContractTests(unittest.TestCase):
                 if "run" in step
             )
         )
+
         unit_steps = [
             step
-            for step in web_steps
+            for step in reusable_steps
             if "run" in step and run_uses_binary(step["run"], scripts, "vitest")
         ]
         self.assertEqual(
             unit_steps,
             [
                 {
-                    "name": "Unit tests (non-main branch pushes)",
-                    "if": "github.event_name == 'push' && github.ref != 'refs/heads/main'",
+                    "name": "Unit tests",
+                    "if": "${{ inputs.run_unit_tests }}",
                     "run": "pnpm test:unit",
                 }
             ],
         )
+        self.assertIn(
+            "run_unit_tests: ${{ github.event_name == 'push' && github.ref != 'refs/heads/main' }}",
+            web_text,
+        )
         self.assertTrue(
             any(
-                step.get("name") == "Test (CI)"
+                step.get("name") == "Run Playwright CI suite"
                 and step.get("run") == "pnpm test:ci"
                 and run_uses_binary(step["run"], scripts, "playwright")
-                for step in web_steps
+                for step in reusable_steps
             )
         )
+
         ci_web_e2e = job_block(CI_WORKFLOW, "web-e2e", "web-runtime-proof")
-        install = ci_web_e2e.index(
-            "- name: Install dependencies\n        run: pnpm install --frozen-lockfile"
-        )
-        prepare = ci_web_e2e.index("- name: SvelteKit prepare\n        run: pnpm sync")
-        browser = ci_web_e2e.index("- name: Run Playwright tests\n        env:")
+        self.assertIn("uses: ./.github/workflows/reusable-web-check.yml", ci_web_e2e)
+        self.assertIn("run_demo_api: true", ci_web_e2e)
+        self.assertIn("suite: ci", ci_web_e2e)
+
+        install = reusable_text.index("- name: Install dependencies")
+        prepare = reusable_text.index("- name: SvelteKit prepare")
+        browser = reusable_text.index("- name: Run Playwright CI suite")
         self.assertLess(install, prepare)
         self.assertLess(prepare, browser)
 

@@ -14,10 +14,10 @@ EXPECTED_CACHE_WORKFLOWS = {
     "api-smoke.yml": 1,
     "auth-passkey-register-proof.yml": 1,
     "auth-session-persistence-proof.yml": 1,
-    "ci.yml": 4,
+    "ci.yml": 3,
     "kubernetes-platform-proof.yml": 4,
     "python-tooling.yml": 1,
-    "web.yml": 1,
+    "reusable-web-check.yml": 1,
 }
 
 
@@ -328,7 +328,7 @@ jobs:
         self.assertEqual(json.loads(result.stdout)["consumer_contract_errors"], [])
 
         missing = dict(files)
-        missing.pop("web.yml")
+        missing.pop("reusable-web-check.yml")
         result = self.run_checker(
             "name: other\non: workflow_dispatch\njobs: {}\n",
             arguments=("--format", "json"),
@@ -337,12 +337,12 @@ jobs:
         )
         self.assertEqual(result.returncode, 1, result.stdout)
         self.assertIn(
-            ".github/workflows/web.yml",
+            ".github/workflows/reusable-web-check.yml",
             " ".join(json.loads(result.stdout)["consumer_contract_errors"]),
         )
 
         wrong_count = dict(files)
-        wrong_count["ci.yml"] = workflow(3)
+        wrong_count["ci.yml"] = workflow(2)
         result = self.run_checker(
             "name: other\non: workflow_dispatch\njobs: {}\n",
             arguments=("--format", "json"),
@@ -351,8 +351,8 @@ jobs:
         )
         self.assertEqual(result.returncode, 1, result.stdout)
         errors = " ".join(json.loads(result.stdout)["consumer_contract_errors"])
-        self.assertIn("expected 4 uses", errors)
-        self.assertIn("observed 3", errors)
+        self.assertIn("expected 3 uses", errors)
+        self.assertIn("observed 2", errors)
 
 
 if __name__ == "__main__":
