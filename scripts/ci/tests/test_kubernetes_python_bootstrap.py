@@ -43,14 +43,20 @@ UV_VERSION_EXPRESSION = re.compile(
     r"^\$\{\{\s*steps\.([A-Za-z0-9_-]+)\.outputs\.uv_version\s*\}\}$"
 )
 UV_VERSION_ASSIGNMENT = re.compile(
-    r"(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)=\$\([^\n]*toolchain\.versions\.yml[^\n]*\)\s*$"
+    r'''(?m)^\s*([A-Za-z_][A-Za-z0-9_]*)=\$\(grep '\^uv:' toolchain\.versions\.yml \| cut -d '"' -f2\)\s*$'''
 )
 FOREIGN_INSTALLERS = re.compile(
     r"\b(?:pip|pip3|pipx|easy_install)\b[^;&|\n]*?\binstall\b"
     r"|\bpython3?\s+-m\s+pip\b[^;&|\n]*?\binstall\b"
 )
-# A Python interpreter invoked as a command, not the word inside a path or flag.
-BARE_PYTHON = re.compile(r"(?:^|[|;&]\s*|\(\s*|\bthen\s+|\bdo\s+)(python3?)\b")
+# A host Python interpreter invoked as a command.  ``env`` and absolute/explicit
+# paths are command wrappers too; plain words inside arguments/paths stay ignored.
+BARE_PYTHON = re.compile(
+    r"(?:^|[|;&]\s*|\(\s*|\bthen\s+|\bdo\s+)"
+    r"(?:env(?:\s+(?:-[^\s;&|()]+|[A-Za-z_][A-Za-z0-9_]*=[^\s;&|()]+))*\s+)?"
+    r"(?:(?:/|\./|\.\./)[^\s;&|()]*/)?"
+    r"(python3?)(?=$|\s|[;&|)])"
+)
 VALIDATOR_DEPENDENCY = "pyyaml"
 
 
@@ -131,8 +137,9 @@ def bare_interpreter_violations(workflow: dict[str, Any], label: str) -> list[st
     for job_id, job in (workflow.get("jobs") or {}).items():
         for step in _steps(job):
             for line in _logical_lines(_run(step)):
-                if LOCKED_RUN in line:
-                    continue
+                # The regex is anchored to shell command positions, so the Python
+                # argument of LOCKED_RUN is not a host invocation.  Do not skip the
+                # whole line: ``LOCKED_RUN ... && python ...`` must still fail.
                 match = BARE_PYTHON.search(line)
                 if match:
                     violations.append(
@@ -383,6 +390,25 @@ class KubernetesPythonBootstrapGuardTests(unittest.TestCase):
         }
         self.assertEqual(len(uv_version_violations(workflow, "w")), 1)
 
+    def test_fake_derivation_inside_assignment_is_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [
+                        {
+                            "id": "uv-version",
+                            "run": "UV_VERSION=$(printf 0.9.11; : toolchain.versions.yml)\nprintf 'uv_version=%s\\n' \"${UV_VERSION}\" >> \"${GITHUB_OUTPUT}\"",
+                        },
+                        {
+                            "uses": "astral-sh/setup-uv@" + "a" * 40,
+                            "with": {"version": "${{ steps.uv-version.outputs.uv_version }}"},
+                        },
+                    ]
+                }
+            }
+        }
+        self.assertEqual(len(uv_version_violations(workflow, "w")), 1)
+
     def test_mentioning_toolchain_file_without_deriving_output_is_reported(self) -> None:
         workflow = {
             "jobs": {
@@ -401,6 +427,45 @@ class KubernetesPythonBootstrapGuardTests(unittest.TestCase):
             }
         }
         self.assertEqual(len(uv_version_violations(workflow, "w")), 1)
+
+    def test_env_wrapped_host_interpreter_is_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [
+                        {"run": LOCKED_SYNC},
+                        {"run": "env PYTHONUTF8=1 python scripts/platform/validate_platform.py --render"},
+                    ]
+                }
+            }
+        }
+        self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
+
+    def test_absolute_host_interpreter_is_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [{"run": "/usr/bin/python3 scripts/platform/validate_platform.py"}]
+                }
+            }
+        }
+        self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
+
+    def test_bare_interpreter_after_locked_run_on_same_line_is_reported(self) -> None:
+        workflow = {
+            "jobs": {
+                "contract": {
+                    "steps": [
+                        {"run": f"{LOCKED_RUN} python -m unittest && python scripts/platform/validate_platform.py"}
+                    ]
+                }
+            }
+        }
+        self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
+
+    def test_python_as_plain_argument_is_not_a_host_interpreter(self) -> None:
+        workflow = {"jobs": {"contract": {"steps": [{"run": "printf '%s\n' python"}]}}}
+        self.assertEqual(bare_interpreter_violations(workflow, "w"), [])
 
     def test_host_interpreter_next_to_the_lock_is_reported(self) -> None:
         workflow = {
