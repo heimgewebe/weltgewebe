@@ -7,9 +7,14 @@
   import { installVitePreloadRecovery } from "$lib/utils/preloadRecovery";
 
   import TopBar from "$lib/components/TopBar.svelte";
-  import ToolFan from "$lib/components/ToolFan.svelte";
-  import SearchDirectionIndicators from "$lib/components/SearchDirectionIndicators.svelte";
-  import FilterOverlay from "$lib/components/FilterOverlay.svelte";
+  import MapRouteOverlays from "$lib/components/map/MapRouteOverlays.svelte";
+  import MapRouteStatus from "$lib/components/map/MapRouteStatus.svelte";
+  import MapRouteSurface from "$lib/components/map/MapRouteSurface.svelte";
+  import type {
+    MapDomainChanged,
+    RelatedMapSelection,
+  } from "$lib/components/map/mapRouteEvents";
+  import type { NodeSearchStatus } from "$lib/api/search";
   import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
   import {
     deriveSearchDirectionIndicators,
@@ -75,7 +80,6 @@
   } from "$lib/map/colorScheme";
   import { hasRenderableMapPosition } from "$lib/map/coordinates";
   import { areMapEdgesVisuallyEnabled } from "$lib/map/edgeVisibility";
-  import { createResettableLazyImport } from "$lib/map/lazyImport";
   import {
     resolveMapInitFailure,
     scheduleMapInitTimeout,
@@ -137,7 +141,7 @@
   // The search client itself is lazy-loaded so opening the map does not pay the
   // search runtime cost before a person actually starts searching.
   let nodeSearchItems: MapEntityViewModel[] = [];
-  let nodeSearchStatus: "idle" | "loading" | "ready" | "error" = "idle";
+  let nodeSearchStatus: NodeSearchStatus = "idle";
   let nodeSearchMode: string | null = null;
   let nodeSearchFallbackReason: string | null = null;
   let nodeSearchTimer: ReturnType<typeof setTimeout> | undefined;
@@ -203,9 +207,9 @@
       .filter((marker) => marker.type === "node")
       .map(getMapContentType),
   );
-  $: activeSearchKinds = Array.from(
-    $mapContentFilters.contentTypes,
-  ).filter((filter) => nodeContentTypes.has(filter));
+  $: activeSearchKinds = Array.from($mapContentFilters.contentTypes).filter(
+    (filter) => nodeContentTypes.has(filter),
+  );
   $: activeSearchTags = Array.from($mapContentFilters.topics).map(
     knottingTopicTag,
   );
@@ -255,40 +259,6 @@
   $: lineEdges = projectedMarkersData
     ? deriveLineEdges(weaveEdges, projectedMarkersData)
     : [];
-
-  type ContextPanelModule =
-    typeof import("$lib/components/ContextPanel.svelte");
-  // Keep a handle so the template can retain a successful mount after close,
-  // while still resetting rejected promises for a later retry.
-  let contextPanelPromise: Promise<ContextPanelModule> | null = null;
-  const loadContextPanelModule = createResettableLazyImport(
-    () => import("$lib/components/ContextPanel.svelte"),
-  );
-
-  function loadContextPanel(): Promise<ContextPanelModule> {
-    const promise = loadContextPanelModule();
-    contextPanelPromise = promise;
-    void promise.catch(() => {
-      if (contextPanelPromise === promise) contextPanelPromise = null;
-    });
-    return promise;
-  }
-
-  type SearchOverlayModule =
-    typeof import("$lib/components/SearchOverlay.svelte");
-  let searchOverlayPromise: Promise<SearchOverlayModule> | null = null;
-  const loadSearchOverlayModule = createResettableLazyImport(
-    () => import("$lib/components/SearchOverlay.svelte"),
-  );
-
-  function loadSearchOverlay(): Promise<SearchOverlayModule> {
-    const promise = loadSearchOverlayModule();
-    searchOverlayPromise = promise;
-    void promise.catch(() => {
-      if (searchOverlayPromise === promise) searchOverlayPromise = null;
-    });
-    return promise;
-  }
 
   let mapContainer: HTMLDivElement | null = null;
   let map: MapLibreMap | null = null;
@@ -577,14 +547,7 @@
     focusAndFlyToPoint(event.detail);
   }
 
-  async function handleRelatedSelect(
-    event: CustomEvent<{
-      type: "node" | "garnrolle";
-      id: string;
-      title?: string;
-      data?: MapEntityViewModel;
-    }>,
-  ) {
+  async function handleRelatedSelect(event: CustomEvent<RelatedMapSelection>) {
     const related =
       event.detail.data ??
       markersData.find(
@@ -644,13 +607,7 @@
     return true;
   }
 
-  type DomainChanged = {
-    kind: "node";
-    id: string;
-    action: "updated" | "deleted" | "archived";
-  };
-
-  async function handleDomainChanged(event: CustomEvent<DomainChanged>) {
+  async function handleDomainChanged(event: CustomEvent<MapDomainChanged>) {
     const removesNode =
       event.detail.kind === "node" &&
       (event.detail.action === "deleted" || event.detail.action === "archived");
@@ -990,7 +947,9 @@
       // fetched, which can let an obsolete first render win the startup race.
       // A full style swap aborts/removes that old style while preserving camera
       // and UI controls; domain overlays are rehydrated below.
-      map.setStyle(resolveBasemapStyle(currentBasemap, scheme), { diff: false });
+      map.setStyle(resolveBasemapStyle(currentBasemap, scheme), {
+        diff: false,
+      });
       map.once("style.load", () => {
         if (destroyed || !map || generation !== basemapStyleGeneration) return;
         mapStyleReady = true;
@@ -1217,260 +1176,47 @@
       teardownMapRuntime();
     };
   });
+
+  function retryMapInitialisation() {
+    window.location.reload();
+  }
 </script>
 
-<main
-  class="shell"
-  class:panel-open={$contextPanelOpen}
-  class:search-open={$isSearchOpen}
-  class:filter-open={$isFilterOpen}
+<MapRouteSurface
+  panelOpen={$contextPanelOpen}
+  searchOpen={$isSearchOpen}
+  filterOpen={$isFilterOpen}
+  loading={isLoading}
+  bind:mapElement={mapContainer}
 >
-  {#if loadState === "partial"}
-    <div class="degraded-banner" role="alert" data-testid="load-state-partial">
-      {data.loadNotice}
-    </div>
-  {/if}
-  {#if loadState === "failed"}
-    <div
-      class="degraded-banner degraded-banner--failed"
-      role="alert"
-      data-testid="load-state-failed"
-    >
-      Kartendaten konnten nicht geladen werden.
-    </div>
-  {/if}
-
-  {#if $contextPanelOpen}
-    {#await loadContextPanel()}
-      <p role="status" class="sr-only">Lade Details…</p>
-    {:then contextPanelModule}
-      <svelte:component
-        this={contextPanelModule.default}
-        on:selectRelated={handleRelatedSelect}
-        on:domainChanged={handleDomainChanged}
-      />
-    {:catch}
-      <p role="alert">Details konnten nicht geladen werden.</p>
-    {/await}
-  {/if}
-  {#if $isSearchOpen || searchOverlayPromise}
-    {#await loadSearchOverlay()}
-      {#if $isSearchOpen}
-        <p role="status" class="sr-only">Lade Suche…</p>
-      {/if}
-    {:then searchOverlayModule}
-      <svelte:component
-        this={searchOverlayModule.default}
-        {filteredResults}
-        searchStatus={nodeSearchStatus}
-        searchMode={nodeSearchMode}
-        searchFallbackReason={nodeSearchFallbackReason}
-        on:select={handleSearchSelect}
-      />
-    {:catch}
-      {#if $isSearchOpen}
-        <p role="alert">Suche konnte nicht geladen werden.</p>
-      {/if}
-    {/await}
-  {/if}
-  <SearchDirectionIndicators
-    indicators={searchDirectionIndicators}
-    on:select={handleSearchDirectionSelect}
+  <MapRouteStatus
+    {loadState}
+    loadNotice={data.loadNotice}
+    loading={isLoading}
+    initFailed={mapInitFailed}
+    showDebug={import.meta.env.DEV || import.meta.env.MODE === "test"}
+    nodeCount={markerCounts.nodes}
+    accountCount={markerCounts.accounts}
+    centerCount={markerCounts.webgemeindezentren}
+    edgeCount={lineEdges.length}
+    {diagnostics}
+    on:retry={retryMapInitialisation}
   />
-  <FilterOverlay
+  <MapRouteOverlays
+    {filteredResults}
+    searchStatus={nodeSearchStatus}
+    searchMode={nodeSearchMode}
+    searchFallbackReason={nodeSearchFallbackReason}
+    {searchDirectionIndicators}
     {availableTypes}
     {availableTopics}
-    resultCount={filteredMarkersData.length}
-    totalCount={filterEvaluation.totalCount}
+    filterResultCount={filteredMarkersData.length}
+    filterTotalCount={filterEvaluation.totalCount}
     allTopicsCount={filterEvaluation.allTopicsCount}
+    on:searchSelect={handleSearchSelect}
+    on:searchDirectionSelect={handleSearchDirectionSelect}
+    on:relatedSelect={handleRelatedSelect}
+    on:domainChanged={handleDomainChanged}
   />
-  <ToolFan />
-  {#if import.meta.env.DEV || import.meta.env.MODE === "test"}
-    <div class="debug-badge" data-testid="debug-badge">
-      Nodes: {markerCounts.nodes} / Accounts: {markerCounts.accounts} / Zentren: {markerCounts.webgemeindezentren}
-      / Edges: {lineEdges.length}
-      <br />
-      API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
-      {#if diagnostics.degraded}
-        <br />⚠ Load: {loadState}
-      {/if}
-    </div>
-  {/if}
   <TopBar />
-  <div
-    id="map"
-    class:panel-open={$contextPanelOpen}
-    class:search-open={$isSearchOpen}
-    class:filter-open={$isFilterOpen}
-    class:map-loading={isLoading}
-    bind:this={mapContainer}
-  ></div>
-  {#if mapInitFailed}
-    <div class="map-init-error" role="alert" data-testid="map-init-error">
-      <p>
-        Die Karte konnte nicht geladen werden. Möglicherweise ist die Verbindung
-        unterbrochen oder eine Programmdatei fehlt.
-      </p>
-      <button
-        type="button"
-        class="map-init-error__retry"
-        data-testid="map-init-error-retry"
-        on:click={() => window.location.reload()}
-      >
-        Erneut laden
-      </button>
-    </div>
-  {:else if isLoading}
-    <div class="loading-overlay">
-      <div class="spinner"></div>
-    </div>
-  {/if}
-</main>
-
-<style>
-  .shell {
-    position: relative;
-    height: 100dvh;
-    height: calc(
-      100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom)
-    );
-    width: 100vw;
-    overflow: hidden;
-    background: var(--bg);
-    color: var(--text);
-    padding-top: env(safe-area-inset-top);
-    padding-bottom: env(safe-area-inset-bottom);
-  }
-  #map {
-    position: absolute;
-    inset: 0;
-  }
-  #map.map-loading {
-    opacity: 0;
-    pointer-events: none;
-  }
-  #map :global(canvas) {
-    filter: grayscale(0.2) saturate(0.75) brightness(1.03) contrast(0.95);
-  }
-
-  #map :global(.maplibregl-ctrl-bottom-right) {
-    right: calc(
-      env(safe-area-inset-right) + var(--map-control-edge)
-    ) !important;
-    bottom: calc(
-      env(safe-area-inset-bottom) + var(--map-control-edge)
-    ) !important;
-  }
-
-  #map :global(.maplibregl-ctrl-bottom-left) {
-    left: calc(env(safe-area-inset-left) + var(--map-control-edge)) !important;
-    bottom: calc(
-      env(safe-area-inset-bottom) + var(--map-control-edge)
-    ) !important;
-  }
-
-  #map :global(.maplibregl-ctrl-group button) {
-    width: 44px;
-    height: 44px;
-  }
-
-  @media (min-width: 769px) {
-    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
-      right: calc(
-        var(--context-panel-width) + env(safe-area-inset-right) +
-          var(--map-control-edge)
-      ) !important;
-    }
-  }
-
-  @media (max-width: 768px) {
-    #map.panel-open :global(.maplibregl-ctrl-bottom-right),
-    #map.panel-open :global(.maplibregl-ctrl-bottom-left) {
-      top: calc(env(safe-area-inset-top) + var(--toolbar-offset) + 8px);
-      bottom: auto !important;
-    }
-
-    #map.panel-open :global(.maplibregl-ctrl-bottom-right) {
-      right: calc(env(safe-area-inset-right) + 10px) !important;
-    }
-
-    #map.panel-open :global(.maplibregl-ctrl-bottom-left) {
-      left: calc(env(safe-area-inset-left) + 10px) !important;
-    }
-  }
-
-  .loading-overlay {
-    position: absolute;
-    inset: 0;
-    background: var(--bg);
-    display: grid;
-    place-items: center;
-    /* Keep the map state above the canvas but below persistent navigation. */
-    z-index: calc(var(--z-map-direction) - 10);
-    transition: opacity 0.3s;
-  }
-  .spinner {
-    width: 40px;
-    height: 40px;
-    border: 3px solid rgba(255, 255, 255, 0.1);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-  }
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
-
-  /* Shares the loading layer so the failure state is never covered by the
-     overlay it replaces. */
-  .map-init-error {
-    position: absolute;
-    inset: 0;
-    background: var(--bg);
-    display: grid;
-    place-content: center;
-    justify-items: center;
-    gap: 16px;
-    padding: 24px;
-    text-align: center;
-    /* A failed map must not make settings, messages or recovery tools unreachable. */
-    z-index: calc(var(--z-map-direction) - 10);
-  }
-  .map-init-error p {
-    margin: 0;
-    max-width: 32rem;
-    color: var(--text);
-  }
-  .map-init-error__retry {
-    padding: 10px 18px;
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    background: transparent;
-    color: var(--text);
-    font: inherit;
-    cursor: pointer;
-  }
-  .map-init-error__retry:hover {
-    background: var(--accent);
-  }
-
-  .debug-badge {
-    position: absolute;
-    top: 60px;
-    right: 10px;
-    z-index: var(--z-map-debug);
-    padding: 4px 8px;
-    background: rgba(0, 0, 0, 0.7);
-    color: #fff;
-    font-size: 10px;
-    border-radius: 4px;
-    pointer-events: none;
-    font-family: monospace;
-  }
-
-  .degraded-banner--failed {
-    background: rgba(180, 40, 40, 0.9);
-  }
-</style>
+</MapRouteSurface>

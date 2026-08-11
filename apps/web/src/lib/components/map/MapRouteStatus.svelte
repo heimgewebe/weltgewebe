@@ -1,0 +1,142 @@
+<script lang="ts">
+  import { createEventDispatcher } from "svelte";
+  import type { MapDiagnostics, MapLoadState } from "$lib/map/types";
+
+  export let loadState: MapLoadState;
+  export let loadNotice: string | null = null;
+  export let loading = true;
+  export let initFailed = false;
+  export let showDebug = false;
+  export let nodeCount = 0;
+  export let accountCount = 0;
+  export let centerCount = 0;
+  export let edgeCount = 0;
+  export let diagnostics: MapDiagnostics;
+
+  const dispatch = createEventDispatcher<{ retry: void }>();
+</script>
+
+{#if loadState === "partial"}
+  <div class="degraded-banner" role="alert" data-testid="load-state-partial">
+    {loadNotice}
+  </div>
+{/if}
+{#if loadState === "failed"}
+  <div
+    class="degraded-banner degraded-banner--failed"
+    role="alert"
+    data-testid="load-state-failed"
+  >
+    Kartendaten konnten nicht geladen werden.
+  </div>
+{/if}
+
+{#if showDebug}
+  <div class="debug-badge" data-testid="debug-badge">
+    Nodes: {nodeCount} / Accounts: {accountCount} / Zentren: {centerCount} / Edges:
+    {edgeCount}
+    <br />
+    API: {diagnostics.apiMode} / Basemap: {diagnostics.basemapMode}
+    {#if diagnostics.degraded}
+      <br />⚠ Load: {loadState}
+    {/if}
+  </div>
+{/if}
+
+{#if initFailed}
+  <div class="map-init-error" role="alert" data-testid="map-init-error">
+    <p>
+      Die Karte konnte nicht geladen werden. Möglicherweise ist die Verbindung
+      unterbrochen oder eine Programmdatei fehlt.
+    </p>
+    <button
+      type="button"
+      class="map-init-error__retry"
+      data-testid="map-init-error-retry"
+      on:click={() => dispatch("retry")}
+    >
+      Erneut laden
+    </button>
+  </div>
+{:else if loading}
+  <div class="loading-overlay">
+    <div class="spinner"></div>
+  </div>
+{/if}
+
+<style>
+  .loading-overlay {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: grid;
+    place-items: center;
+    /* Keep the map state above the canvas but below persistent navigation. */
+    z-index: calc(var(--z-map-direction) - 10);
+    transition: opacity 0.3s;
+  }
+  .spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  /* Shares the loading layer so the failure state is never covered by the
+     overlay it replaces. */
+  .map-init-error {
+    position: absolute;
+    inset: 0;
+    background: var(--bg);
+    display: grid;
+    place-content: center;
+    justify-items: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+    /* A failed map must not make settings, messages or recovery tools unreachable. */
+    z-index: calc(var(--z-map-direction) - 10);
+  }
+  .map-init-error p {
+    margin: 0;
+    max-width: 32rem;
+    color: var(--text);
+  }
+  .map-init-error__retry {
+    padding: 10px 18px;
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    background: transparent;
+    color: var(--text);
+    font: inherit;
+    cursor: pointer;
+  }
+  .map-init-error__retry:hover {
+    background: var(--accent);
+  }
+
+  .debug-badge {
+    position: absolute;
+    top: 60px;
+    right: 10px;
+    z-index: var(--z-map-debug);
+    padding: 4px 8px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 10px;
+    border-radius: 4px;
+    pointer-events: none;
+    font-family: monospace;
+  }
+
+  .degraded-banner--failed {
+    background: rgba(180, 40, 40, 0.9);
+  }
+</style>

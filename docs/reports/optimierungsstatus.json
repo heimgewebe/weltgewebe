@@ -179,19 +179,22 @@
       "id": "OPT-FE-002",
       "area": "Frontend",
       "title": "Map-Aufteilung",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "medium",
-      "evidence_status": "code",
+      "evidence_status": "code+test",
       "evidence": [
-        "apps/web/src/routes/map/+page.svelte"
+        "apps/web/src/routes/map/+page.svelte",
+        "apps/web/src/lib/components/map/MapRouteSurface.svelte",
+        "apps/web/src/lib/components/map/MapRouteStatus.svelte",
+        "apps/web/src/lib/components/map/MapRouteOverlays.svelte",
+        "apps/web/src/lib/components/map/mapRouteEvents.ts",
+        "apps/web/src/routes/map/mapRouteSplit.test.ts"
       ],
-      "missing_evidence": [
-        "Aufteilung in klar getrennte Teilkomponenten fehlt"
-      ],
-      "next_action": "Monolithische Route in Teilkomponenten aufteilen",
-      "updated_at": "2026-04-27"
+      "missing_evidence": [],
+      "next_action": "keine — Darstellungs-, Status-/Recovery- und Overlay-Belange sind typisiert ausgelagert; Kartenorchestrierung, URL-/Fokus-Wahrheit und MapLibre-Lifecycle bleiben in der Route",
+      "updated_at": "2026-08-11"
     },
     {
       "id": "OPT-INF-001",
