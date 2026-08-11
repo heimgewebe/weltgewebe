@@ -51,24 +51,116 @@ FOREIGN_INSTALLERS = re.compile(
 )
 # A host Python interpreter invoked as a command.  ``env`` and absolute/explicit
 # paths are command wrappers too; plain words inside arguments/paths stay ignored.
-BARE_PYTHON = re.compile(
-    r"(?:^|[|;&]\s*|\(\s*|\bthen\s+|\bdo\s+)"
-    # Common shell command wrappers must not hide the real executable.  Allow
-    # wrapper chains such as ``sudo env python`` and explicit wrapper paths.
-    r"(?:"
-    r"(?:(?:/|\./|\.\./)[^\s;&|()]*/)?"
-    r"(?:"
-    r"env(?:\s+(?:-[^\s;&|()]+|[A-Za-z_][A-Za-z0-9_]*=[^\s;&|()]+))*"
-    r"|command(?:\s+-p)?"
-    r"|exec(?:\s+-[cl])?"
-    r"|nohup"
-    r"|sudo(?:\s+(?:-[A-Za-z]+|--[A-Za-z-]+)(?:\s+(?!python3?\b)[^\s;&|()]+)?)*"
-    r"|time(?:\s+-p)?"
-    r")\s+"
-    r")*"
-    r"(?:(?:/|\./|\.\./)[^\s;&|()]*/)?"
-    r"(python3?)(?=$|\s|[;&|)])"
-)
+SHELL_SEPARATORS = {";", "&&", "||", "|", "(", ")", "then", "do"}
+SUDO_VALUE_OPTIONS = {"-u", "--user", "-g", "--group", "-h", "--host", "-p", "--prompt", "-C", "--close-from", "-T", "--command-timeout"}
+
+
+def _command_tokens(line: str) -> list[list[str]]:
+    """Split one logical shell line without requiring balanced quotes.
+
+    Workflow ``run`` scripts can span physical lines, so one inspected line may
+    legitimately contain only one side of a shell quote.  This scanner is
+    deliberately small and linear: separators count only outside quotes, while
+    an unmatched quote simply keeps the remainder in the current token.
+    """
+
+    segments: list[list[str]] = [[]]
+    token: list[str] = []
+    quote: str | None = None
+    escaped = False
+
+    def flush_token() -> None:
+        if not token:
+            return
+        value = "".join(token)
+        token.clear()
+        if value in {"then", "do"}:
+            if segments[-1]:
+                segments.append([])
+        else:
+            segments[-1].append(value)
+
+    for char in line:
+        if escaped:
+            token.append(char)
+            escaped = False
+            continue
+        if char == "\\" and quote != "'":
+            escaped = True
+            continue
+        if quote is not None:
+            if char == quote:
+                quote = None
+            else:
+                token.append(char)
+            continue
+        if char in {"'", '"'}:
+            quote = char
+            continue
+        if char.isspace():
+            flush_token()
+            continue
+        if char in ";&|()":
+            flush_token()
+            if segments[-1]:
+                segments.append([])
+            continue
+        token.append(char)
+
+    if escaped:
+        token.append("\\")
+    flush_token()
+    return [segment for segment in segments if segment]
+
+
+def _strip_command_wrappers(tokens: list[str]) -> list[str]:
+    """Strip benign shell wrappers/options without regex backtracking."""
+
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        name = Path(token).name
+        if name == "env":
+            index += 1
+            while index < len(tokens) and (tokens[index].startswith("-") or "=" in tokens[index]):
+                index += 1
+            continue
+        if name == "command":
+            index += 1
+            while index < len(tokens) and tokens[index].startswith("-"):
+                index += 1
+            continue
+        if name == "exec":
+            index += 1
+            while index < len(tokens) and tokens[index].startswith("-"):
+                index += 1
+            continue
+        if name in {"nohup", "time"}:
+            index += 1
+            while index < len(tokens) and tokens[index].startswith("-"):
+                index += 1
+            continue
+        if name == "sudo":
+            index += 1
+            while index < len(tokens) and tokens[index].startswith("-"):
+                option = tokens[index]
+                index += 1
+                if option.split("=", 1)[0] in SUDO_VALUE_OPTIONS and "=" not in option and index < len(tokens):
+                    index += 1
+            continue
+        break
+    return tokens[index:]
+
+
+def _bare_python_command(line: str) -> str | None:
+    """Return a host Python executable when one starts a shell command segment."""
+
+    for segment in _command_tokens(line):
+        command = _strip_command_wrappers(segment)
+        if command and Path(command[0]).name in {"python", "python3"}:
+            return Path(command[0]).name
+    return None
+
 VALIDATOR_DEPENDENCY = "pyyaml"
 
 
@@ -93,7 +185,7 @@ def _repository_python_step(step: dict[str, Any]) -> bool:
     """Return whether a step invokes repository Python by any supported path."""
 
     for line in _logical_lines(_run(step)):
-        if PROJECT_RUN in line or BARE_PYTHON.search(line):
+        if PROJECT_RUN in line or _bare_python_command(line):
             return True
     return False
 
@@ -152,10 +244,10 @@ def bare_interpreter_violations(workflow: dict[str, Any], label: str) -> list[st
                 # The regex is anchored to shell command positions, so the Python
                 # argument of LOCKED_RUN is not a host invocation.  Do not skip the
                 # whole line: ``LOCKED_RUN ... && python ...`` must still fail.
-                match = BARE_PYTHON.search(line)
-                if match:
+                executable = _bare_python_command(line)
+                if executable:
                     violations.append(
-                        f"{label}:{job_id} runs {match.group(1)!r} outside {LOCKED_RUN!r}: {line}"
+                        f"{label}:{job_id} runs {executable!r} outside {LOCKED_RUN!r}: {line}"
                     )
     return violations
 
@@ -451,6 +543,15 @@ class KubernetesPythonBootstrapGuardTests(unittest.TestCase):
                 }
             }
         }
+        self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
+
+    def test_wrapper_detection_is_linear_on_repeated_sudo_options(self) -> None:
+        command = "sudo " + " ".join(["-A"] * 5000) + " python x.py"
+        workflow = {"jobs": {"contract": {"steps": [{"run": command}]}}}
+        self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
+
+    def test_host_python_after_shell_separator_is_reported(self) -> None:
+        workflow = {"jobs": {"contract": {"steps": [{"run": "echo ok && command python x.py"}]}}}
         self.assertEqual(len(bare_interpreter_violations(workflow, "w")), 1)
 
     def test_common_command_wrappers_cannot_hide_host_python(self) -> None:
