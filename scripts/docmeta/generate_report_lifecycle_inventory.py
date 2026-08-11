@@ -659,12 +659,15 @@ def build_inventory_truth_contract(
     root: Path,
     records: list[ReportRecord],
     control_surfaces: list[ControlSurfaceRecord] | None = None,
+    existing_contract: dict[str, object] | None = None,
 ) -> dict[str, object]:
     surfaces = control_surfaces or []
     source_paths = [root / record.path for record in records]
     if surfaces:
         source_paths.append(root / MANIFEST_REL)
-    revision, generated_at, fresh = source_revision_metadata(root, source_paths)
+    revision, generated_at, fresh = source_revision_metadata(
+        root, source_paths, existing_contract=existing_contract
+    )
     failures = sum(1 for record in records if record.frontmatter_parse_warning)
     status = "no_material_drift" if fresh and failures == 0 else ("fail" if failures else "unknown")
     return build_truth_contract(
@@ -927,8 +930,16 @@ def _cell(value: str) -> str:
 def _render_current_inventory(config: InventoryConfig) -> str:
     records = collect_reports(config)
     control_surfaces = collect_control_surfaces(config.repo_root)
+    existing = (
+        parse_truth_contract_markdown(config.output_path.read_text(encoding="utf-8"))
+        if config.output_path.is_file()
+        else None
+    )
     truth_contract = build_inventory_truth_contract(
-        config.repo_root, records, control_surfaces
+        config.repo_root,
+        records,
+        control_surfaces,
+        existing if isinstance(existing, dict) else None,
     )
     migrated_paths = (
         _as_rel(config.output_path, config.repo_root),

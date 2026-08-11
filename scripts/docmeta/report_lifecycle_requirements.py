@@ -276,6 +276,44 @@ def _git_blob_sha256(root: Path, revision: str, relative: Path) -> str | None:
     return hashlib.sha256(completed.stdout).hexdigest()
 
 
+def _truth_sources_match_revision(
+    root: Path,
+    revision: str,
+    sources: object,
+) -> bool:
+    """Return whether current declared sources exactly match a Git snapshot.
+
+    A squash merge may preserve every source byte while replacing the feature-branch
+    commit identity. In that case ancestry is not a freshness signal; exact SHA-256
+    equality of the current files and the recorded revision is.
+    """
+    if not isinstance(sources, list) or not sources:
+        return False
+    for source in sources:
+        if not isinstance(source, Mapping) or set(source) != {"path", "sha256"}:
+            return False
+        source_path = source.get("path")
+        digest = source.get("sha256")
+        if (
+            not isinstance(source_path, str)
+            or not source_path.strip()
+            or not isinstance(digest, str)
+            or _SHA256_RE.fullmatch(digest) is None
+        ):
+            return False
+        relative = Path(source_path)
+        if relative.is_absolute() or ".." in relative.parts:
+            return False
+        full_path = root / relative
+        if not full_path.is_file():
+            return False
+        if hashlib.sha256(full_path.read_bytes()).hexdigest() != digest:
+            return False
+        if _git_blob_sha256(root, revision, relative) != digest:
+            return False
+    return True
+
+
 def _git_commit_timestamp(root: Path, revision: str) -> str | None:
     try:
         completed = subprocess.run(
@@ -390,23 +428,27 @@ def validate_truth_contract(
 
     generated_at_value = value.get("generated_at")
     generated_at: str | None = None
+    generated_at_instant: datetime | None = None
     generated_at_unavailable = _is_unavailable_provenance(generated_at_value)
     if isinstance(generated_at_value, str):
         generated_at = generated_at_value
         try:
-            parsed = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
-            if parsed.tzinfo is None:
+            generated_at_instant = datetime.fromisoformat(
+                generated_at.replace("Z", "+00:00")
+            )
+            if generated_at_instant.tzinfo is None:
                 raise ValueError("timezone missing")
         except ValueError:
             violations.append("invalid_generated_at")
             generated_at = None
+            generated_at_instant = None
     elif not generated_at_unavailable:
         violations.append("invalid_generated_at")
 
     if revision_unavailable != generated_at_unavailable:
         violations.append("inconsistent_provenance_state")
 
-    revision_resolved = False
+    source_blob_revision: str | None = None
     if root is not None and revision is not None:
         shallow = _git_is_shallow_repository(root)
         if shallow is not False:
@@ -414,10 +456,35 @@ def validate_truth_contract(
         else:
             commit_timestamp = _ensure_git_revision(root, revision)
             if commit_timestamp is None:
-                violations.append("source_revision_not_found")
+                # A squash merge can make the feature commit unreachable and later
+                # prunable even though every source byte survived in main.  In that
+                # case the durable identity is the contract's complete source manifest.
+                # Accept it only when the same manifest is committed at current HEAD;
+                # a dirty working tree or any source drift therefore still fails closed.
+                head_timestamp = _ensure_git_revision(root, "HEAD")
+                if (
+                    head_timestamp is None
+                    or not _truth_sources_match_revision(
+                        root, "HEAD", value.get("sources")
+                    )
+                ):
+                    violations.append("source_revision_not_found")
+                else:
+                    source_blob_revision = "HEAD"
+                    if generated_at_instant is not None:
+                        head_instant = datetime.fromisoformat(
+                            head_timestamp.replace("Z", "+00:00")
+                        )
+                        if generated_at_instant > head_instant:
+                            violations.append("generated_at_after_equivalent_revision")
             else:
-                revision_resolved = True
-                if not _git_revision_is_ancestor(root, revision):
+                source_blob_revision = revision
+                if (
+                    not _git_revision_is_ancestor(root, revision)
+                    and not _truth_sources_match_revision(
+                        root, revision, value.get("sources")
+                    )
+                ):
                     violations.append("source_revision_not_ancestor")
                 if generated_at != commit_timestamp:
                     violations.append("generated_at_revision_mismatch")
@@ -451,8 +518,10 @@ def validate_truth_contract(
                     violations.append(f"missing_source_{index}")
                 elif hashlib.sha256(full_path.read_bytes()).hexdigest() != digest:
                     violations.append(f"source_digest_mismatch_{index}")
-                elif revision_resolved:
-                    revision_digest = _git_blob_sha256(root, revision, relative)
+                elif source_blob_revision is not None:
+                    revision_digest = _git_blob_sha256(
+                        root, source_blob_revision, relative
+                    )
                     if revision_digest is None:
                         violations.append(f"source_missing_at_revision_{index}")
                     elif revision_digest != digest:
@@ -608,8 +677,31 @@ def source_manifest(root: Path, paths: Sequence[Path]) -> list[dict[str, str]]:
 def source_revision_metadata(
     root: Path,
     source_paths: Sequence[Path],
+    *,
+    existing_contract: Mapping[str, object] | None = None,
 ) -> tuple[object, object, bool]:
-    """Resolve provenance from local Git state without network or repo mutation."""
+    """Resolve provenance without rewriting an equivalent squash snapshot.
+
+    A committed generated report may still point at the feature-branch source commit
+    after GitHub squash-merges the same source bytes. Reuse that provenance only when
+    the complete truth contract validates against both the current files and the
+    recorded Git snapshot. Any drift falls back to normal HEAD-history resolution.
+    """
+    if existing_contract is not None:
+        try:
+            current_sources = source_manifest(root, source_paths)
+        except (FileNotFoundError, ValueError):
+            current_sources = []
+        if (
+            current_sources
+            and existing_contract.get("sources") == current_sources
+            and not validate_truth_contract(existing_contract, root=root)
+        ):
+            revision = existing_contract.get("source_revision")
+            generated_at = existing_contract.get("generated_at")
+            if isinstance(revision, str) and isinstance(generated_at, str):
+                return revision, generated_at, True
+
     relative_paths: list[str] = []
     root_resolved = root.resolve()
     for path in source_paths:

@@ -413,6 +413,92 @@ class TestAuditReportTruthContract(unittest.TestCase):
                 validate_truth_contract(contract, root=root),
             )
 
+    def test_non_ancestor_revision_is_valid_when_exact_source_snapshot_matches(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            source = root / "source.md"
+            source.write_text("base\n", encoding="utf-8")
+            subprocess.run(["git", "add", "source.md"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "base"], cwd=root, check=True)
+            base = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True).stdout.strip()
+            subprocess.run(["git", "switch", "-q", "-c", "feature"], cwd=root, check=True)
+            source.write_text("squashed bytes\n", encoding="utf-8")
+            subprocess.run(["git", "add", "source.md"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "feature"], cwd=root, check=True)
+            feature = subprocess.run(["git", "rev-parse", "HEAD"], cwd=root, text=True, capture_output=True, check=True).stdout.strip()
+            feature_time = subprocess.run(["git", "show", "-s", "--format=%cI", feature], cwd=root, text=True, capture_output=True, check=True).stdout.strip()
+            digest = hashlib.sha256(source.read_bytes()).hexdigest()
+            contract = build_truth_contract(
+                status="pass", scope="one exact source", complete=True, fresh=True,
+                method="exact", checked_items=1, total_items=1, failures=0,
+                source_revision=feature, generated_at=feature_time,
+                sources=[{"path": "source.md", "sha256": digest}],
+                limitations=["repository-only"], does_not_establish=["runtime_health"],
+            )
+            subprocess.run(["git", "switch", "-q", "--detach", base], cwd=root, check=True)
+            source.write_text("squashed bytes\n", encoding="utf-8")
+            subprocess.run(["git", "add", "source.md"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "squash"], cwd=root, check=True)
+            subprocess.run(["git", "branch", "-D", "feature"], cwd=root, check=True)
+            subprocess.run(
+                ["git", "reflog", "expire", "--expire=now", "--all"],
+                cwd=root,
+                check=True,
+            )
+            subprocess.run(["git", "gc", "--prune=now"], cwd=root, check=True)
+            self.assertNotEqual(
+                subprocess.run(
+                    ["git", "cat-file", "-e", f"{feature}^{{commit}}"],
+                    cwd=root,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    check=False,
+                ).returncode,
+                0,
+                "the regression fixture must actually prune the feature commit",
+            )
+            self.assertEqual(validate_truth_contract(contract, root=root), ())
+            revision, generated_at, fresh = source_revision_metadata(
+                root, [source], existing_contract=contract
+            )
+            self.assertEqual(revision, feature)
+            self.assertEqual(generated_at, feature_time)
+            self.assertTrue(fresh)
+
+            source.write_text("later drift\n", encoding="utf-8")
+            revision, _, fresh = source_revision_metadata(
+                root, [source], existing_contract=contract
+            )
+            self.assertNotEqual(revision, feature)
+            self.assertFalse(fresh)
+
+    def test_pruned_revision_cannot_hide_a_dirty_source_snapshot(self) -> None:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            subprocess.run(["git", "init", "-q"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.name", "Test"], cwd=root, check=True)
+            subprocess.run(["git", "config", "user.email", "test@example.invalid"], cwd=root, check=True)
+            source = root / "source.md"
+            source.write_text("committed bytes\n", encoding="utf-8")
+            subprocess.run(["git", "add", "source.md"], cwd=root, check=True)
+            subprocess.run(["git", "commit", "-q", "-m", "main"], cwd=root, check=True)
+            head_time = subprocess.run(
+                ["git", "show", "-s", "--format=%cI", "HEAD"], cwd=root, text=True, capture_output=True, check=True
+            ).stdout.strip()
+            source.write_text("dirty bytes\n", encoding="utf-8")
+            contract = build_truth_contract(
+                status="pass", scope="dirty source", complete=True, fresh=True,
+                method="exact", checked_items=1, total_items=1, failures=0,
+                source_revision="f" * 40, generated_at=head_time,
+                sources=[{"path": "source.md", "sha256": hashlib.sha256(source.read_bytes()).hexdigest()}],
+                limitations=["repository-only"], does_not_establish=["runtime_health"],
+            )
+            violations = validate_truth_contract(contract, root=root)
+            self.assertIn("source_revision_not_found", violations)
+
     def test_migration_classification_is_explicit(self) -> None:
         self.assertEqual(
             report_truth_migration_state({"lifecycle_state": "archived", "status": "active"}),

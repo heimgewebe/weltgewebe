@@ -21,6 +21,7 @@ from scripts.docmeta.validate_report_lifecycle import _validate_report, _load_fr
 from scripts.docmeta.report_lifecycle_requirements import (
     build_truth_contract,
     missing_required_report_fields,
+    parse_truth_contract_markdown,
     source_manifest,
     source_revision_metadata,
     string_value,
@@ -283,9 +284,12 @@ def build_overview_truth_contract(
     root: Path,
     records: list[ReportRecord],
     summary: dict[str, int],
+    existing_contract: dict[str, object] | None = None,
 ) -> dict[str, object]:
     source_paths = [root / record.path for record in records]
-    revision, generated_at, fresh = source_revision_metadata(root, source_paths)
+    revision, generated_at, fresh = source_revision_metadata(
+        root, source_paths, existing_contract=existing_contract
+    )
     failures = summary["findings_total"]
     status = "pass" if fresh and failures == 0 else ("fail" if failures else "unknown")
     return build_truth_contract(
@@ -323,7 +327,14 @@ def generate(root: Path = REPO_ROOT, output_path: Path | None = None) -> Path:
     records = collect_reports(config)
     rows = collect_lifecycle_rows(root, records)
     summary = build_summary(rows)
-    truth_contract = build_overview_truth_contract(root, records, summary)
+    existing = (
+        parse_truth_contract_markdown(out_path.read_text(encoding="utf-8"))
+        if out_path.is_file()
+        else None
+    )
+    truth_contract = build_overview_truth_contract(
+        root, records, summary, existing if isinstance(existing, dict) else None
+    )
     content = render_markdown(rows, summary, truth_contract)
     
     out_path.parent.mkdir(parents=True, exist_ok=True)
@@ -352,7 +363,14 @@ def main(argv: list[str] | None = None) -> int:
         records = collect_reports(config)
         rows = collect_lifecycle_rows(root_path, records)
         summary = build_summary(rows)
-        truth_contract = build_overview_truth_contract(root_path, records, summary)
+        existing = (
+            parse_truth_contract_markdown(target.read_text(encoding="utf-8"))
+            if target.is_file()
+            else None
+        )
+        truth_contract = build_overview_truth_contract(
+            root_path, records, summary, existing if isinstance(existing, dict) else None
+        )
         content = render_markdown(rows, summary, truth_contract)
         return write_or_check(target, content, check=True, label=str(target.relative_to(root_path)))
 
