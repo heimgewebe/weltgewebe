@@ -50,8 +50,19 @@ DEPLOY_FRONTEND_MODE="${DEPLOY_FRONTEND_MODE:-auto}"
 if [[ "$DEPLOY_TARGET" == "vps" && -z "$DEPLOY_FRONTEND_MODE_WAS_SET" ]]; then
   DEPLOY_FRONTEND_MODE="internal"
 fi
-if [[ "$DEPLOY_TARGET" == "vps" && -z "${CADDY_BIND:-}" ]]; then
-  export CADDY_BIND="0.0.0.0"
+if [[ "$DEPLOY_TARGET" == "vps" && ( -z "${CADDY_BIND:-}" || -z "${CADDY_IPV6_BIND:-}" ) ]]; then
+  PUBLIC_BIND_RESOLVER="$REPO_DIR/scripts/ops/resolve_vps_public_bind.py"
+  if [[ ! -x "$PUBLIC_BIND_RESOLVER" ]]; then
+    echo "ERROR: VPS public Caddy bind resolver is missing or not executable: $PUBLIC_BIND_RESOLVER" >&2
+    exit 1
+  fi
+  mapfile -t VPS_PUBLIC_CADDY_BINDS < <("$PUBLIC_BIND_RESOLVER")
+  if [[ "${#VPS_PUBLIC_CADDY_BINDS[@]}" -ne 2 ]]; then
+    echo "ERROR: VPS public Caddy bind resolver did not return IPv4 and IPv6 bindings." >&2
+    exit 1
+  fi
+  export CADDY_BIND="${CADDY_BIND:-${VPS_PUBLIC_CADDY_BINDS[0]}}"
+  export CADDY_IPV6_BIND="${CADDY_IPV6_BIND:-${VPS_PUBLIC_CADDY_BINDS[1]}}"
 fi
 
 # Arguments
@@ -2068,6 +2079,11 @@ if [[ "$DEPLOY_SCOPE" == "full" ]]; then
       ERR_CONTENT=$(cat "$ERR_FILE")
 
       if echo "$ERR_CONTENT" | grep -Eq "address already in use|port is already allocated|bind: address already in use"; then
+        if [[ "$DEPLOY_TARGET" == "vps" ]]; then
+          generate_failure_bundle "VPS public Caddy listener port conflict; refusing to continue without public Caddy." "$ERR_FILE"
+          rm -f "$ERR_FILE"
+          exit 1
+        fi
         echo
         echo "WARNING: Port conflict detected (Caddy could not bind ports)."
         echo "Retrying without Caddy (--scale caddy=0)..."
