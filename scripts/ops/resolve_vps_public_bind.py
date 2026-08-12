@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve public host addresses for the VPS Caddy listener."""
+"""Resolve unambiguous public host addresses for the VPS Caddy listener."""
 
 from __future__ import annotations
 
@@ -9,23 +9,38 @@ import subprocess
 import sys
 
 
-def resolve_public_bindings(addresses: list[str]) -> tuple[str, str]:
-    parsed = []
+def _global_addresses(addresses: list[str], version: int) -> list[ipaddress.IPv4Address | ipaddress.IPv6Address]:
+    parsed = set()
     for raw in addresses:
         try:
             address = ipaddress.ip_address(raw.strip())
         except ValueError:
             continue
-        if address.is_global:
-            parsed.append(address)
+        if address.version == version and address.is_global:
+            parsed.add(address)
+    return sorted(parsed, key=int)
 
-    ipv4 = sorted((item for item in parsed if item.version == 4), key=int)
-    ipv6 = sorted((item for item in parsed if item.version == 6), key=int)
+
+def resolve_public_ipv4(addresses: list[str]) -> str:
+    ipv4 = _global_addresses(addresses, 4)
     if not ipv4:
         raise ValueError("no global IPv4 address is available for public Caddy binding")
+    if len(ipv4) > 1:
+        raise ValueError("multiple global IPv4 addresses are available; set CADDY_BIND explicitly")
+    return str(ipv4[0])
+
+
+def resolve_public_ipv6(addresses: list[str]) -> str | None:
+    ipv6 = _global_addresses(addresses, 6)
     if not ipv6:
-        raise ValueError("no global IPv6 address is available for public Caddy binding")
-    return str(ipv4[0]), f"[{ipv6[0]}]"
+        return None
+    if len(ipv6) > 1:
+        raise ValueError("multiple global IPv6 addresses are available; set CADDY_IPV6_BIND explicitly")
+    return f"[{ipv6[0]}]"
+
+
+def resolve_public_bindings(addresses: list[str]) -> tuple[str, str | None]:
+    return resolve_public_ipv4(addresses), resolve_public_ipv6(addresses)
 
 
 def host_addresses() -> list[str]:
@@ -41,16 +56,25 @@ def host_addresses() -> list[str]:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--family", choices=("ipv4", "ipv6", "both"), default="both")
     parser.add_argument("addresses", nargs="*")
     args = parser.parse_args(argv)
     addresses = args.addresses or host_addresses()
     try:
-        ipv4, ipv6 = resolve_public_bindings(addresses)
+        if args.family == "ipv4":
+            print(resolve_public_ipv4(addresses))
+        elif args.family == "ipv6":
+            ipv6 = resolve_public_ipv6(addresses)
+            if ipv6 is not None:
+                print(ipv6)
+        else:
+            ipv4, ipv6 = resolve_public_bindings(addresses)
+            print(ipv4)
+            if ipv6 is not None:
+                print(ipv6)
     except (ValueError, subprocess.SubprocessError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    print(ipv4)
-    print(ipv6)
     return 0
 
 

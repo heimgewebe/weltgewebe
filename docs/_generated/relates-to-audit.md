@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 711 |
+| Relationen gesamt | 712 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 656 |
+| — relates_to | 657 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | relates_to Anteil | 92% |
@@ -32,7 +32,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (278 Dokumente):
+**Cluster 1** (279 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -310,6 +310,7 @@ _Keine Lücken erkannt._
 - `scripts/ops/pull-production-postgres-backup.sh`
 - `scripts/ops/reconcile-production-main-vps.sh`
 - `scripts/ops/reconcile_public_login_smtp_env.py`
+- `scripts/ops/resolve_vps_public_bind.py`
 - `scripts/tests/test_domain_multi_instance_guard.sh`
 - `tests/fixtures/agent/handoff-valid.json`
 

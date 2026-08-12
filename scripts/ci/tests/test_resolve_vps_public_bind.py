@@ -28,9 +28,18 @@ class ResolveVpsPublicBindTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "global IPv4"):
             module.resolve_public_bindings(["100.119.99.55", "2a03:4000::1"])
 
-    def test_requires_global_ipv6(self) -> None:
-        with self.assertRaisesRegex(ValueError, "global IPv6"):
-            module.resolve_public_bindings(["94.16.121.119", "fd7a:115c:a1e0::1"])
+    def test_ipv6_is_optional(self) -> None:
+        ipv4, ipv6 = module.resolve_public_bindings(["94.16.121.119", "fd7a:115c:a1e0::1"])
+        self.assertEqual(ipv4, "94.16.121.119")
+        self.assertIsNone(ipv6)
+
+    def test_multiple_global_ipv4_requires_explicit_binding(self) -> None:
+        with self.assertRaisesRegex(ValueError, "set CADDY_BIND explicitly"):
+            module.resolve_public_ipv4(["94.16.121.119", "8.8.8.8"])
+
+    def test_multiple_global_ipv6_requires_explicit_binding(self) -> None:
+        with self.assertRaisesRegex(ValueError, "set CADDY_IPV6_BIND explicitly"):
+            module.resolve_public_ipv6(["2a03:4000::1", "2001:4860:4860::8888"])
 
 
 if __name__ == "__main__":

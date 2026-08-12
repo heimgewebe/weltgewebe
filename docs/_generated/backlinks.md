@@ -1448,6 +1448,10 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/vps.md
 
+## scripts/ops/resolve_vps_public_bind.py
+
+- [relates_to] docs/deploy/vps.md
+
 ## scripts/platform/ha_reference.py
 
 - [verifies] docs/reports/kubernetes-platform-foundation-status.md
