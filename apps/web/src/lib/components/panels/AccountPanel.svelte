@@ -11,8 +11,8 @@
   const dispatch = createEventDispatcher<{
     selectRelated: { type: "node"; id: string };
   }>();
-  let activeTab = "profil";
-  let heading: HTMLHeadingElement;
+  let activeTab = $state("profil");
+  let heading: HTMLHeadingElement | undefined = $state();
 
   interface AccountDetails {
     id: string;
@@ -39,17 +39,7 @@
   const accountDetailsStore = detailsLoader.details;
   const isLoadingDetailsStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
-  onMount(() => heading.focus());
-
-  $: accountDetails = $accountDetailsStore;
-  $: isLoadingDetails = $isLoadingDetailsStore;
-  $: summary = accountDetails?.summary || $selection?.data?.summary;
-  $: profileTags = (accountDetails?.tags ||
-    $selection?.data?.tags ||
-    []) as string[];
-  $: skills = categoryValues(profileTags, "skill:", true);
-  $: goods = categoryValues(profileTags, "good:");
-  $: interests = categoryValues(profileTags, "interest:");
+  onMount(() => heading?.focus());
 
   function categoryValues(
     tags: string[],
@@ -90,6 +80,15 @@
       ?.querySelectorAll<HTMLButtonElement>('button[role="tab"]');
     buttons?.item(nextIndex)?.focus();
   }
+  let accountDetails = $derived($accountDetailsStore);
+  let isLoadingDetails = $derived($isLoadingDetailsStore);
+  let summary = $derived(accountDetails?.summary || $selection?.data?.summary);
+  let profileTags = $derived(
+    (accountDetails?.tags || $selection?.data?.tags || []) as string[],
+  );
+  let skills = $derived(categoryValues(profileTags, "skill:", true));
+  let goods = $derived(categoryValues(profileTags, "good:"));
+  let interests = $derived(categoryValues(profileTags, "interest:"));
 </script>
 
 <div class="account-mode">
@@ -98,7 +97,11 @@
   </h3>
   {#if summary}<p class="summary">{summary}</p>{/if}
   {#if $authStore.authenticated && $selection?.id && $selection.id !== $authStore.account_id}
-    <a class="message-link" href={`/nachrichten?mit=${encodeURIComponent($selection.id)}`}>Private Nachricht</a>
+    <a
+      class="message-link"
+      href={`/nachrichten?mit=${encodeURIComponent($selection.id)}`}
+      >Private Nachricht</a
+    >
   {/if}
 
   <div
@@ -138,8 +141,8 @@
   >
     <button
       class:active={activeTab === "profil"}
-      on:click={() => setTab("profil")}
-      on:keydown={handleKeydown}
+      onclick={() => setTab("profil")}
+      onkeydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === "profil"}
       aria-controls="panel-profil"
@@ -148,8 +151,8 @@
     >
     <button
       class:active={activeTab === "aktivitaet"}
-      on:click={() => setTab("aktivitaet")}
-      on:keydown={handleKeydown}
+      onclick={() => setTab("aktivitaet")}
+      onkeydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === "aktivitaet"}
       aria-controls="panel-aktivitaet"
@@ -158,8 +161,8 @@
     >
     <button
       class:active={activeTab === "knoten"}
-      on:click={() => setTab("knoten")}
-      on:keydown={handleKeydown}
+      onclick={() => setTab("knoten")}
+      onkeydown={handleKeydown}
       role="tab"
       aria-selected={activeTab === "knoten"}
       aria-controls="panel-knoten"
@@ -220,7 +223,7 @@
             {#each accountDetails.nodes as node}<li>
                 <button
                   type="button"
-                  on:click={() =>
+                  onclick={() =>
                     dispatch("selectRelated", {
                       type: "node",
                       id: node.node_id,

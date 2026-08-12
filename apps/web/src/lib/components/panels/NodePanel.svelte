@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run, preventDefault } from "svelte/legacy";
+
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
@@ -41,30 +43,35 @@
     | "antraege"
     | "verlauf"
     | "bearbeiten";
-  let activeTab: NodeTab = "uebersicht";
-  let tabs: NodeTab[] = ["uebersicht", "gespraech", "verlauf", "antraege"];
-  let overviewTab: HTMLButtonElement | null = null;
-  let editTab: HTMLButtonElement | null = null;
-  let titleInput: HTMLInputElement | null = null;
-  let editing = false;
-  let saving = false;
-  let deleting = false;
-  let mutationError = "";
-  let archiveHref = "";
-  let formTitle = "";
-  let formKind = "";
-  let formSummary = "";
-  let formInfo = "";
-  let formAddress = "";
-  let formLat = "";
-  let formLon = "";
-  let formTopics: KnottingTopic[] = [];
-  let formKeywords = "";
-  let conflictNode: NodeDetails | null = null;
+  let activeTab: NodeTab = $state("uebersicht");
+  let tabs: NodeTab[] = $state([
+    "uebersicht",
+    "gespraech",
+    "verlauf",
+    "antraege",
+  ]);
+  let overviewTab: HTMLButtonElement | null = $state(null);
+  let editTab: HTMLButtonElement | null = $state(null);
+  let titleInput: HTMLInputElement | null = $state(null);
+  let editing = $state(false);
+  let saving = $state(false);
+  let deleting = $state(false);
+  let mutationError = $state("");
+  let archiveHref = $state("");
+  let formTitle = $state("");
+  let formKind = $state("");
+  let formSummary = $state("");
+  let formInfo = $state("");
+  let formAddress = $state("");
+  let formLat = $state("");
+  let formLon = $state("");
+  let formTopics: KnottingTopic[] = $state([]);
+  let formKeywords = $state("");
+  let conflictNode: NodeDetails | null = $state(null);
   let SimilarNodesComponent:
     | typeof import("./SimilarNodes.svelte").default
-    | null = null;
-  let similarNodesLoadStarted = false;
+    | null = $state(null);
+  let similarNodesLoadStarted = $state(false);
 
   type NodeHistoryEvent = {
     date: string;
@@ -111,45 +118,10 @@
   const isLoadingDetailsStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
 
-  $: nodeDetails = $nodeDetailsStore;
-  $: isLoadingDetails = $isLoadingDetailsStore;
-  $: summary = nodeDetails?.summary || $selection?.data?.summary;
-  $: kind = nodeKindLabel(nodeDetails?.kind || $selection?.data?.kind);
-  $: nodeCreator =
-    nodeDetails?.created_by_account_id ||
-    ($selection?.data?.created_by_account_id as string | undefined);
-  $: currentCreatorTitle = nodeDetails?.created_by_account_current_title || "";
-  $: timelineEvents = nodeDetails?.history || [];
-  $: visibleTagSplit = splitKnottingTags(
-    nodeDetails?.tags || $selection?.data?.tags || [],
-  );
-  $: conflictTagSplit = splitKnottingTags(conflictNode?.tags || []);
-  $: canMutate =
-    $authStore.authenticated &&
-    ($authStore.role === "weber" ||
-      $authStore.role === "admin" ||
-      (!!nodeCreator && nodeCreator === $authStore.account_id));
-
   async function ensureSimilarNodesComponent() {
     if (similarNodesLoadStarted) return;
     similarNodesLoadStarted = true;
     SimilarNodesComponent = (await import("./SimilarNodes.svelte")).default;
-  }
-
-  $: if ($selection?.type === "node" && !similarNodesLoadStarted) {
-    void ensureSimilarNodesComponent();
-  }
-
-  $: tabs = canMutate
-    ? ["uebersicht", "gespraech", "verlauf", "antraege", "bearbeiten"]
-    : ["uebersicht", "gespraech", "verlauf", "antraege"];
-  $: if (!canMutate) {
-    const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
-    if (activeTab === "bearbeiten") activeTab = "uebersicht";
-    if (editing) editing = false;
-    mutationError = "";
-    conflictNode = null;
-    if (shouldRestoreFocus) void focusAfterRender(() => overviewTab);
   }
 
   async function focusAfterRender(
@@ -329,6 +301,56 @@
       deleting = false;
     }
   }
+  let nodeDetails = $derived.by(() => $nodeDetailsStore);
+  let isLoadingDetails = $derived.by(() => $isLoadingDetailsStore);
+  let summary = $derived.by(
+    () => nodeDetails?.summary || $selection?.data?.summary,
+  );
+  let kind = $derived.by(() =>
+    nodeKindLabel(nodeDetails?.kind || $selection?.data?.kind),
+  );
+  let nodeCreator = $derived.by(
+    () =>
+      nodeDetails?.created_by_account_id ||
+      ($selection?.data?.created_by_account_id as string | undefined),
+  );
+  let currentCreatorTitle = $derived.by(
+    () => nodeDetails?.created_by_account_current_title || "",
+  );
+  let timelineEvents = $derived.by(() => nodeDetails?.history || []);
+  let visibleTagSplit = $derived.by(() =>
+    splitKnottingTags(nodeDetails?.tags || $selection?.data?.tags || []),
+  );
+  let canMutate = $derived.by(
+    () =>
+      $authStore.authenticated &&
+      ($authStore.role === "weber" ||
+        $authStore.role === "admin" ||
+        (!!nodeCreator && nodeCreator === $authStore.account_id)),
+  );
+  run(() => {
+    if (!canMutate) {
+      const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
+      if (activeTab === "bearbeiten") activeTab = "uebersicht";
+      if (editing) editing = false;
+      mutationError = "";
+      conflictNode = null;
+      if (shouldRestoreFocus) void focusAfterRender(() => overviewTab);
+    }
+  });
+  let conflictTagSplit = $derived.by(() =>
+    splitKnottingTags(conflictNode?.tags || []),
+  );
+  run(() => {
+    if ($selection?.type === "node" && !similarNodesLoadStarted) {
+      void ensureSimilarNodesComponent();
+    }
+  });
+  run(() => {
+    tabs = canMutate
+      ? ["uebersicht", "gespraech", "verlauf", "antraege", "bearbeiten"]
+      : ["uebersicht", "gespraech", "verlauf", "antraege"];
+  });
 </script>
 
 <div class="node-mode" class:editing>
@@ -349,7 +371,7 @@
     {#if editing}
       <form
         class="edit-form node-full-content"
-        on:submit|preventDefault={saveNode}
+        onsubmit={preventDefault(saveNode)}
       >
         <label>
           Titel
@@ -443,7 +465,7 @@
           <button
             type="button"
             class="secondary"
-            on:click={cancelEdit}
+            onclick={cancelEdit}
             disabled={saving}>Abbrechen</button
           >
           <button type="submit" class="primary" disabled={saving}
@@ -459,8 +481,8 @@
       >
         <button
           class:active={activeTab === "uebersicht"}
-          on:click={() => setTab("uebersicht")}
-          on:keydown={handleKeydown}
+          onclick={() => setTab("uebersicht")}
+          onkeydown={handleKeydown}
           role="tab"
           aria-selected={activeTab === "uebersicht"}
           aria-controls="panel-uebersicht"
@@ -470,8 +492,8 @@
         >
         <button
           class:active={activeTab === "gespraech"}
-          on:click={() => setTab("gespraech")}
-          on:keydown={handleKeydown}
+          onclick={() => setTab("gespraech")}
+          onkeydown={handleKeydown}
           role="tab"
           aria-selected={activeTab === "gespraech"}
           aria-controls="panel-gespraech"
@@ -480,8 +502,8 @@
         >
         <button
           class:active={activeTab === "verlauf"}
-          on:click={() => setTab("verlauf")}
-          on:keydown={handleKeydown}
+          onclick={() => setTab("verlauf")}
+          onkeydown={handleKeydown}
           role="tab"
           aria-selected={activeTab === "verlauf"}
           aria-controls="panel-verlauf"
@@ -490,8 +512,8 @@
         >
         <button
           class:active={activeTab === "antraege"}
-          on:click={() => setTab("antraege")}
-          on:keydown={handleKeydown}
+          onclick={() => setTab("antraege")}
+          onkeydown={handleKeydown}
           role="tab"
           aria-selected={activeTab === "antraege"}
           aria-controls="panel-antraege"
@@ -501,8 +523,8 @@
         {#if canMutate}
           <button
             class:active={activeTab === "bearbeiten"}
-            on:click={() => setTab("bearbeiten")}
-            on:keydown={handleKeydown}
+            onclick={() => setTab("bearbeiten")}
+            onkeydown={handleKeydown}
             role="tab"
             aria-selected={activeTab === "bearbeiten"}
             aria-controls="panel-bearbeiten"
@@ -555,7 +577,7 @@
                     {#each nodeDetails.participants as participant}<li>
                         <button
                           type="button"
-                          on:click={() =>
+                          onclick={() =>
                             dispatch("selectRelated", {
                               type: "garnrolle",
                               id: participant.account_id,
@@ -568,8 +590,7 @@
                 </div>
               {/if}
               {#if SimilarNodesComponent}
-                <svelte:component
-                  this={SimilarNodesComponent}
+                <SimilarNodesComponent
                   sourceId={nodeDetails?.id || $selection?.id || ""}
                   title={nodeDetails?.title || $selection?.data?.title}
                   kind={nodeDetails?.kind || $selection?.data?.kind}
@@ -620,7 +641,7 @@
                         <button
                           type="button"
                           aria-label={`Garnrolle ${currentCreatorTitle} öffnen`}
-                          on:click={() =>
+                          onclick={() =>
                             dispatch("selectRelated", {
                               type: "garnrolle",
                               id: nodeCreator,
@@ -667,13 +688,13 @@
               {#if mutationError}<p class="error" role="alert">
                   {mutationError}
                 </p>{/if}
-              <button type="button" class="secondary" on:click={beginEdit}
+              <button type="button" class="secondary" onclick={beginEdit}
                 >Bearbeiten</button
               >
               <button
                 type="button"
                 class="danger"
-                on:click={removeNode}
+                onclick={removeNode}
                 disabled={deleting}
                 >{deleting ? "Entfernt…" : "Aus dem Gewebe entfernen"}</button
               >

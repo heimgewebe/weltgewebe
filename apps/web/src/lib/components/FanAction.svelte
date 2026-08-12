@@ -1,13 +1,31 @@
 <script lang="ts">
-  export let label: string;
-  export let symbol: string;
-  export let testId: string;
-  export let href: string | null = null;
-  export let active: boolean | undefined = undefined;
-  export let disabled = false;
-  export let tabIndex = 0;
-  export let ariaLabel: string | undefined = undefined;
-  export let title: string | undefined = undefined;
+  interface Props {
+    label: string;
+    symbol: string;
+    testId: string;
+    href?: string | null;
+    active?: boolean | undefined;
+    disabled?: boolean;
+    tabIndex?: number;
+    ariaLabel?: string | undefined;
+    title?: string | undefined;
+    onclick?: (event: MouseEvent) => void;
+    children?: import("svelte").Snippet;
+  }
+
+  let {
+    label,
+    symbol,
+    testId,
+    href = null,
+    active = undefined,
+    disabled = false,
+    tabIndex = 0,
+    ariaLabel = undefined,
+    title = undefined,
+    onclick,
+    children,
+  }: Props = $props();
 </script>
 
 {#if href && !disabled}
@@ -20,11 +38,11 @@
     aria-current={active === true ? "page" : undefined}
     tabindex={tabIndex}
     {title}
-    on:click
+    {onclick}
   >
     <span class="fan-symbol" aria-hidden="true">{symbol}</span>
     <span class="fan-label">{label}</span>
-    <slot />
+    {@render children?.()}
   </a>
 {:else}
   <button
@@ -37,11 +55,11 @@
     {disabled}
     tabindex={tabIndex}
     {title}
-    on:click
+    {onclick}
   >
     <span class="fan-symbol" aria-hidden="true">{symbol}</span>
     <span class="fan-label">{label}</span>
-    <slot />
+    {@render children?.()}
   </button>
 {/if}
 

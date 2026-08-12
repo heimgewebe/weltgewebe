@@ -6,41 +6,36 @@
 
   type MarkerAnchor = NonNullable<MarkerOptions["anchor"]>;
 
-  export let lngLat: LngLatLike;
-  export let anchor: MarkerAnchor = "center";
-  export let draggable = false;
-  export let offset: PointLike | undefined;
+  interface Props {
+    lngLat: LngLatLike;
+    anchor?: MarkerAnchor;
+    draggable?: boolean;
+    offset: PointLike | undefined;
+    children?: import("svelte").Snippet;
+    [key: string]: any;
+  }
+
+  let {
+    lngLat,
+    anchor = "center",
+    draggable = false,
+    offset,
+    children,
+    ...rest
+  }: Props = $props();
 
   const context = useMapContext();
 
-  let element: HTMLDivElement | undefined;
-  let marker: import("maplibre-gl").Marker | null = null;
-  let markerProps: Record<string, unknown> = {};
-  let currentAnchor: MarkerAnchor = anchor;
-
-  $: markerProps = $$restProps;
+  let element: HTMLDivElement | undefined = $state();
+  let marker: import("maplibre-gl").Marker | null = $state(null);
+  let markerProps: Record<string, unknown> = $derived(rest);
+  let currentAnchor: MarkerAnchor | null = $state(null);
 
   const unsubscribe = context.map.subscribe((map) => {
     recreateMarker(map);
   });
 
   onDestroy(unsubscribe);
-
-  $: if (marker && lngLat) {
-    marker.setLngLat(lngLat);
-  }
-
-  $: if (marker) {
-    marker.setDraggable(draggable);
-  }
-
-  $: if (marker && offset !== undefined) {
-    marker.setOffset(offset);
-  }
-
-  $: if (marker && anchor !== currentAnchor) {
-    recreateMarker(get(context.map));
-  }
 
   function recreateMarker(map: import("maplibre-gl").Map | null) {
     if (marker) {
@@ -55,7 +50,7 @@
     const options: MarkerOptions = {
       element,
       anchor,
-      draggable
+      draggable,
     };
 
     if (offset !== undefined) {
@@ -72,8 +67,28 @@
       marker = null;
     }
   });
+  $effect(() => {
+    if (marker && lngLat) {
+      marker.setLngLat(lngLat);
+    }
+  });
+  $effect(() => {
+    if (marker) {
+      marker.setDraggable(draggable);
+    }
+  });
+  $effect(() => {
+    if (marker && offset !== undefined) {
+      marker.setOffset(offset);
+    }
+  });
+  $effect(() => {
+    if (marker && anchor !== currentAnchor) {
+      recreateMarker(get(context.map));
+    }
+  });
 </script>
 
 <div bind:this={element} {...markerProps}>
-  <slot />
+  {@render children?.()}
 </div>

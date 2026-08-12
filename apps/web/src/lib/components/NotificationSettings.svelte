@@ -12,18 +12,19 @@
     type PushConfig,
   } from "$lib/api/notifications";
 
-  let supported = false;
-  let loading = true;
-  let savingPreference = false;
-  let changingDevice = false;
-  let config: PushConfig | null = null;
-  let preferences: NotificationPreferences = {
+  let supported = $state(false);
+  let loading = $state(true);
+  let savingPreference = $state(false);
+  let changingDevice = $state(false);
+  let config: PushConfig | null = $state(null);
+  let preferences: NotificationPreferences = $state({
     direct_messages_push: false,
-  };
-  let browserSubscription: PushSubscription | null = null;
-  let permission: NotificationPermission | "unsupported" = "unsupported";
-  let error = "";
-  let notice = "";
+  });
+  let browserSubscription: PushSubscription | null = $state(null);
+  let permission: NotificationPermission | "unsupported" =
+    $state("unsupported");
+  let error = $state("");
+  let notice = $state("");
 
   function describeError(cause: unknown): string {
     if (cause instanceof NotificationsApiError) {
@@ -206,7 +207,7 @@
           type="checkbox"
           checked={preferences.direct_messages_push}
           disabled={savingPreference}
-          on:change={changePreference}
+          onchange={changePreference}
         />
         <span>{preferences.direct_messages_push ? "An" : "Aus"}</span>
       </label>
@@ -231,7 +232,7 @@
           class="btn secondary touch-target"
           type="button"
           disabled={changingDevice}
-          on:click={disableCurrentDevice}
+          onclick={disableCurrentDevice}
         >
           {changingDevice
             ? "Wird deaktiviert …"
@@ -242,7 +243,7 @@
           class="btn primary touch-target"
           type="button"
           disabled={changingDevice || !config?.enabled}
-          on:click={enableCurrentDevice}
+          onclick={enableCurrentDevice}
         >
           {changingDevice ? "Wird aktiviert …" : "Auf diesem Gerät aktivieren"}
         </button>

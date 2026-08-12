@@ -17,12 +17,12 @@
     current: boolean;
   }
 
-  let devices: DeviceInfo[] = [];
+  let devices: DeviceInfo[] = $state([]);
   let devicesStatus: "idle" | "loading" | "ok" | "unauthorized" | "error" =
-    "idle";
-  let actionMessage: string | null = null;
-  let actionVariant: "info" | "error" | "success" = "info";
-  let pending = false;
+    $state("idle");
+  let actionMessage: string | null = $state(null);
+  let actionVariant: "info" | "error" | "success" = $state("info");
+  let pending = $state(false);
 
   function formatTimestamp(value: string): string {
     const date = new Date(value);
@@ -215,7 +215,7 @@
       <button
         type="button"
         class="btn"
-        on:click={handleLogout}
+        onclick={handleLogout}
         disabled={pending}
         data-testid="account-section-logout"
       >
@@ -224,7 +224,7 @@
       <button
         type="button"
         class="btn btn-secondary"
-        on:click={handleLogoutAll}
+        onclick={handleLogoutAll}
         disabled={pending}
         data-testid="account-section-logout-all"
       >

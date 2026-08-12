@@ -3,7 +3,7 @@
   import GovernanceFan from "./GovernanceFan.svelte";
   import { contextPanelOpen } from "$lib/stores/uiView";
 
-  let AuthSlot: any;
+  let AuthSlot: any = $state();
   onMount(() => {
     void import("./TopBarAuth.svelte").then((module) => {
       AuthSlot = module.default;
@@ -21,7 +21,7 @@
     <GovernanceFan />
   </div>
   {#if AuthSlot}
-    <svelte:component this={AuthSlot} />
+    <AuthSlot />
   {/if}
 </div>
 

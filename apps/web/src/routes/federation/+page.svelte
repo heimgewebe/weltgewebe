@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { preventDefault } from "svelte/legacy";
+
   import { onMount } from "svelte";
 
   type CellDescriptor = {
@@ -27,11 +29,11 @@
   type LoadState = "loading" | "ready" | "unavailable" | "invalid";
   type LookupState = "idle" | "loading" | "found" | "not-found" | "error";
 
-  let descriptor: CellDescriptor | null = null;
-  let descriptorState: LoadState = "loading";
-  let address = "";
-  let lookupState: LookupState = "idle";
-  let object: FederatedObject | null = null;
+  let descriptor: CellDescriptor | null = $state(null);
+  let descriptorState: LoadState = $state("loading");
+  let address = $state("");
+  let lookupState: LookupState = $state("idle");
+  let object: FederatedObject | null = $state(null);
 
   function isDescriptor(value: unknown): value is CellDescriptor {
     if (!value || typeof value !== "object") return false;
@@ -142,7 +144,7 @@
   >
     <div class="section-heading">
       <h2 id="cell-heading">Öffentliche Zellidentität</h2>
-      <button type="button" class="secondary" on:click={loadDescriptor}
+      <button type="button" class="secondary" onclick={loadDescriptor}
         >Neu prüfen</button
       >
     </div>
@@ -184,7 +186,7 @@
       Adressen folgen dem Muster <code>wg://zelle/art/id</code>. Nur global
       veröffentlichte, nicht gelöschte Objekte werden ausgegeben.
     </p>
-    <form on:submit|preventDefault={lookupObject}>
+    <form onsubmit={preventDefault(lookupObject)}>
       <label for="federation-address">Objektadresse</label>
       <div class="lookup-row">
         <input

@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run, preventDefault } from "svelte/legacy";
+
   import { onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import {
@@ -12,48 +14,67 @@
     type Proposal,
   } from "$lib/api/governance";
 
-  export let centerId: string;
-  export let proposalCount: number | null = null;
-  export let openProposalCount: number | null = null;
-  export let votingProposalCount: number | null = null;
+  interface Props {
+    centerId: string;
+    proposalCount?: number | null;
+    openProposalCount?: number | null;
+    votingProposalCount?: number | null;
+  }
 
-  let proposals: Proposal[] = [];
-  let loading = true;
-  let error = "";
-  let summary = "";
-  let sachTitle = "";
-  let sachSummary = "";
-  let submitting = false;
-  let submitError = "";
-  let mounted = false;
-  let loadedCenterId = "";
+  let {
+    centerId,
+    proposalCount = null,
+    openProposalCount = null,
+    votingProposalCount = null,
+  }: Props = $props();
+
+  let proposals: Proposal[] = $state([]);
+  let loading = $state(true);
+  let error = $state("");
+  let summary = $state("");
+  let sachTitle = $state("");
+  let sachSummary = $state("");
+  let submitting = $state(false);
+  let submitError = $state("");
+  let mounted = $state(false);
+  let loadedCenterId = $state("");
   let loadGeneration = 0;
 
-  $: centerProposals = proposals.filter(
-    (proposal) => proposal.webgemeindezentrum_id === centerId,
+  let centerProposals = $derived(
+    proposals.filter((proposal) => proposal.webgemeindezentrum_id === centerId),
   );
-  $: activeProposals = centerProposals.filter(
-    (proposal) => proposal.status === "consent" || proposal.status === "voting",
+  let activeProposals = $derived(
+    centerProposals.filter(
+      (proposal) =>
+        proposal.status === "consent" || proposal.status === "voting",
+    ),
   );
-  $: ownOpenProposal = activeProposals.some(
-    (proposal) =>
-      proposal.kind === "weberantrag" &&
-      proposal.applicant_account_id === $authStore.account_id,
+  let ownOpenProposal = $derived(
+    activeProposals.some(
+      (proposal) =>
+        proposal.kind === "weberantrag" &&
+        proposal.applicant_account_id === $authStore.account_id,
+    ),
   );
-  $: displayedProposalCount =
-    loading || error ? proposalCount : centerProposals.length;
-  $: displayedOpenProposalCount =
-    loading || error ? openProposalCount : activeProposals.length;
-  $: displayedVotingProposalCount =
+  let displayedProposalCount = $derived(
+    loading || error ? proposalCount : centerProposals.length,
+  );
+  let displayedOpenProposalCount = $derived(
+    loading || error ? openProposalCount : activeProposals.length,
+  );
+  let displayedVotingProposalCount = $derived(
     loading || error
       ? votingProposalCount
       : centerProposals.filter((proposal) => proposal.status === "voting")
-          .length;
-  $: canApplyForWeber =
-    $authStore.authenticated && $authStore.role === "gast" && !ownOpenProposal;
-  $: canCreateSach =
+          .length,
+  );
+  let canApplyForWeber = $derived(
+    $authStore.authenticated && $authStore.role === "gast" && !ownOpenProposal,
+  );
+  let canCreateSach = $derived(
     $authStore.authenticated &&
-    ($authStore.role === "weber" || $authStore.role === "admin");
+      ($authStore.role === "weber" || $authStore.role === "admin"),
+  );
 
   async function load() {
     const generation = ++loadGeneration;
@@ -118,14 +139,16 @@
     }
   }
 
-  $: if (mounted && centerId !== loadedCenterId) {
-    loadedCenterId = centerId;
-    summary = "";
-    sachTitle = "";
-    sachSummary = "";
-    submitError = "";
-    void load();
-  }
+  run(() => {
+    if (mounted && centerId !== loadedCenterId) {
+      loadedCenterId = centerId;
+      summary = "";
+      sachTitle = "";
+      sachSummary = "";
+      submitError = "";
+      void load();
+    }
+  });
 
   onMount(() => {
     mounted = true;
@@ -192,7 +215,7 @@
   {/if}
 
   {#if canApplyForWeber}
-    <form class="application" on:submit|preventDefault={submitApplication}>
+    <form class="application" onsubmit={preventDefault(submitApplication)}>
       <label for="center-weber-application">Weberstatus beantragen</label>
       <textarea
         id="center-weber-application"
@@ -212,7 +235,7 @@
   {/if}
 
   {#if canCreateSach}
-    <form class="application" on:submit|preventDefault={submitSachProposal}>
+    <form class="application" onsubmit={preventDefault(submitSachProposal)}>
       <label for="center-sach-title">Sachantrag stellen</label>
       <input
         id="center-sach-title"

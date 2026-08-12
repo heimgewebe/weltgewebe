@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import { tick } from "svelte";
   import {
     isFilterOpen,
@@ -16,17 +18,27 @@
   import type { MapFilterOption } from "$lib/map/contentFilters";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
 
-  export let availableTypes: MapFilterOption[] = [];
-  export let availableTopics: MapFilterOption<KnottingTopic>[] = [];
-  export let resultCount = 0;
-  export let totalCount = 0;
-  export let allTopicsCount = 0;
+  interface Props {
+    availableTypes?: MapFilterOption[];
+    availableTopics?: MapFilterOption<KnottingTopic>[];
+    resultCount?: number;
+    totalCount?: number;
+    allTopicsCount?: number;
+  }
 
-  let overlayEl: HTMLDivElement;
-  let closeBtnEl: HTMLButtonElement;
-  let wasOpen = false;
+  let {
+    availableTypes = [],
+    availableTopics = [],
+    resultCount = 0,
+    totalCount = 0,
+    allTopicsCount = 0,
+  }: Props = $props();
 
-  $: {
+  let overlayEl: HTMLDivElement | undefined = $state();
+  let closeBtnEl: HTMLButtonElement | undefined = $state();
+  let wasOpen = $state(false);
+
+  run(() => {
     if ($isFilterOpen) {
       wasOpen = true;
       (async () => {
@@ -40,7 +52,7 @@
       wasOpen = false;
       restoreTarget("filter");
     }
-  }
+  });
 
   function filterLabel(type: { id: string; label: string }): string {
     if (type.id === "Garnrolle") return "Garnrollen";
@@ -56,7 +68,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleGlobalKeydown} />
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 {#if $isFilterOpen}
   <div
@@ -76,7 +88,7 @@
       <button
         class="close-btn"
         bind:this={closeBtnEl}
-        on:click={closeFilter}
+        onclick={closeFilter}
         aria-label="Karteninhalt schließen">✕</button
       >
     </div>
@@ -101,7 +113,7 @@
                 ><input
                   type="checkbox"
                   checked={$mapContentFilters.contentTypes.has(type.id)}
-                  on:change={() => toggleFilterType(type.id)}
+                  onchange={() => toggleFilterType(type.id)}
                 /><span class="filter-label">{filterLabel(type)}</span><span
                   class="filter-count">{type.count}</span
                 ></label
@@ -123,7 +135,7 @@
               class="filter-item all-topics"
               class:active={$mapContentFilters.topics.size === 0}
               aria-pressed={$mapContentFilters.topics.size === 0}
-              on:click={clearTopicFilters}
+              onclick={clearTopicFilters}
             >
               <span class="filter-label">Alle Themen</span>
               <span class="filter-count">{allTopicsCount}</span>
@@ -137,7 +149,7 @@
                 ><input
                   type="checkbox"
                   checked={$mapContentFilters.topics.has(topic.id)}
-                  on:change={() => toggleFilterTopic(topic.id)}
+                  onchange={() => toggleFilterTopic(topic.id)}
                 /><span class="filter-label">{topic.label}</span><span
                   class="filter-count">{topic.count}</span
                 ></label
@@ -155,7 +167,7 @@
     {/if}
 
     {#if $activeFilterCount > 0}
-      <button class="clear-btn" type="button" on:click={clearFilters}
+      <button class="clear-btn" type="button" onclick={clearFilters}
         >Alles wieder zeigen</button
       >
     {/if}

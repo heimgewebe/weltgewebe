@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import { browser } from "$app/environment";
   import { goto, invalidateAll } from "$app/navigation";
   import { authStore } from "$lib/auth/store";
@@ -20,8 +22,12 @@
   } from "$lib/garnrolle/visibility";
   import { onDestroy, tick } from "svelte";
 
-  export let accounts: Account[] = [];
-  export let accountsLoadError: string | null = null;
+  interface Props {
+    accounts?: Account[];
+    accountsLoadError?: string | null;
+  }
+
+  let { accounts = [], accountsLoadError = null }: Props = $props();
 
   type GarnrolleDraft = {
     displayName: string;
@@ -43,73 +49,26 @@
   const saveRequestGuard = createAccountRequestGuard();
   let loadAbortController: AbortController | null = null;
   let saveAbortController: AbortController | null = null;
-  let profileKey = "";
-  let loadedProfileAccountId: string | null = null;
-  let displayName = "";
-  let summary = "";
-  let skills = "";
-  let goods = "";
-  let interests = "";
-  let address = "";
+  let profileKey = $state("");
+  let loadedProfileAccountId: string | null = $state(null);
+  let displayName = $state("");
+  let summary = $state("");
+  let skills = $state("");
+  let goods = $state("");
+  let interests = $state("");
+  let address = $state("");
   let initialAddress = "";
-  let addressTouched = false;
-  let visibilityChoice: GarnrolleMapState = "not_on_map";
-  let radiusM = 250;
-  let selectedLocation: Location | null = null;
+  let addressTouched = $state(false);
+  let visibilityChoice: GarnrolleMapState = $state("not_on_map");
+  let radiusM = $state(250);
+  let selectedLocation: Location | null = $state(null);
   let clearLocation = false;
-  let isLoadingProfile = false;
-  let isSaving = false;
-  let profileError: string | null = null;
-  let draftMessage: string | null = null;
-  let saveMessage: string | null = null;
-  let locationButton: HTMLButtonElement | null = null;
-
-  $: ownGarnrolle = findOwnGarnrolle(accounts, $authStore.account_id);
-  $: visibility = describeGarnrolleVisibility(ownGarnrolle);
-  $: activeAccountId =
-    $authStore.authenticated && $authStore.account_id
-      ? $authStore.account_id
-      : null;
-  $: radiusIsValid =
-    Number.isInteger(radiusM) && radiusM >= 50 && radiusM <= 5000;
-  $: displayNameCodePointCount = countUnicodeCodePoints(displayName.trim());
-  $: displayNameTooLong =
-    displayNameCodePointCount > DISPLAY_NAME_MAX_CODE_POINTS;
-  $: summaryCodePointCount = countUnicodeCodePoints(summary.trim());
-  $: summaryTooLong = summaryCodePointCount > SUMMARY_MAX_CODE_POINTS;
-  $: profileTags = validateProfileTags([skills, goods, interests]);
-  $: formDisabled =
-    isLoadingProfile || isSaving || loadedProfileAccountId !== activeAccountId;
-  $: canSave =
-    !formDisabled &&
-    !!displayName.trim() &&
-    !displayNameTooLong &&
-    !summaryTooLong &&
-    !!profileTags &&
-    (visibilityChoice === "not_on_map" || selectedLocation !== null) &&
-    (visibilityChoice !== "radius" || radiusIsValid);
-
-  $: if (activeAccountId && activeAccountId !== profileKey) {
-    const previousAccountId = profileKey;
-    if (previousAccountId) clearStoredPrivateDraft(previousAccountId);
-    profileKey = activeAccountId;
-    invalidateAccountOperations();
-    loadedProfileAccountId = null;
-    isLoadingProfile = false;
-    isSaving = false;
-    resetDraft();
-    void loadPrivateProfile(activeAccountId);
-  }
-  $: if (!activeAccountId && profileKey) {
-    const previousAccountId = profileKey;
-    profileKey = "";
-    clearStoredPrivateDraft(previousAccountId);
-    invalidateAccountOperations();
-    loadedProfileAccountId = null;
-    isLoadingProfile = false;
-    isSaving = false;
-    resetDraft();
-  }
+  let isLoadingProfile = $state(false);
+  let isSaving = $state(false);
+  let profileError: string | null = $state(null);
+  let draftMessage: string | null = $state(null);
+  let saveMessage: string | null = $state(null);
+  let locationButton: HTMLButtonElement | null = $state(null);
 
   function categoryValues(tags: string[], prefix: string): string[] {
     return tags
@@ -449,6 +408,74 @@
       }
     }
   }
+  let ownGarnrolle = $derived.by(() =>
+    findOwnGarnrolle(accounts, $authStore.account_id),
+  );
+  let visibility = $derived.by(() => describeGarnrolleVisibility(ownGarnrolle));
+  let activeAccountId = $derived.by(() =>
+    $authStore.authenticated && $authStore.account_id
+      ? $authStore.account_id
+      : null,
+  );
+  let radiusIsValid = $derived.by(
+    () => Number.isInteger(radiusM) && radiusM >= 50 && radiusM <= 5000,
+  );
+  let displayNameCodePointCount = $derived.by(() =>
+    countUnicodeCodePoints(displayName.trim()),
+  );
+  let displayNameTooLong = $derived.by(
+    () => displayNameCodePointCount > DISPLAY_NAME_MAX_CODE_POINTS,
+  );
+  let summaryCodePointCount = $derived.by(() =>
+    countUnicodeCodePoints(summary.trim()),
+  );
+  let summaryTooLong = $derived.by(
+    () => summaryCodePointCount > SUMMARY_MAX_CODE_POINTS,
+  );
+  let profileTags = $derived.by(() =>
+    validateProfileTags([skills, goods, interests]),
+  );
+  run(() => {
+    if (activeAccountId && activeAccountId !== profileKey) {
+      const previousAccountId = profileKey;
+      if (previousAccountId) clearStoredPrivateDraft(previousAccountId);
+      profileKey = activeAccountId;
+      invalidateAccountOperations();
+      loadedProfileAccountId = null;
+      isLoadingProfile = false;
+      isSaving = false;
+      resetDraft();
+      void loadPrivateProfile(activeAccountId);
+    }
+  });
+  run(() => {
+    if (!activeAccountId && profileKey) {
+      const previousAccountId = profileKey;
+      profileKey = "";
+      clearStoredPrivateDraft(previousAccountId);
+      invalidateAccountOperations();
+      loadedProfileAccountId = null;
+      isLoadingProfile = false;
+      isSaving = false;
+      resetDraft();
+    }
+  });
+  let formDisabled = $derived.by(
+    () =>
+      isLoadingProfile ||
+      isSaving ||
+      loadedProfileAccountId !== activeAccountId,
+  );
+  let canSave = $derived.by(
+    () =>
+      !formDisabled &&
+      !!displayName.trim() &&
+      !displayNameTooLong &&
+      !summaryTooLong &&
+      !!profileTags &&
+      (visibilityChoice === "not_on_map" || selectedLocation !== null) &&
+      (visibilityChoice !== "radius" || radiusIsValid),
+  );
 </script>
 
 <section
@@ -504,7 +531,7 @@
     <form
       class="garnrolle-form"
       aria-describedby="my-garnrolle-save-note"
-      on:submit={handleSave}
+      onsubmit={handleSave}
     >
       <fieldset disabled={formDisabled}>
         <legend>1. Garnrolle beschreiben</legend>
@@ -614,11 +641,11 @@
                 bind:this={locationButton}
                 type="button"
                 class="btn"
-                on:click={chooseMapLocation}
+                onclick={chooseMapLocation}
               >
                 Punkt ändern
               </button>
-              <button type="button" class="btn" on:click={removeMapLocation}>
+              <button type="button" class="btn" onclick={removeMapLocation}>
                 Kartenanker entfernen
               </button>
             </div>
@@ -633,7 +660,7 @@
               bind:this={locationButton}
               type="button"
               class="btn btn-primary"
-              on:click={chooseMapLocation}
+              onclick={chooseMapLocation}
               data-testid="choose-garnrolle-location"
             >
               Punkt auf Karte wählen
@@ -645,7 +672,7 @@
           Adresse oder Ortsnotiz <span class="optional">privat, optional</span>
           <input
             bind:value={address}
-            on:input={() => (addressTouched = true)}
+            oninput={() => (addressTouched = true)}
             maxlength="500"
             placeholder="z. B. Stadtteil"
           />

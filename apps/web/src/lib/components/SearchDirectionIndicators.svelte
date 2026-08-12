@@ -3,7 +3,11 @@
   import type { MapEntityViewModel } from "$lib/map/types";
   import type { SearchDirectionIndicator } from "$lib/map/searchNavigation";
 
-  export let indicators: SearchDirectionIndicator[] = [];
+  interface Props {
+    indicators?: SearchDirectionIndicator[];
+  }
+
+  let { indicators = [] }: Props = $props();
 
   const dispatch = createEventDispatcher<{ select: MapEntityViewModel }>();
 
@@ -28,7 +32,7 @@
         style={`--search-direction-x: ${indicator.x}px; --search-direction-y: ${indicator.y}px; --search-direction-angle: ${indicator.angle}deg;`}
         aria-label={labelFor(indicator)}
         title={indicator.item.title}
-        on:click={() => dispatch("select", indicator.item)}
+        onclick={() => dispatch("select", indicator.item)}
       >
         <span class="search-direction__arrow" aria-hidden="true">➜</span>
       </button>

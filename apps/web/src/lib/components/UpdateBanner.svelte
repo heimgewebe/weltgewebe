@@ -1,10 +1,10 @@
 <script lang="ts">
-  import { updateStore } from '$lib/stores/updateStore';
-  import { dev } from '$app/environment';
+  import { updateStore } from "$lib/stores/updateStore";
+  import { dev } from "$app/environment";
 
   function reload() {
     if (dev) {
-      console.debug('[update-reload-click]');
+      console.debug("[update-reload-click]");
     }
     window.location.reload();
   }
@@ -14,7 +14,9 @@
   <div class="update-banner" role="alert" aria-live="assertive">
     <div class="content">
       <span class="message">Eine neue Version ist verfügbar.</span>
-      <button class="reload-btn" on:click={reload} type="button">Neu laden</button>
+      <button class="reload-btn" onclick={reload} type="button"
+        >Neu laden</button
+      >
     </div>
   </div>
 {/if}
@@ -42,7 +44,7 @@
     color: var(--text-on-surface, #fff);
     padding: var(--spacing-2, 8px) var(--spacing-4, 16px);
     border-radius: var(--radius-md, 8px);
-    box-shadow: var(--shadow-md, 0 4px 6px rgba(0,0,0,0.1));
+    box-shadow: var(--shadow-md, 0 4px 6px #0000001a);
     pointer-events: auto; /* Reactivate clicks strictly for the banner content */
   }
 

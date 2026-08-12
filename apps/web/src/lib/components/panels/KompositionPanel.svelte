@@ -13,17 +13,17 @@
   import KnottingTopicsSelector from "$lib/components/KnottingTopicsSelector.svelte";
   import { onMount, tick } from "svelte";
 
-  let title = "";
-  let description = "";
-  let address = "";
-  let nodeType = "standard";
-  let topics: KnottingTopic[] = [];
-  let isSubmitting = false;
-  let titleInput: HTMLInputElement | null = null;
+  let title = $state("");
+  let description = $state("");
+  let address = $state("");
+  let nodeType = $state("standard");
+  let topics: KnottingTopic[] = $state([]);
+  let isSubmitting = $state(false);
+  let titleInput: HTMLInputElement | null = $state(null);
 
-  let titleError = false;
-  let addressError = false;
-  let formError: string | null = null;
+  let titleError = $state(false);
+  let addressError = $state(false);
+  let formError: string | null = $state(null);
 
   // One operation id identifies one semantic user action. A transport failure
   // may hide a successful server write, so retries reuse the same id while the
@@ -31,10 +31,13 @@
   let nodeOperationId: string | null = null;
   let nodeOperationSignature: string | null = null;
 
-  $: canWrite = $authStore.authenticated;
-  $: placingGarnrolle = $kompositionDraft?.mode === "place-garnrolle";
-  $: canSubmit =
-    !!$kompositionDraft?.lngLat && !!title.trim() && !!address.trim();
+  let canWrite = $derived($authStore.authenticated);
+  let placingGarnrolle = $derived(
+    $kompositionDraft?.mode === "place-garnrolle",
+  );
+  let canSubmit = $derived(
+    !!$kompositionDraft?.lngLat && !!title.trim() && !!address.trim(),
+  );
 
   onMount(async () => {
     await tick();
@@ -155,7 +158,7 @@
       <p>Jeder angemeldete Account kann einen neuen Knoten knüpfen.</p>
     </div>
     <div class="actions">
-      <button type="button" class="btn btn-secondary" on:click={handleCancel}
+      <button type="button" class="btn btn-secondary" onclick={handleCancel}
         >Schließen</button
       >
     </div>
@@ -185,7 +188,7 @@
         <button
           type="button"
           class="btn btn-secondary"
-          on:click={() => returnToGarnrolleSettings(false)}
+          onclick={() => returnToGarnrolleSettings(false)}
         >
           Abbrechen
         </button>
@@ -193,7 +196,7 @@
           type="button"
           class="btn btn-primary"
           disabled={!$kompositionDraft?.lngLat}
-          on:click={() => returnToGarnrolleSettings(true)}
+          onclick={() => returnToGarnrolleSettings(true)}
           data-testid="confirm-garnrolle-location"
         >
           Diesen Punkt übernehmen
@@ -201,7 +204,7 @@
       </div>
     </div>
   {:else}
-    <form on:submit={handleSubmit} class="komposition-form">
+    <form onsubmit={handleSubmit} class="komposition-form">
       {#if $kompositionDraft?.lngLat}
         <div class="state-set">
           <p><strong>Ort gewählt</strong></p>
@@ -299,7 +302,7 @@
         <button
           type="button"
           class="btn btn-secondary"
-          on:click={handleCancel}
+          onclick={handleCancel}
           disabled={isSubmitting}
         >
           Abbrechen

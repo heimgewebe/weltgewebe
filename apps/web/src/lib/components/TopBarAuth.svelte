@@ -23,40 +23,49 @@
   const MESSAGE_POLL_MS = 30_000;
 
   let observedAccountId = "";
-  let weberApplicationState: WeberApplicationState = "unknown";
-  let unreadMessageCount = 0;
+  let weberApplicationState: WeberApplicationState = $state("unknown");
+  let unreadMessageCount = $state(0);
   let messageRequestRevision = 0;
   let weberRequestRevision = 0;
 
-  $: authView = deriveTopBarAuthView($authStore);
-  $: pendingWeberApplication = weberApplicationState === "pending";
-  $: guestBadgeHref =
+  let authView = $derived.by(() => deriveTopBarAuthView($authStore));
+  let pendingWeberApplication = $derived.by(
+    () => weberApplicationState === "pending",
+  );
+  let guestBadgeHref = $derived.by(() =>
     weberApplicationState === "available"
       ? "/antraege#antrag-stellen"
-      : "/antraege";
-  $: guestBadgeAction =
+      : "/antraege",
+  );
+  let guestBadgeAction = $derived.by(() =>
     weberApplicationState === "pending"
       ? "Weberstatus beantragt"
       : weberApplicationState === "available"
         ? "Weber werden"
-        : "Weberstatus wird geprüft";
-  $: guestBadgeTitle =
+        : "Weberstatus wird geprüft",
+  );
+  let guestBadgeTitle = $derived.by(() =>
     weberApplicationState === "pending"
       ? "Weberstatus beantragt – Antrag ansehen"
       : weberApplicationState === "available"
         ? "Weberstatus beantragen"
-        : "Weberstatus wird geprüft";
-  $: guestBadgeCompactSymbol =
+        : "Weberstatus wird geprüft",
+  );
+  let guestBadgeCompactSymbol = $derived.by(() =>
     weberApplicationState === "pending"
       ? "◌"
       : weberApplicationState === "available"
         ? "G"
-        : "…";
-  $: messageBadgeLabel = unreadMessageBadgeLabel(unreadMessageCount);
-  $: messageAriaLabel =
+        : "…",
+  );
+  let messageBadgeLabel = $derived.by(() =>
+    unreadMessageBadgeLabel(unreadMessageCount),
+  );
+  let messageAriaLabel = $derived.by(() =>
     unreadMessageCount > 0
       ? `Private Nachrichten: ${unreadMessageAccessibleCount(unreadMessageCount)}`
-      : "Private Nachrichten";
+      : "Private Nachrichten",
+  );
 
   function retryAuth() {
     void authStore.checkAuth({ force: true });
@@ -84,7 +93,8 @@
 
     const revision = ++messageRequestRevision;
     try {
-      const conversations: DirectConversation[] = await listDirectConversations();
+      const conversations: DirectConversation[] =
+        await listDirectConversations();
       if (
         revision !== messageRequestRevision ||
         !ownsAttentionResult(accountId)
@@ -242,7 +252,7 @@
       <button
         type="button"
         class="auth-retry"
-        on:click={retryAuth}
+        onclick={retryAuth}
         aria-label="Anmeldung erneut prüfen"
       >
         <span class="auth-symbol" aria-hidden="true">↻</span>
@@ -258,7 +268,7 @@
     <button
       type="button"
       class="login-entry"
-      on:click={retryAuth}
+      onclick={retryAuth}
       aria-label="Anmeldung erneut prüfen"
     >
       <span class="auth-symbol" aria-hidden="true">↻</span>

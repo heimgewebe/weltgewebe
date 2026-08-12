@@ -1,18 +1,26 @@
 <script lang="ts">
-  import { authStore } from '$lib/auth/store';
-  import { onDestroy } from 'svelte';
+  import { authStore } from "$lib/auth/store";
+  import { onDestroy } from "svelte";
 
-  export let balance = "1 250 WE";
-  export let trend: 'stable' | 'up' | 'down' = 'stable';
-  export let note = "Attrappe · UX-Test";
+  interface Props {
+    balance?: string;
+    trend?: "stable" | "up" | "down";
+    note?: string;
+  }
+
+  let {
+    balance = "1 250 WE",
+    trend = "stable",
+    note = "Attrappe · UX-Test",
+  }: Props = $props();
 
   const trendLabels = {
-    stable: 'gleichbleibend',
-    up: 'steigend',
-    down: 'sinkend'
+    stable: "gleichbleibend",
+    up: "steigend",
+    down: "sinkend",
   } as const;
 
-  let loggedIn = false;
+  let loggedIn = $state(false);
 
   const unsubscribe = authStore.subscribe((value) => {
     loggedIn = value.authenticated;
@@ -21,7 +29,11 @@
   onDestroy(unsubscribe);
 </script>
 
-<div class="gewebekonto panel" role="group" aria-label="Gewebekonto-Widget (Attrappe)">
+<div
+  class="gewebekonto panel"
+  role="group"
+  aria-label="Gewebekonto-Widget (Attrappe)"
+>
   <div class="meta row">
     <span class="badge">Gewebekonto</span>
     <span class="ghost">Status: {trendLabels[trend]}</span>
@@ -31,14 +43,29 @@
   </div>
   <p class="note ghost">{note}</p>
   <div class="actions row" aria-hidden="true">
-    <button class="btn" type="button" disabled title="Funktion folgt – Attrappe">Einzahlen</button>
-    <button class="btn" type="button" disabled title="Funktion folgt – Attrappe">Auszahlen</button>
+    <button class="btn" type="button" disabled title="Funktion folgt – Attrappe"
+      >Einzahlen</button
+    >
+    <button class="btn" type="button" disabled title="Funktion folgt – Attrappe"
+      >Auszahlen</button
+    >
   </div>
   <div class="auth-actions row">
     {#if loggedIn}
-      <button class="btn ghost" type="button" on:click={() => authStore.logout()} data-testid="widget-logout">Abmelden</button>
+      <button
+        class="btn ghost"
+        type="button"
+        onclick={() => authStore.logout()}
+        data-testid="widget-logout">Abmelden</button
+      >
     {:else}
-      <button class="btn" type="button" on:click={() => authStore.devLogin('7d97a42e-3704-4a33-a61f-0e0a6b4d65d8')}>Login Demo</button>
+      <button
+        class="btn"
+        type="button"
+        onclick={() =>
+          authStore.devLogin("7d97a42e-3704-4a33-a61f-0e0a6b4d65d8")}
+        >Login Demo</button
+      >
     {/if}
   </div>
 </div>

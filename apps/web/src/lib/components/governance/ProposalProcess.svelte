@@ -2,10 +2,14 @@
   import type { ProposalDetail } from "$lib/api/governance";
   import { deriveProposalProcess } from "./proposalProcess";
 
-  export let proposal: ProposalDetail;
-  export let messageCount = 0;
+  interface Props {
+    proposal: ProposalDetail;
+    messageCount?: number;
+  }
 
-  $: process = deriveProposalProcess(proposal, messageCount);
+  let { proposal, messageCount = 0 }: Props = $props();
+
+  let process = $derived(deriveProposalProcess(proposal, messageCount));
 </script>
 
 <section

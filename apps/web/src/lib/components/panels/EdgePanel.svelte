@@ -1,8 +1,11 @@
 <script lang="ts">
-  import { onDestroy } from 'svelte';
-  import { selection } from '$lib/stores/uiView';
-  import { buildPanelEndpoint, createPanelDetailsLoader } from '$lib/panels/panelDetails';
-  import { formatDate } from '$lib/utils/formatDate';
+  import { onDestroy } from "svelte";
+  import { selection } from "$lib/stores/uiView";
+  import {
+    buildPanelEndpoint,
+    createPanelDetailsLoader,
+  } from "$lib/panels/panelDetails";
+  import { formatDate } from "$lib/utils/formatDate";
 
   interface EdgeParticipantDetails {
     id: string;
@@ -20,19 +23,19 @@
   }
 
   const detailsLoader = createPanelDetailsLoader<EdgeDetails>(selection, {
-    buildEndpoint: (id) => buildPanelEndpoint('edge', id),
-    resourceLabel: 'edge details',
+    buildEndpoint: (id) => buildPanelEndpoint("edge", id),
+    resourceLabel: "edge details",
   });
   const edgeDetailsStore = detailsLoader.details;
   const isLoadingDetailsStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
 
-  $: edgeDetails = $edgeDetailsStore;
-  $: isLoadingDetails = $isLoadingDetailsStore;
+  let edgeDetails = $derived($edgeDetailsStore);
+  let isLoadingDetails = $derived($isLoadingDetailsStore);
 </script>
 
 <div class="edge-mode">
-  <h3>{edgeDetails?.edge_kind || $selection?.data?.edge_kind || 'Faden'}</h3>
+  <h3>{edgeDetails?.edge_kind || $selection?.data?.edge_kind || "Faden"}</h3>
 
   <div class="details">
     {#if isLoadingDetails}
@@ -40,7 +43,7 @@
     {:else}
       <p>
         <strong>Typ:</strong>
-        {edgeDetails?.edge_kind || $selection?.data?.edge_kind || 'Unbekannt'}
+        {edgeDetails?.edge_kind || $selection?.data?.edge_kind || "Unbekannt"}
       </p>
 
       {#if edgeDetails?.note || $selection?.data?.note}
@@ -60,17 +63,23 @@
         {#if edgeDetails?.source_details}
           <ul>
             <li>
-              <span class="participant-name">{edgeDetails.source_details.title}</span>
+              <span class="participant-name"
+                >{edgeDetails.source_details.title}</span
+              >
               {#if edgeDetails.source_details.type}
-                <span class="participant-role">({edgeDetails.source_details.type})</span>
+                <span class="participant-role"
+                  >({edgeDetails.source_details.type})</span
+                >
               {/if}
             </li>
           </ul>
         {:else}
           <p class="ghost">
-            {$selection?.data?.source_id || 'Unbekannt'}
+            {$selection?.data?.source_id || "Unbekannt"}
             {#if $selection?.data?.source_type}
-              <span class="participant-role">({$selection?.data?.source_type})</span>
+              <span class="participant-role"
+                >({$selection?.data?.source_type})</span
+              >
             {/if}
           </p>
         {/if}
@@ -79,17 +88,23 @@
         {#if edgeDetails?.target_details}
           <ul>
             <li>
-              <span class="participant-name">{edgeDetails.target_details.title}</span>
+              <span class="participant-name"
+                >{edgeDetails.target_details.title}</span
+              >
               {#if edgeDetails.target_details.type}
-                <span class="participant-role">({edgeDetails.target_details.type})</span>
+                <span class="participant-role"
+                  >({edgeDetails.target_details.type})</span
+                >
               {/if}
             </li>
           </ul>
         {:else}
           <p class="ghost">
-            {$selection?.data?.target_id || 'Unbekannt'}
+            {$selection?.data?.target_id || "Unbekannt"}
             {#if $selection?.data?.target_type}
-              <span class="participant-role">({$selection?.data?.target_type})</span>
+              <span class="participant-role"
+                >({$selection?.data?.target_type})</span
+              >
             {/if}
           </p>
         {/if}
@@ -111,7 +126,7 @@
   .participants {
     margin-top: 1rem;
     padding-top: 1rem;
-    border-top: 1px solid var(--panel-border, rgba(0,0,0,0.1));
+    border-top: 1px solid var(--panel-border, rgba(0, 0, 0, 0.1));
   }
 
   .participants ul {

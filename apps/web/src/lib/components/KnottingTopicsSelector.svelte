@@ -6,9 +6,17 @@
     type KnottingTopic,
   } from "$lib/knottingTopics";
 
-  export let value: KnottingTopic[] = [];
-  export let disabled = false;
-  export let id = "knotting-topics";
+  interface Props {
+    value?: KnottingTopic[];
+    disabled?: boolean;
+    id?: string;
+  }
+
+  let {
+    value = $bindable([]),
+    disabled = false,
+    id = "knotting-topics",
+  }: Props = $props();
 
   function toggle(topic: KnottingTopic) {
     value = toggleKnottingTopic(value, topic);
@@ -30,7 +38,7 @@
         aria-pressed={isSelected}
         disabled={disabled ||
           (!isSelected && value.length >= MAX_KNOTTING_TOPICS)}
-        on:click={() => toggle(topic)}
+        onclick={() => toggle(topic)}
       >
         {topic}
       </button>

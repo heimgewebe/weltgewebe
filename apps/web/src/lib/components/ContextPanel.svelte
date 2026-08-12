@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import { createEventDispatcher } from "svelte";
   import {
     selection,
@@ -32,14 +34,14 @@
   }>();
   const DRAG_THRESHOLD_PX = 6;
 
-  let kompositionPanel: KompositionPanelHandle | null = null;
-  let sheetStage: SheetStage = "compact";
-  let previousPanelIdentity = "";
-  let panelTitle = "Details";
+  let kompositionPanel: KompositionPanelHandle | null = $state(null);
+  let sheetStage: SheetStage = $state("compact");
+  let previousPanelIdentity = $state("");
+  let panelTitle = $state("Details");
   let dragStartY = 0;
   let dragStartHeight = 0;
-  let dragHeight: number | null = null;
-  let dragging = false;
+  let dragHeight: number | null = $state(null);
+  let dragging = $state(false);
   let dragMoved = false;
   let activePointerId: number | null = null;
 
@@ -74,7 +76,7 @@
     return "Details";
   }
 
-  $: {
+  run(() => {
     panelTitle = derivePanelTitle($systemState, $kompositionDraft, $selection);
     const nextPanelIdentity =
       $systemState === "komposition"
@@ -88,7 +90,7 @@
       sheetStage = $systemState === "komposition" ? "full" : "compact";
       resetSheetPointerState();
     }
-  }
+  });
 
   function setSheetStage(stage: SheetStage): void {
     sheetStage = stage;
@@ -216,7 +218,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleKeydown} />
+<svelte:window onkeydown={handleKeydown} />
 
 {#if $contextPanelOpen}
   <aside
@@ -239,13 +241,13 @@
       aria-label={sheetStage === "compact"
         ? "Panel vollständig öffnen oder ziehen"
         : "Panel kompakt anzeigen oder ziehen"}
-      on:pointerdown={handleSheetPointerDown}
-      on:pointermove={handleSheetPointerMove}
-      on:pointerup={handleSheetPointerUp}
-      on:pointercancel={handleSheetPointerCancel}
-      on:lostpointercapture={handleSheetLostPointerCapture}
-      on:click={handleSheetHandleClick}
-      on:keydown={handleSheetKeydown}
+      onpointerdown={handleSheetPointerDown}
+      onpointermove={handleSheetPointerMove}
+      onpointerup={handleSheetPointerUp}
+      onpointercancel={handleSheetPointerCancel}
+      onlostpointercapture={handleSheetLostPointerCapture}
+      onclick={handleSheetHandleClick}
+      onkeydown={handleSheetKeydown}
     >
       <span aria-hidden="true"></span>
     </button>
@@ -263,12 +265,12 @@
           aria-label={`${panelTitle}: ${
             sheetStage === "compact" ? "vollständig öffnen" : "kompakt anzeigen"
           }`}
-          on:click={toggleSheetStage}
+          onclick={toggleSheetStage}
         >
           <span>{panelTitle}</span>
         </button>
       </div>
-      <button class="close-btn" on:click={closePanel} aria-label="Schließen"
+      <button class="close-btn" onclick={closePanel} aria-label="Schließen"
         >✕</button
       >
     </header>
@@ -286,16 +288,13 @@
           {#await import("./panels/AccountPanel.svelte")}
             <p role="status">Lade Garnrolle…</p>
           {:then accountPanel}
-            <svelte:component
-              this={accountPanel.default}
-              on:selectRelated={handleRelated}
-            />
+            <accountPanel.default on:selectRelated={handleRelated} />
           {/await}
         {:else if $selection.type === "webgemeindezentrum"}
           {#await import("./panels/WebgemeindezentrumPanel.svelte")}
             <p role="status">Lade Webgemeindezentrum…</p>
           {:then centerPanel}
-            <svelte:component this={centerPanel.default} />
+            <centerPanel.default />
           {/await}
         {:else if $selection.type === "edge"}
           <EdgePanel />

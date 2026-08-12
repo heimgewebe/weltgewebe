@@ -160,20 +160,21 @@
       "id": "OPT-FE-001",
       "area": "Frontend",
       "title": "Svelte-5-Runes-Migration",
-      "status": "open",
+      "status": "done",
       "priority": "medium",
       "risk": "medium",
       "effort": "high",
-      "evidence_status": "code",
+      "evidence_status": "code+test",
       "evidence": [
         "apps/web/src/routes/map/+page.svelte",
-        "apps/web/src/lib/maplibre/Marker.svelte"
+        "apps/web/src/lib/maplibre/Marker.svelte",
+        "apps/web/src/lib/maplibre/MapLibre.svelte",
+        "apps/web/src/lib/components/map/MapRouteOverlays.svelte",
+        "apps/web/src/lib/svelteRunesMigration.test.ts"
       ],
-      "missing_evidence": [
-        "Keine belegte Nutzung von $state, $derived, $effect in Kernkomponenten"
-      ],
-      "next_action": "Runes-Migration in Kernkomponenten beginnen",
-      "updated_at": "2026-04-27"
+      "missing_evidence": [],
+      "next_action": "keine — Runes-Vertrag in Kernkomponenten und Verhalten belegt; verbleibende svelte/legacy-Kompatibilitätsbrücken separat als Bureau-Kandidat candidate-f2543f3f009c4bd5511dc4b6 erfasst",
+      "updated_at": "2026-08-12"
     },
     {
       "id": "OPT-FE-002",

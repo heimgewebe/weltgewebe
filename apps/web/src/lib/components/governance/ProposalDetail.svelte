@@ -16,28 +16,36 @@
     type VoteChoice,
   } from "$lib/api/governance";
 
-  export let proposalId: string;
+  interface Props {
+    proposalId: string;
+  }
+
+  let { proposalId }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     messagecountchange: { proposalId: string; messageCount: number };
   }>();
 
-  let proposal: ProposalDetail | null = null;
-  let messages: ProposalMessage[] = [];
-  let knownMessageCount = 0;
-  let loading = true;
-  let error = "";
-  let vetoReason = "";
-  let messageBody = "";
-  let submitting = false;
+  let proposal: ProposalDetail | null = $state(null);
+  let messages: ProposalMessage[] = $state([]);
+  let knownMessageCount = $state(0);
+  let loading = $state(true);
+  let error = $state("");
+  let vetoReason = $state("");
+  let messageBody = $state("");
+  let submitting = $state(false);
 
-  $: canDiscuss = $authStore.authenticated;
-  $: canDecide =
-    $authStore.authenticated &&
-    ($authStore.role === "weber" || $authStore.role === "admin") &&
-    !!proposal &&
-    proposal.applicant_account_id !== $authStore.account_id;
-  $: isOpen = proposal?.status === "consent" || proposal?.status === "voting";
+  let canDiscuss = $derived.by(() => $authStore.authenticated);
+  let canDecide = $derived.by(
+    () =>
+      $authStore.authenticated &&
+      ($authStore.role === "weber" || $authStore.role === "admin") &&
+      !!proposal &&
+      proposal.applicant_account_id !== $authStore.account_id,
+  );
+  let isOpen = $derived.by(
+    () => proposal?.status === "consent" || proposal?.status === "voting",
+  );
 
   function normalizeMessageCount(count: unknown): number {
     return typeof count === "number" &&
@@ -258,7 +266,7 @@
           placeholder="Konkreter Einwand und mögliche Lösung"></textarea>
         <button
           class="primary"
-          on:click={veto}
+          onclick={veto}
           disabled={!vetoReason.trim() || submitting}>Veto einlegen</button
         >
       </section>
@@ -275,7 +283,7 @@
           {#each ["ja", "nein", "enthaltung"] as choice}
             <button
               class:active={proposal.own_vote === choice}
-              on:click={() => vote(choice as VoteChoice)}
+              onclick={() => vote(choice as VoteChoice)}
               disabled={submitting}
             >
               {choice === "ja"
@@ -317,7 +325,7 @@
             rows="4"></textarea>
           <button
             class="primary"
-            on:click={postMessage}
+            onclick={postMessage}
             disabled={!messageBody.trim() || submitting}>Beitrag senden</button
           >
         </div>

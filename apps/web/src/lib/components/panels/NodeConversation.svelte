@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run, preventDefault } from "svelte/legacy";
+
   import { onDestroy, onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import { formatDate } from "$lib/utils/formatDate";
@@ -16,45 +18,47 @@
     type PublicConversation,
   } from "$lib/api/nodeConversation";
 
-  export let nodeId = "";
-  export let conversationId: string | null = null;
-  export let heading = "Öffentlicher Gesprächsraum";
-  export let emptyMessage =
-    "Noch keine Beiträge. Hier kann das Gespräch über diesen Knoten beginnen.";
-  export let testId = "node-conversation";
+  interface Props {
+    nodeId?: string;
+    conversationId?: string | null;
+    heading?: string;
+    emptyMessage?: string;
+    testId?: string;
+  }
+
+  let {
+    nodeId = "",
+    conversationId = null,
+    heading = "Öffentlicher Gesprächsraum",
+    emptyMessage = "Noch keine Beiträge. Hier kann das Gespräch über diesen Knoten beginnen.",
+    testId = "node-conversation",
+  }: Props = $props();
 
   const POLL_INTERVAL_MS = 5_000;
 
   let conversation: NodeConversation | PublicConversation | null = null;
-  let messages: ConversationMessage[] = [];
-  let olderCursor: string | null = null;
-  let loading = true;
-  let loadingOlder = false;
+  let messages: ConversationMessage[] = $state([]);
+  let olderCursor: string | null = $state(null);
+  let loading = $state(true);
+  let loadingOlder = $state(false);
   let loadedOlder = false;
-  let loadError = "";
-  let draft = "";
+  let loadError = $state("");
+  let draft = $state("");
   let draftOperationId = "";
   let lastSubmittedDraft = "";
-  let posting = false;
-  let mutationError = "";
-  let editingId = "";
-  let editDraft = "";
-  let savingId = "";
-  let tombstoningId = "";
+  let posting = $state(false);
+  let mutationError = $state("");
+  let editingId = $state("");
+  let editDraft = $state("");
+  let savingId = $state("");
+  let tombstoningId = $state("");
   let pollTimer: ReturnType<typeof setTimeout> | null = null;
   let pollGeneration = 0;
   let mutationGeneration = 0;
   let refreshController: AbortController | null = null;
   let destroyed = false;
-  let mounted = false;
-  let loadedTarget = "";
-
-  $: canWrite = $authStore.authenticated;
-  $: requestedTarget = targetKey();
-  $: if (mounted && requestedTarget !== loadedTarget) {
-    loading = true;
-    syncPolling();
-  }
+  let mounted = $state(false);
+  let loadedTarget = $state("");
 
   function targetKey(): string {
     return conversationId ? `conversation:${conversationId}` : `node:${nodeId}`;
@@ -318,6 +322,14 @@
     stopPolling();
     document.removeEventListener("visibilitychange", syncPolling);
   });
+  let canWrite = $derived($authStore.authenticated);
+  let requestedTarget = $derived(targetKey());
+  run(() => {
+    if (mounted && requestedTarget !== loadedTarget) {
+      loading = true;
+      syncPolling();
+    }
+  });
 </script>
 
 <section
@@ -336,7 +348,7 @@
     {#if olderCursor}<button
         type="button"
         class="older"
-        on:click={loadOlder}
+        onclick={loadOlder}
         disabled={loadingOlder}
         >{loadingOlder ? "Lädt…" : "Ältere Beiträge laden"}</button
       >{/if}
@@ -358,7 +370,7 @@
           </header>
           {#if message.deleted_at}<p class="tombstone">Beitrag entfernt.</p>
           {:else if editingId === message.id}
-            <form on:submit|preventDefault={() => saveEdit(message)}>
+            <form onsubmit={preventDefault(() => saveEdit(message))}>
               <label for={`edit-message-${message.id}`}
                 >Beitrag bearbeiten</label
               >
@@ -372,7 +384,7 @@
                 <button
                   type="button"
                   class="secondary"
-                  on:click={() => (editingId = "")}>Abbrechen</button
+                  onclick={() => (editingId = "")}>Abbrechen</button
                 >
                 <button type="submit" disabled={savingId === message.id}
                   >{savingId === message.id
@@ -389,12 +401,12 @@
                 {#if message.author_account_id !== null && message.author_account_id === $authStore.account_id}<button
                     type="button"
                     class="link"
-                    on:click={() => beginEdit(message)}>Bearbeiten</button
+                    onclick={() => beginEdit(message)}>Bearbeiten</button
                   >{/if}
                 <button
                   type="button"
                   class="link danger-link"
-                  on:click={() => tombstone(message)}
+                  onclick={() => tombstone(message)}
                   disabled={tombstoningId === message.id}
                   >{tombstoningId === message.id
                     ? "Entfernt…"
@@ -407,7 +419,7 @@
   {/if}
 
   {#if canWrite}
-    <form class="composer" on:submit|preventDefault={submitMessage}>
+    <form class="composer" onsubmit={preventDefault(submitMessage)}>
       <label for="conversation-room-draft">Neuer Beitrag</label>
       <textarea
         id="conversation-room-draft"

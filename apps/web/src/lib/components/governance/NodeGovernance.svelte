@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run, preventDefault } from "svelte/legacy";
+
   import { onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import {
@@ -10,27 +12,34 @@
     type Proposal,
   } from "$lib/api/governance";
 
-  export let nodeId: string;
-  export let nodeTitle: string;
-  export let centerId: string | undefined = undefined;
+  interface Props {
+    nodeId: string;
+    nodeTitle: string;
+    centerId?: string | undefined;
+  }
 
-  let proposals: Proposal[] = [];
-  let loading = true;
-  let error = "";
-  let title = "";
-  let summary = "";
-  let submitting = false;
-  let mounted = false;
-  let loadedNodeId = "";
+  let { nodeId, nodeTitle, centerId = undefined }: Props = $props();
+
+  let proposals: Proposal[] = $state([]);
+  let loading = $state(true);
+  let error = $state("");
+  let title = $state("");
+  let summary = $state("");
+  let submitting = $state(false);
+  let mounted = $state(false);
+  let loadedNodeId = $state("");
   let loadGeneration = 0;
 
-  $: nodeProposals = proposals.filter(
-    (proposal) =>
-      proposal.kind === "sachantrag" && proposal.target_node_id === nodeId,
+  let nodeProposals = $derived(
+    proposals.filter(
+      (proposal) =>
+        proposal.kind === "sachantrag" && proposal.target_node_id === nodeId,
+    ),
   );
-  $: canCreate =
+  let canCreate = $derived(
     $authStore.authenticated &&
-    ($authStore.role === "weber" || $authStore.role === "admin");
+      ($authStore.role === "weber" || $authStore.role === "admin"),
+  );
 
   async function load() {
     const generation = ++loadGeneration;
@@ -74,12 +83,14 @@
     }
   }
 
-  $: if (mounted && nodeId !== loadedNodeId) {
-    loadedNodeId = nodeId;
-    title = "";
-    summary = "";
-    void load();
-  }
+  run(() => {
+    if (mounted && nodeId !== loadedNodeId) {
+      loadedNodeId = nodeId;
+      title = "";
+      summary = "";
+      void load();
+    }
+  });
 
   onMount(() => {
     mounted = true;
@@ -129,7 +140,7 @@
     </p>{/if}
 
   {#if canCreate}
-    <form on:submit|preventDefault={submit}>
+    <form onsubmit={preventDefault(submit)}>
       <label for="node-sach-title">Sachantrag zu „{nodeTitle}“</label>
       <input
         id="node-sach-title"

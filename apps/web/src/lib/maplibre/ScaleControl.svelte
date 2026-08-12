@@ -1,16 +1,24 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import type { ControlPosition } from "maplibre-gl";
   import { onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { useMapContext } from "./context";
 
-  export let position: ControlPosition = "bottom-left";
-  export let maxWidth: number | undefined;
-  export let unit: "imperial" | "metric" | "nautical" | undefined;
+  interface Props {
+    position?: ControlPosition;
+    maxWidth: number | undefined;
+    unit: "imperial" | "metric" | "nautical" | undefined;
+  }
+
+  let { position = "bottom-left", maxWidth, unit }: Props = $props();
 
   const context = useMapContext();
 
-  type ScaleControlOptions = ConstructorParameters<typeof import("maplibre-gl").ScaleControl>[0];
+  type ScaleControlOptions = ConstructorParameters<
+    typeof import("maplibre-gl").ScaleControl
+  >[0];
 
   let control: import("maplibre-gl").ScaleControl | null = null;
   let signature: string | null = null;
@@ -19,8 +27,6 @@
   const unsubscribe = context.map.subscribe((map) => {
     ensureControl(map);
   });
-
-  $: ensureControl(get(context.map));
 
   function ensureControl(map: import("maplibre-gl").Map | null) {
     if (control && lastMap && lastMap !== map) {
@@ -71,5 +77,8 @@
     }
     control = null;
     lastMap = null;
+  });
+  run(() => {
+    ensureControl(get(context.map));
   });
 </script>

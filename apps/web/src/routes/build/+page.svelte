@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import buildVersion from '$lib/generated/buildVersion.json';
+  import { onMount } from "svelte";
+  import buildVersion from "$lib/generated/buildVersion.json";
 
   type ServerVersion = {
     version?: string;
@@ -10,56 +10,63 @@
     release?: string;
   };
 
-  type Status = 'loading' | 'ok' | 'unreachable' | 'invalid';
+  type Status = "loading" | "ok" | "unreachable" | "invalid";
 
-  const localVersion: string = buildVersion.version ?? 'unknown';
-  const localBuildId: string | undefined = (buildVersion as ServerVersion).build_id;
-  const localBuiltAt: string | undefined = (buildVersion as ServerVersion).built_at;
-  const localCommit: string | undefined = (buildVersion as ServerVersion).commit;
+  const localVersion: string = buildVersion.version ?? "unknown";
+  const localBuildId: string | undefined = (buildVersion as ServerVersion)
+    .build_id;
+  const localBuiltAt: string | undefined = (buildVersion as ServerVersion)
+    .built_at;
+  const localCommit: string | undefined = (buildVersion as ServerVersion)
+    .commit;
 
-  let serverData: ServerVersion | null = null;
-  let status: Status = 'loading';
+  let serverData: ServerVersion | null = $state(null);
+  let status: Status = $state("loading");
 
   function formatTimestamp(value: string | undefined): string | null {
     if (!value) return null;
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return null;
-    return new Intl.DateTimeFormat('de-DE', {
-      timeZone: 'UTC',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
+    return new Intl.DateTimeFormat("de-DE", {
+      timeZone: "UTC",
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
     }).format(date);
   }
 
-  $: localBuiltAtFormatted = formatTimestamp(localBuiltAt);
-  $: serverBuiltAtFormatted = formatTimestamp(serverData?.built_at);
+  let localBuiltAtFormatted = $derived.by(() => formatTimestamp(localBuiltAt));
+  let serverBuiltAtFormatted = $derived.by(() =>
+    formatTimestamp(serverData?.built_at),
+  );
 
-  $: serverVersion = serverData?.version ?? null;
-  $: inSync = status === 'ok' && serverVersion === localVersion;
+  let serverVersion = $derived.by(() => serverData?.version ?? null);
+  let inSync = $derived.by(
+    () => status === "ok" && serverVersion === localVersion,
+  );
 
   async function refresh() {
-    status = 'loading';
+    status = "loading";
     serverData = null;
     try {
-      const res = await fetch('/_app/version.json', { cache: 'no-store' });
+      const res = await fetch("/_app/version.json", { cache: "no-store" });
       if (!res.ok) {
-        status = 'unreachable';
+        status = "unreachable";
         return;
       }
       const data = (await res.json()) as ServerVersion;
-      if (typeof data.version !== 'string' || data.version.trim() === '') {
-        status = 'invalid';
+      if (typeof data.version !== "string" || data.version.trim() === "") {
+        status = "invalid";
         serverData = data;
         return;
       }
       serverData = data;
-      status = 'ok';
+      status = "ok";
     } catch {
-      status = 'unreachable';
+      status = "unreachable";
     }
   }
 
@@ -76,9 +83,9 @@
 <div class="container">
   <h1>Build-Diagnose</h1>
   <p class="intro">
-    Diese Seite zeigt die im Browser geladene Build-Identität und vergleicht sie mit
-    dem aktuell auf dem Server ausgelieferten Stand. Sie ist als Support- und
-    Debug-Ansicht gedacht und nicht für die normale Nutzung erforderlich.
+    Diese Seite zeigt die im Browser geladene Build-Identität und vergleicht sie
+    mit dem aktuell auf dem Server ausgelieferten Stand. Sie ist als Support-
+    und Debug-Ansicht gedacht und nicht für die normale Nutzung erforderlich.
   </p>
 
   <section class="card" data-testid="build-local">
@@ -103,13 +110,13 @@
 
   <section class="card" data-testid="build-server">
     <h2>Server-Stand (live)</h2>
-    {#if status === 'loading'}
+    {#if status === "loading"}
       <p data-testid="build-server-status">Wird geladen…</p>
-    {:else if status === 'unreachable'}
+    {:else if status === "unreachable"}
       <p class="error" data-testid="build-server-status">
         Server-Versionsdatei nicht erreichbar.
       </p>
-    {:else if status === 'invalid'}
+    {:else if status === "invalid"}
       <p class="error" data-testid="build-server-status">
         Server-Versionsdatei ohne brauchbare <code>version</code> empfangen.
       </p>
@@ -127,7 +134,9 @@
         {/if}
         {#if serverBuiltAtFormatted}
           <dt>Gebaut am</dt>
-          <dd data-testid="build-server-built-at">{serverBuiltAtFormatted} UTC</dd>
+          <dd data-testid="build-server-built-at">
+            {serverBuiltAtFormatted} UTC
+          </dd>
         {/if}
         {#if serverData.commit}
           <dt>Commit</dt>
@@ -139,9 +148,9 @@
 
   <section class="card sync" data-testid="build-sync">
     <h2>Abgleich</h2>
-    {#if status === 'loading'}
+    {#if status === "loading"}
       <p>Vergleich noch ausstehend.</p>
-    {:else if status === 'unreachable' || status === 'invalid'}
+    {:else if status === "unreachable" || status === "invalid"}
       <p class="error" data-testid="build-sync-state">
         Abgleich nicht möglich – kein verlässlicher Server-Stand.
       </p>
@@ -151,10 +160,16 @@
       </p>
     {:else}
       <p class="warn" data-testid="build-sync-state">
-        Lokaler Bundle-Stand und Server-Stand unterscheiden sich. Ein Neuladen liefert den frischen Build.
+        Lokaler Bundle-Stand und Server-Stand unterscheiden sich. Ein Neuladen
+        liefert den frischen Build.
       </p>
     {/if}
-    <button class="btn" type="button" on:click={refresh} data-testid="build-refresh">
+    <button
+      class="btn"
+      type="button"
+      onclick={refresh}
+      data-testid="build-refresh"
+    >
       Erneut abfragen
     </button>
   </section>

@@ -3,15 +3,29 @@
   import FanAction from "./FanAction.svelte";
   import { TOOL_FAN_BRANCH, type ToolFanBranch } from "$lib/stores/mapChrome";
 
-  export let open = false;
-  export let branch: ToolFanBranch = TOOL_FAN_BRANCH.root;
-  export let searchOpen = false;
-  export let filterOpen = false;
-  export let compositionActive = false;
-  export let activeFilterCount = 0;
-  export let canCreateNode = false;
-  export let canCreateProposal = false;
-  export let hasWeavingAction = false;
+  interface Props {
+    open?: boolean;
+    branch?: ToolFanBranch;
+    searchOpen?: boolean;
+    filterOpen?: boolean;
+    compositionActive?: boolean;
+    activeFilterCount?: number;
+    canCreateNode?: boolean;
+    canCreateProposal?: boolean;
+    hasWeavingAction?: boolean;
+  }
+
+  let {
+    open = false,
+    branch = TOOL_FAN_BRANCH.root,
+    searchOpen = false,
+    filterOpen = false,
+    compositionActive = false,
+    activeFilterCount = 0,
+    canCreateNode = false,
+    canCreateProposal = false,
+    hasWeavingAction = false,
+  }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     find: void;
@@ -43,7 +57,7 @@
           testId="tool-fan-find"
           active={searchOpen}
           tabIndex={open ? 0 : -1}
-          on:click={() => dispatch("find")}
+          onclick={() => dispatch("find")}
         />
       </div>
       <div class="fan-slot fan-slot--center">
@@ -53,7 +67,7 @@
           testId="tool-fan-map-content"
           active={filterOpen}
           tabIndex={open ? 0 : -1}
-          on:click={() => dispatch("mapContent")}
+          onclick={() => dispatch("mapContent")}
         >
           {#if activeFilterCount > 0}
             <span class="count-badge" aria-label={`${activeFilterCount} aktiv`}
@@ -76,7 +90,7 @@
           title={hasWeavingAction
             ? "Webungsaktionen öffnen"
             : "Zum Weben ist eine Anmeldung erforderlich"}
-          on:click={() => dispatch("openWeave")}
+          onclick={() => dispatch("openWeave")}
         />
       </div>
     </div>
@@ -88,7 +102,7 @@
         data-testid="tool-fan-back"
         aria-label="Zurück zu den Werkzeugen"
         tabindex={open ? 0 : -1}
-        on:click={() => dispatch("back")}>←</button
+        onclick={() => dispatch("back")}>←</button
       >
       <span>Weben</span>
     </div>
@@ -105,7 +119,7 @@
         title={canCreateNode
           ? "Neuen Knoten auf der Karte knüpfen"
           : "Zum Knotenknüpfen musst du angemeldet sein"}
-        on:click={() => dispatch("createNode")}
+        onclick={() => dispatch("createNode")}
       />
       <FanAction
         label="Antrag stellen"
@@ -120,7 +134,7 @@
         title={canCreateProposal
           ? "Weberstatus beantragen"
           : "Weitere Antragstypen sind noch nicht freigeschaltet"}
-        on:click={() => dispatch("close")}
+        onclick={() => dispatch("close")}
       />
     </div>
     <p class="branch-note">

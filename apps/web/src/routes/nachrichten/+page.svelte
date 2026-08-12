@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run, preventDefault } from "svelte/legacy";
+
   import { onMount, tick } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
@@ -18,29 +20,19 @@
   } from "$lib/api/directMessages";
   import "$lib/styles/page-system.css";
 
-  let conversations: DirectConversation[] = [];
-  let selected: DirectConversation | null = null;
-  let messages: ConversationMessage[] = [];
-  let draft = "";
-  let loadingInbox = true;
-  let loadingConversation = false;
-  let sending = false;
-  let changingBlock = false;
-  let error = "";
-  let initialized = false;
-  let handledRecipient: string | null = null;
-  let messageList: HTMLElement | null = null;
+  let conversations: DirectConversation[] = $state([]);
+  let selected: DirectConversation | null = $state(null);
+  let messages: ConversationMessage[] = $state([]);
+  let draft = $state("");
+  let loadingInbox = $state(true);
+  let loadingConversation = $state(false);
+  let sending = $state(false);
+  let changingBlock = $state(false);
+  let error = $state("");
+  let initialized = $state(false);
+  let handledRecipient: string | null = $state(null);
+  let messageList: HTMLElement | null = $state(null);
   let selectionGeneration = 0;
-
-  $: requestedRecipient = $page.url.searchParams.get("mit");
-  $: if (
-    initialized &&
-    requestedRecipient &&
-    requestedRecipient !== handledRecipient
-  ) {
-    handledRecipient = requestedRecipient;
-    void startConversation(requestedRecipient);
-  }
 
   function describeError(cause: unknown): string {
     if (
@@ -263,6 +255,17 @@
     }
     initialized = true;
   });
+  let requestedRecipient = $derived($page.url.searchParams.get("mit"));
+  run(() => {
+    if (
+      initialized &&
+      requestedRecipient &&
+      requestedRecipient !== handledRecipient
+    ) {
+      handledRecipient = requestedRecipient;
+      void startConversation(requestedRecipient);
+    }
+  });
 </script>
 
 <svelte:head>
@@ -303,7 +306,7 @@
           <button
             type="button"
             class="quiet"
-            on:click={refreshInbox}
+            onclick={refreshInbox}
             disabled={loadingInbox}
           >
             Aktualisieren
@@ -324,7 +327,7 @@
                 <button
                   type="button"
                   class:active={selected?.id === conversation.id}
-                  on:click={() => selectConversation(conversation)}
+                  onclick={() => selectConversation(conversation)}
                   aria-current={selected?.id === conversation.id
                     ? "true"
                     : undefined}
@@ -368,7 +371,7 @@
             <button
               type="button"
               class="quiet danger"
-              on:click={toggleBlock}
+              onclick={toggleBlock}
               disabled={changingBlock}
             >
               {selected.blocked_by_me ? "Freigeben" : "Blockieren"}
@@ -419,14 +422,14 @@
               Die bisherigen Nachrichten bleiben lesbar.
             </p>
           {:else}
-            <form class="composer" on:submit|preventDefault={send}>
+            <form class="composer" onsubmit={preventDefault(send)}>
               <label for="direct-message">Nachricht</label>
               <textarea
                 id="direct-message"
                 bind:value={draft}
                 maxlength="4000"
                 rows="4"
-                on:keydown={handleComposerKeydown}
+                onkeydown={handleComposerKeydown}
                 placeholder="Nachricht schreiben…"></textarea>
               <div class="composer-footer">
                 <span>{draft.length}/4000 · Strg/⌘ + Enter</span>
