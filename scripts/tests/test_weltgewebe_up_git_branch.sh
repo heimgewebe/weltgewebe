@@ -7,6 +7,10 @@ REPO_ROOT="$(dirname "$(dirname "$SCRIPT_DIR")")"
 SCRIPT_SOURCE="$REPO_ROOT/scripts/weltgewebe-up"
 REAL_GIT="$(command -v git)"
 
+# Synthetic VPS fixtures must not depend on the host network or resolver file.
+export CADDY_BIND=203.0.113.10
+export CADDY_IPV6_BIND='[2001:db8::10]'
+
 WORKDIR_ROOT="$(mktemp -d)"
 EDGE_CA_FIXTURE="$WORKDIR_ROOT/edge-ca.crt"
 printf 'test-ca\n' > "$EDGE_CA_FIXTURE"

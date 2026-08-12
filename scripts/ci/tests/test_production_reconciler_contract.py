@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -845,6 +846,25 @@ prune_releases
         self.assertLess(activation, bake)
         self.assertLess(bake, docker_config)
 
+    def test_vps_caddy_binding_is_public_and_fail_closed(self) -> None:
+        up = self.read("scripts/weltgewebe-up")
+        self.assertIn("resolve_vps_public_bind.py", up)
+        repo_resolution = up.index('REPO_DIR="$FOUND_REPO"')
+        resolver = up.index('PUBLIC_BIND_RESOLVER="$REPO_DIR/scripts/ops/resolve_vps_public_bind.py"')
+        self.assertLess(repo_resolution, resolver)
+        self.assertIn('$PUBLIC_BIND_RESOLVER --family ipv4', up)
+        self.assertIn('$PUBLIC_BIND_RESOLVER --family ipv6', up)
+        self.assertIn('export CADDY_BIND="$VPS_PUBLIC_CADDY_IPV4"', up)
+        self.assertIn('export CADDY_IPV6_BIND="${VPS_PUBLIC_CADDY_IPV6:-127.0.0.1}"', up)
+        conflict = up.index('if echo "$ERR_CONTENT" | grep -Eq')
+        vps_guard = up.index('if [[ "$DEPLOY_TARGET" == "vps" ]]; then', conflict)
+        fallback = up.index('CMD_RETRY=("${CMD_BASE[@]}" "--scale" "caddy=0")', conflict)
+        self.assertLess(vps_guard, fallback)
+        self.assertIn(
+            "refusing to continue without public Caddy",
+            up[vps_guard:fallback],
+        )
+
     def test_weltgewebe_up_normalizes_release_trailing_slashes(self) -> None:
         with tempfile.TemporaryDirectory(
             prefix="weltgewebe-release-activation-"
@@ -855,6 +875,10 @@ prune_releases
             release_dir = release_root / commit
             (release_dir / "infra" / "compose").mkdir(parents=True)
             (release_dir / "scripts" / "ops").mkdir(parents=True)
+            shutil.copy2(
+                ROOT / "scripts" / "ops" / "resolve_vps_public_bind.py",
+                release_dir / "scripts" / "ops" / "resolve_vps_public_bind.py",
+            )
             for activation_dir in (
                 release_root,
                 release_dir,
@@ -886,6 +910,8 @@ prune_releases
             env.update(
                 {
                     "DEPLOY_TARGET": "vps",
+                    "CADDY_BIND": "203.0.113.10",
+                    "CADDY_IPV6_BIND": "[2001:db8::10]",
                     "ENV_FILE": str(runtime_env),
                     "REPO_DIR": f"{release_dir}/",
                     "WELTGEWEBE_DEPLOY_LOCK_FILE": str(root / "deploy.lock"),

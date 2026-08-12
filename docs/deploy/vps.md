@@ -10,6 +10,8 @@ relations:
   - type: relates_to
     target: scripts/ops/check_public_live_readiness.py
   - type: relates_to
+    target: scripts/ops/resolve_vps_public_bind.py
+  - type: relates_to
     target: scripts/ops/reconcile_public_login_smtp_env.py
   - type: relates_to
     target: scripts/ci/tests/test_reconcile_public_login_smtp_env.py
@@ -40,6 +42,14 @@ Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 
 Die Subdomain `api.weltgewebe.net` ist Teil des aktuellen Public-VPS-Zielbilds
 und muss auf dieselbe VPS-IPv4 zeigen wie Root und `www`.
+
+Der Deploy bindet Caddy niemals automatisch an eine beliebige Adresse, wenn der VPS
+mehrere globale IPv4- oder IPv6-Adressen besitzt. Bei genau einer globalen IPv4
+wird sie automatisch erkannt. Bei Mehrdeutigkeit muss `CADDY_BIND` explizit auf
+die Adresse gesetzt werden, auf die die A-Records zeigen. IPv6 bleibt optional:
+ohne globale IPv6-Adresse wird keine öffentliche IPv6-Bindung erzeugt; bei mehreren
+globalen IPv6-Adressen muss `CADDY_IPV6_BIND` explizit zur freigegebenen AAAA-Adresse
+(z. B. `[2001:db8::10]`) gesetzt werden.
 
 ## 2. Server Vorbereitung
 

@@ -148,6 +148,21 @@ implementations:
       - map-style/ASSETS.md
     verified_by: []
 
+  - id: impl.ops.vps-public-bind-resolver
+    path: scripts/ops/resolve_vps_public_bind.py
+    impl_type: guard
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/vps.md
+    verified_by:
+      - scripts/ci/tests/test_resolve_vps_public_bind.py
+      - scripts/ci/tests/test_production_reconciler_contract.py
+      - .github/workflows/production-live-contract.yml
+    supersedes: []
+    deprecated_by: []
+
   - id: impl.infra.caddy
     path: infra/caddy/
     impl_type: config

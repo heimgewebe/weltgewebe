@@ -7,6 +7,7 @@ name: Production live contract
     paths:
       - "apps/web/scripts/generate-version.js"
       - "scripts/ops/verify_public_release_commit.py"
+      - "scripts/ops/resolve_vps_public_bind.py"
       - "scripts/ops/weltgewebe_secure_receipt_io.py"
       - "scripts/ops/validate_web_deploy_archive.py"
       - "scripts/ops/ensure_web_push_vapid_env.py"
@@ -17,6 +18,7 @@ name: Production live contract
       - "scripts/weltgewebe-up"
       - "scripts/ci/tests/test_generate_version_env.py"
       - "scripts/ci/tests/test_verify_public_release_commit.py"
+      - "scripts/ci/tests/test_resolve_vps_public_bind.py"
       - "scripts/ci/tests/test_secure_receipt_io.py"
       - "scripts/ci/tests/test_validate_web_deploy_archive.py"
       - "scripts/ci/tests/test_ensure_web_push_vapid_env.py"
@@ -59,6 +61,7 @@ jobs:
       - name: Compile Python tools
         run: |
           python -m py_compile scripts/ops/verify_public_release_commit.py
+          python -m py_compile scripts/ops/resolve_vps_public_bind.py
           python -m py_compile scripts/ops/weltgewebe_secure_receipt_io.py
           python -m py_compile scripts/ops/validate_web_deploy_archive.py
           python -m py_compile scripts/ops/ensure_web_push_vapid_env.py
@@ -91,6 +94,10 @@ jobs:
         run: >-
           python -m unittest -v
           scripts/ci/tests/test_verify_public_release_commit.py
+      - name: Verify VPS public Caddy bind resolver
+        run: >-
+          python -m unittest -v
+          scripts/ci/tests/test_resolve_vps_public_bind.py
       - name: Verify secure receipt I/O
         run: >-
           python -m unittest -v
