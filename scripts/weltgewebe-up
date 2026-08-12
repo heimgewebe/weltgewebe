@@ -50,7 +50,7 @@ DEPLOY_FRONTEND_MODE="${DEPLOY_FRONTEND_MODE:-auto}"
 if [[ "$DEPLOY_TARGET" == "vps" && -z "$DEPLOY_FRONTEND_MODE_WAS_SET" ]]; then
   DEPLOY_FRONTEND_MODE="internal"
 fi
-if [[ "$DEPLOY_TARGET" == "vps" && ( -z "${CADDY_BIND:-}" || -z "${CADDY_IPV6_BIND:-}" ) ]]; then
+if [[ "$DEPLOY_TARGET" == "vps" && (-z "${CADDY_BIND:-}" || -z "${CADDY_IPV6_BIND:-}") ]]; then
   PUBLIC_BIND_RESOLVER="$REPO_DIR/scripts/ops/resolve_vps_public_bind.py"
   if [[ ! -x "$PUBLIC_BIND_RESOLVER" ]]; then
     echo "ERROR: VPS public Caddy bind resolver is missing or not executable: $PUBLIC_BIND_RESOLVER" >&2

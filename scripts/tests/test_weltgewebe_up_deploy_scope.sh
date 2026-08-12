@@ -7,6 +7,10 @@ SCRIPT_SOURCE="$REPO_ROOT/scripts/weltgewebe-up"
 WORK_ROOT="$(mktemp -d)"
 trap 'rm -rf "$WORK_ROOT"' EXIT
 
+# Synthetic VPS tests must not depend on the host network interfaces.
+export CADDY_BIND=203.0.113.10
+export CADDY_IPV6_BIND='[2001:db8::10]'
+
 fail() {
   echo "FAIL: $*" >&2
   exit 1

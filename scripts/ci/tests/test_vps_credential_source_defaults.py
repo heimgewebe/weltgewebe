@@ -65,6 +65,8 @@ def run_until_env_guard(tmp_path: Path, *, env_file: str | None) -> subprocess.C
     env.update(
         {
             "DEPLOY_TARGET": "vps",
+            "CADDY_BIND": "203.0.113.10",
+            "CADDY_IPV6_BIND": "[2001:db8::10]",
             "REPO_DIR": str(REPO),
             "VPS_DEFAULT_ENV_FILE": str(tmp_path / "canonical.env"),
             "WELTGEWEBE_STATE_DIR": str(tmp_path / "state"),
