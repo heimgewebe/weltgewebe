@@ -67,9 +67,22 @@
 
   type SearchOverlayModule =
     typeof import("$lib/components/SearchOverlay.svelte");
+  let retainSearchOverlay = $state(false);
   const loadSearchOverlayModule = createResettableLazyImport(
     () => import("$lib/components/SearchOverlay.svelte"),
   );
+
+  $effect.pre(() => {
+    if ($isSearchOpen) retainSearchOverlay = true;
+  });
+
+  function loadSearchOverlay(): Promise<SearchOverlayModule> {
+    const promise = loadSearchOverlayModule();
+    void promise.catch(() => {
+      retainSearchOverlay = false;
+    });
+    return promise;
+  }
 
   function handleSearchSelect(event: CustomEvent<MapEntityViewModel>) {
     dispatch("searchSelect", event.detail);
@@ -100,8 +113,8 @@
     <p role="alert">Details konnten nicht geladen werden.</p>
   {/await}
 {/if}
-{#if $isSearchOpen}
-  {#await loadSearchOverlayModule()}
+{#if $isSearchOpen || retainSearchOverlay}
+  {#await loadSearchOverlay()}
     {#if $isSearchOpen}
       <p role="status" class="sr-only">Lade Suche…</p>
     {/if}

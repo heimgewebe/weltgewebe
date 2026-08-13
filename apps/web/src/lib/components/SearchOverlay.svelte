@@ -29,10 +29,10 @@
   let inputEl: HTMLInputElement | undefined = $state();
   let listEl: HTMLUListElement | undefined = $state();
   let activeIndex = $state(-1);
-  let wasOpen = $state(false);
+  let wasOpen = false;
   let showAll = $state(false);
-  let previousQuery = $state("");
-  let previousResults: MapEntityViewModel[] = $state([]);
+  let previousQuery = "";
+  let previousResults: MapEntityViewModel[] | undefined;
 
   let visibleResults = $derived(
     showAll ? filteredResults : filteredResults.slice(0, 6),
