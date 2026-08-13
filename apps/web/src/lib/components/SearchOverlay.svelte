@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { tick, createEventDispatcher } from "svelte";
   import {
     isSearchOpen,
@@ -39,21 +37,21 @@
   let visibleResults = $derived(
     showAll ? filteredResults : filteredResults.slice(0, 6),
   );
-  run(() => {
+  $effect.pre(() => {
     if ($searchQuery !== previousQuery) {
       previousQuery = $searchQuery;
       showAll = false;
       activeIndex = -1;
     }
   });
-  run(() => {
+  $effect.pre(() => {
     if (filteredResults !== previousResults) {
       previousResults = filteredResults;
       activeIndex = -1;
       if (filteredResults.length <= 6) showAll = false;
     }
   });
-  run(() => {
+  $effect(() => {
     if ($isSearchOpen) {
       wasOpen = true;
       (async () => {
