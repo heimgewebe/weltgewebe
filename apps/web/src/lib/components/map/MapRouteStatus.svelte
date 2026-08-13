@@ -2,16 +2,31 @@
   import { createEventDispatcher } from "svelte";
   import type { MapDiagnostics, MapLoadState } from "$lib/map/types";
 
-  export let loadState: MapLoadState;
-  export let loadNotice: string | null = null;
-  export let loading = true;
-  export let initFailed = false;
-  export let showDebug = false;
-  export let nodeCount = 0;
-  export let accountCount = 0;
-  export let centerCount = 0;
-  export let edgeCount = 0;
-  export let diagnostics: MapDiagnostics;
+  interface Props {
+    loadState: MapLoadState;
+    loadNotice?: string | null;
+    loading?: boolean;
+    initFailed?: boolean;
+    showDebug?: boolean;
+    nodeCount?: number;
+    accountCount?: number;
+    centerCount?: number;
+    edgeCount?: number;
+    diagnostics: MapDiagnostics;
+  }
+
+  let {
+    loadState,
+    loadNotice = null,
+    loading = true,
+    initFailed = false,
+    showDebug = false,
+    nodeCount = 0,
+    accountCount = 0,
+    centerCount = 0,
+    edgeCount = 0,
+    diagnostics,
+  }: Props = $props();
 
   const dispatch = createEventDispatcher<{ retry: void }>();
 </script>
@@ -53,7 +68,7 @@
       type="button"
       class="map-init-error__retry"
       data-testid="map-init-error-retry"
-      on:click={() => dispatch("retry")}
+      onclick={() => dispatch("retry")}
     >
       Erneut laden
     </button>

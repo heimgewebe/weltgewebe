@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import { createEventDispatcher, onDestroy } from "svelte";
   import InfoHeading from "$lib/components/InfoHeading.svelte";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
@@ -9,27 +11,40 @@
   } from "$lib/api/search";
   import type { MapEntityNode, MapEntityViewModel } from "$lib/map/types";
 
-  export let sourceId: string;
-  export let title: string | null | undefined = null;
-  export let kind: string | null | undefined = null;
-  export let summary: string | null | undefined = null;
-  export let info: string | null | undefined = null;
-  export let tags: string[] | null | undefined = null;
+  interface Props {
+    sourceId: string;
+    title?: string | null | undefined;
+    kind?: string | null | undefined;
+    summary?: string | null | undefined;
+    info?: string | null | undefined;
+    tags?: string[] | null | undefined;
+  }
+
+  let {
+    sourceId,
+    title = null,
+    kind = null,
+    summary = null,
+    info = null,
+    tags = null,
+  }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     select: { type: "node"; id: string; data: MapEntityViewModel };
   }>();
 
-  let similarNodes: MapEntityNode[] = [];
-  let requested = false;
-  let loading = false;
-  let error = "";
-  let mode: string | null = null;
-  let previousKey = "";
-  let abortController: AbortController | null = null;
-  let requestSequence = 0;
+  let similarNodes: MapEntityNode[] = $state([]);
+  let requested = $state(false);
+  let loading = $state(false);
+  let error = $state("");
+  let mode: string | null = $state(null);
+  let previousKey = $state("");
+  let abortController: AbortController | null = $state(null);
+  let requestSequence = $state(0);
 
-  $: query = buildSimilarNodeQuery({ title, kind, summary, info, tags });
+  let query = $derived(
+    buildSimilarNodeQuery({ title, kind, summary, info, tags }),
+  );
 
   async function load(query: string) {
     if (!sourceId || !query) return;
@@ -63,7 +78,7 @@
     }
   }
 
-  $: {
+  run(() => {
     const key = sourceId && query ? `${sourceId}\u0000${query}` : "";
     if (key !== previousKey) {
       previousKey = key;
@@ -76,7 +91,7 @@
       error = "";
       mode = null;
     }
-  }
+  });
 
   onDestroy(() => {
     requestSequence += 1;
@@ -107,7 +122,7 @@
         type="button"
         aria-label="Ähnliche Knoten suchen"
         disabled={!sourceId || !query}
-        on:click={() => void load(query)}>Suchen</button
+        onclick={() => void load(query)}>Suchen</button
       >
     {/if}
   </div>
@@ -120,7 +135,7 @@
     <button
       class="similar-trigger"
       type="button"
-      on:click={() => void load(query)}>Erneut versuchen</button
+      onclick={() => void load(query)}>Erneut versuchen</button
     >
   {:else}
     {#if mode === "lexical_fallback"}
@@ -139,7 +154,7 @@
           <li>
             <button
               type="button"
-              on:click={() =>
+              onclick={() =>
                 dispatch("select", {
                   type: "node",
                   id: similar.id,

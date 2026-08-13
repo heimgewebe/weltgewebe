@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import { onMount, tick } from "svelte";
   import { afterNavigate, goto } from "$app/navigation";
   import { page } from "$app/stores";
@@ -15,59 +17,24 @@
     type Proposal,
   } from "$lib/api/governance";
 
-  let proposals: Proposal[] = [];
+  let proposals: Proposal[] = $state([]);
   const localMessageCountFloors = new Map<string, number>();
-  let loading = true;
-  let error = "";
-  let summary = "";
-  let submitting = false;
-  let leaving = false;
+  let loading = $state(true);
+  let error = $state("");
+  let summary = $state("");
+  let submitting = $state(false);
+  let leaving = $state(false);
   type ApplicationFocusRequest = "initial" | "navigation";
 
-  let applicationSection: HTMLElement | null = null;
+  let applicationSection: HTMLElement | null = $state(null);
   let pendingApplicationFocus: ApplicationFocusRequest | null = null;
 
-  let ProposalDetail: typeof import("$lib/components/governance/ProposalDetail.svelte").default | null = null;
-  let detailProposalId: string | null = null;
-  let requestedDetailProposalId: string | null = null;
+  let ProposalDetail:
+    | typeof import("$lib/components/governance/ProposalDetail.svelte").default
+    | null = $state(null);
+  let detailProposalId: string | null = $state(null);
+  let requestedDetailProposalId: string | null = $state(null);
   let detailRebindVersion = 0;
-
-  $: selectedProposalId = $page.url.searchParams.get("id");
-  $: if (
-    typeof window !== "undefined" &&
-    selectedProposalId !== requestedDetailProposalId
-  ) {
-    requestedDetailProposalId = selectedProposalId;
-    void rebindProposalDetail(selectedProposalId);
-  }
-  $: statusFilter = $page.url.searchParams.get("status");
-  $: eventFilter = $page.url.searchParams.get("ereignis");
-  $: visibleProposals =
-    statusFilter === "consent" || statusFilter === "voting"
-      ? proposals.filter((proposal) => proposal.status === statusFilter)
-      : eventFilter === "veto"
-        ? proposals.filter((proposal) => proposal.veto_count > 0)
-        : eventFilter === "gespraech"
-          ? proposals.filter((proposal) => proposalMessageCount(proposal) > 0)
-          : proposals;
-  $: proposalListTitle =
-    statusFilter === "consent"
-      ? "Offene Anträge"
-      : statusFilter === "voting"
-        ? "Abstimmungen"
-        : eventFilter === "veto"
-          ? "Anträge mit Veto"
-          : eventFilter === "gespraech"
-            ? "Gespräche"
-            : "Alle Anträge";
-  $: isGuest = $authStore.authenticated && $authStore.role === "gast";
-  $: hasOpenOwnProposal =
-    isGuest &&
-    proposals.some(
-      (proposal) =>
-        proposal.applicant_account_id === $authStore.account_id &&
-        (proposal.status === "consent" || proposal.status === "voting"),
-    );
 
   function normalizeMessageCount(count: unknown): number {
     return typeof count === "number" &&
@@ -175,9 +142,8 @@
     const version = ++detailRebindVersion;
     detailProposalId = null;
     if (proposalId && !ProposalDetail) {
-      const module = await import(
-        "$lib/components/governance/ProposalDetail.svelte"
-      );
+      const module =
+        await import("$lib/components/governance/ProposalDetail.svelte");
       if (version !== detailRebindVersion) return;
       ProposalDetail = module.default;
     }
@@ -222,6 +188,49 @@
     await focusPendingApplicationSection();
     await refresh();
   });
+  let selectedProposalId = $derived($page.url.searchParams.get("id"));
+  run(() => {
+    if (
+      typeof window !== "undefined" &&
+      selectedProposalId !== requestedDetailProposalId
+    ) {
+      requestedDetailProposalId = selectedProposalId;
+      void rebindProposalDetail(selectedProposalId);
+    }
+  });
+  let statusFilter = $derived($page.url.searchParams.get("status"));
+  let eventFilter = $derived($page.url.searchParams.get("ereignis"));
+  let visibleProposals = $derived(
+    statusFilter === "consent" || statusFilter === "voting"
+      ? proposals.filter((proposal) => proposal.status === statusFilter)
+      : eventFilter === "veto"
+        ? proposals.filter((proposal) => proposal.veto_count > 0)
+        : eventFilter === "gespraech"
+          ? proposals.filter((proposal) => proposalMessageCount(proposal) > 0)
+          : proposals,
+  );
+  let proposalListTitle = $derived(
+    statusFilter === "consent"
+      ? "Offene Anträge"
+      : statusFilter === "voting"
+        ? "Abstimmungen"
+        : eventFilter === "veto"
+          ? "Anträge mit Veto"
+          : eventFilter === "gespraech"
+            ? "Gespräche"
+            : "Alle Anträge",
+  );
+  let isGuest = $derived(
+    $authStore.authenticated && $authStore.role === "gast",
+  );
+  let hasOpenOwnProposal = $derived(
+    isGuest &&
+      proposals.some(
+        (proposal) =>
+          proposal.applicant_account_id === $authStore.account_id &&
+          (proposal.status === "consent" || proposal.status === "voting"),
+      ),
+  );
 </script>
 
 <svelte:head>
@@ -295,7 +304,7 @@
             </div>
             <button
               class="wg-button wg-button--primary"
-              on:click={applyForWeber}
+              onclick={applyForWeber}
               disabled={submitting}
             >
               {submitting ? "Antrag wird gestellt…" : "Weberstatus beantragen"}
@@ -303,7 +312,7 @@
           {/if}
           <button
             class="wg-button wg-button--danger"
-            on:click={leaveWeltgewebe}
+            onclick={leaveWeltgewebe}
             disabled={leaving}
           >
             {leaving
@@ -358,7 +367,7 @@
           </div>
           <button
             class="wg-button wg-button--secondary"
-            on:click={refresh}
+            onclick={refresh}
             disabled={loading}>Aktualisieren</button
           >
         </div>

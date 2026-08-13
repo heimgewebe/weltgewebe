@@ -1,9 +1,21 @@
 <script lang="ts">
-  export let panelOpen = false;
-  export let searchOpen = false;
-  export let filterOpen = false;
-  export let loading = true;
-  export let mapElement: HTMLDivElement | null = null;
+  interface Props {
+    panelOpen?: boolean;
+    searchOpen?: boolean;
+    filterOpen?: boolean;
+    loading?: boolean;
+    mapElement?: HTMLDivElement | null;
+    children?: import("svelte").Snippet;
+  }
+
+  let {
+    panelOpen = false,
+    searchOpen = false,
+    filterOpen = false,
+    loading = true,
+    mapElement = $bindable(null),
+    children,
+  }: Props = $props();
 </script>
 
 <main
@@ -12,7 +24,7 @@
   class:search-open={searchOpen}
   class:filter-open={filterOpen}
 >
-  <slot />
+  {@render children?.()}
   <div
     id="map"
     class:panel-open={panelOpen}

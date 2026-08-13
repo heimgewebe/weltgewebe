@@ -15,7 +15,7 @@
     type WebgemeindezentrumDetails,
   } from "$lib/webgemeindezentrum/details";
 
-  let detailsLoadFailed = false;
+  let detailsLoadFailed = $state(false);
   function focusHeading(node: HTMLHeadingElement): void {
     node.focus();
   }
@@ -37,28 +37,46 @@
   const loadingStore = detailsLoader.isLoading;
   onDestroy(detailsLoader.destroy);
 
-  $: fallback = $selection?.data as MapEntityWebgemeindezentrum | undefined;
-  $: details = $detailsStore;
-  $: title = details?.title || fallback?.title || "Webgemeindezentrum";
-  $: locationState = details?.location_state || fallback?.location_state;
-  $: locationStateLabel =
-    details?.location_state_label || fallback?.location_state_label;
-  $: locationLabel = details?.location_label || fallback?.location_label;
-  $: meetingNote = details?.meeting_note || fallback?.meeting_note;
-  $: accessNote = details?.access_note || fallback?.access_note;
-  $: ortsweberei = details?.ortsweberei || fallback?.ortsweberei;
-  $: location =
+  let fallback = $derived(
+    $selection?.data as MapEntityWebgemeindezentrum | undefined,
+  );
+  let details = $derived($detailsStore);
+  let title = $derived(
+    details?.title || fallback?.title || "Webgemeindezentrum",
+  );
+  let locationState = $derived(
+    details?.location_state || fallback?.location_state,
+  );
+  let locationStateLabel = $derived(
+    details?.location_state_label || fallback?.location_state_label,
+  );
+  let locationLabel = $derived(
+    details?.location_label || fallback?.location_label,
+  );
+  let meetingNote = $derived(details?.meeting_note || fallback?.meeting_note);
+  let accessNote = $derived(details?.access_note || fallback?.access_note);
+  let ortsweberei = $derived(details?.ortsweberei || fallback?.ortsweberei);
+  let location = $derived(
     details?.location ||
-    (fallback ? { lat: fallback.lat, lon: fallback.lon } : undefined);
-  $: history = details?.location_history || [];
-  $: centerId = details?.id || fallback?.id;
-  $: conversationId = details?.conversation_id || fallback?.conversation_id;
-  $: truthHeading = webgemeindezentrumTruthHeading(locationState);
-  $: fullViewMode = $page.url.searchParams.get("view") === "webgemeindezentrum";
-  $: mapHref = centerId
-    ? `/map?focus=webgemeindezentrum:${encodeURIComponent(centerId)}`
-    : "/map";
-  $: fullViewHref = centerId ? `${mapHref}&view=webgemeindezentrum` : "/map";
+      (fallback ? { lat: fallback.lat, lon: fallback.lon } : undefined),
+  );
+  let history = $derived(details?.location_history || []);
+  let centerId = $derived(details?.id || fallback?.id);
+  let conversationId = $derived(
+    details?.conversation_id || fallback?.conversation_id,
+  );
+  let truthHeading = $derived(webgemeindezentrumTruthHeading(locationState));
+  let fullViewMode = $derived(
+    $page.url.searchParams.get("view") === "webgemeindezentrum",
+  );
+  let mapHref = $derived(
+    centerId
+      ? `/map?focus=webgemeindezentrum:${encodeURIComponent(centerId)}`
+      : "/map",
+  );
+  let fullViewHref = $derived(
+    centerId ? `${mapHref}&view=webgemeindezentrum` : "/map",
+  );
 </script>
 
 {#if fullViewMode}

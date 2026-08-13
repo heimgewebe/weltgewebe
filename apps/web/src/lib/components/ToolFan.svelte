@@ -29,14 +29,16 @@
   } from "$lib/utils/focusManager";
   import { authStore } from "$lib/auth/store";
 
-  let fanEl: HTMLDivElement;
-  let triggerEl: HTMLButtonElement;
+  let fanEl: HTMLDivElement | undefined = $state();
+  let triggerEl: HTMLButtonElement | undefined = $state();
 
-  $: open = $mapChrome.toolFanOpen;
-  $: branch = $mapChrome.toolFanBranch;
-  $: canCreateNode = $authStore.authenticated;
-  $: canCreateProposal = $authStore.authenticated && $authStore.role === "gast";
-  $: hasWeavingAction = canCreateNode || canCreateProposal;
+  let open = $derived($mapChrome.toolFanOpen);
+  let branch = $derived($mapChrome.toolFanBranch);
+  let canCreateNode = $derived($authStore.authenticated);
+  let canCreateProposal = $derived(
+    $authStore.authenticated && $authStore.role === "gast",
+  );
+  let hasWeavingAction = $derived(canCreateNode || canCreateProposal);
 
   function closeLensesWithoutRestore(): void {
     if ($isSearchOpen) {
@@ -106,7 +108,7 @@
   function handleFocusOut(event: FocusEvent): void {
     if (!open) return;
     const next = event.relatedTarget as Node | null;
-    if (next && fanEl.contains(next)) return;
+    if (next && fanEl?.contains(next)) return;
     tick().then(() => {
       if (open && fanEl && !fanEl.contains(document.activeElement)) closeFan();
     });
@@ -114,8 +116,8 @@
 </script>
 
 <svelte:window
-  on:pointerdown={handleWindowPointerDown}
-  on:keydown={handleWindowKeydown}
+  onpointerdown={handleWindowPointerDown}
+  onkeydown={handleWindowKeydown}
 />
 
 <div
@@ -126,7 +128,7 @@
   data-testid="tool-fan"
   data-expanded={open ? "true" : "false"}
   data-branch={branch}
-  on:focusout={handleFocusOut}
+  onfocusout={handleFocusOut}
 >
   <button
     type="button"
@@ -136,7 +138,7 @@
     aria-label={open ? "Werkzeuge schließen" : "Werkzeuge öffnen"}
     aria-expanded={open}
     aria-controls="tool-fan-actions"
-    on:click={handleTrigger}
+    onclick={handleTrigger}
   >
     <span class="trigger-symbol" aria-hidden="true">{open ? "×" : "✣"}</span>
     <span>Werkzeuge</span>

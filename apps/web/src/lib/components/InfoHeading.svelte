@@ -1,9 +1,14 @@
 <script lang="ts">
-  export let id: string;
-  export let label: string;
-  export let level: 2 | 3 | 4 | 5 | 6 = 3;
+  interface Props {
+    id: string;
+    label: string;
+    level?: 2 | 3 | 4 | 5 | 6;
+    children?: import("svelte").Snippet;
+  }
 
-  let detailsElement: HTMLDetailsElement;
+  let { id, label, level = 3, children }: Props = $props();
+
+  let detailsElement: HTMLDetailsElement | undefined = $state();
 
   function openFromLongPress(event: MouseEvent) {
     event.preventDefault();
@@ -28,18 +33,18 @@
   function handleKeydown(event: KeyboardEvent) {
     if (event.key !== "Escape" || event.repeat || event.defaultPrevented)
       return;
-    if (!detailsElement.open) return;
+    if (!detailsElement?.open) return;
     event.preventDefault();
     event.stopPropagation();
-    closeDetails(detailsElement);
+    closeDetails(detailsElement ?? null);
   }
 </script>
 
 <details bind:this={detailsElement} class="info-heading">
   <summary
     aria-controls={`${id}-explanation`}
-    on:contextmenu={openFromLongPress}
-    on:keydown={handleKeydown}
+    oncontextmenu={openFromLongPress}
+    onkeydown={handleKeydown}
   >
     <span {id} class="info-heading-title" role="heading" aria-level={level}
       >{label}</span
@@ -52,8 +57,8 @@
     role="dialog"
     aria-labelledby={id}
   >
-    <slot />
-    <button type="button" on:click={close} on:keydown={handleKeydown}
+    {@render children?.()}
+    <button type="button" onclick={close} onkeydown={handleKeydown}
       >Schließen</button
     >
   </div>

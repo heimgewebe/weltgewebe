@@ -23,8 +23,8 @@
   //   { label: "April 2024", path: "/archive/2024/04" },
   //   { label: "März 2024", path: "/archive/2024/03" }
   // ];
-  let state: ArchiveState = "overview";
-  let archive: ArchivedConversationView | null = null;
+  let archiveState: ArchiveState = $state("overview");
+  let archive: ArchivedConversationView | null = $state(null);
   let controller: AbortController | null = null;
   const archiveDate = new Intl.DateTimeFormat("de-DE", {
     timeZone: "UTC",
@@ -47,24 +47,24 @@
       "id",
     );
     if (conversationId === null) {
-      state = "overview";
+      archiveState = "overview";
       return;
     }
     if (!conversationId || conversationId.length > 200) {
-      state = "invalid";
+      archiveState = "invalid";
       return;
     }
 
-    state = "loading";
+    archiveState = "loading";
     controller = new AbortController();
     void loadArchivedConversation(conversationId, controller.signal)
       .then((loaded) => {
         archive = loaded;
-        state = "ready";
+        archiveState = "ready";
       })
       .catch((error: unknown) => {
         if ((error as { name?: string } | null)?.name !== "AbortError") {
-          state = classifyError(error);
+          archiveState = classifyError(error);
         }
       });
   });
@@ -84,8 +84,8 @@
   />
 </svelte:head>
 
-<main class="archive" aria-busy={state === "loading"}>
-  {#if state === "overview"}
+<main class="archive" aria-busy={archiveState === "loading"}>
+  {#if archiveState === "overview"}
     <header>
       <h1>Archiv</h1>
       <p>
@@ -106,30 +106,30 @@
         <p class="state">Das Archiv ist derzeit noch leer oder im Aufbau.</p>
       {/if}
     </section>
-  {:else if state === "loading"}
+  {:else if archiveState === "loading"}
     <h1>Gesprächsarchiv</h1>
     <p class="state" role="status">Lade archiviertes Gespräch…</p>
-  {:else if state === "invalid"}
+  {:else if archiveState === "invalid"}
     <h1>Archivlink unvollständig</h1>
     <p class="state error" role="alert">
       Dieser Archivlink enthält keine gültige Gesprächskennung.
     </p>
-  {:else if state === "not-found"}
+  {:else if archiveState === "not-found"}
     <h1>Archiv nicht gefunden</h1>
     <p class="state error" role="alert">
       Das angeforderte Gesprächsarchiv ist nicht vorhanden.
     </p>
-  {:else if state === "forbidden"}
+  {:else if archiveState === "forbidden"}
     <h1>Kein Zugriff</h1>
     <p class="state error" role="alert">
       Du darfst dieses Gesprächsarchiv nicht ansehen.
     </p>
-  {:else if state === "malformed"}
+  {:else if archiveState === "malformed"}
     <h1>Archivdaten unvollständig</h1>
     <p class="state error" role="alert">
       Das Gesprächsarchiv konnte nicht sicher dargestellt werden.
     </p>
-  {:else if state === "error"}
+  {:else if archiveState === "error"}
     <h1>Gesprächsarchiv nicht verfügbar</h1>
     <p class="state error" role="alert">
       Das Gesprächsarchiv kann gerade nicht geladen werden. Bitte versuche es

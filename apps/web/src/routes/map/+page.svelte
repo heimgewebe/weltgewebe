@@ -1,4 +1,6 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import { onDestroy, onMount, tick } from "svelte";
   import type { PageData } from "./$types";
   import "$lib/styles/tokens.css";
@@ -103,47 +105,22 @@
   import { setupKompositionInteraction } from "$lib/map/overlay/komposition";
   import { setupFocusInteraction } from "$lib/map/overlay/focus";
 
-  export let data: PageData;
+  interface Props {
+    data: PageData;
+  }
 
-  // Phase 2: Build the scene from request-scoped route data. The scene stays
-  // local to this component instance (never a module-level store), so no
-  // request-specific data is shared across module state. The presentation
-  // derivations live as pure functions in `$lib/stores/mapView` and are fed the
-  // scene together with the ephemeral UI state (filters, search).
-  $: scene = buildMapScene({
-    nodes: data.nodes || [],
-    accounts: data.accounts || [],
-    edges: data.edges || [],
-    webgemeindezentren: data.webgemeindezentren || [],
-    loadState: data.loadState ?? "ok",
-    resourceStatus: data.resourceStatus ?? [],
-    apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
-    basemapMode: currentBasemap.mode,
-  });
+  let { data }: Props = $props();
 
-  // Presentation state derived via pure functions from the local scene + UI state.
-  $: loadState = scene.loadState;
-  $: diagnostics = scene.diagnostics;
-  $: markersData = scene.entities;
-  $: markerCounts = deriveMarkerCounts(markersData);
-  $: filterEvaluation = evaluateMapContentFilters(
-    markersData,
-    $mapContentFilters,
-  );
-  $: availableTypes = filterEvaluation.contentTypes;
-  $: availableTopics = filterEvaluation.topics;
-  $: filteredMarkersData = filterEvaluation.entities;
-  $: showNodes = $view.showNodes;
   // T007: node search comes from the authorized T006 server contract. Public
   // non-node structures (Garnrollen and Webgemeindezentren) are searched only
   // inside the map projection already delivered to this client; node visibility
   // is never reconstructed from the downloaded scene.
   // The search client itself is lazy-loaded so opening the map does not pay the
   // search runtime cost before a person actually starts searching.
-  let nodeSearchItems: MapEntityViewModel[] = [];
-  let nodeSearchStatus: NodeSearchStatus = "idle";
-  let nodeSearchMode: string | null = null;
-  let nodeSearchFallbackReason: string | null = null;
+  let nodeSearchItems: MapEntityViewModel[] = $state([]);
+  let nodeSearchStatus: NodeSearchStatus = $state("idle");
+  let nodeSearchMode: string | null = $state(null);
+  let nodeSearchFallbackReason: string | null = $state(null);
   let nodeSearchTimer: ReturnType<typeof setTimeout> | undefined;
   let nodeSearchAbortController: AbortController | null = null;
   let nodeSearchSequence = 0;
@@ -202,84 +179,27 @@
   }
 
   onDestroy(resetNodeSearch);
-  $: nodeContentTypes = new Set(
-    markersData
-      .filter((marker) => marker.type === "node")
-      .map(getMapContentType),
-  );
-  $: activeSearchKinds = Array.from($mapContentFilters.contentTypes).filter(
-    (filter) => nodeContentTypes.has(filter),
-  );
-  $: activeSearchTags = Array.from($mapContentFilters.topics).map(
-    knottingTopicTag,
-  );
-  $: nodeSearchEnabled =
-    $mapContentFilters.contentTypes.size === 0 || activeSearchKinds.length > 0;
-  $: scheduleNodeSearch(
-    $searchQuery,
-    activeSearchKinds,
-    activeSearchTags,
-    nodeSearchEnabled,
-    $isSearchOpen,
-  );
-  $: localPublicStructureResults = deriveSearchResults(
-    filteredMarkersData.filter((item) => item.type !== "node"),
-    $searchQuery,
-    $isSearchOpen,
-  );
-  $: filteredNodeSearchItems = evaluateMapContentFilters(
-    nodeSearchItems,
-    $mapContentFilters,
-  ).entities;
-  $: filteredResults = [
-    ...filteredNodeSearchItems,
-    ...localPublicStructureResults,
-  ];
-  $: searchMatchIds = deriveSearchMatchIds(filteredResults);
-  // Fachlich absichtliche Asymmetrie: Der sichtbare Zielkörper trägt sein
-  // Gewebe auch dann, wenn die Quelle ausgefiltert ist. Eine Linie benötigt
-  // dagegen weiterhin beide sichtbaren Endpunkte.
-  $: weaveEdges = deriveWeaveEdges(scene.edges, filteredMarkersData);
-  // Null until the weave projector is loaded. Never fall back to raw markers:
-  // without `weave` multi-theme edges and motion collapse to a single colour.
-  // Motion resolves geometry against the unfiltered projected set so filter
-  // visibility can hide transitions without inventing monochrome from raw
-  // markers or losing endpoints that are only temporarily filtered out. The
-  // visible view reuses that projection instead of rebuilding every weave.
-  $: markerWeaveViews = projectMapMarkerViewsForWeave
-    ? projectMapMarkerViewsForWeave(
-        markersData,
-        filteredMarkersData,
-        scene.edges,
-        edgeProjectionNow,
-      )
-    : null;
-  $: projectedMarkersData = markerWeaveViews?.visible ?? null;
-  $: motionMarkersData = markerWeaveViews?.motion ?? null;
-  $: lineEdges = projectedMarkersData
-    ? deriveLineEdges(weaveEdges, projectedMarkersData)
-    : [];
 
-  let mapContainer: HTMLDivElement | null = null;
-  let map: MapLibreMap | null = null;
-  let mapStyleReady = false;
-  let isLoading = true;
-  let mapInitFailed = false;
+  let mapContainer: HTMLDivElement | null = $state(null);
+  let map: MapLibreMap | null = $state(null);
+  let mapStyleReady = $state(false);
+  let isLoading = $state(true);
+  let mapInitFailed = $state(false);
   // True only after MapLibre emitted its first successful `load`.
   let mapHasLoaded = false;
-  let edgeProjectionNow = Date.now();
+  let edgeProjectionNow = $state(Date.now());
   let edgeExpiryTimeout: ReturnType<typeof setTimeout> | undefined;
-  let lastFocusedElement: HTMLElement | null = null;
+  let lastFocusedElement: HTMLElement | null = $state(null);
 
-  let nodesOverlay: NodesOverlayController | null = null;
+  let nodesOverlay: NodesOverlayController | null = $state(null);
   let projectMapMarkerViewsForWeave:
     | typeof import("$lib/map/overlay/nodes").projectMapMarkerViewsForWeave
-    | null = null;
+    | null = $state(null);
   let edgeMotion: EdgeMotionController | null = null;
   let resolveMotionInput:
     | typeof import("$lib/map/overlay/edgeMotion").resolveEdgeMotionInput
     | null = null;
-  let searchDirectionIndicators: SearchDirectionIndicator[] = [];
+  let searchDirectionIndicators: SearchDirectionIndicator[] = $state([]);
   let searchDirectionFrame: number | null = null;
   let usableSearchViewportCache: ViewportBounds | null = null;
   let searchViewportGeometryDirty = true;
@@ -418,48 +338,6 @@
     });
   }
 
-  // Marker data and search highlighting have separate update paths. Filtering or
-  // scene changes may touch the full marker set; search changes only toggle the
-  // small delta between the previous and next (maximum ten) search matches.
-  $: if (nodesOverlay && projectedMarkersData) {
-    nodesOverlay.update(projectedMarkersData, showNodes);
-  }
-
-  $: if (nodesOverlay) {
-    nodesOverlay.updateSearchMatches(searchMatchIds);
-  }
-
-  $: if (nodesOverlay) {
-    nodesOverlay.updateSelection($selection?.id ?? null);
-  }
-
-  // Search content changes only require indicator and highlight refreshes. ResizeObserver already
-  // reports intrinsic overlay-size changes, so it must not be recycled per key.
-  $: if (map) {
-    filteredResults;
-    $searchQuery;
-    $isSearchOpen;
-    scheduleSearchDirectionIndicators();
-  }
-
-  // Rebind observers only when an observed surface is mounted or removed.
-  $: {
-    $isSearchOpen;
-    $contextPanelOpen;
-    $isFilterOpen;
-    $mapChrome.toolFanOpen;
-    $mapChrome.toolFanBranch;
-    $mapChrome.governanceFanOpen;
-    if (map) tick().then(refreshSearchViewportObservers);
-  }
-
-  // Lines require visible node endpoints. Hiding nodes must therefore hide
-  // lines as well; otherwise GeoJSON edges float without their markers.
-  $: edgesVisuallyEnabled = areMapEdgesVisuallyEnabled(
-    $view.showEdges,
-    $view.showNodes,
-  );
-
   function syncEdgeMotionProjection() {
     if (!edgeMotion) return;
     edgeMotion.syncCanonicalEdges(scene.edges);
@@ -468,21 +346,6 @@
         ? new Set(lineEdges.map((edge) => edge.id))
         : new Set(),
     );
-  }
-
-  // Reactive update for edges – only after map style is fully loaded. The
-  // transient motion controller receives visibility and canonical ids, but
-  // neither filtering nor a render-only difference starts a transition.
-  // Wait for weave projection so static and motion threads share one palette.
-  $: if (map && mapStyleReady && projectedMarkersData && $view) {
-    updateEdges(
-      map,
-      lineEdges,
-      projectedMarkersData,
-      edgesVisuallyEnabled,
-      edgeProjectionNow,
-    );
-    syncEdgeMotionProjection();
   }
 
   function scheduleNextEdgeExpiryRefresh(edges = weaveEdges) {
@@ -515,11 +378,6 @@
   function refreshEdgeProjection() {
     edgeProjectionNow = Date.now();
     scheduleNextEdgeExpiryRefresh(weaveEdges);
-  }
-
-  $: if (map) {
-    weaveEdges;
-    refreshEdgeProjection();
   }
 
   function focusAndFlyToPoint(item: MapEntityViewModel) {
@@ -621,23 +479,6 @@
     await invalidate("weltgewebe:domain-data");
   }
 
-  // After KompositionPanel creates a node (+ its account->node edge) and
-  // reloads route data, focus/fly-to it once it shows up in the freshly
-  // rebuilt scene. Retries on later markersData updates while unresolved
-  // (e.g. the reload is still in flight when this first runs).
-  $: if ($lastCreatedNodeId) {
-    const created = markersData.find(
-      (m) => m.id === $lastCreatedNodeId && m.type === "node",
-    );
-    if (created) {
-      // The store is set only by a successful node create. By this point the
-      // route reload has supplied the server-derived Faden and its endpoints.
-      animateEdgesForNode(created.id, "creating");
-      focusAndFlyToPoint(created);
-      lastCreatedNodeId.set(null);
-    }
-  }
-
   // --- URL addressing (UI Interaction Doctrine, first slice) -----------------
   // The URL is an addressing layer, not a second state machine: it maps query
   // parameters onto the existing uiView / overlay stores. uiView stays the
@@ -716,51 +557,8 @@
   // locks once its target is resolved, and retries while it stays unresolved.
   // `null` sentinels (not '') ensure the very first render — including plain
   // `/map` with an empty query — runs through the effect and leaves stale state.
-  let lastAppliedImmediateUrlSearch: string | null = null;
-  let lastResolvedFocusUrlSearch: string | null = null;
-  $: {
-    const search = $page.url.search;
-    const parsed = parseMapUrlState($page.url.searchParams);
-    if (search !== lastAppliedImmediateUrlSearch) {
-      lastAppliedImmediateUrlSearch = search;
-      applyImmediateMapUrlAddressing(parsed);
-      // compose is final; without a valid focus there is nothing for the focus
-      // pass to do. Either way the focus lock is satisfied for this query.
-      if (parsed.compose || !parsed.focus) {
-        lastResolvedFocusUrlSearch = search;
-      }
-    }
-    // Focus resolves directly against the live entity list, so the data
-    // dependency stays visible to Svelte without an artificial key. A retry can
-    // still happen on a later markersData change while focus is unresolved.
-    if (
-      parsed.focus &&
-      search !== lastResolvedFocusUrlSearch &&
-      markersData.length > 0
-    ) {
-      if (tryApplyFocusMapUrlAddressing(parsed, markersData)) {
-        lastResolvedFocusUrlSearch = search;
-      }
-    }
-  }
-
-  // Restore focus when selection is closed or state becomes navigation
-  $: if (($systemState === "navigation" || !$selection) && lastFocusedElement) {
-    const elToFocus = lastFocusedElement;
-    lastFocusedElement = null; // Clear immediately to prevent loop
-
-    // Use tick() to wait for DOM updates (e.g. context panel removed)
-    // and try to focus safely.
-    tick().then(() => {
-      if (elToFocus && document.body.contains(elToFocus)) {
-        try {
-          elToFocus.focus();
-        } catch (e) {
-          // ignore focus errors
-        }
-      }
-    });
-  }
+  let lastAppliedImmediateUrlSearch: string | null = $state(null);
+  let lastResolvedFocusUrlSearch: string | null = $state(null);
 
   let cleanupKomposition: (() => void) | undefined = undefined;
   let cleanupFocus: (() => void) | undefined = undefined;
@@ -1180,6 +978,239 @@
   function retryMapInitialisation() {
     window.location.reload();
   }
+  // Phase 2: Build the scene from request-scoped route data. The scene stays
+  // local to this component instance (never a module-level store), so no
+  // request-specific data is shared across module state. The presentation
+  // derivations live as pure functions in `$lib/stores/mapView` and are fed the
+  // scene together with the ephemeral UI state (filters, search).
+  let scene = $derived.by(() =>
+    buildMapScene({
+      nodes: data.nodes || [],
+      accounts: data.accounts || [],
+      edges: data.edges || [],
+      webgemeindezentren: data.webgemeindezentren || [],
+      loadState: data.loadState ?? "ok",
+      resourceStatus: data.resourceStatus ?? [],
+      apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
+      basemapMode: currentBasemap.mode,
+    }),
+  );
+  // Presentation state derived via pure functions from the local scene + UI state.
+  let loadState = $derived.by(() => scene.loadState);
+  let diagnostics = $derived.by(() => scene.diagnostics);
+  let markersData = $derived.by(() => scene.entities);
+  let markerCounts = $derived.by(() => deriveMarkerCounts(markersData));
+  let filterEvaluation = $derived.by(() =>
+    evaluateMapContentFilters(markersData, $mapContentFilters),
+  );
+  let availableTypes = $derived.by(() => filterEvaluation.contentTypes);
+  let availableTopics = $derived.by(() => filterEvaluation.topics);
+  let filteredMarkersData = $derived.by(() => filterEvaluation.entities);
+  let showNodes = $derived.by(() => $view.showNodes);
+  let nodeContentTypes = $derived.by(
+    () =>
+      new Set(
+        markersData
+          .filter((marker) => marker.type === "node")
+          .map(getMapContentType),
+      ),
+  );
+  let activeSearchKinds = $derived.by(() =>
+    Array.from($mapContentFilters.contentTypes).filter((filter) =>
+      nodeContentTypes.has(filter),
+    ),
+  );
+  let activeSearchTags = $derived.by(() =>
+    Array.from($mapContentFilters.topics).map(knottingTopicTag),
+  );
+  let nodeSearchEnabled = $derived.by(
+    () =>
+      $mapContentFilters.contentTypes.size === 0 ||
+      activeSearchKinds.length > 0,
+  );
+  run(() => {
+    scheduleNodeSearch(
+      $searchQuery,
+      activeSearchKinds,
+      activeSearchTags,
+      nodeSearchEnabled,
+      $isSearchOpen,
+    );
+  });
+  let localPublicStructureResults = $derived.by(() =>
+    deriveSearchResults(
+      filteredMarkersData.filter((item) => item.type !== "node"),
+      $searchQuery,
+      $isSearchOpen,
+    ),
+  );
+  let filteredNodeSearchItems = $derived.by(
+    () =>
+      evaluateMapContentFilters(nodeSearchItems, $mapContentFilters).entities,
+  );
+  let filteredResults = $derived.by(() => [
+    ...filteredNodeSearchItems,
+    ...localPublicStructureResults,
+  ]);
+  let searchMatchIds = $derived.by(() => deriveSearchMatchIds(filteredResults));
+  // Fachlich absichtliche Asymmetrie: Der sichtbare Zielkörper trägt sein
+  // Gewebe auch dann, wenn die Quelle ausgefiltert ist. Eine Linie benötigt
+  // dagegen weiterhin beide sichtbaren Endpunkte.
+  let weaveEdges = $derived.by(() =>
+    deriveWeaveEdges(scene.edges, filteredMarkersData),
+  );
+  // Null until the weave projector is loaded. Never fall back to raw markers:
+  // without `weave` multi-theme edges and motion collapse to a single colour.
+  // Motion resolves geometry against the unfiltered projected set so filter
+  // visibility can hide transitions without inventing monochrome from raw
+  // markers or losing endpoints that are only temporarily filtered out. The
+  // visible view reuses that projection instead of rebuilding every weave.
+  let markerWeaveViews = $derived.by(() =>
+    projectMapMarkerViewsForWeave
+      ? projectMapMarkerViewsForWeave(
+          markersData,
+          filteredMarkersData,
+          scene.edges,
+          edgeProjectionNow,
+        )
+      : null,
+  );
+  let projectedMarkersData = $derived.by(
+    () => markerWeaveViews?.visible ?? null,
+  );
+  let motionMarkersData = $derived.by(() => markerWeaveViews?.motion ?? null);
+  let lineEdges = $derived.by(() =>
+    projectedMarkersData
+      ? deriveLineEdges(weaveEdges, projectedMarkersData)
+      : [],
+  );
+  // Marker data and search highlighting have separate update paths. Filtering or
+  // scene changes may touch the full marker set; search changes only toggle the
+  // small delta between the previous and next (maximum ten) search matches.
+  run(() => {
+    if (nodesOverlay && projectedMarkersData) {
+      nodesOverlay.update(projectedMarkersData, showNodes);
+    }
+  });
+  run(() => {
+    if (nodesOverlay) {
+      nodesOverlay.updateSearchMatches(searchMatchIds);
+    }
+  });
+  run(() => {
+    if (nodesOverlay) {
+      nodesOverlay.updateSelection($selection?.id ?? null);
+    }
+  });
+  // Search content changes only require indicator and highlight refreshes. ResizeObserver already
+  // reports intrinsic overlay-size changes, so it must not be recycled per key.
+  run(() => {
+    if (map) {
+      filteredResults;
+      $searchQuery;
+      $isSearchOpen;
+      scheduleSearchDirectionIndicators();
+    }
+  });
+  // Rebind observers only when an observed surface is mounted or removed.
+  run(() => {
+    $isSearchOpen;
+    $contextPanelOpen;
+    $isFilterOpen;
+    $mapChrome.toolFanOpen;
+    $mapChrome.toolFanBranch;
+    $mapChrome.governanceFanOpen;
+    if (map) tick().then(refreshSearchViewportObservers);
+  });
+  // Lines require visible node endpoints. Hiding nodes must therefore hide
+  // lines as well; otherwise GeoJSON edges float without their markers.
+  let edgesVisuallyEnabled = $derived.by(() =>
+    areMapEdgesVisuallyEnabled($view.showEdges, $view.showNodes),
+  );
+  // Reactive update for edges – only after map style is fully loaded. The
+  // transient motion controller receives visibility and canonical ids, but
+  // neither filtering nor a render-only difference starts a transition.
+  // Wait for weave projection so static and motion threads share one palette.
+  run(() => {
+    if (map && mapStyleReady && projectedMarkersData && $view) {
+      updateEdges(
+        map,
+        lineEdges,
+        projectedMarkersData,
+        edgesVisuallyEnabled,
+        edgeProjectionNow,
+      );
+      syncEdgeMotionProjection();
+    }
+  });
+  run(() => {
+    if (map) {
+      weaveEdges;
+      refreshEdgeProjection();
+    }
+  });
+  // After KompositionPanel creates a node (+ its account->node edge) and
+  // reloads route data, focus/fly-to it once it shows up in the freshly
+  // rebuilt scene. Retries on later markersData updates while unresolved
+  // (e.g. the reload is still in flight when this first runs).
+  run(() => {
+    if ($lastCreatedNodeId) {
+      const created = markersData.find(
+        (m) => m.id === $lastCreatedNodeId && m.type === "node",
+      );
+      if (created) {
+        // The store is set only by a successful node create. By this point the
+        // route reload has supplied the server-derived Faden and its endpoints.
+        animateEdgesForNode(created.id, "creating");
+        focusAndFlyToPoint(created);
+        lastCreatedNodeId.set(null);
+      }
+    }
+  });
+  run(() => {
+    const search = $page.url.search;
+    const parsed = parseMapUrlState($page.url.searchParams);
+    if (search !== lastAppliedImmediateUrlSearch) {
+      lastAppliedImmediateUrlSearch = search;
+      applyImmediateMapUrlAddressing(parsed);
+      // compose is final; without a valid focus there is nothing for the focus
+      // pass to do. Either way the focus lock is satisfied for this query.
+      if (parsed.compose || !parsed.focus) {
+        lastResolvedFocusUrlSearch = search;
+      }
+    }
+    // Focus resolves directly against the live entity list, so the data
+    // dependency stays visible to Svelte without an artificial key. A retry can
+    // still happen on a later markersData change while focus is unresolved.
+    if (
+      parsed.focus &&
+      search !== lastResolvedFocusUrlSearch &&
+      markersData.length > 0
+    ) {
+      if (tryApplyFocusMapUrlAddressing(parsed, markersData)) {
+        lastResolvedFocusUrlSearch = search;
+      }
+    }
+  });
+  // Restore focus when selection is closed or state becomes navigation
+  run(() => {
+    if (($systemState === "navigation" || !$selection) && lastFocusedElement) {
+      const elToFocus = lastFocusedElement;
+      lastFocusedElement = null; // Clear immediately to prevent loop
+
+      // Use tick() to wait for DOM updates (e.g. context panel removed)
+      // and try to focus safely.
+      tick().then(() => {
+        if (elToFocus && document.body.contains(elToFocus)) {
+          try {
+            elToFocus.focus();
+          } catch (e) {
+            // ignore focus errors
+          }
+        }
+      });
+    }
+  });
 </script>
 
 <MapRouteSurface

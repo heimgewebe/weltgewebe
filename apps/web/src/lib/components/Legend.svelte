@@ -1,5 +1,5 @@
 <script lang="ts">
-  let open: boolean = false;
+  let open: boolean = $state(false);
 </script>
 
 <div class="panel legend">
@@ -7,7 +7,7 @@
     <strong>Legende</strong>
     <button
       class="btn"
-      on:click={() => (open = !open)}
+      onclick={() => (open = !open)}
       aria-expanded={open}
       aria-controls="legend-panel"
     >

@@ -10,10 +10,10 @@
   } from "$lib/stores/mapChrome";
   import { suppressNextRestore } from "$lib/utils/focusManager";
 
-  let fanEl: HTMLDivElement;
-  let triggerEl: HTMLButtonElement;
+  let fanEl: HTMLDivElement | undefined = $state();
+  let triggerEl: HTMLButtonElement | undefined = $state();
 
-  $: open = $mapChrome.governanceFanOpen;
+  let open = $derived($mapChrome.governanceFanOpen);
 
   function closeLensesWithoutRestore(): void {
     if ($isSearchOpen) {
@@ -53,7 +53,7 @@
   function handleFocusOut(event: FocusEvent): void {
     if (!open) return;
     const next = event.relatedTarget as Node | null;
-    if (next && fanEl.contains(next)) return;
+    if (next && fanEl?.contains(next)) return;
     tick().then(() => {
       if (open && fanEl && !fanEl.contains(document.activeElement)) closeFan();
     });
@@ -61,8 +61,8 @@
 </script>
 
 <svelte:window
-  on:pointerdown={handleWindowPointerDown}
-  on:keydown={handleWindowKeydown}
+  onpointerdown={handleWindowPointerDown}
+  onkeydown={handleWindowKeydown}
 />
 
 <div
@@ -70,7 +70,7 @@
   bind:this={fanEl}
   data-testid="governance-fan"
   data-expanded={open ? "true" : "false"}
-  on:focusout={handleFocusOut}
+  onfocusout={handleFocusOut}
 >
   <button
     type="button"
@@ -82,7 +82,7 @@
       : "Gemeinsame Entscheidungen öffnen"}
     aria-expanded={open}
     aria-controls="governance-fan-actions"
-    on:click={handleTrigger}
+    onclick={handleTrigger}
   >
     <span class="governance-symbol" aria-hidden="true">◇</span>
     <span class="governance-label">Mitentscheiden</span>
@@ -103,7 +103,7 @@
         testId="governance-fan-all"
         href="/antraege"
         tabIndex={open ? 0 : -1}
-        on:click={() => closeGovernanceFan()}
+        onclick={() => closeGovernanceFan()}
       />
     </div>
     <div class="governance-slot governance-slot--inner-left">
@@ -113,7 +113,7 @@
         testId="governance-fan-open"
         href="/antraege?status=consent"
         tabIndex={open ? 0 : -1}
-        on:click={() => closeGovernanceFan()}
+        onclick={() => closeGovernanceFan()}
       />
     </div>
     <div class="governance-slot governance-slot--center">
@@ -123,7 +123,7 @@
         testId="governance-fan-vetoes"
         href="/antraege?ereignis=veto"
         tabIndex={open ? 0 : -1}
-        on:click={() => closeGovernanceFan()}
+        onclick={() => closeGovernanceFan()}
       />
     </div>
     <div class="governance-slot governance-slot--inner-right">
@@ -133,7 +133,7 @@
         testId="governance-fan-conversations"
         href="/antraege?ereignis=gespraech"
         tabIndex={open ? 0 : -1}
-        on:click={() => closeGovernanceFan()}
+        onclick={() => closeGovernanceFan()}
       />
     </div>
     <div class="governance-slot governance-slot--outer-right">
@@ -143,7 +143,7 @@
         testId="governance-fan-voting"
         href="/antraege?status=voting"
         tabIndex={open ? 0 : -1}
-        on:click={() => closeGovernanceFan()}
+        onclick={() => closeGovernanceFan()}
       />
     </div>
   </div>

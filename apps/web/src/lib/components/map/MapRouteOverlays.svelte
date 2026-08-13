@@ -16,16 +16,31 @@
     RelatedMapSelection,
   } from "$lib/components/map/mapRouteEvents";
 
-  export let filteredResults: MapEntityViewModel[] = [];
-  export let searchStatus: NodeSearchStatus = "idle";
-  export let searchMode: string | null = null;
-  export let searchFallbackReason: string | null = null;
-  export let searchDirectionIndicators: SearchDirectionIndicator[] = [];
-  export let availableTypes: MapFilterOption[] = [];
-  export let availableTopics: MapFilterOption<KnottingTopic>[] = [];
-  export let filterResultCount = 0;
-  export let filterTotalCount = 0;
-  export let allTopicsCount = 0;
+  interface Props {
+    filteredResults?: MapEntityViewModel[];
+    searchStatus?: NodeSearchStatus;
+    searchMode?: string | null;
+    searchFallbackReason?: string | null;
+    searchDirectionIndicators?: SearchDirectionIndicator[];
+    availableTypes?: MapFilterOption[];
+    availableTopics?: MapFilterOption<KnottingTopic>[];
+    filterResultCount?: number;
+    filterTotalCount?: number;
+    allTopicsCount?: number;
+  }
+
+  let {
+    filteredResults = [],
+    searchStatus = "idle",
+    searchMode = null,
+    searchFallbackReason = null,
+    searchDirectionIndicators = [],
+    availableTypes = [],
+    availableTopics = [],
+    filterResultCount = 0,
+    filterTotalCount = 0,
+    allTopicsCount = 0,
+  }: Props = $props();
 
   const dispatch = createEventDispatcher<{
     searchSelect: MapEntityViewModel;
@@ -52,16 +67,19 @@
 
   type SearchOverlayModule =
     typeof import("$lib/components/SearchOverlay.svelte");
-  let searchOverlayPromise: Promise<SearchOverlayModule> | null = null;
+  let retainSearchOverlay = $state(false);
   const loadSearchOverlayModule = createResettableLazyImport(
     () => import("$lib/components/SearchOverlay.svelte"),
   );
 
+  $effect.pre(() => {
+    if ($isSearchOpen) retainSearchOverlay = true;
+  });
+
   function loadSearchOverlay(): Promise<SearchOverlayModule> {
     const promise = loadSearchOverlayModule();
-    searchOverlayPromise = promise;
     void promise.catch(() => {
-      if (searchOverlayPromise === promise) searchOverlayPromise = null;
+      retainSearchOverlay = false;
     });
     return promise;
   }
@@ -87,8 +105,7 @@
   {#await loadContextPanel()}
     <p role="status" class="sr-only">Lade Details…</p>
   {:then contextPanelModule}
-    <svelte:component
-      this={contextPanelModule.default}
+    <contextPanelModule.default
       on:selectRelated={handleRelatedSelect}
       on:domainChanged={handleDomainChanged}
     />
@@ -96,14 +113,13 @@
     <p role="alert">Details konnten nicht geladen werden.</p>
   {/await}
 {/if}
-{#if $isSearchOpen || searchOverlayPromise}
+{#if $isSearchOpen || retainSearchOverlay}
   {#await loadSearchOverlay()}
     {#if $isSearchOpen}
       <p role="status" class="sr-only">Lade Suche…</p>
     {/if}
   {:then searchOverlayModule}
-    <svelte:component
-      this={searchOverlayModule.default}
+    <searchOverlayModule.default
       {filteredResults}
       {searchStatus}
       {searchMode}

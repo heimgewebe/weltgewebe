@@ -12,35 +12,46 @@
   import type { NodeSearchStatus } from "$lib/api/search";
   import { restoreTarget } from "$lib/utils/focusManager";
 
-  export let filteredResults: MapEntityViewModel[] = [];
-  export let searchStatus: NodeSearchStatus = "idle";
-  export let searchMode: string | null = null;
-  export let searchFallbackReason: string | null = null;
-  const dispatch = createEventDispatcher<{ select: MapEntityViewModel }>();
-  let inputEl: HTMLInputElement;
-  let listEl: HTMLUListElement;
-  let activeIndex = -1;
-  let wasOpen = false;
-  let showAll = false;
-  let previousQuery = "";
-  let previousResults = filteredResults;
+  interface Props {
+    filteredResults?: MapEntityViewModel[];
+    searchStatus?: NodeSearchStatus;
+    searchMode?: string | null;
+    searchFallbackReason?: string | null;
+  }
 
-  $: visibleResults = showAll ? filteredResults : filteredResults.slice(0, 6);
-  $: {
+  let {
+    filteredResults = [],
+    searchStatus = "idle",
+    searchMode = null,
+    searchFallbackReason = null,
+  }: Props = $props();
+  const dispatch = createEventDispatcher<{ select: MapEntityViewModel }>();
+  let inputEl: HTMLInputElement | undefined = $state();
+  let listEl: HTMLUListElement | undefined = $state();
+  let activeIndex = $state(-1);
+  let wasOpen = false;
+  let showAll = $state(false);
+  let previousQuery = "";
+  let previousResults: MapEntityViewModel[] | undefined;
+
+  let visibleResults = $derived(
+    showAll ? filteredResults : filteredResults.slice(0, 6),
+  );
+  $effect.pre(() => {
     if ($searchQuery !== previousQuery) {
       previousQuery = $searchQuery;
       showAll = false;
       activeIndex = -1;
     }
-  }
-  $: {
+  });
+  $effect.pre(() => {
     if (filteredResults !== previousResults) {
       previousResults = filteredResults;
       activeIndex = -1;
       if (filteredResults.length <= 6) showAll = false;
     }
-  }
-  $: {
+  });
+  $effect(() => {
     if ($isSearchOpen) {
       wasOpen = true;
       (async () => {
@@ -55,7 +66,7 @@
         restoreTarget("search");
       }
     }
-  }
+  });
 
   function resultOptionId(item: MapEntityViewModel): string {
     return `search-option-${item.type}-${item.id}`;
@@ -104,7 +115,7 @@
   }
 </script>
 
-<svelte:window on:keydown={handleGlobalKeydown} />
+<svelte:window onkeydown={handleGlobalKeydown} />
 
 {#if $isSearchOpen}
   <div
@@ -134,11 +145,11 @@
         activeIndex < visibleResults.length
           ? resultOptionId(visibleResults[activeIndex])
           : undefined}
-        on:keydown={handleInputKeydown}
+        onkeydown={handleInputKeydown}
       />
       <button
         class="close-btn"
-        on:click={closeSearch}
+        onclick={closeSearch}
         aria-label="Finden schließen">✕</button
       >
     </div>
@@ -187,11 +198,11 @@
               role="option"
               aria-selected={activeIndex === index}
               class:active={activeIndex === index}
-              on:click={() => onSelect(result)}
-              on:keydown={(e) => {
+              onclick={() => onSelect(result)}
+              onkeydown={(e) => {
                 if (e.key === "Enter") onSelect(result);
               }}
-              on:mouseenter={() => (activeIndex = index)}
+              onmouseenter={() => (activeIndex = index)}
             >
               <div class="result-content">
                 <span class="result-title">{result.title}</span>
@@ -212,7 +223,7 @@
             type="button"
             class="show-more"
             aria-expanded={showAll}
-            on:click={() => {
+            onclick={() => {
               showAll = !showAll;
               activeIndex = -1;
             }}

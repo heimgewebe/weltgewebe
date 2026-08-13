@@ -1,13 +1,24 @@
 <script lang="ts">
+  import { run } from "svelte/legacy";
+
   import type { ControlPosition } from "maplibre-gl";
   import { onDestroy } from "svelte";
   import { get } from "svelte/store";
   import { useMapContext } from "./context";
 
-  export let position: ControlPosition = "top-right";
-  export let visualizePitch = true;
-  export let showCompass = true;
-  export let showZoom = true;
+  interface Props {
+    position?: ControlPosition;
+    visualizePitch?: boolean;
+    showCompass?: boolean;
+    showZoom?: boolean;
+  }
+
+  let {
+    position = "top-right",
+    visualizePitch = true,
+    showCompass = true,
+    showZoom = true,
+  }: Props = $props();
 
   const context = useMapContext();
 
@@ -18,8 +29,6 @@
   const unsubscribe = context.map.subscribe((map) => {
     ensureControl(map);
   });
-
-  $: ensureControl(get(context.map));
 
   function ensureControl(map: import("maplibre-gl").Map | null) {
     if (!map || !context.maplibre) {
@@ -32,7 +41,12 @@
       return;
     }
 
-    const nextSignature = JSON.stringify({ position, visualizePitch, showCompass, showZoom });
+    const nextSignature = JSON.stringify({
+      position,
+      visualizePitch,
+      showCompass,
+      showZoom,
+    });
     if (control && signature === nextSignature && lastMap === map) {
       return;
     }
@@ -42,7 +56,11 @@
       control = null;
     }
 
-    control = new context.maplibre.NavigationControl({ visualizePitch, showCompass, showZoom });
+    control = new context.maplibre.NavigationControl({
+      visualizePitch,
+      showCompass,
+      showZoom,
+    });
     map.addControl(control, position);
     signature = nextSignature;
     lastMap = map;
@@ -58,5 +76,8 @@
     }
     control = null;
     lastMap = null;
+  });
+  run(() => {
+    ensureControl(get(context.map));
   });
 </script>

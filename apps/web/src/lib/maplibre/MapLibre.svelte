@@ -1,28 +1,50 @@
 <script lang="ts">
   import { createEventDispatcher, onMount } from "svelte";
   import "maplibre-gl/dist/maplibre-gl.css";
-  import type { FitBoundsOptions, LngLatBoundsLike, LngLatLike, MapOptions } from "maplibre-gl";
+  import type {
+    FitBoundsOptions,
+    LngLatBoundsLike,
+    LngLatLike,
+    MapOptions,
+  } from "maplibre-gl";
   import { initMapContext } from "./context";
 
   const dispatch = createEventDispatcher();
   const context = initMapContext();
 
-  export let style: string;
-  export let center: LngLatLike | undefined;
-  export let zoom: number | undefined;
-  export let minZoom: number | undefined;
-  export let maxZoom: number | undefined;
-  export let bounds: LngLatBoundsLike | undefined;
-  export let fitBoundsOptions: FitBoundsOptions | undefined;
-  export let attributionControl = false;
-  export let interactive: boolean | undefined;
-  export let options: Partial<MapOptions> = {};
+  interface Props {
+    style: string;
+    center: LngLatLike | undefined;
+    zoom: number | undefined;
+    minZoom: number | undefined;
+    maxZoom: number | undefined;
+    bounds: LngLatBoundsLike | undefined;
+    fitBoundsOptions: FitBoundsOptions | undefined;
+    attributionControl?: boolean;
+    interactive: boolean | undefined;
+    options?: Partial<MapOptions>;
+    children?: import("svelte").Snippet;
+    [key: string]: any;
+  }
 
-  let container: HTMLDivElement | undefined;
-  let map: import("maplibre-gl").Map | null = null;
-  let containerProps: Record<string, unknown> = {};
+  let {
+    style,
+    center,
+    zoom,
+    minZoom,
+    maxZoom,
+    bounds,
+    fitBoundsOptions,
+    attributionControl = false,
+    interactive,
+    options = {},
+    children,
+    ...rest
+  }: Props = $props();
 
-  $: ({ style: _omitStyle, ...containerProps } = $$restProps);
+  let container: HTMLDivElement | undefined = $state();
+  let map: import("maplibre-gl").Map | null = $state(null);
+  let containerProps: Record<string, unknown> = $derived(rest);
 
   onMount(() => {
     let destroyed = false;
@@ -45,7 +67,7 @@
         container,
         style,
         attributionControl,
-        ...options
+        ...options,
       } as MapOptions;
 
       if (center) {
@@ -90,18 +112,6 @@
     };
   });
 
-  $: if (map && center) {
-    map.setCenter(normalizeLngLat(center));
-  }
-
-  $: if (map && zoom !== undefined) {
-    map.setZoom(zoom);
-  }
-
-  $: if (map && bounds) {
-    map.fitBounds(bounds, fitBoundsOptions);
-  }
-
   function normalizeLngLat(value: LngLatLike): LngLatLike {
     if (Array.isArray(value)) {
       return value;
@@ -125,11 +135,26 @@
     }
 
     throw new Error(
-      `Invalid LngLatLike value passed to normalizeLngLat: ${JSON.stringify(value)}`
+      `Invalid LngLatLike value passed to normalizeLngLat: ${JSON.stringify(value)}`,
     );
   }
+  $effect(() => {
+    if (map && center) {
+      map.setCenter(normalizeLngLat(center));
+    }
+  });
+  $effect(() => {
+    if (map && zoom !== undefined) {
+      map.setZoom(zoom);
+    }
+  });
+  $effect(() => {
+    if (map && bounds) {
+      map.fitBounds(bounds, fitBoundsOptions);
+    }
+  });
 </script>
 
 <div bind:this={container} {...containerProps}>
-  <slot />
+  {@render children?.()}
 </div>

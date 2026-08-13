@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
-  import { authStore } from '$lib/auth/store';
+  import { onMount } from "svelte";
+  import { authStore } from "$lib/auth/store";
 
   interface DevAccount {
     id: string;
@@ -9,17 +9,17 @@
     summary?: string;
   }
 
-  let accounts: DevAccount[] = [];
-  let error: string | null = null;
-  let loading = true;
+  let accounts: DevAccount[] = $state([]);
+  let error: string | null = $state(null);
+  let loading = $state(true);
 
   onMount(async () => {
     try {
-      const res = await fetch('/api/auth/dev/accounts');
+      const res = await fetch("/api/auth/dev/accounts");
       if (res.ok) {
         accounts = await res.json();
       } else if (res.status === 404) {
-        error = 'Dev login disabled (AUTH_DEV_LOGIN=0).';
+        error = "Dev login disabled (AUTH_DEV_LOGIN=0).";
       } else {
         error = `Failed to load accounts: ${res.status}`;
       }
@@ -35,7 +35,7 @@
       await authStore.devLogin(id);
       // Reactivity handles UI update
     } catch (e) {
-      error = 'Login failed: ' + String(e);
+      error = "Login failed: " + String(e);
     }
   }
 
@@ -49,7 +49,10 @@
   <title>Dev Login</title>
 </svelte:head>
 
-<div class="col" style="gap:1.5rem; padding:1.5rem; max-width:720px; margin:0 auto;">
+<div
+  class="col"
+  style="gap:1.5rem; padding:1.5rem; max-width:720px; margin:0 auto;"
+>
   <header class="col" style="gap:.5rem;">
     <h1>Dev Login</h1>
     <p class="ghost">
@@ -57,12 +60,15 @@
     </p>
 
     {#if $authStore.authenticated}
-      <div class="panel row" style="align-items:center; justify-content:space-between; border-color:var(--color-theme-1);">
+      <div
+        class="panel row"
+        style="align-items:center; justify-content:space-between; border-color:var(--color-theme-1);"
+      >
         <div class="col">
           <strong>Angemeldet als:</strong>
           <span>{$authStore.role} (Account: {$authStore.account_id})</span>
         </div>
-        <button class="btn" on:click={logout}>Logout</button>
+        <button class="btn" onclick={logout}>Logout</button>
       </div>
     {/if}
   </header>
@@ -79,7 +85,10 @@
     <ul class="col" style="gap:1rem; margin:0; padding:0; list-style:none;">
       {#each accounts as account}
         <li class="panel col" style="gap:.5rem;">
-          <div class="row" style="justify-content:space-between; align-items:flex-start;">
+          <div
+            class="row"
+            style="justify-content:space-between; align-items:flex-start;"
+          >
             <div class="col">
               <h2 style="margin:0; font-size:1.1rem;">{account.title}</h2>
               <code style="font-size:0.8rem; opacity:0.7;">{account.id}</code>
@@ -92,7 +101,12 @@
           {/if}
 
           <div class="row" style="justify-content:flex-end;">
-            <button class="btn" on:click={() => login(account.id)} disabled={$authStore.authenticated && $authStore.account_id === account.id}>
+            <button
+              class="btn"
+              onclick={() => login(account.id)}
+              disabled={$authStore.authenticated &&
+                $authStore.account_id === account.id}
+            >
               {#if $authStore.authenticated && $authStore.account_id === account.id}
                 Aktuell
               {:else}
