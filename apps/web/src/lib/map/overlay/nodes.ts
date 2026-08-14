@@ -35,6 +35,7 @@ export type MarkerConstructor = new (options?: MarkerOptions) => Marker;
 export const MARKER_GEO_ANCHOR = "center" as const;
 const WEAVE_DETAIL_ZOOM = 13.5;
 const MARKER_SCALE_WRITE_EPSILON = 0.001;
+const FULL_DOM_MARKER_LIMIT = 100;
 type MapObjectScaleOwnership = {
   owners: Set<symbol>;
   previousValue: string;
@@ -70,7 +71,9 @@ export class NodesOverlay {
     if (this.map) this.updateZoom(this.map.getZoom());
   };
   private readonly handleMoveEnd = () => {
-    this.update(this.latestPoints, this.latestShowNodes);
+    if (this.shouldVirtualizeMarkers()) {
+      this.update(this.latestPoints, this.latestShowNodes);
+    }
   };
 
   constructor(
@@ -150,6 +153,16 @@ export class NodesOverlay {
     return "node";
   }
 
+  private shouldVirtualizeMarkers(points = this.latestPoints): boolean {
+    return points.length > FULL_DOM_MARKER_LIMIT;
+  }
+
+  private reconcileVirtualizedMarkers() {
+    if (this.shouldVirtualizeMarkers()) {
+      this.update(this.latestPoints, this.latestShowNodes);
+    }
+  }
+
   private syncWebgemeindezentrumAppearance(
     element: HTMLElement,
     item: MapEntityViewModel,
@@ -176,8 +189,11 @@ export class NodesOverlay {
     const map = this.map;
     if (!map) return;
 
+    const shouldVirtualize = this.shouldVirtualizeMarkers(points);
     const viewportBounds =
-      typeof map.getBounds === "function" ? map.getBounds() : null;
+      shouldVirtualize && typeof map.getBounds === "function"
+        ? map.getBounds()
+        : null;
     const currentIds = new Set<string>();
 
     for (const item of points) {
@@ -191,6 +207,9 @@ export class NodesOverlay {
       }
 
       if (
+        shouldVirtualize &&
+        this.selectedMarkerId !== item.id &&
+        !this.searchMatchIds.has(item.id) &&
         viewportBounds &&
         typeof viewportBounds.contains === "function" &&
         !viewportBounds.contains([item.lon, item.lat])
@@ -386,10 +405,11 @@ export class NodesOverlay {
     if (this.selectedMarkerId !== null) {
       this.setSelected(this.selectedMarkerId, false);
     }
+    this.selectedMarkerId = nextSelectedMarkerId;
     if (nextSelectedMarkerId !== null) {
       this.setSelected(nextSelectedMarkerId, true);
     }
-    this.selectedMarkerId = nextSelectedMarkerId;
+    this.reconcileVirtualizedMarkers();
   }
 
   public updateSearchMatches(nextSearchMatchIds: ReadonlySet<string>) {
@@ -402,6 +422,7 @@ export class NodesOverlay {
     for (const id of added) this.setSearchMatch(id, true);
 
     this.searchMatchIds = new Set(nextSearchMatchIds);
+    this.reconcileVirtualizedMarkers();
   }
 
   public getActiveMarker(id: string) {
