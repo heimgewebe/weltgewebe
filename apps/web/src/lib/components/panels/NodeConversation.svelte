@@ -322,7 +322,7 @@
   });
   let canWrite = $derived($authStore.authenticated);
   let requestedTarget = $derived(targetKey());
-  $effect(() => {
+  $effect.pre(() => {
     if (mounted && requestedTarget !== loadedTarget) {
       loading = true;
       syncPolling();

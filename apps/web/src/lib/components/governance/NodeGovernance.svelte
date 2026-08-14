@@ -81,7 +81,7 @@
     }
   }
 
-  $effect(() => {
+  $effect.pre(() => {
     if (mounted && nodeId !== loadedNodeId) {
       loadedNodeId = nodeId;
       title = "";

@@ -433,7 +433,7 @@
   let profileTags = $derived.by(() =>
     validateProfileTags([skills, goods, interests]),
   );
-  $effect(() => {
+  $effect.pre(() => {
     if (activeAccountId && activeAccountId !== profileKey) {
       const previousAccountId = profileKey;
       if (previousAccountId) clearStoredPrivateDraft(previousAccountId);
@@ -446,7 +446,7 @@
       void loadPrivateProfile(activeAccountId);
     }
   });
-  $effect(() => {
+  $effect.pre(() => {
     if (!activeAccountId && profileKey) {
       const previousAccountId = profileKey;
       profileKey = "";

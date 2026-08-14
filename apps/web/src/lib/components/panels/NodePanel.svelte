@@ -325,7 +325,7 @@
       ? ["uebersicht", "gespraech", "verlauf", "antraege", "bearbeiten"]
       : ["uebersicht", "gespraech", "verlauf", "antraege"],
   );
-  $effect(() => {
+  $effect.pre(() => {
     if (!canMutate) {
       const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
       if (activeTab === "bearbeiten") activeTab = "uebersicht";
@@ -338,7 +338,7 @@
   let conflictTagSplit = $derived.by(() =>
     splitKnottingTags(conflictNode?.tags || []),
   );
-  $effect(() => {
+  $effect.pre(() => {
     if ($selection?.type === "node" && !similarNodesLoadStarted) {
       void ensureSimilarNodesComponent();
     }

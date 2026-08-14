@@ -21,7 +21,7 @@
       : "invalid",
   );
 
-  $effect(() => {
+  $effect.pre(() => {
     if (
       token === lastEvaluatedToken &&
       challengeId === lastEvaluatedChallengeId

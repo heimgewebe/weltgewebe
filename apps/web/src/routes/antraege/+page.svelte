@@ -187,7 +187,7 @@
     await refresh();
   });
   let selectedProposalId = $derived($page.url.searchParams.get("id"));
-  $effect(() => {
+  $effect.pre(() => {
     if (
       typeof window !== "undefined" &&
       selectedProposalId !== requestedDetailProposalId

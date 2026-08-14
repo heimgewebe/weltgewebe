@@ -254,7 +254,7 @@
     initialized = true;
   });
   let requestedRecipient = $derived($page.url.searchParams.get("mit"));
-  $effect(() => {
+  $effect.pre(() => {
     if (
       initialized &&
       requestedRecipient &&

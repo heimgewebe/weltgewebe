@@ -76,7 +76,7 @@
     }
   }
 
-  $effect(() => {
+  $effect.pre(() => {
     const key = sourceId && query ? `${sourceId}\u0000${query}` : "";
     if (key !== previousKey) {
       previousKey = key;

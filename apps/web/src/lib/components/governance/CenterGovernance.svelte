@@ -137,7 +137,7 @@
     }
   }
 
-  $effect(() => {
+  $effect.pre(() => {
     if (mounted && centerId !== loadedCenterId) {
       loadedCenterId = centerId;
       summary = "";

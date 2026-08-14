@@ -36,7 +36,7 @@
   let closeBtnEl: HTMLButtonElement | undefined = $state();
   let wasOpen = $state(false);
 
-  $effect(() => {
+  $effect.pre(() => {
     if ($isFilterOpen) {
       wasOpen = true;
       (async () => {

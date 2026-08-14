@@ -84,7 +84,7 @@
     return "Details";
   }
 
-  $effect(() => {
+  $effect.pre(() => {
     const nextPanelIdentity =
       $systemState === "komposition"
         ? `komposition:${$kompositionDraft?.mode ?? "unknown"}`

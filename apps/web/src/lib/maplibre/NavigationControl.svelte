@@ -75,7 +75,7 @@
     control = null;
     lastMap = null;
   });
-  $effect(() => {
+  $effect.pre(() => {
     ensureControl(get(context.map));
   });
 </script>
