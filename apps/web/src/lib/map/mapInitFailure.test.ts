@@ -113,6 +113,38 @@ describe("map page early init-timeout wiring", () => {
     expect(armSlice).toContain('"timeout"');
   });
 
+  it("starts local PMTiles loading in parallel with the MapLibre runtime", () => {
+    const initIdx = pageSource.indexOf("async function initialiseMap()");
+    const firstGuardIdx = pageSource.indexOf(
+      "if (destroyed || mapInitTerminated) return;",
+      initIdx,
+    );
+    expect(initIdx).toBeGreaterThan(-1);
+    expect(firstGuardIdx).toBeGreaterThan(initIdx);
+
+    const importBatch = pageSource.slice(initIdx, firstGuardIdx);
+    expect(importBatch).toContain('import("maplibre-gl")');
+    expect(importBatch).toContain('import("$lib/map/overlay/nodes")');
+    expect(importBatch).toContain('import("$lib/map/overlay/edgeMotion")');
+    expect(importBatch).toContain('currentBasemap.mode === "local-sovereign"');
+    expect(importBatch).toContain('? import("pmtiles")');
+    expect(importBatch).toContain("Promise.resolve(null)");
+
+    const protocolIdx = pageSource.indexOf(
+      'if (currentBasemap.mode === "local-sovereign")',
+      firstGuardIdx,
+    );
+    const mapConstructorIdx = pageSource.indexOf(
+      "map = new maplibregl.Map({",
+      protocolIdx,
+    );
+    expect(protocolIdx).toBeGreaterThan(firstGuardIdx);
+    expect(mapConstructorIdx).toBeGreaterThan(protocolIdx);
+    expect(pageSource.slice(protocolIdx, mapConstructorIdx)).not.toContain(
+      'await import("pmtiles")',
+    );
+  });
+
   it("does not re-arm a second loading timeout after map construction", () => {
     const arms = pageSource.match(
       /loadingTimeout\s*=\s*scheduleMapInitTimeout\s*\(/g,
