@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run, preventDefault } from "svelte/legacy";
-
   import { onMount, tick } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
@@ -256,7 +254,7 @@
     initialized = true;
   });
   let requestedRecipient = $derived($page.url.searchParams.get("mit"));
-  run(() => {
+  $effect.pre(() => {
     if (
       initialized &&
       requestedRecipient &&
@@ -422,7 +420,13 @@
               Die bisherigen Nachrichten bleiben lesbar.
             </p>
           {:else}
-            <form class="composer" onsubmit={preventDefault(send)}>
+            <form
+              class="composer"
+              onsubmit={(event) => {
+                event.preventDefault();
+                void send();
+              }}
+            >
               <label for="direct-message">Nachricht</label>
               <textarea
                 id="direct-message"

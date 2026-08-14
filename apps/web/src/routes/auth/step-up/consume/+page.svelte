@@ -1,37 +1,37 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { page } from "$app/stores";
 
-  let token: string | null = $state(null);
-  let challengeId: string | null = $state(null);
+  let token: string | null = $derived($page.url.searchParams.get("token"));
+  let challengeId: string | null = $derived(
+    $page.url.searchParams.get("challenge_id"),
+  );
 
-  // Track last evaluated pair to detect navigation changes
-  let lastEvaluatedToken: string | null = $state(null);
-  let lastEvaluatedChallengeId: string | null = $state(null);
+  // Keep the rendered state correct during SSR, then react only when navigation
+  // actually changes the token/challenge pair on the client.
+  let lastEvaluatedToken: string | null = $state(
+    $page.url.searchParams.get("token"),
+  );
+  let lastEvaluatedChallengeId: string | null = $state(
+    $page.url.searchParams.get("challenge_id"),
+  );
+  let status: "idle" | "loading" | "success" | "error" | "invalid" = $state(
+    $page.url.searchParams.get("token") &&
+      $page.url.searchParams.get("challenge_id")
+      ? "idle"
+      : "invalid",
+  );
 
-  let status: "idle" | "loading" | "success" | "error" | "invalid" =
-    $state("idle");
-
-  run(() => {
-    token = $page.url.searchParams.get("token");
-    challengeId = $page.url.searchParams.get("challenge_id");
-
-    if (!token || !challengeId) {
-      status = "invalid";
-      lastEvaluatedToken = token;
-      lastEvaluatedChallengeId = challengeId;
-    } else {
-      // Both exist. If they represent a NEW valid pair, reset to idle
-      if (
-        token !== lastEvaluatedToken ||
-        challengeId !== lastEvaluatedChallengeId
-      ) {
-        status = "idle";
-        lastEvaluatedToken = token;
-        lastEvaluatedChallengeId = challengeId;
-      }
+  $effect.pre(() => {
+    if (
+      token === lastEvaluatedToken &&
+      challengeId === lastEvaluatedChallengeId
+    ) {
+      return;
     }
+
+    lastEvaluatedToken = token;
+    lastEvaluatedChallengeId = challengeId;
+    status = token && challengeId ? "idle" : "invalid";
   });
 
   async function confirm() {

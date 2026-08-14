@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { browser } from "$app/environment";
   import { goto, invalidateAll } from "$app/navigation";
   import { authStore } from "$lib/auth/store";
@@ -435,7 +433,7 @@
   let profileTags = $derived.by(() =>
     validateProfileTags([skills, goods, interests]),
   );
-  run(() => {
+  $effect.pre(() => {
     if (activeAccountId && activeAccountId !== profileKey) {
       const previousAccountId = profileKey;
       if (previousAccountId) clearStoredPrivateDraft(previousAccountId);
@@ -448,7 +446,7 @@
       void loadPrivateProfile(activeAccountId);
     }
   });
-  run(() => {
+  $effect.pre(() => {
     if (!activeAccountId && profileKey) {
       const previousAccountId = profileKey;
       profileKey = "";

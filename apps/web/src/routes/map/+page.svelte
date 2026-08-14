@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { onDestroy, onMount, tick } from "svelte";
   import type { PageData } from "./$types";
   import "$lib/styles/tokens.css";
@@ -1028,7 +1026,7 @@
       $mapContentFilters.contentTypes.size === 0 ||
       activeSearchKinds.length > 0,
   );
-  run(() => {
+  $effect.pre(() => {
     scheduleNodeSearch(
       $searchQuery,
       activeSearchKinds,
@@ -1087,24 +1085,24 @@
   // Marker data and search highlighting have separate update paths. Filtering or
   // scene changes may touch the full marker set; search changes only toggle the
   // small delta between the previous and next (maximum ten) search matches.
-  run(() => {
+  $effect.pre(() => {
     if (nodesOverlay && projectedMarkersData) {
       nodesOverlay.update(projectedMarkersData, showNodes);
     }
   });
-  run(() => {
+  $effect.pre(() => {
     if (nodesOverlay) {
       nodesOverlay.updateSearchMatches(searchMatchIds);
     }
   });
-  run(() => {
+  $effect.pre(() => {
     if (nodesOverlay) {
       nodesOverlay.updateSelection($selection?.id ?? null);
     }
   });
   // Search content changes only require indicator and highlight refreshes. ResizeObserver already
   // reports intrinsic overlay-size changes, so it must not be recycled per key.
-  run(() => {
+  $effect.pre(() => {
     if (map) {
       filteredResults;
       $searchQuery;
@@ -1113,7 +1111,7 @@
     }
   });
   // Rebind observers only when an observed surface is mounted or removed.
-  run(() => {
+  $effect.pre(() => {
     $isSearchOpen;
     $contextPanelOpen;
     $isFilterOpen;
@@ -1131,7 +1129,7 @@
   // transient motion controller receives visibility and canonical ids, but
   // neither filtering nor a render-only difference starts a transition.
   // Wait for weave projection so static and motion threads share one palette.
-  run(() => {
+  $effect.pre(() => {
     if (map && mapStyleReady && projectedMarkersData && $view) {
       updateEdges(
         map,
@@ -1143,7 +1141,7 @@
       syncEdgeMotionProjection();
     }
   });
-  run(() => {
+  $effect.pre(() => {
     if (map) {
       weaveEdges;
       refreshEdgeProjection();
@@ -1153,7 +1151,7 @@
   // reloads route data, focus/fly-to it once it shows up in the freshly
   // rebuilt scene. Retries on later markersData updates while unresolved
   // (e.g. the reload is still in flight when this first runs).
-  run(() => {
+  $effect.pre(() => {
     if ($lastCreatedNodeId) {
       const created = markersData.find(
         (m) => m.id === $lastCreatedNodeId && m.type === "node",
@@ -1167,7 +1165,7 @@
       }
     }
   });
-  run(() => {
+  $effect.pre(() => {
     const search = $page.url.search;
     const parsed = parseMapUrlState($page.url.searchParams);
     if (search !== lastAppliedImmediateUrlSearch) {
@@ -1193,7 +1191,7 @@
     }
   });
   // Restore focus when selection is closed or state becomes navigation
-  run(() => {
+  $effect.pre(() => {
     if (($systemState === "navigation" || !$selection) && lastFocusedElement) {
       const elToFocus = lastFocusedElement;
       lastFocusedElement = null; // Clear immediately to prevent loop

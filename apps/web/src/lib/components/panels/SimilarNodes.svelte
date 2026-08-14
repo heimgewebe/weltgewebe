@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { createEventDispatcher, onDestroy } from "svelte";
   import InfoHeading from "$lib/components/InfoHeading.svelte";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
@@ -78,7 +76,7 @@
     }
   }
 
-  run(() => {
+  $effect.pre(() => {
     const key = sourceId && query ? `${sourceId}\u0000${query}` : "";
     if (key !== previousKey) {
       previousKey = key;

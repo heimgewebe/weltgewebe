@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { onMount, tick } from "svelte";
   import { afterNavigate, goto } from "$app/navigation";
   import { page } from "$app/stores";
@@ -189,7 +187,7 @@
     await refresh();
   });
   let selectedProposalId = $derived($page.url.searchParams.get("id"));
-  run(() => {
+  $effect.pre(() => {
     if (
       typeof window !== "undefined" &&
       selectedProposalId !== requestedDetailProposalId

@@ -24,6 +24,7 @@ describe("Svelte 5 runes migration contract", () => {
       const reasons = [
         /(^|\n)\s*export\s+let\s/.test(source) ? "export let" : null,
         /(^|\n)\s*\$:\s*/.test(source) ? "$:" : null,
+        /from\s+["']svelte\/legacy["']/.test(source) ? "svelte/legacy" : null,
       ].filter(Boolean);
       return reasons.length > 0
         ? [`${path.slice(srcRoot.length)}: ${reasons.join(", ")}`]

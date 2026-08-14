@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run, preventDefault } from "svelte/legacy";
-
   import { onDestroy, onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import { formatDate } from "$lib/utils/formatDate";
@@ -324,7 +322,7 @@
   });
   let canWrite = $derived($authStore.authenticated);
   let requestedTarget = $derived(targetKey());
-  run(() => {
+  $effect.pre(() => {
     if (mounted && requestedTarget !== loadedTarget) {
       loading = true;
       syncPolling();
@@ -370,7 +368,12 @@
           </header>
           {#if message.deleted_at}<p class="tombstone">Beitrag entfernt.</p>
           {:else if editingId === message.id}
-            <form onsubmit={preventDefault(() => saveEdit(message))}>
+            <form
+              onsubmit={(event) => {
+                event.preventDefault();
+                void saveEdit(message);
+              }}
+            >
               <label for={`edit-message-${message.id}`}
                 >Beitrag bearbeiten</label
               >
@@ -419,7 +422,13 @@
   {/if}
 
   {#if canWrite}
-    <form class="composer" onsubmit={preventDefault(submitMessage)}>
+    <form
+      class="composer"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void submitMessage();
+      }}
+    >
       <label for="conversation-room-draft">Neuer Beitrag</label>
       <textarea
         id="conversation-room-draft"

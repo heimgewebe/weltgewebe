@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run, preventDefault } from "svelte/legacy";
-
   import { onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import {
@@ -139,7 +137,7 @@
     }
   }
 
-  run(() => {
+  $effect.pre(() => {
     if (mounted && centerId !== loadedCenterId) {
       loadedCenterId = centerId;
       summary = "";
@@ -215,7 +213,13 @@
   {/if}
 
   {#if canApplyForWeber}
-    <form class="application" onsubmit={preventDefault(submitApplication)}>
+    <form
+      class="application"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void submitApplication();
+      }}
+    >
       <label for="center-weber-application">Weberstatus beantragen</label>
       <textarea
         id="center-weber-application"
@@ -235,7 +239,13 @@
   {/if}
 
   {#if canCreateSach}
-    <form class="application" onsubmit={preventDefault(submitSachProposal)}>
+    <form
+      class="application"
+      onsubmit={(event) => {
+        event.preventDefault();
+        void submitSachProposal();
+      }}
+    >
       <label for="center-sach-title">Sachantrag stellen</label>
       <input
         id="center-sach-title"

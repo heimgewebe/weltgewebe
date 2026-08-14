@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run, preventDefault } from "svelte/legacy";
-
   import { onMount } from "svelte";
   import { authStore } from "$lib/auth/store";
   import {
@@ -83,7 +81,7 @@
     }
   }
 
-  run(() => {
+  $effect.pre(() => {
     if (mounted && nodeId !== loadedNodeId) {
       loadedNodeId = nodeId;
       title = "";
@@ -140,7 +138,12 @@
     </p>{/if}
 
   {#if canCreate}
-    <form onsubmit={preventDefault(submit)}>
+    <form
+      onsubmit={(event) => {
+        event.preventDefault();
+        void submit();
+      }}
+    >
       <label for="node-sach-title">Sachantrag zu „{nodeTitle}“</label>
       <input
         id="node-sach-title"

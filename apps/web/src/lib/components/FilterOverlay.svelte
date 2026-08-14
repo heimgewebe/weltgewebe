@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { tick } from "svelte";
   import {
     isFilterOpen,
@@ -38,7 +36,7 @@
   let closeBtnEl: HTMLButtonElement | undefined = $state();
   let wasOpen = $state(false);
 
-  run(() => {
+  $effect.pre(() => {
     if ($isFilterOpen) {
       wasOpen = true;
       (async () => {

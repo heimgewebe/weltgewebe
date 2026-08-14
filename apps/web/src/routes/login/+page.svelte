@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { preventDefault } from "svelte/legacy";
-
   import { authStore } from "$lib/auth/store";
   import "$lib/styles/page-system.css";
 
@@ -53,7 +51,13 @@
           </p>
         </div>
       {:else}
-        <form onsubmit={preventDefault(handleSubmit)} class="wg-stack">
+        <form
+          onsubmit={(event) => {
+            event.preventDefault();
+            void handleSubmit();
+          }}
+          class="wg-stack"
+        >
           <div class="wg-field">
             <label class="wg-label" for="email">E-Mail</label>
             <input
