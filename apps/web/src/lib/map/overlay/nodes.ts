@@ -62,10 +62,15 @@ export class NodesOverlay {
   private compactWeave = false;
   private markerScale = 1;
   private markerScaleInitialized = false;
+  private latestPoints: MapEntityViewModel[] = [];
+  private latestShowNodes = true;
   private mapScaleContainer: HTMLElement | null = null;
   private readonly mapScaleOwner = Symbol("nodes-overlay-map-scale");
   private readonly handleZoom = () => {
     if (this.map) this.updateZoom(this.map.getZoom());
+  };
+  private readonly handleMoveEnd = () => {
+    this.update(this.latestPoints, this.latestShowNodes);
   };
 
   constructor(
@@ -95,6 +100,9 @@ export class NodesOverlay {
     ) {
       this.updateZoom(this.map.getZoom());
       this.map.on("zoom", this.handleZoom);
+    }
+    if (this.map && typeof this.map.on === "function") {
+      this.map.on("moveend", this.handleMoveEnd);
     }
   }
 
@@ -156,6 +164,9 @@ export class NodesOverlay {
   }
 
   public update(points: MapEntityViewModel[], showNodes: boolean): void {
+    this.latestPoints = points;
+    this.latestShowNodes = showNodes;
+
     if (!showNodes) {
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
       this.activeMarkers.clear();
@@ -165,10 +176,25 @@ export class NodesOverlay {
     const map = this.map;
     if (!map) return;
 
+    const viewportBounds =
+      typeof map.getBounds === "function" ? map.getBounds() : null;
     const currentIds = new Set<string>();
 
     for (const item of points) {
       if (!hasRenderableMapPosition(item)) {
+        const existing = this.activeMarkers.get(item.id);
+        if (existing) {
+          existing.cleanup();
+          this.activeMarkers.delete(item.id);
+        }
+        continue;
+      }
+
+      if (
+        viewportBounds &&
+        typeof viewportBounds.contains === "function" &&
+        !viewportBounds.contains([item.lon, item.lat])
+      ) {
         const existing = this.activeMarkers.get(item.id);
         if (existing) {
           existing.cleanup();
@@ -385,6 +411,7 @@ export class NodesOverlay {
   public destroy() {
     if (this.map && typeof this.map.off === "function") {
       this.map.off("zoom", this.handleZoom);
+      this.map.off("moveend", this.handleMoveEnd);
     }
     if (this.mapScaleContainer) {
       const container = this.mapScaleContainer;
@@ -410,5 +437,7 @@ export class NodesOverlay {
     this.activeMarkers.clear();
     this.searchMatchIds.clear();
     this.selectedMarkerId = null;
+    this.latestPoints = [];
+    this.latestShowNodes = false;
   }
 }

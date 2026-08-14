@@ -447,6 +447,58 @@ describe("NodesOverlay runtime robustness", () => {
     expect(root?.dataset.proposalCount).toBe("0");
     expect(root?.dataset.voteThreads).toBe("0");
   });
+
+  it("keeps DOM markers inside the viewport and restores stored state after moveend", () => {
+    vi.stubGlobal("document", {
+      createElement: () => new FakeElement(),
+    });
+    let viewport: "west" | "east" = "west";
+    const contains = vi.fn((lngLat: [number, number]) =>
+      viewport === "west" ? lngLat[0] < 15 : lngLat[0] >= 15,
+    );
+    const getBounds = vi.fn(() => ({ contains }));
+    const on = vi.fn();
+    const off = vi.fn();
+    const map = {
+      getBounds,
+      on,
+      off,
+    } as unknown as MapLibreMap;
+    const overlay = new NodesOverlay(
+      map,
+      FakeMarker as unknown as MarkerConstructor,
+      weaveRuntime,
+    );
+
+    overlay.updateSearchMatches(new Set(["east"]));
+    overlay.updateSelection("east");
+    overlay.update(
+      [makeNode("west", { lon: 10 }), makeNode("east", { lon: 20 })],
+      true,
+    );
+
+    expect(overlay.getActiveMarker("west")).toBeDefined();
+    expect(overlay.getActiveMarker("east")).toBeUndefined();
+    expect(getBounds).toHaveBeenCalledTimes(1);
+    const moveEnd = on.mock.calls.find((call) => call[0] === "moveend")?.[1] as
+      | (() => void)
+      | undefined;
+    expect(moveEnd).toBeTypeOf("function");
+
+    viewport = "east";
+    moveEnd?.();
+
+    expect(overlay.getActiveMarker("west")).toBeUndefined();
+    const east = overlay.getActiveMarker("east");
+    expect(east).toBeDefined();
+    expect(east?.element.dataset.searchMatch).toBe("true");
+    expect(east?.element.dataset.selected).toBe("true");
+    expect(east?.element.getAttribute("aria-current")).toBe("true");
+    expect(getBounds).toHaveBeenCalledTimes(2);
+
+    overlay.destroy();
+    expect(off).toHaveBeenCalledWith("moveend", moveEnd);
+  });
 });
 
 describe("weave projection timing", () => {
