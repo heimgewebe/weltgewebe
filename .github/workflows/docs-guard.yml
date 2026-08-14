@@ -95,6 +95,13 @@ jobs:
       - name: Sync hash-locked Python tooling
         run: uv sync --project tools/py --locked
 
+      - name: Rebind report lifecycle provenance for main validation
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          set -euo pipefail
+          uv run --project tools/py --locked python -m scripts.docmeta.generate_report_lifecycle
+          uv run --project tools/py --locked python -m scripts.docmeta.generate_report_lifecycle_inventory
+
       - name: Report lifecycle global strict
         run: uv run --project tools/py --locked python -m scripts.docmeta.validate_report_lifecycle --mode strict
 
@@ -120,6 +127,112 @@ jobs:
         run: make ci-validate
 
 
+  reconcile-report-lifecycle-provenance:
+    name: Reconcile report lifecycle provenance
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: blocking-doc-validations
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Setup Python
+        uses: actions/setup-python@8549b9f8f590ad24eab7482f36f6e1e24d34597b # tag: v7.0.0
+        with:
+          python-version-file: '.python-version'
+
+      - name: Read uv version
+        id: reconcile-uv-version
+        shell: bash
+        run: |
+          set -euo pipefail
+          UV_VERSION=$(grep '^uv:' toolchain.versions.yml | cut -d '"' -f2)
+          if [ -z "${UV_VERSION}" ]; then
+            echo "failed to parse uv version from toolchain.versions.yml" >&2
+            exit 1
+          fi
+          printf 'uv_version=%s\n' "${UV_VERSION}" >> "${GITHUB_OUTPUT}"
+
+      - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # tag: v8.3.2
+        with:
+          version: ${{ steps.reconcile-uv-version.outputs.uv_version }}
+
+      - name: Sync hash-locked Python tooling
+        run: uv sync --project tools/py --locked
+
+      - name: Regenerate report lifecycle provenance at exact main head
+        run: |
+          set -euo pipefail
+          uv run --project tools/py --locked python -m scripts.docmeta.generate_report_lifecycle
+          uv run --project tools/py --locked python -m scripts.docmeta.generate_report_lifecycle_inventory
+
+      - name: Verify regenerated report lifecycle provenance
+        run: |
+          set -euo pipefail
+          uv run --project tools/py --locked python -m scripts.docmeta.validate_report_lifecycle --mode strict
+          uv run --project tools/py --locked python -m scripts.docmeta.generate_report_lifecycle --check
+          uv run --project tools/py --locked python -m scripts.docmeta.generate_report_lifecycle_inventory --check
+          git diff --check -- docs/_generated/report-lifecycle.md docs/_generated/report-lifecycle-inventory.md
+
+      - name: Publish exact report lifecycle provenance refresh
+        env:
+          TARGET_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          outputs=(
+            docs/_generated/report-lifecycle.md
+            docs/_generated/report-lifecycle-inventory.md
+          )
+
+          if ! git diff --quiet -- . \
+            ':(exclude)docs/_generated/report-lifecycle.md' \
+            ':(exclude)docs/_generated/report-lifecycle-inventory.md'; then
+            echo "unexpected tracked changes outside report lifecycle outputs" >&2
+            git diff --name-only -- . \
+              ':(exclude)docs/_generated/report-lifecycle.md' \
+              ':(exclude)docs/_generated/report-lifecycle-inventory.md' >&2
+            exit 1
+          fi
+          if [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "unexpected untracked files after provenance regeneration" >&2
+            git ls-files --others --exclude-standard >&2
+            exit 1
+          fi
+          if git diff --quiet -- "${outputs[@]}"; then
+            echo "report lifecycle provenance already matches exact main head"
+            exit 0
+          fi
+          if [ "$(git rev-parse HEAD)" != "${TARGET_SHA}" ]; then
+            echo "checked-out head differs from triggering main head" >&2
+            exit 1
+          fi
+
+          git fetch --no-tags origin main
+          if [ "$(git rev-parse refs/remotes/origin/main)" != "${TARGET_SHA}" ]; then
+            echo "main advanced; newer push owns provenance reconciliation"
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- "${outputs[@]}"
+          if git diff --cached --quiet; then
+            echo "no staged provenance refresh remains"
+            exit 0
+          fi
+          git commit -m "docs: rebind report lifecycle provenance"
+
+          git fetch --no-tags origin main
+          if [ "$(git rev-parse refs/remotes/origin/main)" != "${TARGET_SHA}" ]; then
+            echo "main advanced after validation; refusing stale provenance push"
+            exit 0
+          fi
+          git push origin "HEAD:refs/heads/main"
+
+
   generated-diagnostics:
     name: Generated diagnostics (non-blocking)
     runs-on: ubuntu-latest
@@ -128,6 +241,8 @@ jobs:
     if: always()
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
 
       - name: Setup Python
         uses: actions/setup-python@8549b9f8f590ad24eab7482f36f6e1e24d34597b # tag: v7.0.0
