@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run, preventDefault } from "svelte/legacy";
-
   import { createEventDispatcher, onDestroy, tick } from "svelte";
   import { selection } from "$lib/stores/uiView";
   import { authStore } from "$lib/auth/store";
@@ -44,12 +42,6 @@
     | "verlauf"
     | "bearbeiten";
   let activeTab: NodeTab = $state("uebersicht");
-  let tabs: NodeTab[] = $state([
-    "uebersicht",
-    "gespraech",
-    "verlauf",
-    "antraege",
-  ]);
   let overviewTab: HTMLButtonElement | null = $state(null);
   let editTab: HTMLButtonElement | null = $state(null);
   let titleInput: HTMLInputElement | null = $state(null);
@@ -328,7 +320,12 @@
         $authStore.role === "admin" ||
         (!!nodeCreator && nodeCreator === $authStore.account_id)),
   );
-  run(() => {
+  let tabs: NodeTab[] = $derived(
+    canMutate
+      ? ["uebersicht", "gespraech", "verlauf", "antraege", "bearbeiten"]
+      : ["uebersicht", "gespraech", "verlauf", "antraege"],
+  );
+  $effect(() => {
     if (!canMutate) {
       const shouldRestoreFocus = activeTab === "bearbeiten" || editing;
       if (activeTab === "bearbeiten") activeTab = "uebersicht";
@@ -341,15 +338,10 @@
   let conflictTagSplit = $derived.by(() =>
     splitKnottingTags(conflictNode?.tags || []),
   );
-  run(() => {
+  $effect(() => {
     if ($selection?.type === "node" && !similarNodesLoadStarted) {
       void ensureSimilarNodesComponent();
     }
-  });
-  run(() => {
-    tabs = canMutate
-      ? ["uebersicht", "gespraech", "verlauf", "antraege", "bearbeiten"]
-      : ["uebersicht", "gespraech", "verlauf", "antraege"];
   });
 </script>
 
@@ -371,7 +363,10 @@
     {#if editing}
       <form
         class="edit-form node-full-content"
-        onsubmit={preventDefault(saveNode)}
+        onsubmit={(event) => {
+          event.preventDefault();
+          void saveNode();
+        }}
       >
         <label>
           Titel

@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import type { ControlPosition } from "maplibre-gl";
   import { onDestroy } from "svelte";
   import { get } from "svelte/store";
@@ -77,7 +75,7 @@
     control = null;
     lastMap = null;
   });
-  run(() => {
+  $effect(() => {
     ensureControl(get(context.map));
   });
 </script>

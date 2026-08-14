@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { preventDefault } from "svelte/legacy";
-
   import { onMount } from "svelte";
 
   type CellDescriptor = {
@@ -186,7 +184,12 @@
       Adressen folgen dem Muster <code>wg://zelle/art/id</code>. Nur global
       veröffentlichte, nicht gelöschte Objekte werden ausgegeben.
     </p>
-    <form onsubmit={preventDefault(lookupObject)}>
+    <form
+      onsubmit={(event) => {
+        event.preventDefault();
+        void lookupObject();
+      }}
+    >
       <label for="federation-address">Objektadresse</label>
       <div class="lookup-row">
         <input

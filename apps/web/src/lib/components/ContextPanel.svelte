@@ -1,6 +1,4 @@
 <script lang="ts">
-  import { run } from "svelte/legacy";
-
   import { createEventDispatcher } from "svelte";
   import {
     selection,
@@ -35,9 +33,19 @@
   const DRAG_THRESHOLD_PX = 6;
 
   let kompositionPanel: KompositionPanelHandle | null = $state(null);
-  let sheetStage: SheetStage = $state("compact");
-  let previousPanelIdentity = $state("");
-  let panelTitle = $state("Details");
+  let sheetStage: SheetStage = $state(
+    $systemState === "komposition" ? "full" : "compact",
+  );
+  let previousPanelIdentity = $state(
+    $systemState === "komposition"
+      ? `komposition:${$kompositionDraft?.mode ?? "unknown"}`
+      : $selection
+        ? `${$selection.type}:${$selection.id}`
+        : "",
+  );
+  let panelTitle = $derived.by(() =>
+    derivePanelTitle($systemState, $kompositionDraft, $selection),
+  );
   let dragStartY = 0;
   let dragStartHeight = 0;
   let dragHeight: number | null = $state(null);
@@ -76,8 +84,7 @@
     return "Details";
   }
 
-  run(() => {
-    panelTitle = derivePanelTitle($systemState, $kompositionDraft, $selection);
+  $effect(() => {
     const nextPanelIdentity =
       $systemState === "komposition"
         ? `komposition:${$kompositionDraft?.mode ?? "unknown"}`
