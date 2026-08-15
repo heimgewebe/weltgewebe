@@ -9,12 +9,13 @@
   import MapRouteOverlays from "$lib/components/map/MapRouteOverlays.svelte";
   import MapRouteStatus from "$lib/components/map/MapRouteStatus.svelte";
   import MapRouteSurface from "$lib/components/map/MapRouteSurface.svelte";
-  import type {
-    MapDomainChanged,
-    RelatedMapSelection,
+  import {
+    resolveMapDomainChange,
+    type MapDomainChanged,
+    type RelatedMapSelection,
   } from "$lib/components/map/mapRouteEvents";
   import type { NodeSearchStatus } from "$lib/api/search";
-  import type { MapEdge, MapEntityViewModel } from "$lib/map/types";
+  import type { MapEdge, MapEntityViewModel, Node } from "$lib/map/types";
   import {
     deriveSearchDirectionIndicators,
     resolveInitialMapCamera,
@@ -84,7 +85,7 @@
     scheduleMapInitTimeout,
   } from "$lib/map/mapInitFailure";
   import { registerPmtilesProtocol } from "$lib/map/pmtilesProtocol";
-  import { buildMapScene } from "$lib/map/scene";
+  import { applyNodeUpdateOverrides, buildMapScene } from "$lib/map/scene";
 
   import type { NodesOverlay as NodesOverlayController } from "$lib/map/overlay/nodes";
   import {
@@ -107,6 +108,8 @@
   }
 
   let { data }: Props = $props();
+
+  let nodeUpdateOverrides: Record<string, Node> = $state({});
 
   // T007: node search comes from the authorized T006 server contract. Public
   // non-node structures (Garnrollen and Webgemeindezentren) are searched only
@@ -463,6 +466,15 @@
   }
 
   async function handleDomainChanged(event: CustomEvent<MapDomainChanged>) {
+    const resolution = resolveMapDomainChange(event.detail);
+    if (resolution.kind === "local-node-update") {
+      nodeUpdateOverrides = {
+        ...nodeUpdateOverrides,
+        [resolution.node.id]: resolution.node,
+      };
+      return;
+    }
+
     const removesNode =
       event.detail.kind === "node" &&
       (event.detail.action === "deleted" || event.detail.action === "archived");
@@ -985,7 +997,7 @@
   // scene together with the ephemeral UI state (filters, search).
   let scene = $derived.by(() =>
     buildMapScene({
-      nodes: data.nodes || [],
+      nodes: applyNodeUpdateOverrides(data.nodes || [], nodeUpdateOverrides),
       accounts: data.accounts || [],
       edges: data.edges || [],
       webgemeindezentren: data.webgemeindezentren || [],

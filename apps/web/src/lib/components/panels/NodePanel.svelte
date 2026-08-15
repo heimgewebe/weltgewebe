@@ -8,6 +8,7 @@
     createPanelDetailsLoader,
   } from "$lib/panels/panelDetails";
   import { formatDate } from "$lib/utils/formatDate";
+  import type { MapDomainChanged } from "$lib/components/map/mapRouteEvents";
   import { nodeKindLabel } from "$lib/ui/productLanguage";
   import type { MapEntityViewModel } from "$lib/map/types";
   import {
@@ -19,12 +20,6 @@
   import NodeGovernance from "$lib/components/governance/NodeGovernance.svelte";
   import NodeConversation from "./NodeConversation.svelte";
 
-  type DomainChanged = {
-    kind: "node";
-    id: string;
-    action: "updated" | "deleted" | "archived";
-  };
-
   const dispatch = createEventDispatcher<{
     selectRelated: {
       type: "node" | "garnrolle";
@@ -32,7 +27,7 @@
       title?: string;
       data?: MapEntityViewModel;
     };
-    domainChanged: DomainChanged;
+    domainChanged: MapDomainChanged;
   }>();
 
   type NodeTab =
@@ -232,7 +227,12 @@
       editing = false;
       activeTab = "uebersicht";
       void focusAfterRender(() => overviewTab);
-      dispatch("domainChanged", { kind: "node", id, action: "updated" });
+      dispatch("domainChanged", {
+        kind: "node",
+        id,
+        action: "updated",
+        node: updatedNode,
+      });
     } catch (error) {
       if (
         error instanceof ApiRequestError &&
@@ -268,7 +268,7 @@
     try {
       const { deleteNode } = await import("$lib/api/nodeDelete");
       const receipt = await deleteNode(id, nodeDetails?.updated_at);
-      let action: DomainChanged["action"] = "deleted";
+      let action: "deleted" | "archived" = "deleted";
       if (receipt.conversation.effect === "archived") {
         archiveHref = `/archive?id=${encodeURIComponent(receipt.conversation.archive_id)}`;
         action = "archived";

@@ -50,6 +50,40 @@ export type MapSceneInput = {
   basemapMode: BasemapMode;
 };
 
+export type NodeUpdateOverrides = Readonly<Record<string, Node>>;
+
+/**
+ * Overlay canonical mutation responses onto request-scoped route data without
+ * letting an old client-side response outrank a later, fresher route reload.
+ * Returning the original array when nothing changes also avoids waking the
+ * scene/overlay pipeline for unrelated override entries.
+ */
+export function applyNodeUpdateOverrides(
+  nodes: Node[],
+  overrides: NodeUpdateOverrides,
+): Node[] {
+  if (nodes.length === 0 || Object.keys(overrides).length === 0) return nodes;
+
+  let changed = false;
+  const merged = nodes.map((node) => {
+    const override = overrides[node.id];
+    if (!override || override.id !== node.id) return node;
+
+    const baseUpdatedAt = Date.parse(node.updated_at);
+    const overrideUpdatedAt = Date.parse(override.updated_at);
+    if (!Number.isFinite(overrideUpdatedAt)) return node;
+    if (Number.isFinite(baseUpdatedAt) && overrideUpdatedAt < baseUpdatedAt) {
+      return node;
+    }
+
+    if (override === node) return node;
+    changed = true;
+    return override;
+  });
+
+  return changed ? merged : nodes;
+}
+
 /**
  * Resolves the API mode from the API base URL.
  * A configured PUBLIC_GEWEBE_API_BASE means remote; absent means local/demo.
