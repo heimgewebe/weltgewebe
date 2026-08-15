@@ -5,6 +5,8 @@ const readSource = (relativePath: string) =>
   readFileSync(new URL(relativePath, import.meta.url), "utf8");
 
 const pageSource = readSource("./+page.svelte");
+const pageLoadSource = readSource("./+page.ts");
+const clientHookSource = readSource("../../hooks.client.ts");
 const surfaceSource = readSource(
   "../../lib/components/map/MapRouteSurface.svelte",
 );
@@ -29,6 +31,29 @@ describe("map route component boundaries", () => {
     expect(pageSource).toMatch(
       /function retryMapInitialisation\(\)\s*\{\s*window\.location\.reload\(\);\s*\}/,
     );
+  });
+
+  it("starts the map runtime early without making MapLibre an eager route dependency", () => {
+    const recoveryIndex = clientHookSource.indexOf(
+      "installVitePreloadRecovery();",
+    );
+    const directPreloadIndex = clientHookSource.indexOf(
+      'import("maplibre-gl")',
+    );
+
+    expect(recoveryIndex).toBeGreaterThanOrEqual(0);
+    expect(directPreloadIndex).toBeGreaterThan(recoveryIndex);
+    expect(clientHookSource).toContain('window.location.pathname !== "/map"');
+    expect(clientHookSource).toContain('"DOMContentLoaded"');
+    expect(pageLoadSource).toContain(
+      'import { browser } from "$app/environment"',
+    );
+    expect(pageLoadSource).toContain("if (browser)");
+    expect(pageLoadSource).toContain('import("maplibre-gl")');
+    expect(pageLoadSource).not.toMatch(
+      /import\s+[^;(]+from\s+["']maplibre-gl["']/,
+    );
+    expect(pageSource).not.toContain("installVitePreloadRecovery");
   });
 
   it("assigns canvas layout, recovery status and lazy overlays to one owner each", () => {

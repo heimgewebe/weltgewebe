@@ -1,5 +1,10 @@
+import { browser } from "$app/environment";
 import type { PageLoad } from "./$types";
 import { selectMapResourceTransport } from "$lib/map/mapResourceTransport";
+
+if (browser) {
+  void import("maplibre-gl").catch(() => undefined);
+}
 
 export const load: PageLoad = async ({ fetch, depends }) => {
   depends("weltgewebe:domain-data");

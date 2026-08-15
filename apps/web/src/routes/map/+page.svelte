@@ -4,7 +4,6 @@
   import "$lib/styles/tokens.css";
   import "maplibre-gl/dist/maplibre-gl.css";
   import type { Map as MapLibreMap } from "maplibre-gl";
-  import { installVitePreloadRecovery } from "$lib/utils/preloadRecovery";
 
   import TopBar from "$lib/components/TopBar.svelte";
   import MapRouteOverlays from "$lib/components/map/MapRouteOverlays.svelte";
@@ -565,8 +564,6 @@
   const shouldExposeTestMap =
     import.meta.env.DEV ||
     import.meta.env.VITE_PUBLIC_ENABLE_TEST_MAP === "true";
-
-  onMount(() => installVitePreloadRecovery());
 
   onMount(() => {
     let releasePmtilesProtocol: (() => void) | undefined;
