@@ -1,5 +1,12 @@
+import { browser } from "$app/environment";
 import type { PageLoad } from "./$types";
 import { selectMapResourceTransport } from "$lib/map/mapResourceTransport";
+
+const MOBILE_MAP_PRELOAD_QUERY = "(max-width: 768px)";
+
+if (browser && window.matchMedia(MOBILE_MAP_PRELOAD_QUERY).matches) {
+  void import("maplibre-gl").catch(() => undefined);
+}
 
 export const load: PageLoad = async ({ fetch, depends }) => {
   depends("weltgewebe:domain-data");
