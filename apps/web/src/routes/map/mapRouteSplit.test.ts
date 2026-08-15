@@ -33,7 +33,7 @@ describe("map route component boundaries", () => {
     );
   });
 
-  it("starts the map runtime early without making MapLibre an eager route dependency", () => {
+  it("starts the mobile map runtime early without making MapLibre an eager route dependency", () => {
     const recoveryIndex = clientHookSource.indexOf(
       "installVitePreloadRecovery();",
     );
@@ -44,11 +44,22 @@ describe("map route component boundaries", () => {
     expect(recoveryIndex).toBeGreaterThanOrEqual(0);
     expect(directPreloadIndex).toBeGreaterThan(recoveryIndex);
     expect(clientHookSource).toContain('window.location.pathname !== "/map"');
+    expect(clientHookSource).toContain(
+      'MOBILE_MAP_PRELOAD_QUERY = "(max-width: 768px)"',
+    );
+    expect(clientHookSource).toContain(
+      "window.matchMedia(MOBILE_MAP_PRELOAD_QUERY).matches",
+    );
     expect(clientHookSource).toContain('"DOMContentLoaded"');
     expect(pageLoadSource).toContain(
       'import { browser } from "$app/environment"',
     );
-    expect(pageLoadSource).toContain("if (browser)");
+    expect(pageLoadSource).toContain(
+      'MOBILE_MAP_PRELOAD_QUERY = "(max-width: 768px)"',
+    );
+    expect(pageLoadSource).toContain(
+      "browser && window.matchMedia(MOBILE_MAP_PRELOAD_QUERY).matches",
+    );
     expect(pageLoadSource).toContain('import("maplibre-gl")');
     expect(pageLoadSource).not.toMatch(
       /import\s+[^;(]+from\s+["']maplibre-gl["']/,
