@@ -778,11 +778,15 @@
     async function initialiseMap() {
       // Public map rendering never waits for session verification. Auth loads
       // after map creation and may perform one guarded convergence later.
-      const [maplibregl, nodesModule, edgeMotionModule] = await Promise.all([
-        import("maplibre-gl"),
-        import("$lib/map/overlay/nodes"),
-        import("$lib/map/overlay/edgeMotion"),
-      ]);
+      const [maplibregl, nodesModule, edgeMotionModule, pmtilesModule] =
+        await Promise.all([
+          import("maplibre-gl"),
+          import("$lib/map/overlay/nodes"),
+          import("$lib/map/overlay/edgeMotion"),
+          currentBasemap.mode === "local-sovereign"
+            ? import("pmtiles")
+            : Promise.resolve(null),
+        ]);
       const initialAuth = { authenticated: false };
       if (destroyed || mapInitTerminated) return;
       projectMapMarkerViewsForWeave = nodesModule.projectMapMarkerViewsForWeave;
@@ -804,11 +808,12 @@
       // caches, while the lease prevents an older overlapping teardown from
       // deleting the handler that a newer map already installed.
       if (currentBasemap.mode === "local-sovereign") {
-        const pmtiles = await import("pmtiles");
-        if (destroyed || mapInitTerminated) return;
+        if (!pmtilesModule) {
+          throw new Error("PMTiles runtime unavailable for local basemap");
+        }
         releasePmtilesProtocol = registerPmtilesProtocol(
           maplibregl,
-          new pmtiles.Protocol().tile,
+          new pmtilesModule.Protocol().tile,
         );
 
         transformRequestFn = (url: string, resourceType?: any) => {
