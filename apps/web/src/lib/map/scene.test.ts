@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { buildMapScene, resolveApiMode } from "./scene";
+import {
+  applyNodeUpdateOverrides,
+  buildMapScene,
+  resolveApiMode,
+} from "./scene";
 import type { Node, Account, Edge, Webgemeindezentrum } from "./types";
 
 const makeNode = (overrides: Partial<Node> = {}): Node => ({
@@ -70,6 +74,98 @@ describe("resolveApiMode", () => {
 
   it("returns 'local' when apiBase is undefined", () => {
     expect(resolveApiMode(undefined)).toBe("local");
+  });
+});
+
+describe("applyNodeUpdateOverrides", () => {
+  it("uses a newer canonical mutation response without refetching route data", () => {
+    const base = makeNode();
+    const updated = makeNode({
+      title: "Lokal aktualisiert",
+      updated_at: "2025-01-01T00:01:00Z",
+      location: { lat: 53.51, lon: 10.01 },
+    });
+    const nodes = [base];
+
+    const merged = applyNodeUpdateOverrides(nodes, { [base.id]: updated });
+
+    expect(merged).not.toBe(nodes);
+    expect(merged[0]).toBe(updated);
+    expect(merged[0].title).toBe("Lokal aktualisiert");
+    expect(merged[0].location).toEqual({ lat: 53.51, lon: 10.01 });
+  });
+
+  it("lets fresher route data supersede an older local mutation response", () => {
+    const base = makeNode({
+      title: "Frischer Serverstand",
+      updated_at: "2025-01-01T00:02:00Z",
+    });
+    const staleOverride = makeNode({
+      title: "Alter lokaler Stand",
+      updated_at: "2025-01-01T00:01:00Z",
+    });
+    const nodes = [base];
+
+    const merged = applyNodeUpdateOverrides(nodes, {
+      [base.id]: staleOverride,
+    });
+
+    expect(merged).toBe(nodes);
+    expect(merged[0]).toBe(base);
+  });
+
+  it("preserves sub-millisecond ordering when route data is fresher", () => {
+    const base = makeNode({
+      title: "Frischer Serverstand",
+      updated_at: "2025-01-01T00:02:00.123789+00:00",
+    });
+    const staleOverride = makeNode({
+      title: "Alter lokaler Stand",
+      updated_at: "2025-01-01T00:02:00.123456+00:00",
+    });
+    const nodes = [base];
+
+    expect(Date.parse(base.updated_at)).toBe(
+      Date.parse(staleOverride.updated_at),
+    );
+    expect(applyNodeUpdateOverrides(nodes, { [base.id]: staleOverride })).toBe(
+      nodes,
+    );
+  });
+
+  it("preserves sub-millisecond ordering when the mutation is fresher", () => {
+    const base = makeNode({
+      updated_at: "2025-01-01T00:02:00.123456+00:00",
+    });
+    const updated = makeNode({
+      title: "Mikrosekunden-neuer Stand",
+      updated_at: "2025-01-01T00:02:00.123789+00:00",
+    });
+
+    expect(Date.parse(base.updated_at)).toBe(Date.parse(updated.updated_at));
+    expect(applyNodeUpdateOverrides([base], { [base.id]: updated })[0]).toBe(
+      updated,
+    );
+  });
+
+  it("fails closed for invalid timestamps and mismatched identities", () => {
+    const base = makeNode();
+    const invalidTimestamp = makeNode({
+      title: "Ungültig",
+      updated_at: "not-a-timestamp",
+    });
+    const mismatched = makeNode({
+      id: "node-other",
+      updated_at: "2025-01-01T00:03:00Z",
+    });
+    const nodes = [base];
+
+    expect(
+      applyNodeUpdateOverrides(nodes, { [base.id]: invalidTimestamp }),
+    ).toBe(nodes);
+    expect(applyNodeUpdateOverrides(nodes, { [base.id]: mismatched })).toBe(
+      nodes,
+    );
   });
 });
 
