@@ -52,6 +52,27 @@ export type MapSceneInput = {
 
 export type NodeUpdateOverrides = Readonly<Record<string, Node>>;
 
+const RFC3339_FRACTION_RE =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.(\d+))?(?:Z|[+-]\d{2}:\d{2})$/;
+
+function compareRfc3339FractionalSeconds(
+  left: string,
+  right: string,
+): -1 | 0 | 1 | null {
+  const leftMatch = RFC3339_FRACTION_RE.exec(left);
+  const rightMatch = RFC3339_FRACTION_RE.exec(right);
+  if (!leftMatch || !rightMatch) return null;
+
+  const leftFraction = leftMatch[1] ?? "";
+  const rightFraction = rightMatch[1] ?? "";
+  const width = Math.max(leftFraction.length, rightFraction.length);
+  const normalizedLeft = leftFraction.padEnd(width, "0");
+  const normalizedRight = rightFraction.padEnd(width, "0");
+  if (normalizedLeft < normalizedRight) return -1;
+  if (normalizedLeft > normalizedRight) return 1;
+  return 0;
+}
+
 /**
  * Overlay canonical mutation responses onto request-scoped route data without
  * letting an old client-side response outrank a later, fresher route reload.
@@ -72,8 +93,15 @@ export function applyNodeUpdateOverrides(
     const baseUpdatedAt = Date.parse(node.updated_at);
     const overrideUpdatedAt = Date.parse(override.updated_at);
     if (!Number.isFinite(overrideUpdatedAt)) return node;
-    if (Number.isFinite(baseUpdatedAt) && overrideUpdatedAt < baseUpdatedAt) {
-      return node;
+    if (Number.isFinite(baseUpdatedAt)) {
+      if (overrideUpdatedAt < baseUpdatedAt) return node;
+      if (overrideUpdatedAt === baseUpdatedAt) {
+        const fractionalOrder = compareRfc3339FractionalSeconds(
+          override.updated_at,
+          node.updated_at,
+        );
+        if (fractionalOrder === null || fractionalOrder < 0) return node;
+      }
     }
 
     if (override === node) return node;

@@ -114,6 +114,40 @@ describe("applyNodeUpdateOverrides", () => {
     expect(merged[0]).toBe(base);
   });
 
+  it("preserves sub-millisecond ordering when route data is fresher", () => {
+    const base = makeNode({
+      title: "Frischer Serverstand",
+      updated_at: "2025-01-01T00:02:00.123789+00:00",
+    });
+    const staleOverride = makeNode({
+      title: "Alter lokaler Stand",
+      updated_at: "2025-01-01T00:02:00.123456+00:00",
+    });
+    const nodes = [base];
+
+    expect(Date.parse(base.updated_at)).toBe(
+      Date.parse(staleOverride.updated_at),
+    );
+    expect(applyNodeUpdateOverrides(nodes, { [base.id]: staleOverride })).toBe(
+      nodes,
+    );
+  });
+
+  it("preserves sub-millisecond ordering when the mutation is fresher", () => {
+    const base = makeNode({
+      updated_at: "2025-01-01T00:02:00.123456+00:00",
+    });
+    const updated = makeNode({
+      title: "Mikrosekunden-neuer Stand",
+      updated_at: "2025-01-01T00:02:00.123789+00:00",
+    });
+
+    expect(Date.parse(base.updated_at)).toBe(Date.parse(updated.updated_at));
+    expect(applyNodeUpdateOverrides([base], { [base.id]: updated })[0]).toBe(
+      updated,
+    );
+  });
+
   it("fails closed for invalid timestamps and mismatched identities", () => {
     const base = makeNode();
     const invalidTimestamp = makeNode({
