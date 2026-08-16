@@ -38,6 +38,12 @@ CREATE UNIQUE INDEX governance_proposals_one_active_repeal
     WHERE repeals_proposal_id IS NOT NULL
       AND status IN ('consent', 'voting', 'accepted');
 
+-- The foreign-key lookup must also cover rejected and withdrawn historical
+-- repeal attempts. PostgreSQL does not create this child-side index for us.
+CREATE INDEX governance_proposals_repeals_lookup
+    ON governance_proposals (repeals_proposal_id)
+    WHERE repeals_proposal_id IS NOT NULL;
+
 -- Account deletion must preserve an explicitly withdrawn proposal even when it
 -- has no veto, vote or message yet. The withdrawal itself is durable procedural
 -- history; only the live applicant binding may be detached.

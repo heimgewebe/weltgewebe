@@ -290,6 +290,51 @@ async fn own_open_proposal_withdrawal_preserves_history_and_cannot_beat_deadline
 #[tokio::test]
 #[serial]
 #[ignore = "requires direct PostgreSQL"]
+async fn guest_exit_preserves_withdrawn_proposal_and_detaches_applicant() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, GUEST_A, "gast").await;
+
+    let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 9, 0, 0).unwrap();
+    let proposal = create_weber_proposal(
+        &pool,
+        GUEST_A,
+        "gov-proof:Gast A",
+        Some("Dieser zurückgezogene Antrag bleibt Verfahrensgeschichte."),
+        t0,
+    )
+    .await
+    .expect("create proposal before withdrawal and exit");
+    let withdrawn_at = t0 + Duration::hours(2);
+    withdraw_proposal(&pool, &proposal.id, GUEST_A, withdrawn_at)
+        .await
+        .expect("withdraw before account exit");
+
+    delete_guest_account(&pool, GUEST_A)
+        .await
+        .expect("delete guest after withdrawal");
+
+    let retained = get_proposal(&pool, &proposal.id)
+        .await
+        .expect("read withdrawn history after account exit")
+        .expect("withdrawn proposal must remain");
+    assert_eq!(retained.status, ProposalStatus::Withdrawn);
+    assert_eq!(retained.applicant_account_id, None);
+    assert_eq!(retained.finalized_at, Some(withdrawn_at));
+    let account_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS(SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(GUEST_A)
+            .fetch_one(&pool)
+            .await
+            .expect("read deleted account state");
+    assert!(!account_exists);
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
 async fn repeal_is_a_new_sachantrag_and_never_rewrites_the_old_decision() {
     let pool = pool().await;
     cleanup(&pool).await;
@@ -387,18 +432,65 @@ async fn repeal_is_a_new_sachantrag_and_never_rewrites_the_old_decision() {
         &target.id,
         WEBER_A,
         "Weber A",
-        Some("Erneuter Aufhebungsantrag."),
+        Some("Erneuter Aufhebungsantrag, diesmal mit Abstimmung."),
         t0 + Duration::days(10),
     )
     .await
     .expect("withdrawn repeal permits a later new procedure");
-    let second_outcomes = finalize_due_proposals(&pool, second.consent_until)
+    add_veto(
+        &pool,
+        &second.id,
+        WEBER_B,
+        "Weber B",
+        "Die Aufhebung soll ausdrücklich abgestimmt werden.",
+        t0 + Duration::days(11),
+    )
+    .await
+    .expect("open voting on second repeal attempt");
+    let second_phase = finalize_due_proposals(&pool, second.consent_until)
         .await
-        .expect("accept second repeal proposal");
-    assert_eq!(second_outcomes.len(), 1);
-    assert_eq!(second_outcomes[0].proposal_id, second.id);
-    assert_eq!(second_outcomes[0].status, ProposalStatus::Accepted);
-    assert!(!second_outcomes[0].promoted);
+        .expect("move second repeal into voting");
+    assert_eq!(second_phase.len(), 1);
+    assert_eq!(second_phase[0].status, ProposalStatus::Voting);
+    let second_voting = get_proposal(&pool, &second.id)
+        .await
+        .expect("read voting repeal")
+        .expect("second repeal remains");
+    let second_voting_until = second_voting
+        .voting_until
+        .expect("voting repeal has a second deadline");
+    let rejected_outcomes = finalize_due_proposals(&pool, second_voting_until)
+        .await
+        .expect("reject zero-to-zero repeal vote");
+    assert_eq!(rejected_outcomes.len(), 1);
+    assert_eq!(rejected_outcomes[0].proposal_id, second.id);
+    assert_eq!(rejected_outcomes[0].status, ProposalStatus::Rejected);
+
+    let target_after_rejection = get_proposal(&pool, &target.id)
+        .await
+        .expect("read target after rejected repeal")
+        .expect("target");
+    assert_eq!(target_after_rejection.status, ProposalStatus::Accepted);
+    assert_eq!(target_after_rejection.pending_repeal_proposal_id, None);
+    assert_eq!(target_after_rejection.repealed_by_proposal_id, None);
+
+    let third = create_repeal_proposal(
+        &pool,
+        &target.id,
+        WEBER_B,
+        "Weber B",
+        Some("Neuer Aufhebungsantrag nach der Ablehnung."),
+        second_voting_until + Duration::minutes(1),
+    )
+    .await
+    .expect("rejected repeal permits a later new procedure");
+    let third_outcomes = finalize_due_proposals(&pool, third.consent_until)
+        .await
+        .expect("accept third repeal proposal");
+    assert_eq!(third_outcomes.len(), 1);
+    assert_eq!(third_outcomes[0].proposal_id, third.id);
+    assert_eq!(third_outcomes[0].status, ProposalStatus::Accepted);
+    assert!(!third_outcomes[0].promoted);
 
     let original = get_proposal(&pool, &target.id)
         .await
@@ -412,9 +504,9 @@ async fn repeal_is_a_new_sachantrag_and_never_rewrites_the_old_decision() {
     assert_eq!(original.pending_repeal_proposal_id, None);
     assert_eq!(
         original.repealed_by_proposal_id.as_deref(),
-        Some(second.id.as_str())
+        Some(third.id.as_str())
     );
-    let accepted_repeal = get_proposal(&pool, &second.id)
+    let accepted_repeal = get_proposal(&pool, &third.id)
         .await
         .expect("read accepted repeal")
         .expect("accepted repeal remains");
@@ -425,19 +517,101 @@ async fn repeal_is_a_new_sachantrag_and_never_rewrites_the_old_decision() {
     );
     assert_eq!(original.repealed_at, accepted_repeal.finalized_at);
 
+    let duplicate_after_accept = create_repeal_proposal(
+        &pool,
+        &target.id,
+        WEBER_A,
+        "Weber A",
+        None,
+        third.consent_until + Duration::minutes(1),
+    )
+    .await;
+    assert!(matches!(
+        duplicate_after_accept,
+        Err(RepealProposalError::AlreadyHasRepeal)
+    ));
+
     let recursive = create_repeal_proposal(
         &pool,
-        &second.id,
-        WEBER_B,
-        "Weber B",
+        &third.id,
+        WEBER_A,
+        "Weber A",
         None,
-        second.consent_until + Duration::minutes(1),
+        third.consent_until + Duration::minutes(1),
     )
     .await;
     assert!(matches!(
         recursive,
         Err(RepealProposalError::TargetIsRepeal)
     ));
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn concurrent_repeal_creation_allows_exactly_one_active_child() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, WEBER_A, "weber").await;
+    seed_account(&pool, WEBER_B, "weber").await;
+
+    let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 10, 0, 0).unwrap();
+    let target = create_sach_proposal(
+        &pool,
+        WEBER_A,
+        "Weber A",
+        "Parallelität beim Aufhebungsverfahren prüfen",
+        None,
+        None,
+        t0,
+    )
+    .await
+    .expect("create concurrent repeal target");
+    finalize_due_proposals(&pool, target.consent_until)
+        .await
+        .expect("accept concurrent repeal target");
+
+    let first_pool = pool.clone();
+    let second_pool = pool.clone();
+    let first_target = target.id.clone();
+    let second_target = target.id.clone();
+    let first = create_repeal_proposal(
+        &first_pool,
+        &first_target,
+        WEBER_A,
+        "Weber A",
+        Some("Erster paralleler Versuch."),
+        t0 + Duration::days(8),
+    );
+    let second = create_repeal_proposal(
+        &second_pool,
+        &second_target,
+        WEBER_B,
+        "Weber B",
+        Some("Zweiter paralleler Versuch."),
+        t0 + Duration::days(8),
+    );
+    let (first, second) = tokio::join!(first, second);
+    let created = match (first, second) {
+        (Ok(created), Err(RepealProposalError::AlreadyHasRepeal))
+        | (Err(RepealProposalError::AlreadyHasRepeal), Ok(created)) => created,
+        _ => panic!("exactly one concurrent repeal creation must win"),
+    };
+    assert_eq!(
+        created.repeals_proposal_id.as_deref(),
+        Some(target.id.as_str())
+    );
+
+    let child_count: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM governance_proposals WHERE repeals_proposal_id = $1::uuid",
+    )
+    .bind(&target.id)
+    .fetch_one(&pool)
+    .await
+    .expect("count concurrent repeal children");
+    assert_eq!(child_count, 1);
 
     cleanup(&pool).await;
 }

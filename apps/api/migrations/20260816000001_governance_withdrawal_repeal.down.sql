@@ -56,6 +56,7 @@ BEGIN
 END;
 $$;
 
+DROP INDEX governance_proposals_repeals_lookup;
 DROP INDEX governance_proposals_one_active_repeal;
 
 ALTER TABLE governance_proposals

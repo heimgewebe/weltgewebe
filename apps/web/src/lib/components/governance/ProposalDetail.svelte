@@ -131,7 +131,11 @@
     error = "";
     try {
       const updated = await withdrawProposal(proposal.id);
-      proposal = { ...proposal, ...updated };
+      proposal = {
+        ...proposal,
+        ...updated,
+        remaining_seconds: updated.remaining_seconds,
+      };
     } catch (cause) {
       error = describeError(cause);
     } finally {
