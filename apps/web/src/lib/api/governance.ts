@@ -224,3 +224,17 @@ export function statusLabel(status: ProposalStatus): string {
       return "Zurückgezogen";
   }
 }
+
+export function proposalStatusLabel(
+  proposal: Pick<
+    Proposal,
+    "status" | "pending_repeal_proposal_id" | "repealed_by_proposal_id"
+  >,
+): string {
+  if (proposal.status === "accepted") {
+    if (proposal.repealed_by_proposal_id) return "Aufgehoben";
+    if (proposal.pending_repeal_proposal_id)
+      return "Angenommen · Aufhebung läuft";
+  }
+  return statusLabel(proposal.status);
+}

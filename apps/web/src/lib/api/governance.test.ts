@@ -3,6 +3,7 @@ import {
   createSachProposal,
   createWeberProposal,
   formatRemaining,
+  proposalStatusLabel,
   requestProposalRepeal,
   statusLabel,
   submitVote,
@@ -158,6 +159,22 @@ describe("governance presentation", () => {
     expect(statusLabel("consent")).toBe("Offene Konsentphase");
     expect(statusLabel("voting")).toBe("Gespräch und Abstimmung");
     expect(statusLabel("withdrawn")).toBe("Zurückgezogen");
+  });
+
+  it("renders accepted repeal state without rewriting the stored status", () => {
+    expect(proposalStatusLabel({ status: "accepted" })).toBe("Angenommen");
+    expect(
+      proposalStatusLabel({
+        status: "accepted",
+        pending_repeal_proposal_id: "repeal-open",
+      }),
+    ).toBe("Angenommen · Aufhebung läuft");
+    expect(
+      proposalStatusLabel({
+        status: "accepted",
+        repealed_by_proposal_id: "repeal-accepted",
+      }),
+    ).toBe("Aufgehoben");
   });
 
   it("formats remaining time without inventing a quorum", () => {

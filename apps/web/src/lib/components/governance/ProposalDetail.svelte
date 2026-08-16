@@ -9,7 +9,7 @@
     listProposalMessages,
     postProposalMessage,
     requestProposalRepeal,
-    statusLabel,
+    proposalStatusLabel,
     submitVeto,
     submitVote,
     withdrawProposal,
@@ -227,7 +227,7 @@
   {:else if proposal}
     <header class="proposal-header">
       <div class="topline">
-        <span class:open={isOpen}>{statusLabel(proposal.status)}</span>
+        <span class:open={isOpen}>{proposalStatusLabel(proposal)}</span>
         {#if proposal.remaining_seconds !== undefined}<strong
             >Noch {formatRemaining(proposal.remaining_seconds)}</strong
           >{/if}
