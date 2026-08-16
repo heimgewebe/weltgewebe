@@ -1253,14 +1253,15 @@ class WorkflowContractTests(unittest.TestCase):
             match = re.fullmatch(r"uses: [^@\s]+@([0-9a-f]{40})(?:\s+#.*)?", line)
             self.assertIsNotNone(match, line)
 
-    def test_status_context_matches_required_checks_contract(self) -> None:
+    def test_status_context_stays_out_of_grabowski_required_check_catalog(self) -> None:
         required = json.loads(
             (self.repo_root / ".github/grabowski-required-checks.json").read_text(
                 encoding="utf-8"
             )
         )
         required_context = self.workflow_data["env"]["REVIEW_EVIDENCE_CONTEXT"]
-        self.assertIn(required_context, required["required_checks"])
+        self.assertNotIn(required_context, required["required_checks"])
+        self.assertEqual(required["required_checks"], ["Required merge gate"])
         self.assertEqual(required_context, "Review evidence gate")
         self.assertEqual(self.review_job["name"], "Review evidence evaluator")
         self.assertNotEqual(self.review_job["name"], required_context)
