@@ -279,10 +279,17 @@ test("proves withdrawal, consent, veto, voting, repeal, and atomic guest-to-Webe
   await weberB.page
     .getByLabel("Begründung (optional)")
     .fill("Der Beschluss soll nach erneutem Verfahren aufgehoben werden.");
-  await weberB.page
-    .getByRole("button", { name: "Aufhebung beantragen" })
-    .click();
-  await expect(weberB.page).toHaveURL(/\/antraege\?id=/);
+  await Promise.all([
+    weberB.page.waitForURL((url) => {
+      const proposalId = url.searchParams.get("id");
+      return (
+        url.pathname === "/antraege" &&
+        proposalId !== null &&
+        proposalId !== sachTarget.id
+      );
+    }),
+    weberB.page.getByRole("button", { name: "Aufhebung beantragen" }).click(),
+  ]);
   const repealId = new URL(weberB.page.url()).searchParams.get("id");
   if (!repealId)
     throw new Error("repeal navigation must expose the new proposal id");
