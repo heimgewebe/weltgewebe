@@ -54,6 +54,8 @@ pub enum ProposalStatus {
     Accepted,
     /// Final abgelehnt (auch Gleichstand und 0:0).
     Rejected,
+    /// Vom Antragsteller vor dem Ende der laufenden Phase zurückgezogen.
+    Withdrawn,
 }
 
 impl ProposalStatus {
@@ -63,6 +65,7 @@ impl ProposalStatus {
             Self::Voting => "voting",
             Self::Accepted => "accepted",
             Self::Rejected => "rejected",
+            Self::Withdrawn => "withdrawn",
         }
     }
 
@@ -72,6 +75,7 @@ impl ProposalStatus {
             "voting" => Ok(Self::Voting),
             "accepted" => Ok(Self::Accepted),
             "rejected" => Ok(Self::Rejected),
+            "withdrawn" => Ok(Self::Withdrawn),
             other => Err(sqlx::Error::Decode(
                 format!("unknown governance proposal status: {other}").into(),
             )),
@@ -116,6 +120,13 @@ pub struct ProposalWithCounts {
     pub title: Option<String>,
     pub target_node_id: Option<String>,
     pub target_node_title: Option<String>,
+    /// Nur bei einem Aufhebungsantrag: der historisch angenommene Sachantrag.
+    pub repeals_proposal_id: Option<String>,
+    /// Offenes Aufhebungsverfahren, das diesen Beschluss adressiert.
+    pub pending_repeal_proposal_id: Option<String>,
+    /// Angenommener Aufhebungsantrag, durch den dieser Beschluss aufgehoben ist.
+    pub repealed_by_proposal_id: Option<String>,
+    pub repealed_at: Option<DateTime<Utc>>,
     pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     pub summary: Option<String>,
@@ -176,6 +187,40 @@ pub enum CreateProposalError {
     #[error("the target node does not exist")]
     TargetNodeNotFound,
     #[error("failed to persist proposal: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum WithdrawProposalError {
+    #[error("proposal not found")]
+    NotFound,
+    #[error("only the applicant may withdraw this proposal")]
+    NotApplicant,
+    #[error("proposal is no longer open for withdrawal")]
+    WrongPhase,
+    #[error("proposal applicant account is missing or disabled")]
+    ActorUnavailable,
+    #[error("failed to withdraw proposal: {0}")]
+    Database(#[source] sqlx::Error),
+}
+
+#[derive(Debug, thiserror::Error)]
+pub enum RepealProposalError {
+    #[error("proposal not found")]
+    NotFound,
+    #[error("only accepted Sachantraege may be repealed")]
+    TargetNotSachProposal,
+    #[error("only an accepted decision may be repealed")]
+    TargetNotAccepted,
+    #[error("a repeal proposal cannot itself be repealed")]
+    TargetIsRepeal,
+    #[error("an open or accepted repeal proposal already exists")]
+    AlreadyHasRepeal,
+    #[error("repeal proposals require Weber or administrator status")]
+    ActorNotEligible,
+    #[error("repeal applicant account is missing or disabled")]
+    ActorUnavailable,
+    #[error("failed to persist repeal proposal: {0}")]
     Database(#[source] sqlx::Error),
 }
 
@@ -399,6 +444,10 @@ pub async fn create_weber_proposal_at_center(
         title: None,
         target_node_id: None,
         target_node_title: None,
+        repeals_proposal_id: None,
+        pending_repeal_proposal_id: None,
+        repealed_by_proposal_id: None,
+        repealed_at: None,
         applicant_account_id: Some(applicant_account_id.to_string()),
         applicant_title: applicant_title.to_string(),
         summary: summary.map(str::to_string),
@@ -521,6 +570,10 @@ pub async fn create_sach_proposal_at_center(
         title: Some(title.to_string()),
         target_node_id: target_node_id.map(str::to_string),
         target_node_title,
+        repeals_proposal_id: None,
+        pending_repeal_proposal_id: None,
+        repealed_by_proposal_id: None,
+        repealed_at: None,
         applicant_account_id: Some(applicant_account_id.to_string()),
         applicant_title: applicant_title.to_string(),
         summary: summary.map(str::to_string),
@@ -535,6 +588,201 @@ pub async fn create_sach_proposal_at_center(
         no_votes: 0,
         abstain_votes: 0,
     })
+}
+
+fn repeal_title(target_title: Option<&str>) -> String {
+    let prefix = "Aufhebung: ";
+    let fallback = "Sachbeschluss";
+    let source = target_title.unwrap_or(fallback).trim();
+    let available = PROPOSAL_TITLE_MAX_CHARS.saturating_sub(prefix.chars().count());
+    let shortened: String = source.chars().take(available).collect();
+    format!("{prefix}{shortened}")
+}
+
+/// Ziehe den eigenen noch offenen Antrag zurück, ohne seine Verfahrensspur zu
+/// löschen. Die laufende Phase muss auch zeitlich noch offen sein: eine bereits
+/// abgelaufene Entscheidung kann nicht durch einen verspäteten Rücknahmeklick
+/// überholt werden, nur weil der Sweeper sie noch nicht finalisiert hat.
+pub async fn withdraw_proposal(
+    pool: &PgPool,
+    proposal_id: &str,
+    applicant_account_id: &str,
+    now: DateTime<Utc>,
+) -> Result<ProposalWithCounts, WithdrawProposalError> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(WithdrawProposalError::Database)?;
+
+    let active_actor: Option<String> = sqlx::query_scalar(
+        "SELECT id FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(applicant_account_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(WithdrawProposalError::Database)?;
+    if active_actor.is_none() {
+        return Err(WithdrawProposalError::ActorUnavailable);
+    }
+
+    let (status, locked_applicant, consent_until, voting_until) =
+        lock_proposal_phase(&mut tx, proposal_id)
+            .await
+            .map_err(WithdrawProposalError::Database)?
+            .ok_or(WithdrawProposalError::NotFound)?;
+    if locked_applicant.as_deref() != Some(applicant_account_id) {
+        return Err(WithdrawProposalError::NotApplicant);
+    }
+    let still_open = match status {
+        ProposalStatus::Consent => now < consent_until,
+        ProposalStatus::Voting => voting_until.is_some_and(|until| now < until),
+        ProposalStatus::Accepted | ProposalStatus::Rejected | ProposalStatus::Withdrawn => false,
+    };
+    if !still_open {
+        return Err(WithdrawProposalError::WrongPhase);
+    }
+
+    sqlx::query(
+        "UPDATE governance_proposals SET status = 'withdrawn', finalized_at = $2 \
+         WHERE id = $1::uuid",
+    )
+    .bind(proposal_id)
+    .bind(now)
+    .execute(&mut *tx)
+    .await
+    .map_err(WithdrawProposalError::Database)?;
+    tx.commit().await.map_err(WithdrawProposalError::Database)?;
+
+    get_proposal(pool, proposal_id)
+        .await
+        .map_err(WithdrawProposalError::Database)?
+        .ok_or_else(|| WithdrawProposalError::Database(sqlx::Error::RowNotFound))
+}
+
+/// Eröffne ein reguläres Sachantragsverfahren zur Aufhebung eines bereits
+/// angenommenen Sachbeschlusses. Der alte Beschluss bleibt unverändert; erst
+/// die Annahme dieses neuen Antrags macht die Aufhebung in der Projektion
+/// wirksam. Aufhebungsanträge werden nicht rekursiv aufgehoben — eine spätere
+/// inhaltliche Kehrtwende ist wieder ein normaler Sachantrag.
+pub async fn create_repeal_proposal(
+    pool: &PgPool,
+    target_proposal_id: &str,
+    applicant_account_id: &str,
+    applicant_title: &str,
+    summary: Option<&str>,
+    now: DateTime<Utc>,
+) -> Result<ProposalWithCounts, RepealProposalError> {
+    let mut tx = pool.begin().await.map_err(RepealProposalError::Database)?;
+
+    // Gleiche Lock-Reihenfolge wie Veto, Stimme, Nachricht und Finalisierung:
+    // zuerst Account, dann Antrag. Das hält Account-Lifecycle und Governance
+    // auch unter Parallelität deadlock-frei.
+    let actor_role: Option<String> = sqlx::query_scalar(
+        "SELECT role FROM domain_accounts WHERE id = $1 AND disabled = FALSE FOR UPDATE",
+    )
+    .bind(applicant_account_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(RepealProposalError::Database)?;
+    match actor_role.as_deref() {
+        None => return Err(RepealProposalError::ActorUnavailable),
+        Some("weber" | "admin") => {}
+        Some(_) => return Err(RepealProposalError::ActorNotEligible),
+    }
+
+    let row = sqlx::query(
+        "SELECT kind, status, webgemeindezentrum_id, title, target_node_id, \
+                target_node_title, repeals_proposal_id::text AS repeals_proposal_id \
+         FROM governance_proposals WHERE id = $1::uuid FOR UPDATE",
+    )
+    .bind(target_proposal_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(RepealProposalError::Database)?
+    .ok_or(RepealProposalError::NotFound)?;
+
+    let kind: String = row.try_get("kind").map_err(RepealProposalError::Database)?;
+    if kind != "sachantrag" {
+        return Err(RepealProposalError::TargetNotSachProposal);
+    }
+    let status = ProposalStatus::from_db(
+        row.try_get::<String, _>("status")
+            .map_err(RepealProposalError::Database)?
+            .as_str(),
+    )
+    .map_err(RepealProposalError::Database)?;
+    if status != ProposalStatus::Accepted {
+        return Err(RepealProposalError::TargetNotAccepted);
+    }
+    let target_repeals: Option<String> = row
+        .try_get("repeals_proposal_id")
+        .map_err(RepealProposalError::Database)?;
+    if target_repeals.is_some() {
+        return Err(RepealProposalError::TargetIsRepeal);
+    }
+
+    let existing: Option<String> = sqlx::query_scalar(
+        "SELECT id::text FROM governance_proposals \
+         WHERE repeals_proposal_id = $1::uuid \
+           AND status IN ('consent', 'voting', 'accepted') LIMIT 1",
+    )
+    .bind(target_proposal_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(RepealProposalError::Database)?;
+    if existing.is_some() {
+        return Err(RepealProposalError::AlreadyHasRepeal);
+    }
+
+    let webgemeindezentrum_id: String = row
+        .try_get("webgemeindezentrum_id")
+        .map_err(RepealProposalError::Database)?;
+    let target_title: Option<String> = row
+        .try_get("title")
+        .map_err(RepealProposalError::Database)?;
+    let target_node_id: Option<String> = row
+        .try_get("target_node_id")
+        .map_err(RepealProposalError::Database)?;
+    let target_node_title: Option<String> = row
+        .try_get("target_node_title")
+        .map_err(RepealProposalError::Database)?;
+    let title = repeal_title(target_title.as_deref());
+    let id = Uuid::new_v4().to_string();
+    let consent_until = now + Duration::days(CONSENT_PHASE_DAYS);
+
+    sqlx::query(
+        "INSERT INTO governance_proposals \
+             (id, kind, webgemeindezentrum_id, title, target_node_id, target_node_title, \
+              applicant_account_id, applicant_title, summary, status, created_at, consent_until, \
+              repeals_proposal_id) \
+         VALUES ($1::uuid, 'sachantrag', $2, $3, $4, $5, $6, $7, $8, 'consent', $9, $10, $11::uuid)",
+    )
+    .bind(&id)
+    .bind(&webgemeindezentrum_id)
+    .bind(&title)
+    .bind(&target_node_id)
+    .bind(&target_node_title)
+    .bind(applicant_account_id)
+    .bind(applicant_title)
+    .bind(summary)
+    .bind(now)
+    .bind(consent_until)
+    .bind(target_proposal_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| {
+        if is_unique_violation(&error, "governance_proposals_one_active_repeal") {
+            RepealProposalError::AlreadyHasRepeal
+        } else {
+            RepealProposalError::Database(error)
+        }
+    })?;
+    tx.commit().await.map_err(RepealProposalError::Database)?;
+
+    get_proposal(pool, &id)
+        .await
+        .map_err(RepealProposalError::Database)?
+        .ok_or_else(|| RepealProposalError::Database(sqlx::Error::RowNotFound))
 }
 
 /// Sperre den Antrag und liefere Phase, Antragsteller und Fristen.
@@ -758,7 +1006,7 @@ pub async fn add_message(
     let conversation_open = match status {
         ProposalStatus::Consent => now < consent_until,
         ProposalStatus::Voting => voting_until.is_some_and(|until| now < until),
-        ProposalStatus::Accepted | ProposalStatus::Rejected => false,
+        ProposalStatus::Accepted | ProposalStatus::Rejected | ProposalStatus::Withdrawn => false,
     };
     if !conversation_open {
         return Err(MessageError::WrongPhase);
@@ -922,6 +1170,16 @@ pub async fn delete_guest_account(pool: &PgPool, account_id: &str) -> Result<(),
 
 const PROPOSAL_WITH_COUNTS_SELECT: &str = "SELECT p.id::text AS id, p.kind, \
         p.webgemeindezentrum_id, p.title, p.target_node_id, p.target_node_title, \
+        p.repeals_proposal_id::text AS repeals_proposal_id, \
+        (SELECT r.id::text FROM governance_proposals r \
+            WHERE r.repeals_proposal_id = p.id AND r.status IN ('consent', 'voting') \
+            ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS pending_repeal_proposal_id, \
+        (SELECT r.id::text FROM governance_proposals r \
+            WHERE r.repeals_proposal_id = p.id AND r.status = 'accepted' \
+            ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS repealed_by_proposal_id, \
+        (SELECT r.finalized_at FROM governance_proposals r \
+            WHERE r.repeals_proposal_id = p.id AND r.status = 'accepted' \
+            ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS repealed_at, \
         p.applicant_account_id, p.applicant_title, p.summary, p.status, \
         p.created_at, p.consent_until, p.voting_until, p.finalized_at, \
         (SELECT count(*) FROM governance_vetoes v \
@@ -944,6 +1202,10 @@ fn proposal_from_row(row: &sqlx::postgres::PgRow) -> Result<ProposalWithCounts, 
         title: row.try_get("title")?,
         target_node_id: row.try_get("target_node_id")?,
         target_node_title: row.try_get("target_node_title")?,
+        repeals_proposal_id: row.try_get("repeals_proposal_id")?,
+        pending_repeal_proposal_id: row.try_get("pending_repeal_proposal_id")?,
+        repealed_by_proposal_id: row.try_get("repealed_by_proposal_id")?,
+        repealed_at: row.try_get("repealed_at")?,
         applicant_account_id: row.try_get("applicant_account_id")?,
         applicant_title: row.try_get("applicant_title")?,
         summary: row.try_get("summary")?,
@@ -1393,6 +1655,7 @@ mod tests {
             ProposalStatus::Voting,
             ProposalStatus::Accepted,
             ProposalStatus::Rejected,
+            ProposalStatus::Withdrawn,
         ] {
             assert_eq!(
                 ProposalStatus::from_db(status.as_str()).expect("known status must parse"),

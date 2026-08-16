@@ -49,7 +49,7 @@ use self::{
     edges::{get_edge, list_edges},
     governance::{
         create_proposal, exit_own_account, get_proposal, list_proposal_messages, list_proposals,
-        post_proposal_message, veto_proposal, vote_proposal,
+        post_proposal_message, request_repeal, veto_proposal, vote_proposal, withdraw_proposal,
     },
     nodes::{get_node, list_nodes},
     search::search_nodes,
@@ -154,6 +154,14 @@ pub fn api_router() -> Router<ApiState> {
         // Accounts offen; formale Vetos und Stimmen bleiben Weber/Admin vorbehalten.
         .route("/proposals", get(list_proposals).post(create_proposal))
         .route("/proposals/{id}", get(get_proposal))
+        .route(
+            "/proposals/{id}/withdraw",
+            post(withdraw_proposal).route_layer(from_fn(require_authenticated)),
+        )
+        .route(
+            "/proposals/{id}/repeal",
+            post(request_repeal).route_layer(from_fn(require_write)),
+        )
         .route(
             "/proposals/{id}/veto",
             post(veto_proposal).route_layer(from_fn(require_write)),

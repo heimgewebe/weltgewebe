@@ -1,6 +1,11 @@
 import { invalidateAccountAttention } from "$lib/accountAttention";
 
-export type ProposalStatus = "consent" | "voting" | "accepted" | "rejected";
+export type ProposalStatus =
+  | "consent"
+  | "voting"
+  | "accepted"
+  | "rejected"
+  | "withdrawn";
 export type VoteChoice = "ja" | "nein" | "enthaltung";
 
 export interface Proposal {
@@ -10,6 +15,10 @@ export interface Proposal {
   title?: string;
   target_node_id?: string;
   target_node_title?: string;
+  repeals_proposal_id?: string;
+  pending_repeal_proposal_id?: string;
+  repealed_by_proposal_id?: string;
+  repealed_at?: string;
   applicant_account_id: string | null;
   applicant_title: string;
   summary?: string;
@@ -118,6 +127,27 @@ export function createSachProposal(
   });
 }
 
+export async function withdrawProposal(id: string): Promise<Proposal> {
+  const proposal = await request<Proposal>(
+    `/api/proposals/${encodeURIComponent(id)}/withdraw`,
+    { method: "POST" },
+  );
+  invalidateAccountAttention();
+  return proposal;
+}
+
+export function requestProposalRepeal(
+  id: string,
+  summary?: string,
+): Promise<Proposal> {
+  return request<Proposal>(`/api/proposals/${encodeURIComponent(id)}/repeal`, {
+    method: "POST",
+    body: JSON.stringify({
+      ...(summary?.trim() ? { summary: summary.trim() } : {}),
+    }),
+  });
+}
+
 export function proposalTitle(proposal: Proposal): string {
   return proposal.kind === "sachantrag"
     ? proposal.title || "Sachantrag ohne Titel"
@@ -190,5 +220,7 @@ export function statusLabel(status: ProposalStatus): string {
       return "Angenommen";
     case "rejected":
       return "Abgelehnt";
+    case "withdrawn":
+      return "Zurückgezogen";
   }
 }

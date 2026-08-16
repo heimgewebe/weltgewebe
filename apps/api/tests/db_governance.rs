@@ -13,9 +13,10 @@ use sha2::{Digest, Sha256};
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::time::{sleep, timeout, Duration as TokioDuration};
 use weltgewebe_api::governance::{
-    add_message, add_veto, create_sach_proposal, create_weber_proposal, delete_guest_account,
-    finalize_due_proposals, get_proposal, list_proposals, upsert_vote, CreateProposalError,
-    MessageError, ProposalStatus, VetoError, VoteChoice, VoteError, VoteWriteOutcome,
+    add_message, add_veto, create_repeal_proposal, create_sach_proposal, create_weber_proposal,
+    delete_guest_account, finalize_due_proposals, get_proposal, list_proposals, upsert_vote,
+    withdraw_proposal, CreateProposalError, MessageError, ProposalStatus, RepealProposalError,
+    VetoError, VoteChoice, VoteError, VoteWriteOutcome, WithdrawProposalError,
 };
 
 const GUEST_A: &str = "gov-proof-guest-a";
@@ -62,6 +63,18 @@ async fn cleanup(pool: &sqlx::PgPool) {
         .execute(pool)
         .await
         .expect("clean nodes");
+    // Repeal proposals reference their historical target with ON DELETE RESTRICT.
+    // Remove those children first; production has deliberately no generic
+    // proposal-deletion surface, this ordering exists only for disposable tests.
+    sqlx::query(
+        "DELETE FROM governance_proposals \
+         WHERE repeals_proposal_id IS NOT NULL \
+           AND (applicant_account_id LIKE 'gov-proof-%' \
+             OR (applicant_account_id IS NULL AND applicant_title LIKE 'gov-proof:%'))",
+    )
+    .execute(pool)
+    .await
+    .expect("clean repeal proposals");
     sqlx::query(
         "DELETE FROM governance_proposals \
          WHERE applicant_account_id LIKE 'gov-proof-%' \
@@ -193,6 +206,238 @@ async fn sachantraege_require_weber_allow_multiple_and_accept_without_promotion(
         after_delete.target_node_title.as_deref(),
         Some("Rennknoten")
     );
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn own_open_proposal_withdrawal_preserves_history_and_cannot_beat_deadline() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, GUEST_A, "gast").await;
+    seed_account(&pool, WEBER_A, "weber").await;
+
+    let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 8, 0, 0).unwrap();
+    let proposal =
+        create_weber_proposal(&pool, GUEST_A, "Gast A", Some("Ich möchte mitweben."), t0)
+            .await
+            .expect("create Weber proposal");
+    add_message(
+        &pool,
+        &proposal.id,
+        GUEST_A,
+        "Gast A",
+        "Die Rücknahme soll die Geschichte nicht löschen.",
+        t0 + Duration::hours(1),
+    )
+    .await
+    .expect("write procedural history");
+
+    let foreign = withdraw_proposal(&pool, &proposal.id, WEBER_A, t0 + Duration::hours(2)).await;
+    assert!(matches!(foreign, Err(WithdrawProposalError::NotApplicant)));
+
+    let withdrawn_at = t0 + Duration::days(1);
+    let withdrawn = withdraw_proposal(&pool, &proposal.id, GUEST_A, withdrawn_at)
+        .await
+        .expect("withdraw own open proposal");
+    assert_eq!(withdrawn.status, ProposalStatus::Withdrawn);
+    assert_eq!(withdrawn.finalized_at, Some(withdrawn_at));
+    assert_eq!(withdrawn.message_count, 1);
+    assert_eq!(withdrawn.applicant_account_id.as_deref(), Some(GUEST_A));
+
+    let closed_message = add_message(
+        &pool,
+        &proposal.id,
+        GUEST_A,
+        "Gast A",
+        "Zu spät",
+        withdrawn_at + Duration::minutes(1),
+    )
+    .await;
+    assert!(matches!(closed_message, Err(MessageError::WrongPhase)));
+    assert!(finalize_due_proposals(&pool, t0 + Duration::days(30))
+        .await
+        .expect("withdrawn proposal stays terminal")
+        .is_empty());
+    let role: String = sqlx::query_scalar("SELECT role FROM domain_accounts WHERE id = $1")
+        .bind(GUEST_A)
+        .fetch_one(&pool)
+        .await
+        .expect("read guest role");
+    assert_eq!(role, "gast", "withdrawal must never grant Weber status");
+
+    let second_created = withdrawn_at + Duration::days(1);
+    let second = create_weber_proposal(&pool, GUEST_A, "Gast A", None, second_created)
+        .await
+        .expect("withdrawal releases the one-open-proposal constraint");
+    let late_withdraw = withdraw_proposal(&pool, &second.id, GUEST_A, second.consent_until).await;
+    assert!(matches!(
+        late_withdraw,
+        Err(WithdrawProposalError::WrongPhase)
+    ));
+    let outcomes = finalize_due_proposals(&pool, second.consent_until)
+        .await
+        .expect("deadline decision remains authoritative");
+    assert_eq!(outcomes.len(), 1);
+    assert_eq!(outcomes[0].status, ProposalStatus::Accepted);
+    assert!(outcomes[0].promoted);
+
+    cleanup(&pool).await;
+}
+
+#[tokio::test]
+#[serial]
+#[ignore = "requires direct PostgreSQL"]
+async fn repeal_is_a_new_sachantrag_and_never_rewrites_the_old_decision() {
+    let pool = pool().await;
+    cleanup(&pool).await;
+    seed_account(&pool, WEBER_A, "weber").await;
+    seed_account(&pool, WEBER_B, "weber").await;
+
+    let t0 = Utc.with_ymd_and_hms(2026, 8, 16, 8, 0, 0).unwrap();
+    let target = create_sach_proposal(
+        &pool,
+        WEBER_A,
+        "Weber A",
+        "Werkstatt sonntags öffnen",
+        Some("Erster gemeinschaftlicher Beschluss."),
+        None,
+        t0,
+    )
+    .await
+    .expect("create target Sachantrag");
+    finalize_due_proposals(&pool, target.consent_until)
+        .await
+        .expect("accept target");
+    assert_eq!(
+        get_proposal(&pool, &target.id)
+            .await
+            .expect("read target")
+            .expect("target")
+            .status,
+        ProposalStatus::Accepted
+    );
+
+    let first = create_repeal_proposal(
+        &pool,
+        &target.id,
+        WEBER_B,
+        "Weber B",
+        Some("Der Beschluss hat sich nicht bewährt."),
+        t0 + Duration::days(8),
+    )
+    .await
+    .expect("create repeal proposal");
+    assert_eq!(first.kind, "sachantrag");
+    assert_eq!(
+        first.repeals_proposal_id.as_deref(),
+        Some(target.id.as_str())
+    );
+    assert_eq!(first.status, ProposalStatus::Consent);
+    assert!(first
+        .title
+        .as_deref()
+        .is_some_and(|title| title.starts_with("Aufhebung: ")));
+
+    let target_with_pending = get_proposal(&pool, &target.id)
+        .await
+        .expect("read target with pending repeal")
+        .expect("target");
+    assert_eq!(target_with_pending.status, ProposalStatus::Accepted);
+    assert_eq!(
+        target_with_pending.pending_repeal_proposal_id.as_deref(),
+        Some(first.id.as_str())
+    );
+    assert_eq!(target_with_pending.repealed_by_proposal_id, None);
+
+    let duplicate = create_repeal_proposal(
+        &pool,
+        &target.id,
+        WEBER_A,
+        "Weber A",
+        None,
+        t0 + Duration::days(8) + Duration::minutes(1),
+    )
+    .await;
+    assert!(matches!(
+        duplicate,
+        Err(RepealProposalError::AlreadyHasRepeal)
+    ));
+
+    let withdrawn = withdraw_proposal(&pool, &first.id, WEBER_B, t0 + Duration::days(9))
+        .await
+        .expect("withdraw first repeal attempt");
+    assert_eq!(withdrawn.status, ProposalStatus::Withdrawn);
+    assert_eq!(
+        withdrawn.repeals_proposal_id.as_deref(),
+        Some(target.id.as_str())
+    );
+    let target_after_withdrawal = get_proposal(&pool, &target.id)
+        .await
+        .expect("read target after withdrawn repeal")
+        .expect("target");
+    assert_eq!(target_after_withdrawal.status, ProposalStatus::Accepted);
+    assert_eq!(target_after_withdrawal.pending_repeal_proposal_id, None);
+    assert_eq!(target_after_withdrawal.repealed_by_proposal_id, None);
+
+    let second = create_repeal_proposal(
+        &pool,
+        &target.id,
+        WEBER_A,
+        "Weber A",
+        Some("Erneuter Aufhebungsantrag."),
+        t0 + Duration::days(10),
+    )
+    .await
+    .expect("withdrawn repeal permits a later new procedure");
+    let second_outcomes = finalize_due_proposals(&pool, second.consent_until)
+        .await
+        .expect("accept second repeal proposal");
+    assert_eq!(second_outcomes.len(), 1);
+    assert_eq!(second_outcomes[0].proposal_id, second.id);
+    assert_eq!(second_outcomes[0].status, ProposalStatus::Accepted);
+    assert!(!second_outcomes[0].promoted);
+
+    let original = get_proposal(&pool, &target.id)
+        .await
+        .expect("read repealed original")
+        .expect("target remains");
+    assert_eq!(
+        original.status,
+        ProposalStatus::Accepted,
+        "historical decision itself must remain accepted"
+    );
+    assert_eq!(original.pending_repeal_proposal_id, None);
+    assert_eq!(
+        original.repealed_by_proposal_id.as_deref(),
+        Some(second.id.as_str())
+    );
+    let accepted_repeal = get_proposal(&pool, &second.id)
+        .await
+        .expect("read accepted repeal")
+        .expect("accepted repeal remains");
+    assert_eq!(accepted_repeal.status, ProposalStatus::Accepted);
+    assert_eq!(
+        accepted_repeal.repeals_proposal_id.as_deref(),
+        Some(target.id.as_str())
+    );
+    assert_eq!(original.repealed_at, accepted_repeal.finalized_at);
+
+    let recursive = create_repeal_proposal(
+        &pool,
+        &second.id,
+        WEBER_B,
+        "Weber B",
+        None,
+        second.consent_until + Duration::minutes(1),
+    )
+    .await;
+    assert!(matches!(
+        recursive,
+        Err(RepealProposalError::TargetIsRepeal)
+    ));
 
     cleanup(&pool).await;
 }

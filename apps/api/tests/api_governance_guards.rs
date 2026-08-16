@@ -255,6 +255,30 @@ async fn governance_writes_fail_closed_without_database() {
         .expect("response");
     assert_eq!(create_sach.status(), StatusCode::SERVICE_UNAVAILABLE);
 
+    let withdraw = app
+        .clone()
+        .oneshot(request(
+            "POST",
+            &format!("/proposals/{PROPOSAL_ID}/withdraw"),
+            Some(&gast_cookie),
+            None,
+        ))
+        .await
+        .expect("response");
+    assert_eq!(withdraw.status(), StatusCode::SERVICE_UNAVAILABLE);
+
+    let repeal = app
+        .clone()
+        .oneshot(request(
+            "POST",
+            &format!("/proposals/{PROPOSAL_ID}/repeal"),
+            Some(&weber_cookie),
+            Some(r#"{}"#),
+        ))
+        .await
+        .expect("response");
+    assert_eq!(repeal.status(), StatusCode::SERVICE_UNAVAILABLE);
+
     let exit = app
         .clone()
         .oneshot(request(
@@ -333,6 +357,22 @@ async fn guest_discussion_passes_but_formal_decisions_are_forbidden() {
         "guest vote must be rejected before touching the database"
     );
 
+    let repeal = app
+        .clone()
+        .oneshot(request(
+            "POST",
+            &format!("/proposals/{PROPOSAL_ID}/repeal"),
+            Some(&gast_cookie),
+            Some(r#"{}"#),
+        ))
+        .await
+        .expect("response");
+    assert_eq!(
+        repeal.status(),
+        StatusCode::FORBIDDEN,
+        "guest repeal must be rejected before touching the database"
+    );
+
     let message = app
         .clone()
         .oneshot(request(
@@ -371,6 +411,8 @@ async fn anonymous_webungsaktionen_are_unauthorized() {
     let (app, _, _) = app_without_database().await;
 
     for (method, path, body_json) in [
+        ("POST", format!("/proposals/{PROPOSAL_ID}/withdraw"), "{}"),
+        ("POST", format!("/proposals/{PROPOSAL_ID}/repeal"), "{}"),
         (
             "POST",
             format!("/proposals/{PROPOSAL_ID}/veto"),
