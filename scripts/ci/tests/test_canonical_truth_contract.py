@@ -45,7 +45,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
         # Remaining host-path jobs outside make validate still pin the same versions.
         self.assertIn("pytest==9.0.3 pyyaml==6.0.2", main_workflow)
 
-    def test_required_check_catalog_is_strict_and_matches_trusted_producers(
+    def test_required_check_catalog_excludes_derived_review_status_and_matches_producers(
         self,
     ) -> None:
         path = ROOT / ".github/grabowski-required-checks.json"
@@ -54,7 +54,7 @@ class CanonicalTruthContractTests(unittest.TestCase):
         self.assertEqual(data["schema_version"], 1)
         self.assertEqual(
             data["required_checks"],
-            ["Required merge gate", "Review evidence gate"],
+            ["Required merge gate"],
         )
         producers = {
             "Required merge gate": {
@@ -66,7 +66,8 @@ class CanonicalTruthContractTests(unittest.TestCase):
                 "workflow": ROOT / ".github/workflows/review-evidence.yml",
             },
         }
-        self.assertEqual(set(data["required_checks"]), set(producers))
+        self.assertEqual(set(data["required_checks"]), {"Required merge gate"})
+        self.assertNotIn("Review evidence gate", data["required_checks"])
 
         required_merge = producers["Required merge gate"]
         self.assertEqual(required_merge["kind"], "check_run")

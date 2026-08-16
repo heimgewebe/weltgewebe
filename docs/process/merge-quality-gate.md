@@ -195,21 +195,19 @@ UTC-Datumswerte und bei Gleichstand über stabile GitHub-IDs geordnet.
 
 ## Erforderliche Prüfungen
 
-Die Datei `.github/grabowski-required-checks.json` enthält die kanonische Liste der
-Checks, die Grabowski vor einem Merge lesen muss. Dazu gehören insbesondere:
+Die Datei `.github/grabowski-required-checks.json` enthält ausschließlich die
+**primären** Checks, die Grabowski vor einem Merge direkt auswertet. Abgeleitete
+Review-Statusprojektionen dürfen dort nicht erneut als Eingabe erscheinen, weil
+sonst das Review-Gate von seinem eigenen Ergebnis abhängen würde. Aktuell enthält
+der Katalog deshalb:
 
-- `Core Guard Tests`;
-- `ci`;
-- `Docs & Shell Hygiene`;
-- `PostgreSQL integration proofs`;
-- `Web E2E`;
-- `Required merge gate`;
-- `Review evidence gate`.
+- `Required merge gate`.
 
 Der Required-Merge-Gate-Job bleibt der vorhandene CI-Aggregator. Das
-Review-Evidence-Gate ergänzt ihn um die exakte Reviewbindung. Der GitHub-Ruleset
-wird separat verwaltet; eine Datei im Repository kann ihn weder beweisen noch
-ändern.
+`Review evidence gate` ergänzt ihn weiterhin um die exakte Reviewbindung, ist aber
+bewusst **kein Eintrag** im Grabowski-Eingabekatalog. Es bleibt unabhängig davon
+ein eigener harter Commitstatus des GitHub-Rulesets. Der GitHub-Ruleset wird
+separat verwaltet; eine Datei im Repository kann ihn weder beweisen noch ändern.
 
 ## Bootstrap
 
