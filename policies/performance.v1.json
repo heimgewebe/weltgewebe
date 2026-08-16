@@ -171,8 +171,8 @@
     },
     "api_runtime": {
       "status": "calibration_required",
-      "runner": "k6",
-      "artifact_kind": "api-load-samples",
+      "runner": "scripts/performance/api_runtime_evidence.py check (k6 workload: scripts/performance/api_runtime_k6.js)",
+      "artifact_kind": "api-runtime-evidence-v1",
       "scenario": {
         "virtual_users": 10,
         "duration_seconds": 30,
@@ -194,7 +194,10 @@
       },
       "limitations": [
         "The p95 threshold is inherited from prior policy files and is not blocking until the workload is wired to a revision-bound application and dataset.",
-        "Health-endpoint smoke checks alone do not establish API capacity."
+        "Health-endpoint smoke checks alone do not establish API capacity.",
+        "scripts/performance/api_runtime_evidence.py check produces a machine-readable evidence artifact bound to the exact git HEAD and this scenario contract; it reuses the existing search_request_duration_seconds, search_repository_duration_seconds and http_requests_total Prometheus telemetry rather than a new observability path, and its query-count evidence is a deterministic cross-check between two independently instrumented counters, not a sampled profiler.",
+        "scripts/performance/api_runtime_evidence.py regression-fixture generates a self-consistent but threshold-violating fixture so the gate's fail-closed behaviour can be demonstrated and tested on demand.",
+        "Database latency and query-count evidence describe the search read path only; they do not establish plan-shape at scale, which remains the responsibility of measurements.database_scale."
       ]
     },
     "database_scale": {
@@ -219,7 +222,9 @@
         "database_connections"
       ],
       "limitations": [
-        "No blocking resource thresholds exist until reproducible measurements cover projection refresh and steady-state traffic."
+        "No blocking resource thresholds exist until reproducible measurements cover projection refresh and steady-state traffic.",
+        "Runner: scripts/performance/container_resource_sampler.py samples docker stats peaks for the already-running API replica container over the same window as the api_runtime k6 workload; database_connections is a point-in-time count from PostgreSQL's built-in pg_stat_activity view, not a new extension such as pg_stat_statements.",
+        "These samples are attached to the api_runtime evidence artifact produced by scripts/performance/api_runtime_evidence.py check; they remain calibration_required until repeated across hardware baselines."
       ]
     }
   },
