@@ -169,7 +169,9 @@ test("proves withdrawal, consent, veto, voting, repeal, and atomic guest-to-Webe
     .getByRole("button", { name: "Antrag zurückziehen" })
     .click();
   await expect(
-    applicantVoting.page.getByText("Zurückgezogen", { exact: true }),
+    applicantVoting.page
+      .locator("header")
+      .getByText("Zurückgezogen", { exact: true }),
   ).toBeVisible();
   await expect(applicantVoting.page.getByText(/^Noch \d/)).toHaveCount(0);
   const withdrawn = await jsonRequest<Proposal>(
