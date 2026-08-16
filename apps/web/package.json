@@ -9,7 +9,7 @@
     "overrides": {
       "cookie": "^0.7.0",
       "rollup": "4.60.2",
-      "flatted": "3.4.2",
+      "flatted": "3.4.4",
       "picomatch@^2.0.0": "2.3.2",
       "devalue": "^5.8.1",
       "postcss": "8.5.23",
