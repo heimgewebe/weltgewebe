@@ -1,9 +1,9 @@
 //! HTTP-Oberfläche des Antragssystems (`docs/specs/governance-antraege.md`).
 //!
 //! Leserechte sind öffentlich. Angemeldete Gäste dürfen den eigenen
-//! Weberantrag stellen, in offenen Gesprächsräumen mitreden und den eigenen
-//! Account auflösen. Formale Vetos und Stimmen bleiben Webern und
-//! Administratoren vorbehalten.
+//! Weberantrag stellen, in offenen Gesprächsräumen mitreden, eigene offene
+//! Anträge zurückziehen und den eigenen Account auflösen. Formale Vetos, Stimmen
+//! und Aufhebungsanträge bleiben Webern und Administratoren vorbehalten.
 //!
 //! PostgreSQL ist kanonisch: ohne konfigurierten Pool antworten alle
 //! Governance-Endpunkte fail-closed mit 503 — es gibt keinen JSONL- oder
@@ -115,7 +115,7 @@ fn require_formal_governance_actor(auth: &AuthContext) -> Result<String, ApiErro
     if !matches!(auth.role, Role::Weber | Role::Admin) {
         return Err((
             StatusCode::FORBIDDEN,
-            "formal vetoes and votes require Weber status".to_string(),
+            "formal governance actions require Weber or administrator status".to_string(),
         ));
     }
     Ok(account_id)
@@ -153,6 +153,14 @@ pub struct ProposalView {
     pub target_node_id: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub target_node_title: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repeals_proposal_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pending_repeal_proposal_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repealed_by_proposal_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub repealed_at: Option<DateTime<Utc>>,
     pub applicant_account_id: Option<String>,
     pub applicant_title: String,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -180,7 +188,7 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
         ProposalStatus::Voting => proposal
             .voting_until
             .map(|until| (until - now).num_seconds().max(0)),
-        ProposalStatus::Accepted | ProposalStatus::Rejected => None,
+        ProposalStatus::Accepted | ProposalStatus::Rejected | ProposalStatus::Withdrawn => None,
     };
 
     ProposalView {
@@ -190,6 +198,10 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
         title: proposal.title,
         target_node_id: proposal.target_node_id,
         target_node_title: proposal.target_node_title,
+        repeals_proposal_id: proposal.repeals_proposal_id,
+        pending_repeal_proposal_id: proposal.pending_repeal_proposal_id,
+        repealed_by_proposal_id: proposal.repealed_by_proposal_id,
+        repealed_at: proposal.repealed_at,
         applicant_account_id: proposal.applicant_account_id,
         applicant_title: proposal.applicant_title,
         summary: proposal.summary,
@@ -486,6 +498,142 @@ pub async fn create_proposal(
 
     let now = Utc::now();
     Ok((StatusCode::CREATED, Json(proposal_view(proposal, now))))
+}
+
+/// POST /proposals/{id}/withdraw — der Antragsteller beendet das eigene offene
+/// Verfahren, ohne es oder seine bisherigen Beiträge zu löschen.
+pub async fn withdraw_proposal(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<String>,
+) -> Result<Json<ProposalView>, ApiError> {
+    let account_id = require_account_id(&auth)?;
+    let pool = require_pool(&state)?;
+    let proposal = governance::withdraw_proposal(pool, &id, &account_id, Utc::now())
+        .await
+        .map_err(|error| match error {
+            governance::WithdrawProposalError::NotFound => {
+                (StatusCode::NOT_FOUND, "proposal not found".to_string())
+            }
+            governance::WithdrawProposalError::NotApplicant => (
+                StatusCode::FORBIDDEN,
+                "only the applicant may withdraw this proposal".to_string(),
+            ),
+            governance::WithdrawProposalError::WrongPhase => (
+                StatusCode::CONFLICT,
+                "only a currently open proposal may be withdrawn".to_string(),
+            ),
+            governance::WithdrawProposalError::ActorUnavailable => (
+                StatusCode::UNAUTHORIZED,
+                "proposal applicant account is no longer active".to_string(),
+            ),
+            governance::WithdrawProposalError::Database(error) => {
+                internal_error("withdraw_proposal")(error)
+            }
+        })?;
+
+    tracing::info!(
+        event = "governance.proposal.withdrawn",
+        proposal_id = %id,
+        applicant_account_id = %account_id,
+        "Governance proposal withdrawn"
+    );
+    Ok(Json(proposal_view(proposal, Utc::now())))
+}
+
+/// POST /proposals/{id}/repeal — eröffnet einen neuen Sachantrag, der einen
+/// angenommenen Sachbeschluss adressiert. Der Zielbeschluss wird nicht mutiert.
+pub async fn request_repeal(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+    Path(id): Path<String>,
+    Json(payload): Json<Value>,
+) -> Result<(StatusCode, Json<ProposalView>), ApiError> {
+    let account_id = require_formal_governance_actor(&auth)?;
+    let pool = require_pool(&state)?;
+    let object = payload
+        .as_object()
+        .ok_or_else(|| bad_request("repeal request must be a JSON object"))?;
+    for key in object.keys() {
+        if key != "summary" {
+            return Err(bad_request(&format!("unknown field: {key}")));
+        }
+    }
+    let summary = optional_trimmed_text(object.get("summary"), "summary", SUMMARY_MAX_CHARS)?;
+    let applicant_title = account_title(&state, &account_id).await;
+    let proposal = governance::create_repeal_proposal(
+        pool,
+        &id,
+        &account_id,
+        &applicant_title,
+        summary.as_deref(),
+        Utc::now(),
+    )
+    .await
+    .map_err(|error| match error {
+        governance::RepealProposalError::NotFound => {
+            (StatusCode::NOT_FOUND, "proposal not found".to_string())
+        }
+        governance::RepealProposalError::TargetNotSachProposal => (
+            StatusCode::CONFLICT,
+            "only a Sachantrag decision can be repealed".to_string(),
+        ),
+        governance::RepealProposalError::TargetNotAccepted => (
+            StatusCode::CONFLICT,
+            "only an accepted Sachantrag can be repealed".to_string(),
+        ),
+        governance::RepealProposalError::TargetIsRepeal => (
+            StatusCode::CONFLICT,
+            "a repeal proposal cannot itself be repealed".to_string(),
+        ),
+        governance::RepealProposalError::AlreadyHasRepeal => (
+            StatusCode::CONFLICT,
+            "an open or accepted repeal proposal already exists for this decision".to_string(),
+        ),
+        governance::RepealProposalError::ActorNotEligible => (
+            StatusCode::FORBIDDEN,
+            "repeal proposals require Weber or administrator status".to_string(),
+        ),
+        governance::RepealProposalError::ActorUnavailable => (
+            StatusCode::UNAUTHORIZED,
+            "repeal applicant account is no longer active".to_string(),
+        ),
+        governance::RepealProposalError::Database(error) => {
+            internal_error("create_repeal_proposal")(error)
+        }
+    })?;
+
+    if let Err((status, error)) = ensure_webgemeindezentrum_activity_faden(
+        &state,
+        &auth,
+        &proposal.webgemeindezentrum_id,
+        super::edges::FadenType::Proposal,
+        &proposal.id,
+    )
+    .await
+    {
+        tracing::error!(
+            event = "governance.repeal_proposal_faden_projection.failed",
+            proposal_id = %proposal.id,
+            target_proposal_id = %id,
+            center_id = %proposal.webgemeindezentrum_id,
+            %status,
+            %error,
+            "Repeal proposal remains durable; its derived center Faden is missing"
+        );
+    }
+
+    tracing::info!(
+        event = "governance.repeal_proposal.created",
+        proposal_id = %proposal.id,
+        target_proposal_id = %id,
+        applicant_account_id = %account_id,
+        "Governance repeal proposal created"
+    );
+    Ok((
+        StatusCode::CREATED,
+        Json(proposal_view(proposal, Utc::now())),
+    ))
 }
 
 /// POST /proposals/{id}/veto — begründetes Veto eines angemeldeten Accounts.

@@ -101,6 +101,56 @@ describe("proposal process", () => {
     expect(process.showVotes).toBe(true);
   });
 
+  it("shows withdrawal as final without inventing a voting phase from an unused veto", () => {
+    const process = deriveProposalProcess(
+      proposal("withdrawn", {
+        veto_count: 1,
+        finalized_at: "2026-07-18T10:00:00Z",
+      }),
+      3,
+    );
+
+    expect(process.steps.map((step) => step.id)).toEqual([
+      "filed",
+      "consent",
+      "decision",
+    ]);
+    expect(process.steps.at(-1)).toEqual({
+      id: "decision",
+      label: "Zurückgezogen",
+      state: "current",
+    });
+    expect(process.summary).toContain("zurückgezogen");
+  });
+
+  it("describes accepted Sachantraege as decisions rather than Weber promotion", () => {
+    const process = deriveProposalProcess(
+      proposal("accepted", {
+        kind: "sachantrag",
+        title: "Werkstattzeiten",
+        finalized_at: "2026-07-21T10:00:00Z",
+      }),
+      0,
+    );
+
+    expect(process.summary).toContain("gemeinschaftlicher Beschluss");
+    expect(process.summary).not.toContain("Weberstatus");
+  });
+
+  it("makes an accepted repeal proposal explicit", () => {
+    const process = deriveProposalProcess(
+      proposal("accepted", {
+        kind: "sachantrag",
+        title: "Aufhebung: Werkstattzeiten",
+        repeals_proposal_id: "old-proposal",
+        finalized_at: "2026-07-21T10:00:00Z",
+      }),
+      0,
+    );
+
+    expect(process.summary).toContain("Aufhebungsantrag wurde angenommen");
+  });
+
   it("does not publish a partial vote total when one count is malformed", () => {
     const process = deriveProposalProcess(
       proposal("voting", {

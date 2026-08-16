@@ -11,7 +11,7 @@
     formatRemaining,
     listProposals,
     proposalTitle,
-    statusLabel,
+    proposalStatusLabel,
     type Proposal,
   } from "$lib/api/governance";
 
@@ -391,7 +391,7 @@
                     <span
                       class:open={proposal.status === "consent" ||
                         proposal.status === "voting"}
-                      >{statusLabel(proposal.status)}</span
+                      >{proposalStatusLabel(proposal)}</span
                     >
                     <time datetime={proposal.created_at}
                       >{new Date(proposal.created_at).toLocaleDateString(

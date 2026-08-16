@@ -46,6 +46,7 @@ function safeCountSum(...values: unknown[]): number {
 function decisionLabel(proposal: ProposalDetail): string {
   if (proposal.status === "accepted") return "Angenommen";
   if (proposal.status === "rejected") return "Abgelehnt";
+  if (proposal.status === "withdrawn") return "Zurückgezogen";
   return "Entscheidung";
 }
 
@@ -61,11 +62,14 @@ export function deriveProposalProcess(
   );
   const normalizedMessageCount = safeCount(messageCount);
   const finalized =
-    proposal.status === "accepted" || proposal.status === "rejected";
+    proposal.status === "accepted" ||
+    proposal.status === "rejected" ||
+    proposal.status === "withdrawn";
   const includesVoting =
     proposal.status === "voting" ||
-    vetoCount > 0 ||
-    (finalized && voteCount > 0);
+    proposal.voting_until !== undefined ||
+    (proposal.status === "consent" && vetoCount > 0) ||
+    voteCount > 0;
 
   const steps: ProposalProcessStep[] = [
     { id: "filed", label: "Antrag gestellt", state: "complete" },
@@ -125,12 +129,22 @@ export function deriveProposalProcess(
     };
   }
 
+  const summary =
+    proposal.status === "withdrawn"
+      ? "Der Antrag wurde vom Antragsteller zurückgezogen. Die bisherige Verfahrensspur bleibt erhalten."
+      : proposal.kind === "sachantrag"
+        ? proposal.status === "accepted"
+          ? proposal.repeals_proposal_id
+            ? "Der Aufhebungsantrag wurde angenommen. Der frühere Beschluss bleibt als historische Entscheidung sichtbar und ist nun aufgehoben."
+            : "Das Verfahren ist abgeschlossen. Der Sachantrag wurde als gemeinschaftlicher Beschluss angenommen."
+          : "Das Verfahren ist abgeschlossen. Der Sachantrag wurde abgelehnt."
+        : proposal.status === "accepted"
+          ? "Das Verfahren ist abgeschlossen. Der Weberstatus wurde erteilt."
+          : "Das Verfahren ist abgeschlossen. Der Weberstatus wurde nicht erteilt.";
+
   return {
     steps,
-    summary:
-      proposal.status === "accepted"
-        ? "Das Verfahren ist abgeschlossen. Der Weberstatus wurde erteilt."
-        : "Das Verfahren ist abgeschlossen. Der Weberstatus wurde nicht erteilt.",
+    summary,
     vetoCount,
     messageCount: normalizedMessageCount,
     voteCount,

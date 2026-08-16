@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: governance
 owner: governance
-last_reviewed: 2026-08-08
+last_reviewed: 2026-08-16
 review_after: 2026-10-12
 depends_on:
   - specs.garnrolle-knoten-faden
@@ -116,6 +116,41 @@ Webrat des Zentrums und zusätzlich über den Knoten erreichbar.
 Wird der referenzierte Knoten später regulär aus dem aktiven Gewebe entfernt,
 wird die aktive Knotenbindung gelöst. Der Titelsnapshot und der Sachantrag
 bleiben als Verfahrens- und Beschlussspur erhalten.
+
+## Rücknahme eines offenen Antrags
+
+Der Antragsteller darf den eigenen Antrag während einer tatsächlich noch offenen
+Konsent- oder Abstimmungsphase zurückziehen. Die Rücknahme löscht nichts. Der
+Antrag wechselt auf den finalen Status `withdrawn`, erhält einen
+Abschlusszeitpunkt und bleibt mit Gespräch, Vetos und bereits abgegebenen Stimmen
+lesbar. Nach Ablauf der jeweiligen Frist ist eine verspätete Rücknahme nicht mehr
+zulässig, auch wenn der Sweeper die fällige Entscheidung noch nicht ausgewertet
+hat.
+
+Die Rücknahme ist keine formale Selbstentscheidung über Annahme oder Ablehnung.
+Sie ist ausschließlich die Beendigung des eigenen noch offenen Antrags.
+
+## Aufhebung eines angenommenen Sachbeschlusses
+
+Ein angenommener Sachantrag wird niemals nachträglich auf `rejected` gesetzt oder
+gelöscht. Soll ein solcher Beschluss aufgehoben werden, stellt ein Weber oder
+Administrator einen **neuen Sachantrag zur Aufhebung**. Dieser neue Antrag enthält
+einen unveränderlichen Verweis `repeals_proposal_id` auf den ursprünglichen
+Sachantrag und durchläuft exakt dieselbe Konsent-, Veto-, Gesprächs-, Abstimmungs-
+und Finalisierungsengine wie jeder andere Sachantrag.
+
+Erst wenn der Aufhebungsantrag `accepted` ist, gilt der frühere Beschluss als
+aufgehoben. Seine eigene historische Entscheidung bleibt `accepted`; die
+Oberfläche leitet den späteren Zustand aus der angenommenen Aufhebungsrelation ab
+und zeigt beide Entscheidungen miteinander verknüpft. Ein abgelehnter oder
+zurückgezogener Aufhebungsantrag verändert den alten Beschluss nicht und sperrt
+keinen späteren neuen Versuch. Parallel darf höchstens ein offenes oder bereits
+angenommenes Aufhebungsverfahren denselben Beschluss adressieren.
+
+Aufhebungsanträge sind weiterhin `sachantrag`; es entsteht kein dritter
+Antragstyp und keine zweite Entscheidungsengine. Ein Aufhebungsantrag selbst wird
+nicht rekursiv aufgehoben. Soll eine Gemeinschaft später wieder eine frühere
+Regelung herstellen, geschieht das durch einen neuen inhaltlichen Sachantrag.
 
 ## Erste Phase: sieben Tage Konsent
 
@@ -261,7 +296,12 @@ Die Oberfläche bietet:
   Veto- und Abstimmungsaktionen;
 - für Gäste Weberantrag und Gast-Austritt;
 - für Weber und Administratoren Sachanträge im Webrat eines Zentrums und,
-  sofern ein Knoten Ziel ist, zusätzlich im Antragsbereich dieses Knotens.
+  sofern ein Knoten Ziel ist, zusätzlich im Antragsbereich dieses Knotens;
+- für den Antragsteller bei einem offenen eigenen Verfahren die Aktion
+  **Antrag zurückziehen**;
+- bei angenommenen Sachbeschlüssen für Weber und Administratoren die Aktion
+  **Aufhebung beantragen** sowie sichtbare Verweise zwischen ursprünglichem
+  Beschluss und laufendem oder angenommenem Aufhebungsverfahren.
 
 `GET /api/proposals` liefert für jeden Antrag `message_count`. Solange die
 Governance-Gespräche noch nicht auf die kanonische Release-B-Konversation
@@ -287,8 +327,10 @@ Account-ID. Seine Hilfsrouten werden ausschließlich mit dem Cargo-Feature
 ## Antragstypen
 
 Der Datenbankvertrag lässt ausschließlich `weberantrag` und `sachantrag` zu.
-Beide verwenden dieselbe Zustandsmaschine. Weitere Antragstypen bleiben ohne
-eigene Spezifikation und Migration fail-closed ausgeschlossen.
+Beide verwenden dieselbe Zustandsmaschine. Ein Aufhebungsverfahren ist ein
+Sachantrag mit `repeals_proposal_id`, kein zusätzlicher Antragstyp. Weitere
+Antragstypen bleiben ohne eigene Spezifikation und Migration fail-closed
+ausgeschlossen.
 
 ## Nicht-Ziele dieses Schnitts
 
@@ -299,5 +341,7 @@ eigene Spezifikation und Migration fail-closed ausgeschlossen.
 - keine direkte Vergabe des Weberstatus durch einzelne Administratoren;
 - kein automatischer beliebiger Mutations-Executor aus angenommenen
   Sachanträgen;
+- kein Überschreiben oder Löschen eines früher angenommenen Beschlusses bei
+  seiner späteren Aufhebung;
 - keine zweite Governance-Wahrheit außerhalb PostgreSQL;
 - noch kein allgemeiner Austrittsprozess für Weber.

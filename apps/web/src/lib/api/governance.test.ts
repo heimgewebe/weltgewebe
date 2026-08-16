@@ -3,8 +3,11 @@ import {
   createSachProposal,
   createWeberProposal,
   formatRemaining,
+  proposalStatusLabel,
+  requestProposalRepeal,
   statusLabel,
   submitVote,
+  withdrawProposal,
 } from "./governance";
 
 afterEach(() => {
@@ -83,6 +86,45 @@ describe("governance API", () => {
     });
   });
 
+  it("withdraws the exact proposal without turning withdrawal into deletion", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(
+        JSON.stringify({ id: "p 1", kind: "weberantrag", status: "withdrawn" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await withdrawProposal("p 1");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/proposals/p%201/withdraw",
+      expect.objectContaining({ method: "POST", credentials: "include" }),
+    );
+  });
+
+  it("requests repeal as a new proposal and trims only its optional reason", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ id: "r1", kind: "sachantrag" }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+
+    await requestProposalRepeal("old decision", "  Nicht mehr sinnvoll.  ");
+
+    const [path, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe("/api/proposals/old%20decision/repeal");
+    expect(init.method).toBe("POST");
+    expect(JSON.parse(String(init.body))).toEqual({
+      summary: "Nicht mehr sinnvoll.",
+    });
+  });
+
   it("sends one current vote without any quorum field", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ choice: "ja" }), {
@@ -116,6 +158,23 @@ describe("governance presentation", () => {
   it("renders phase labels", () => {
     expect(statusLabel("consent")).toBe("Offene Konsentphase");
     expect(statusLabel("voting")).toBe("Gespräch und Abstimmung");
+    expect(statusLabel("withdrawn")).toBe("Zurückgezogen");
+  });
+
+  it("renders accepted repeal state without rewriting the stored status", () => {
+    expect(proposalStatusLabel({ status: "accepted" })).toBe("Angenommen");
+    expect(
+      proposalStatusLabel({
+        status: "accepted",
+        pending_repeal_proposal_id: "repeal-open",
+      }),
+    ).toBe("Angenommen · Aufhebung läuft");
+    expect(
+      proposalStatusLabel({
+        status: "accepted",
+        repealed_by_proposal_id: "repeal-accepted",
+      }),
+    ).toBe("Aufgehoben");
   });
 
   it("formats remaining time without inventing a quorum", () => {

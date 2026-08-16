@@ -6,7 +6,7 @@
     formatRemaining,
     listProposals,
     proposalTitle,
-    statusLabel,
+    proposalStatusLabel,
     type Proposal,
   } from "$lib/api/governance";
 
@@ -120,7 +120,7 @@
           <a href={`/antraege?id=${encodeURIComponent(proposal.id)}`}>
             <strong>{proposalTitle(proposal)}</strong>
             <span>
-              {statusLabel(proposal.status)} · {formatRemaining(
+              {proposalStatusLabel(proposal)} · {formatRemaining(
                 proposal.remaining_seconds,
               )}
             </span>

@@ -10,10 +10,15 @@ type AuthStatus = {
 };
 type Proposal = {
   id: string;
+  kind: "weberantrag" | "sachantrag";
   applicant_account_id: string | null;
-  status: "consent" | "voting" | "accepted" | "rejected";
+  status: "consent" | "voting" | "accepted" | "rejected" | "withdrawn";
   consent_until: string;
   voting_until?: string;
+  repeals_proposal_id?: string;
+  pending_repeal_proposal_id?: string;
+  repealed_by_proposal_id?: string;
+  remaining_seconds?: number;
   yes_votes: number;
   no_votes: number;
   abstain_votes: number;
@@ -120,7 +125,7 @@ async function advance(
   );
 }
 
-test("proves consent, veto, voting, and atomic guest-to-Weber promotion", async ({
+test("proves withdrawal, consent, veto, voting, repeal, and atomic guest-to-Weber promotion", async ({
   browser,
   baseURL,
 }, testInfo) => {
@@ -150,6 +155,31 @@ test("proves consent, veto, voting, and atomic guest-to-Weber promotion", async 
     runId,
     "weber-b",
   );
+
+  const withdrawalProposal = await createApplication(
+    applicantVoting,
+    "Diesen Antrag ziehe ich bewusst wieder zurück.",
+  );
+  await applicantVoting.page.goto(`/antraege?id=${withdrawalProposal.id}`);
+  await expect(applicantVoting.page.getByText(/^Noch \d/)).toBeVisible();
+  applicantVoting.page.once("dialog", (dialog) => {
+    void dialog.accept();
+  });
+  await applicantVoting.page
+    .getByRole("button", { name: "Antrag zurückziehen" })
+    .click();
+  await expect(
+    applicantVoting.page
+      .locator("header")
+      .getByText("Zurückgezogen", { exact: true }),
+  ).toBeVisible();
+  await expect(applicantVoting.page.getByText(/^Noch \d/)).toHaveCount(0);
+  const withdrawn = await jsonRequest<Proposal>(
+    applicantVoting.page,
+    `/api/proposals/${withdrawalProposal.id}`,
+  );
+  expect(withdrawn.status).toBe("withdrawn");
+  expect(withdrawn.remaining_seconds).toBeUndefined();
 
   const consentProposal = await createApplication(
     applicantConsent,
@@ -227,6 +257,70 @@ test("proves consent, veto, voting, and atomic guest-to-Weber promotion", async 
   expect(votingApplicantAuth.account_id).toBe(applicantVoting.account_id);
   expect(votingApplicantAuth.role).toBe("weber");
 
+  const sachTarget = await jsonRequest<Proposal>(
+    weberA.page,
+    "/api/proposals",
+    "POST",
+    {
+      kind: "sachantrag",
+      title: "Gemeinschaftswerkstatt sonntags öffnen",
+      summary: "Browserbeweis für eine später nachvollziehbare Aufhebung.",
+    },
+  );
+  expect(sachTarget.kind).toBe("sachantrag");
+  const acceptedSachTarget = await advance(
+    weberA.page,
+    sachTarget,
+    sachTarget.consent_until,
+  );
+  expect(acceptedSachTarget.status).toBe("accepted");
+
+  await weberB.page.goto(`/antraege?id=${sachTarget.id}`);
+  await weberB.page
+    .getByLabel("Begründung (optional)")
+    .fill("Der Beschluss soll nach erneutem Verfahren aufgehoben werden.");
+  await Promise.all([
+    weberB.page.waitForURL((url) => {
+      const proposalId = url.searchParams.get("id");
+      return (
+        url.pathname === "/antraege" &&
+        proposalId !== null &&
+        proposalId !== sachTarget.id
+      );
+    }),
+    weberB.page.getByRole("button", { name: "Aufhebung beantragen" }).click(),
+  ]);
+  const repealId = new URL(weberB.page.url()).searchParams.get("id");
+  if (!repealId)
+    throw new Error("repeal navigation must expose the new proposal id");
+  const repeal = await jsonRequest<Proposal>(
+    weberB.page,
+    `/api/proposals/${repealId}`,
+  );
+  expect(repeal.kind).toBe("sachantrag");
+  expect(repeal.status).toBe("consent");
+  expect(repeal.repeals_proposal_id).toBe(sachTarget.id);
+  const originalWithPending = await jsonRequest<Proposal>(
+    weberB.page,
+    `/api/proposals/${sachTarget.id}`,
+  );
+  expect(originalWithPending.status).toBe("accepted");
+  expect(originalWithPending.pending_repeal_proposal_id).toBe(repeal.id);
+
+  const acceptedRepeal = await advance(
+    weberB.page,
+    repeal,
+    repeal.consent_until,
+  );
+  expect(acceptedRepeal.status).toBe("accepted");
+  const originalAfterRepeal = await jsonRequest<Proposal>(
+    weberB.page,
+    `/api/proposals/${sachTarget.id}`,
+  );
+  expect(originalAfterRepeal.status).toBe("accepted");
+  expect(originalAfterRepeal.pending_repeal_proposal_id).toBeUndefined();
+  expect(originalAfterRepeal.repealed_by_proposal_id).toBe(repeal.id);
+
   const proofDir = path.resolve(
     process.cwd(),
     "../../build/proofs/governance-full-flow",
@@ -237,6 +331,11 @@ test("proves consent, veto, voting, and atomic guest-to-Weber promotion", async 
     `${JSON.stringify(
       {
         proof: "governance-full-flow",
+        withdrawal: {
+          proposal_id: withdrawalProposal.id,
+          final_status: withdrawn.status,
+          remaining_seconds_visible: false,
+        },
         no_veto: {
           proposal_id: consentProposal.id,
           retained_account_id: consentApplicantAuth.account_id,
@@ -252,6 +351,14 @@ test("proves consent, veto, voting, and atomic guest-to-Weber promotion", async 
           retained_account_id: votingApplicantAuth.account_id,
           final_role: votingApplicantAuth.role,
           applicant_self_vote_controls_visible: false,
+        },
+        repeal: {
+          original_proposal_id: sachTarget.id,
+          original_status: originalAfterRepeal.status,
+          repeal_proposal_id: repeal.id,
+          repeal_status: acceptedRepeal.status,
+          original_repealed_by_proposal_id:
+            originalAfterRepeal.repealed_by_proposal_id,
         },
       },
       null,

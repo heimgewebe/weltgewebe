@@ -8,7 +8,7 @@
     GovernanceApiError,
     listProposals,
     proposalTitle,
-    statusLabel,
+    proposalStatusLabel,
     type Proposal,
   } from "$lib/api/governance";
 
@@ -199,7 +199,7 @@
             <strong>{proposalTitle(proposal)}</strong>
             <span
               >{proposal.kind === "sachantrag" ? "Sachantrag" : "Weberantrag"}
-              · {statusLabel(proposal.status)} · {formatRemaining(
+              · {proposalStatusLabel(proposal)} · {formatRemaining(
                 proposal.remaining_seconds,
               )}</span
             >

@@ -8,9 +8,11 @@
     getProposal,
     listProposalMessages,
     postProposalMessage,
-    statusLabel,
+    requestProposalRepeal,
+    proposalStatusLabel,
     submitVeto,
     submitVote,
+    withdrawProposal,
     type ProposalDetail,
     type ProposalMessage,
     type VoteChoice,
@@ -33,6 +35,7 @@
   let error = $state("");
   let vetoReason = $state("");
   let messageBody = $state("");
+  let repealSummary = $state("");
   let submitting = $state(false);
 
   let canDiscuss = $derived.by(() => $authStore.authenticated);
@@ -45,6 +48,24 @@
   );
   let isOpen = $derived.by(
     () => proposal?.status === "consent" || proposal?.status === "voting",
+  );
+  let canWithdraw = $derived.by(
+    () =>
+      $authStore.authenticated &&
+      !!proposal &&
+      isOpen &&
+      proposal.applicant_account_id === $authStore.account_id,
+  );
+  let canRequestRepeal = $derived.by(
+    () =>
+      $authStore.authenticated &&
+      ($authStore.role === "weber" || $authStore.role === "admin") &&
+      !!proposal &&
+      proposal.kind === "sachantrag" &&
+      proposal.status === "accepted" &&
+      !proposal.repeals_proposal_id &&
+      !proposal.pending_repeal_proposal_id &&
+      !proposal.repealed_by_proposal_id,
   );
 
   function normalizeMessageCount(count: unknown): number {
@@ -63,7 +84,7 @@
   function describeError(cause: unknown): string {
     if (cause instanceof GovernanceApiError) {
       if (cause.status === 403)
-        return "Über den eigenen Antrag kannst du nicht selbst entscheiden.";
+        return "Diese Aktion ist für deinen Account nicht zulässig.";
       if (cause.status === 409)
         return "Die Aktion passt nicht mehr zur aktuellen Antragsphase.";
       if (cause.status === 503)
@@ -95,6 +116,44 @@
       error = describeError(cause);
     } finally {
       loading = false;
+    }
+  }
+
+  async function withdraw() {
+    if (!proposal || !canWithdraw || submitting) return;
+    if (
+      !window.confirm(
+        "Diesen Antrag zurückziehen? Die bisherige Verfahrensspur bleibt sichtbar, das Verfahren wird aber endgültig beendet.",
+      )
+    )
+      return;
+    submitting = true;
+    error = "";
+    try {
+      const updated = await withdrawProposal(proposal.id);
+      proposal = {
+        ...proposal,
+        ...updated,
+        remaining_seconds: updated.remaining_seconds,
+      };
+    } catch (cause) {
+      error = describeError(cause);
+    } finally {
+      submitting = false;
+    }
+  }
+
+  async function requestRepeal() {
+    if (!proposal || !canRequestRepeal || submitting) return;
+    submitting = true;
+    error = "";
+    try {
+      const created = await requestProposalRepeal(proposal.id, repealSummary);
+      window.location.assign(`/antraege?id=${encodeURIComponent(created.id)}`);
+    } catch (cause) {
+      error = describeError(cause);
+    } finally {
+      submitting = false;
     }
   }
 
@@ -168,7 +227,7 @@
   {:else if proposal}
     <header class="proposal-header">
       <div class="topline">
-        <span class:open={isOpen}>{statusLabel(proposal.status)}</span>
+        <span class:open={isOpen}>{proposalStatusLabel(proposal)}</span>
         {#if proposal.remaining_seconds !== undefined}<strong
             >Noch {formatRemaining(proposal.remaining_seconds)}</strong
           >{/if}
@@ -191,7 +250,9 @@
           <dt>Verfahrensart</dt>
           <dd>
             {proposal.kind === "sachantrag"
-              ? "Gemeinschaftlicher Beschluss"
+              ? proposal.repeals_proposal_id
+                ? "Aufhebung eines Beschlusses"
+                : "Gemeinschaftlicher Beschluss"
               : "Aufnahme als Weber"}
           </dd>
         </div>
@@ -230,6 +291,47 @@
 
     {#if error}<div class="error" role="alert">{error}</div>{/if}
 
+    {#if proposal.repeals_proposal_id || proposal.pending_repeal_proposal_id || proposal.repealed_by_proposal_id}
+      <section
+        class="card lifecycle-card"
+        aria-labelledby="proposal-lifecycle-heading"
+        data-testid="proposal-lifecycle"
+      >
+        <h2 id="proposal-lifecycle-heading">Beschlussgeschichte</h2>
+        {#if proposal.repeals_proposal_id}
+          <p>
+            Dieser Sachantrag beantragt die Aufhebung eines früheren
+            Beschlusses.
+            <a
+              href={`/antraege?id=${encodeURIComponent(proposal.repeals_proposal_id)}`}
+              >Früheren Beschluss öffnen</a
+            >.
+          </p>
+        {/if}
+        {#if proposal.repealed_by_proposal_id}
+          <p>
+            Dieser Beschluss wurde
+            {#if proposal.repealed_at}
+              am {new Date(proposal.repealed_at).toLocaleString("de-DE")}
+            {/if}
+            durch einen späteren gemeinschaftlichen Beschluss aufgehoben.
+            <a
+              href={`/antraege?id=${encodeURIComponent(proposal.repealed_by_proposal_id)}`}
+              >Aufhebungsantrag öffnen</a
+            >.
+          </p>
+        {:else if proposal.pending_repeal_proposal_id}
+          <p>
+            Für diesen Beschluss läuft bereits ein Aufhebungsverfahren.
+            <a
+              href={`/antraege?id=${encodeURIComponent(proposal.pending_repeal_proposal_id)}`}
+              >Aufhebungsverfahren öffnen</a
+            >.
+          </p>
+        {/if}
+      </section>
+    {/if}
+
     <ProposalProcess {proposal} messageCount={knownMessageCount} />
 
     {#if proposal.vetoes.length > 0}
@@ -248,6 +350,50 @@
             </article>
           {/each}
         </div>
+      </section>
+    {/if}
+
+    {#if canWithdraw}
+      <section
+        class="card action-card"
+        aria-labelledby="withdraw-heading"
+        data-testid="proposal-withdraw-action"
+      >
+        <h2 id="withdraw-heading">Eigenen Antrag zurückziehen</h2>
+        <p>
+          Die Rücknahme beendet das laufende Verfahren. Der Antrag, seine
+          bisherigen Beiträge und Verfahrensschritte bleiben als
+          nachvollziehbare Geschichte sichtbar.
+        </p>
+        <button class="primary" onclick={withdraw} disabled={submitting}
+          >Antrag zurückziehen</button
+        >
+      </section>
+    {/if}
+
+    {#if canRequestRepeal}
+      <section
+        class="card action-card"
+        aria-labelledby="repeal-heading"
+        data-testid="proposal-repeal-action"
+      >
+        <h2 id="repeal-heading">Aufhebung beantragen</h2>
+        <p>
+          Der bestehende Beschluss wird nicht überschrieben. Stattdessen
+          entsteht ein neuer Sachantrag, der das normale Konsent-, Veto- und
+          Abstimmungsverfahren durchläuft.
+        </p>
+        <label for="repeal-summary">Begründung (optional)</label>
+        <textarea
+          id="repeal-summary"
+          bind:value={repealSummary}
+          maxlength="2000"
+          rows="4"
+          placeholder="Warum soll dieser Beschluss aufgehoben werden?"
+        ></textarea>
+        <button class="primary" onclick={requestRepeal} disabled={submitting}
+          >Aufhebung beantragen</button
+        >
       </section>
     {/if}
 
@@ -425,6 +571,12 @@
   }
   .action-card {
     background: var(--accent-soft);
+  }
+  .lifecycle-card {
+    border-inline-start: 4px solid var(--accent);
+  }
+  .lifecycle-card p {
+    line-height: 1.55;
   }
   .entries {
     display: grid;
