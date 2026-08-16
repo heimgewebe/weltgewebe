@@ -360,10 +360,10 @@ def histogram_quantile_ms(snapshot: HistogramSnapshot, quantile: float) -> float
     for le_value, cumulative in _sorted_bucket_bounds(snapshot.buckets):
         if cumulative >= target:
             if le_value == math.inf:
-                # The target falls in the open-ended overflow bucket. Report the
-                # last finite boundary: a conservative (non-optimistic) estimate
-                # rather than inventing an upper bound.
-                return lower_bound * 1000.0
+                raise ApiRuntimeEvidenceError(
+                    "requested histogram quantile falls in the open-ended +Inf bucket; "
+                    "finite latency is not established"
+                )
             if cumulative == lower_count:
                 return le_value * 1000.0
             fraction = (target - lower_count) / (cumulative - lower_count)
@@ -475,8 +475,8 @@ def load_resource_receipt(path: Path) -> dict[str, Any]:
     return {
         "container_name": container_name,
         "sample_count": sample_count,
-        "cpu_percent": float(cpu_percent),
-        "memory_bytes": memory_bytes,
+        "peak_cpu_percent": float(cpu_percent),
+        "peak_memory_bytes": memory_bytes,
     }
 
 
@@ -506,6 +506,11 @@ def assemble_report(
         raise ApiRuntimeEvidenceError(f"git_head must be a 40-hex sha: {git_head!r}")
     if not SHA256_RE.fullmatch(policy_sha256):
         raise ApiRuntimeEvidenceError(f"policy_sha256 must be a 64-hex sha256: {policy_sha256!r}")
+    if resource_receipt is None:
+        raise ApiRuntimeEvidenceError(
+            "resource_receipt is required so api_runtime evidence cannot pass without "
+            "API replica CPU/memory measurement"
+        )
 
     contract = api_runtime_section(policy)
     declared_scenario = extract_declared_scenario(k6_summary)
@@ -555,9 +560,11 @@ def assemble_report(
     db_p99 = histogram_quantile_ms(delta_hist, 0.99)
     db_mean = (delta_hist.total_sum / delta_hist.total_count) * 1000.0
 
-    resources: dict[str, Any] = {"database_connections": database_connections}
-    if resource_receipt is not None:
-        resources["api_replica"] = dict(resource_receipt)
+    resources: dict[str, Any] = {
+        "database_connections": database_connections,
+        "database_connections_source": "caller-supplied-pg_stat_activity-point-measurement",
+        "api_replica": dict(resource_receipt),
+    }
 
     thresholds = contract["thresholds"]
     failures: list[str] = []
@@ -614,9 +621,11 @@ def assemble_report(
             "This artifact establishes latency and failure-rate evidence for the exact k6 run and "
             "PostgreSQL-backed dataset it was generated from; it does not establish steady-state "
             "production capacity.",
-            "api_replica cpu/memory and database_connections are point samples attached from the "
-            "same run and are not yet gated by a blocking threshold (see measurements."
-            "api_replica_resources in the performance contract).",
+            "api_replica peak_cpu_percent/peak_memory_bytes and database_connections are point "
+            "measurements attached from the same run and are not yet gated by a blocking threshold "
+            "(see measurements.api_replica_resources in the performance contract).",
+            "database_connections is supplied explicitly from a pg_stat_activity point measurement; "
+            "this runner does not collect PostgreSQL connection state automatically.",
         ],
     }
 
@@ -630,6 +639,10 @@ def verify_report(
         or report.get("contract_id") != CONTRACT_ID
     ):
         raise ApiRuntimeEvidenceError("report is not a recognizable api_runtime evidence artifact")
+    if report.get("status") != "pass":
+        raise ApiRuntimeEvidenceError(
+            f"report is revision-bound but does not pass the performance gate: {report.get('status')!r}"
+        )
     revision = report.get("revision")
     if not isinstance(revision, dict):
         raise ApiRuntimeEvidenceError("report is missing its revision binding")
@@ -716,10 +729,21 @@ def render_regression_fixture(policy: Mapping[str, Any], output_dir: Path) -> di
         "k6_summary": output_dir / "k6-summary.json",
         "metrics_before": output_dir / "metrics-before.prom",
         "metrics_after": output_dir / "metrics-after.prom",
+        "resource_receipt": output_dir / "resource-receipt.json",
     }
     _atomic_json(paths["k6_summary"], k6_summary)
     _atomic_text(paths["metrics_before"], metrics_before)
     _atomic_text(paths["metrics_after"], metrics_after)
+    _atomic_json(
+        paths["resource_receipt"],
+        {
+            "schema_version": 1,
+            "contract": RESOURCE_RECEIPT_CONTRACT,
+            "container_name": "weltgewebe-api-regression-fixture",
+            "peaks": {"cpu_percent": 25.0, "memory_bytes": 134217728},
+            "sample_count": 30,
+        },
+    )
     return paths
 
 
@@ -770,9 +794,7 @@ def _cli_check(args: argparse.Namespace) -> int:
     k6_summary = load_k6_summary(args.k6_summary)
     metrics_before_text = _read_text(args.metrics_before, "metrics-before snapshot")
     metrics_after_text = _read_text(args.metrics_after, "metrics-after snapshot")
-    resource_receipt = (
-        load_resource_receipt(args.resource_receipt) if args.resource_receipt is not None else None
-    )
+    resource_receipt = load_resource_receipt(args.resource_receipt)
     database_connections = validate_database_connections(args.database_connections)
     head = git_head(REPO_ROOT)
     policy_sha256 = sha256_file(args.policy)
@@ -819,9 +841,9 @@ def _cli_regression_fixture(args: argparse.Namespace) -> int:
         "files": {name: str(path) for name, path in paths.items()},
         "note": (
             "This fixture is self-consistent (query counts match) but breaches every canonical "
-            "api_runtime threshold on purpose. Run `check` against it (with any non-negative "
-            "--database-connections and without --resource-receipt) to prove the gate fails "
-            "closed; it must exit with status 2."
+            "api_runtime threshold on purpose. Run `check` against it with the generated "
+            "--resource-receipt and any non-negative --database-connections value to prove the "
+            "gate fails closed; it must exit with status 2."
         ),
     }
     print(json.dumps(payload, sort_keys=True, indent=2))
@@ -839,7 +861,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--k6-summary", type=Path, required=True)
     check.add_argument("--metrics-before", type=Path, required=True)
     check.add_argument("--metrics-after", type=Path, required=True)
-    check.add_argument("--resource-receipt", type=Path, default=None)
+    check.add_argument("--resource-receipt", type=Path, required=True)
     check.add_argument("--database-connections", type=int, required=True)
     check.add_argument("--report", type=Path, default=None)
 

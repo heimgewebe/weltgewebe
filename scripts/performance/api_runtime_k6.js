@@ -21,11 +21,14 @@ const CONCURRENCY_PROFILE =
 
 // k6's http_req_failed metric only reflects network-level errors by default
 // (DNS/TCP/timeout), never HTTP status codes, which would make the
-// http_request_failed_rate gate blind to real 5xx responses. 200 and 503 are
-// this scenario's only intentionally-tolerated statuses (health/ready and
-// search both report 503 for expected unavailability); every other status,
-// including any other 5xx, counts as failed.
-http.setResponseCallback(http.expectedStatuses(200, 503));
+// http_request_failed_rate gate blind to real 5xx responses. Only
+// /health/ready legitimately reports 503 for expected unavailability (its
+// dependencies are still starting up); every other endpoint, including
+// /search, must return 200 to count as a success, so a 503 there is a real
+// failure and must count against http_req_failed. The 503 tolerance below is
+// therefore scoped to the /health/ready request only, not set globally.
+http.setResponseCallback(http.expectedStatuses(200));
+const READY_RESPONSE_CALLBACK = http.expectedStatuses(200, 503);
 
 export const options = {
   vus: Number(__ENV.API_RUNTIME_VUS || 10),
@@ -40,18 +43,24 @@ export default function () {
   const live = http.get(`${BASE_URL}/health/live`);
   check(live, { 'live 200': (r) => r.status === 200 });
 
-  const ready = http.get(`${BASE_URL}/health/ready`);
+  const ready = http.get(`${BASE_URL}/health/ready`, {
+    responseCallback: READY_RESPONSE_CALLBACK,
+  });
   check(ready, { 'ready 2xx/5xx': (r) => r.status === 200 || r.status === 503 });
 
   // The only read endpoint in the mix that is wired to PostgreSQL repository
   // telemetry (search_repository_duration_seconds); scripts/performance/
   // api_runtime_evidence.py cross-checks its request count against that
   // histogram's observation count as its deterministic query-count evidence.
+  // Unlike /health/ready, /search has no legitimate 503 case in this
+  // scenario, so it uses the default (200-only) response callback: a 503
+  // here is real evidence of /search unavailability and must surface in
+  // http_req_failed rather than being silently tolerated.
   const search = http.get(
     `${BASE_URL}/search?q=${encodeURIComponent(SEARCH_QUERY)}&limit=5`,
   );
   check(search, {
-    'search reachable': (r) => r.status === 200 || r.status === 503,
+    'search 200': (r) => r.status === 200,
   });
 }
 

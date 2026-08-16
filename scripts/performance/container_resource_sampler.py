@@ -11,8 +11,8 @@ observes it for a bounded window that is expected to overlap the
 scripts/performance/api_runtime_k6.js load test.
 
 The resulting receipt feeds scripts/performance/api_runtime_evidence.py
-check --resource-receipt, covering the api_replica_resources cpu_seconds and
-max_rss_bytes evidence declared in policies/performance.v1.json.
+check --resource-receipt, covering the api_replica_resources peak_cpu_percent
+and peak_memory_bytes evidence declared in policies/performance.v1.json.
 """
 
 from __future__ import annotations

@@ -68,6 +68,25 @@ def _prometheus_text(*, search_count: int, search_sum_seconds: float, http_searc
     )
 
 
+def _resource_receipt() -> dict:
+    return {
+        "container_name": "weltgewebe-api",
+        "sample_count": 30,
+        "peak_cpu_percent": 12.5,
+        "peak_memory_bytes": 104857600,
+    }
+
+
+def _raw_resource_receipt() -> dict:
+    return {
+        "schema_version": 1,
+        "contract": evidence.RESOURCE_RECEIPT_CONTRACT,
+        "container_name": "weltgewebe-api",
+        "sample_count": 30,
+        "peaks": {"cpu_percent": 12.5, "memory_bytes": 104857600},
+    }
+
+
 class PolicyBindingTests(unittest.TestCase):
     def test_real_policy_scenario_matches_the_documented_ci_contract(self) -> None:
         policy = _load_policy()
@@ -76,6 +95,10 @@ class PolicyBindingTests(unittest.TestCase):
         self.assertEqual(contract["thresholds"]["http_request_duration_ms"], 300.0)
         self.assertEqual(contract["thresholds"]["http_request_duration_p99_ms"], 750.0)
         self.assertEqual(contract["thresholds"]["http_request_failed_rate"], 0.01)
+        self.assertEqual(
+            policy["measurements"]["api_replica_resources"]["metrics"],
+            ["peak_cpu_percent", "peak_memory_bytes", "database_connections"],
+        )
 
     def test_load_policy_rejects_malformed_json(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -175,7 +198,7 @@ class PrometheusParsingTests(unittest.TestCase):
         median_ms = evidence.histogram_quantile_ms(snapshot, 0.5)
         self.assertAlmostEqual(median_ms, 100.0, places=6)
 
-    def test_histogram_quantile_in_overflow_bucket_is_conservative(self) -> None:
+    def test_histogram_quantile_in_overflow_bucket_fails_closed(self) -> None:
         text = (
             'x_bucket{le="0.1"} 0\n'
             'x_bucket{le="+Inf"} 5\n'
@@ -184,8 +207,8 @@ class PrometheusParsingTests(unittest.TestCase):
         )
         families = evidence.parse_prometheus_text(text)
         snapshot = evidence.histogram_snapshot(families, "x")
-        p99_ms = evidence.histogram_quantile_ms(snapshot, 0.99)
-        self.assertEqual(p99_ms, 100.0)
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, r"\+Inf"):
+            evidence.histogram_quantile_ms(snapshot, 0.99)
 
 
 class K6SummaryParsingTests(unittest.TestCase):
@@ -209,6 +232,16 @@ class K6SummaryParsingTests(unittest.TestCase):
             evidence.extract_declared_scenario(summary)
 
 
+class K6ScriptContractTests(unittest.TestCase):
+    def test_503_tolerance_is_scoped_to_readiness_only(self) -> None:
+        source = (ROOT / "scripts/performance/api_runtime_k6.js").read_text(encoding="utf-8")
+        self.assertIn("http.setResponseCallback(http.expectedStatuses(200));", source)
+        self.assertIn("READY_RESPONSE_CALLBACK = http.expectedStatuses(200, 503)", source)
+        self.assertIn("responseCallback: READY_RESPONSE_CALLBACK", source)
+        self.assertIn("'search 200': (r) => r.status === 200", source)
+        self.assertNotIn("http.setResponseCallback(http.expectedStatuses(200, 503));", source)
+
+
 class AssembleReportTests(unittest.TestCase):
     def setUp(self) -> None:
         self.policy = _load_policy()
@@ -223,7 +256,7 @@ class AssembleReportTests(unittest.TestCase):
             k6_summary=k6_summary,
             metrics_before_text=before,
             metrics_after_text=after,
-            resource_receipt=None,
+            resource_receipt=_resource_receipt(),
             database_connections=4,
             git_head=FAKE_GIT_HEAD,
             policy_sha256=FAKE_POLICY_SHA256,
@@ -242,18 +275,17 @@ class AssembleReportTests(unittest.TestCase):
             },
         )
         self.assertEqual(report["metrics"]["resources"]["database_connections"], 4)
-        self.assertNotIn("api_replica", report["metrics"]["resources"])
+        self.assertEqual(
+            report["metrics"]["resources"]["database_connections_source"],
+            "caller-supplied-pg_stat_activity-point-measurement",
+        )
+        self.assertEqual(report["metrics"]["resources"]["api_replica"], _resource_receipt())
 
     def test_folds_in_a_valid_resource_receipt(self) -> None:
         k6_summary = _k6_summary()
         before = _prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0)
         after = _prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10)
-        receipt = {
-            "container_name": "weltgewebe-api",
-            "sample_count": 30,
-            "cpu_percent": 12.5,
-            "memory_bytes": 104857600,
-        }
+        receipt = _resource_receipt()
         report = evidence.assemble_report(
             policy=self.policy,
             k6_summary=k6_summary,
@@ -276,13 +308,29 @@ class AssembleReportTests(unittest.TestCase):
             k6_summary=k6_summary,
             metrics_before_text=before,
             metrics_after_text=after,
-            resource_receipt=None,
+            resource_receipt=_resource_receipt(),
             database_connections=1,
             git_head=FAKE_GIT_HEAD,
             policy_sha256=FAKE_POLICY_SHA256,
         )
         self.assertEqual(report["status"], "fail")
         self.assertEqual(len(report["failures"]), 3)
+
+    def test_missing_resource_receipt_is_a_hard_failure(self) -> None:
+        k6_summary = _k6_summary()
+        before = _prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0)
+        after = _prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10)
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "resource_receipt is required"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=k6_summary,
+                metrics_before_text=before,
+                metrics_after_text=after,
+                resource_receipt=None,
+                database_connections=1,
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
 
     def test_scenario_mismatch_is_a_hard_failure(self) -> None:
         mismatched_scenario = _canonical_scenario()
@@ -297,7 +345,7 @@ class AssembleReportTests(unittest.TestCase):
                 k6_summary=k6_summary,
                 metrics_before_text=before,
                 metrics_after_text=after,
-                resource_receipt=None,
+                resource_receipt=_resource_receipt(),
                 database_connections=1,
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
@@ -317,7 +365,7 @@ class AssembleReportTests(unittest.TestCase):
                 k6_summary=k6_summary,
                 metrics_before_text=before,
                 metrics_after_text=after,
-                resource_receipt=None,
+                resource_receipt=_resource_receipt(),
                 database_connections=1,
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
@@ -334,7 +382,7 @@ class AssembleReportTests(unittest.TestCase):
                 k6_summary=k6_summary,
                 metrics_before_text=before,
                 metrics_after_text=after,
-                resource_receipt=None,
+                resource_receipt=_resource_receipt(),
                 database_connections=1,
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
@@ -350,7 +398,7 @@ class AssembleReportTests(unittest.TestCase):
                 k6_summary=k6_summary,
                 metrics_before_text=before,
                 metrics_after_text=after,
-                resource_receipt=None,
+                resource_receipt=_resource_receipt(),
                 database_connections=1,
                 git_head="not-a-sha",
                 policy_sha256=FAKE_POLICY_SHA256,
@@ -413,16 +461,30 @@ class RevisionBindingTests(unittest.TestCase):
         report = {
             "schema_version": evidence.SCHEMA_VERSION,
             "contract_id": evidence.CONTRACT_ID,
+            "status": "pass",
             "revision": {"git_head": FAKE_GIT_HEAD, "policy_sha256": FAKE_POLICY_SHA256},
         }
         evidence.verify_report(
             report, expected_git_head=FAKE_GIT_HEAD, expected_policy_sha256=FAKE_POLICY_SHA256
         )
 
+    def test_verify_rejects_a_threshold_failing_report(self) -> None:
+        report = {
+            "schema_version": evidence.SCHEMA_VERSION,
+            "contract_id": evidence.CONTRACT_ID,
+            "status": "fail",
+            "revision": {"git_head": FAKE_GIT_HEAD, "policy_sha256": FAKE_POLICY_SHA256},
+        }
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "does not pass"):
+            evidence.verify_report(
+                report, expected_git_head=FAKE_GIT_HEAD, expected_policy_sha256=FAKE_POLICY_SHA256
+            )
+
     def test_verify_rejects_a_stale_git_head(self) -> None:
         report = {
             "schema_version": evidence.SCHEMA_VERSION,
             "contract_id": evidence.CONTRACT_ID,
+            "status": "pass",
             "revision": {"git_head": "c" * 40, "policy_sha256": FAKE_POLICY_SHA256},
         }
         with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "git HEAD"):
@@ -434,6 +496,7 @@ class RevisionBindingTests(unittest.TestCase):
         report = {
             "schema_version": evidence.SCHEMA_VERSION,
             "contract_id": evidence.CONTRACT_ID,
+            "status": "pass",
             "revision": {"git_head": FAKE_GIT_HEAD, "policy_sha256": "d" * 64},
         }
         with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "performance.v1.json revision"):
@@ -491,6 +554,8 @@ class RegressionFixtureCliTests(unittest.TestCase):
                     str(fixture_dir / "metrics-before.prom"),
                     "--metrics-after",
                     str(fixture_dir / "metrics-after.prom"),
+                    "--resource-receipt",
+                    str(fixture_dir / "resource-receipt.json"),
                     "--database-connections",
                     "1",
                     "--report",
@@ -521,7 +586,8 @@ class RegressionFixtureCliTests(unittest.TestCase):
                 text=True,
                 check=False,
             )
-            self.assertEqual(verify.returncode, 0, verify.stdout + verify.stderr)
+            self.assertEqual(verify.returncode, 2, verify.stdout + verify.stderr)
+            self.assertIn("does not pass", verify.stderr)
 
     def test_check_passes_cleanly_against_a_hand_built_healthy_fixture(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -530,6 +596,7 @@ class RegressionFixtureCliTests(unittest.TestCase):
             before_path = root / "before.prom"
             after_path = root / "after.prom"
             report_path = root / "report.json"
+            resource_path = root / "resource-receipt.json"
 
             k6_path.write_text(json.dumps(_k6_summary()), encoding="utf-8")
             before_path.write_text(
@@ -540,6 +607,7 @@ class RegressionFixtureCliTests(unittest.TestCase):
                 _prometheus_text(search_count=50, search_sum_seconds=0.5, http_search_requests=50),
                 encoding="utf-8",
             )
+            resource_path.write_text(json.dumps(_raw_resource_receipt()), encoding="utf-8")
 
             result = subprocess.run(
                 [
@@ -553,6 +621,8 @@ class RegressionFixtureCliTests(unittest.TestCase):
                     str(before_path),
                     "--metrics-after",
                     str(after_path),
+                    "--resource-receipt",
+                    str(resource_path),
                     "--database-connections",
                     "0",
                     "--report",
