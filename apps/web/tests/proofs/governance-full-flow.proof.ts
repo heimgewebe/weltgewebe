@@ -161,7 +161,7 @@ test("proves withdrawal, consent, veto, voting, repeal, and atomic guest-to-Webe
     "Diesen Antrag ziehe ich bewusst wieder zurück.",
   );
   await applicantVoting.page.goto(`/antraege?id=${withdrawalProposal.id}`);
-  await expect(applicantVoting.page.getByText(/^Noch /)).toBeVisible();
+  await expect(applicantVoting.page.getByText(/^Noch \d/)).toBeVisible();
   applicantVoting.page.once("dialog", (dialog) => {
     void dialog.accept();
   });
@@ -171,7 +171,7 @@ test("proves withdrawal, consent, veto, voting, repeal, and atomic guest-to-Webe
   await expect(
     applicantVoting.page.getByText("Zurückgezogen", { exact: true }),
   ).toBeVisible();
-  await expect(applicantVoting.page.getByText(/^Noch /)).toHaveCount(0);
+  await expect(applicantVoting.page.getByText(/^Noch \d/)).toHaveCount(0);
   const withdrawn = await jsonRequest<Proposal>(
     applicantVoting.page,
     `/api/proposals/${withdrawalProposal.id}`,
