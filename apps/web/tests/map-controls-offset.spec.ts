@@ -46,7 +46,7 @@ test.describe("MapLibre control placement", () => {
     );
   });
 
-  test("opening either centered fan does not move MapLibre controls", async ({
+  test("opening the centered tool fan does not move MapLibre controls", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
@@ -57,14 +57,6 @@ test.describe("MapLibre control placement", () => {
 
     await page.getByTestId("tool-fan-trigger").click();
     await expect(page.getByTestId("tool-fan")).toHaveAttribute(
-      "data-expanded",
-      "true",
-    );
-    expect(await zoom.boundingBox()).toEqual(baselineZoom);
-    expect(await attribution.boundingBox()).toEqual(baselineAttribution);
-
-    await page.getByTestId("governance-fan-trigger").click();
-    await expect(page.getByTestId("governance-fan")).toHaveAttribute(
       "data-expanded",
       "true",
     );
@@ -123,7 +115,7 @@ test.describe("MapLibre control placement", () => {
     expect(shiftedAttribution).toEqual(initialAttribution);
   });
 
-  test("both centered fans stay inside a narrow remaining desktop map", async ({
+  test("the centered tool fan stays inside a narrow remaining desktop map", async ({
     page,
   }) => {
     await page.setViewportSize({ width: 800, height: 800 });
@@ -137,16 +129,6 @@ test.describe("MapLibre control placement", () => {
     expect(toolMenuBox).not.toBeNull();
     expect(toolMenuBox!.x).toBeGreaterThanOrEqual(0);
     expect(toolMenuBox!.x + toolMenuBox!.width).toBeLessThanOrEqual(
-      panelBox!.x,
-    );
-
-    await page.getByTestId("governance-fan-trigger").click();
-    const governanceMenuBox = await page
-      .locator("#governance-fan-actions")
-      .boundingBox();
-    expect(governanceMenuBox).not.toBeNull();
-    expect(governanceMenuBox!.x).toBeGreaterThanOrEqual(0);
-    expect(governanceMenuBox!.x + governanceMenuBox!.width).toBeLessThanOrEqual(
       panelBox!.x,
     );
   });

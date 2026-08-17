@@ -220,16 +220,16 @@
     if (topBarRect)
       top = Math.max(top, topBarRect.bottom - mapRect.top + edgeInset);
 
-    const governanceFan = document.querySelector<HTMLElement>(
-      '[data-testid="governance-fan"]',
-    );
-    const governanceObstacle =
-      governanceFan?.dataset.expanded === "true"
-        ? document.getElementById("governance-fan-actions")
-        : null;
-    const governanceRect = governanceObstacle?.getBoundingClientRect();
-    if (governanceRect && governanceRect.height > 0) {
-      top = Math.max(top, governanceRect.bottom - mapRect.top + edgeInset);
+    for (const selector of [
+      '[data-testid="attention-overflow-menu"]',
+      '[data-testid="attention-card"]',
+    ]) {
+      const attentionRect = document
+        .querySelector<HTMLElement>(selector)
+        ?.getBoundingClientRect();
+      if (attentionRect && attentionRect.height > 0) {
+        top = Math.max(top, attentionRect.bottom - mapRect.top + edgeInset);
+      }
     }
 
     const searchRect = document
@@ -291,8 +291,8 @@
       ".topbar",
       '[data-testid="search-overlay"]',
       '[data-testid="filter-overlay"]',
-      '[data-testid="governance-fan"]',
-      "#governance-fan-actions",
+      '[data-testid="attention-overflow-menu"]',
+      '[data-testid="attention-card"]',
       '[data-testid="tool-fan"]',
       "#tool-fan-actions",
       '[data-testid="context-panel"]',
@@ -1131,7 +1131,8 @@
     $isFilterOpen;
     $mapChrome.toolFanOpen;
     $mapChrome.toolFanBranch;
-    $mapChrome.governanceFanOpen;
+    $mapChrome.attentionOverflowOpen;
+    $mapChrome.attentionCardOpen;
     if (map) tick().then(refreshSearchViewportObservers);
   });
   // Lines require visible node endpoints. Hiding nodes must therefore hide
