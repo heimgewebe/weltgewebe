@@ -175,7 +175,7 @@ test.describe("Topbar — guest role visibility", () => {
     await expect(bubble).toBeVisible();
     await expect(bubble).toHaveAttribute(
       "aria-label",
-      "Ada: 99 oder mehr ungelesene Nachrichten",
+      "Neu für dich. Ada: 99 oder mehr ungelesene Nachrichten",
     );
     await expect(bubble.locator(".attention-count")).toHaveText("99+");
   });
