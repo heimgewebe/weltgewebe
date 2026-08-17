@@ -9,7 +9,10 @@
     setAttentionCardOpen,
     setAttentionOverflowOpen,
   } from "$lib/stores/mapChrome";
-  import { unreadMessageBadgeLabel } from "./topBarAttentionState";
+  import {
+    attentionMeaningLabel,
+    unreadMessageBadgeLabel,
+  } from "./topBarAttentionState";
 
   let attentionEl: HTMLElement | undefined = $state();
   let controlCapacity = $state(3);
@@ -36,6 +39,7 @@
       case "direct_message":
         return "✉";
       case "weber_application":
+      case "own_proposal":
         return "◌";
       default:
         return "◇";
@@ -48,6 +52,8 @@
         return "Nachricht öffnen";
       case "weber_application":
         return "Weberantrag öffnen";
+      case "own_proposal":
+        return "Antrag öffnen";
       default:
         return "Antrag öffnen";
     }
@@ -150,10 +156,11 @@
           class:active={activeItem?.id === item.id}
           data-attention-id={item.id}
           data-attention-kind={item.kind}
-          aria-label={`${item.label}: ${item.detail}`}
+          data-attention-meaning={item.meaning}
+          aria-label={`${attentionMeaningLabel(item.meaning)}. ${item.label}: ${item.detail}`}
           aria-expanded={activeItem?.id === item.id}
           aria-controls="attention-card"
-          title={`${item.label} · ${item.detail}`}
+          title={`${attentionMeaningLabel(item.meaning)} · ${item.label} · ${item.detail}`}
           onclick={() => selectAttention(item.id)}
           animate:flip={{ duration: reducedMotion ? 0 : 170 }}
         >
@@ -191,14 +198,22 @@
                 type="button"
                 class="attention-overflow-item"
                 data-attention-id={item.id}
+                data-attention-meaning={item.meaning}
                 onclick={() => selectOverflowAttention(item.id)}
               >
-                <span class="overflow-symbol" aria-hidden="true">
+                <span
+                  class="overflow-symbol"
+                  data-attention-meaning={item.meaning}
+                  aria-hidden="true"
+                >
                   {attentionSymbol(item.kind)}
                 </span>
                 <span class="overflow-copy">
+                  <span class="overflow-meaning"
+                    >{attentionMeaningLabel(item.meaning)}</span
+                  >
                   <strong>{item.label}</strong>
-                  <span>{item.detail}</span>
+                  <span class="overflow-detail">{item.detail}</span>
                 </span>
                 {#if item.count && item.count > 1}
                   <span class="overflow-count">
@@ -217,12 +232,20 @@
         id="attention-card"
         class="attention-card"
         data-testid="attention-card"
+        data-attention-meaning={activeItem.meaning}
         aria-labelledby="attention-card-title"
       >
-        <div class="attention-card-symbol" aria-hidden="true">
+        <div
+          class="attention-card-symbol"
+          data-attention-meaning={activeItem.meaning}
+          aria-hidden="true"
+        >
           {attentionSymbol(activeItem.kind)}
         </div>
         <div class="attention-card-copy">
+          <p class="attention-card-meaning">
+            {attentionMeaningLabel(activeItem.meaning)}
+          </p>
           <h2 id="attention-card-title">{activeItem.label}</h2>
           <p>{activeItem.detail}</p>
         </div>
@@ -284,6 +307,55 @@
       var(--accent) 65%,
       var(--panel-border-strong)
     );
+  }
+
+  .attention-bubble[data-attention-meaning="required"] {
+    border-width: 2px;
+    border-color: var(--accent);
+  }
+
+  .attention-bubble[data-attention-meaning="required"]::before {
+    content: "!";
+    position: absolute;
+    bottom: -0.18rem;
+    left: -0.18rem;
+    display: grid;
+    place-items: center;
+    width: 1rem;
+    height: 1rem;
+    border: 2px solid var(--panel);
+    border-radius: 50%;
+    background: var(--text);
+    color: var(--panel);
+    font-size: 0.62rem;
+    font-weight: 900;
+    line-height: 1;
+  }
+
+  .attention-bubble[data-attention-meaning="new"]::before {
+    content: "";
+    position: absolute;
+    bottom: 0.15rem;
+    left: 0.15rem;
+    width: 0.48rem;
+    height: 0.48rem;
+    border: 2px solid var(--panel);
+    border-radius: 50%;
+    background: var(--accent);
+  }
+
+  .attention-bubble[data-attention-meaning="available"],
+  .overflow-symbol[data-attention-meaning="available"],
+  .attention-card-symbol[data-attention-meaning="available"] {
+    border-width: 2px;
+    border-style: dashed;
+  }
+
+  .attention-bubble[data-attention-meaning="waiting"],
+  .overflow-symbol[data-attention-meaning="waiting"],
+  .attention-card-symbol[data-attention-meaning="waiting"] {
+    border-style: dotted;
+    box-shadow: none;
   }
 
   .attention-symbol {
@@ -383,6 +455,12 @@
     min-width: 0;
   }
 
+  .overflow-copy .overflow-meaning {
+    color: var(--accent);
+    font-size: 0.62rem;
+    font-weight: 800;
+  }
+
   .overflow-copy strong,
   .overflow-copy span {
     overflow: hidden;
@@ -439,6 +517,14 @@
 
   .attention-card-copy {
     min-width: 0;
+  }
+
+  .attention-card-copy .attention-card-meaning {
+    margin: 0 0 0.14rem;
+    color: var(--accent);
+    font-size: 0.66rem;
+    font-weight: 800;
+    line-height: 1.2;
   }
 
   .attention-card-copy h2,

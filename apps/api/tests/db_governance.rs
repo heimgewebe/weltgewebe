@@ -14,9 +14,10 @@ use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tokio::time::{sleep, timeout, Duration as TokioDuration};
 use weltgewebe_api::governance::{
     add_message, add_veto, create_repeal_proposal, create_sach_proposal, create_weber_proposal,
-    delete_guest_account, finalize_due_proposals, get_proposal, list_proposals, upsert_vote,
-    withdraw_proposal, CreateProposalError, MessageError, ProposalStatus, RepealProposalError,
-    VetoError, VoteChoice, VoteError, VoteWriteOutcome, WithdrawProposalError,
+    delete_guest_account, finalize_due_proposals, get_proposal, list_proposals,
+    list_proposals_for_viewer, upsert_vote, withdraw_proposal, CreateProposalError, MessageError,
+    ProposalStatus, RepealProposalError, VetoError, VoteChoice, VoteError, VoteWriteOutcome,
+    WithdrawProposalError,
 };
 
 const GUEST_A: &str = "gov-proof-guest-a";
@@ -658,6 +659,27 @@ async fn sachantrag_uses_shared_veto_voting_majority_and_self_decision_guard() {
     )
     .await
     .expect("foreign veto");
+
+    let consent_entries = list_proposals_for_viewer(&pool, Some(WEBER_B))
+        .await
+        .expect("list consent participation for viewer");
+    let consent_entry = consent_entries
+        .iter()
+        .find(|entry| entry.proposal.id == proposal.id)
+        .expect("proposal in viewer list");
+    assert!(consent_entry.own_veto);
+    assert_eq!(consent_entry.own_vote, None);
+
+    let anonymous_entries = list_proposals_for_viewer(&pool, None)
+        .await
+        .expect("list anonymous proposal projection");
+    let anonymous_entry = anonymous_entries
+        .iter()
+        .find(|entry| entry.proposal.id == proposal.id)
+        .expect("proposal in anonymous list");
+    assert!(!anonymous_entry.own_veto);
+    assert_eq!(anonymous_entry.own_vote, None);
+
     finalize_due_proposals(&pool, t0 + Duration::days(7))
         .await
         .expect("open voting");
@@ -680,6 +702,16 @@ async fn sachantrag_uses_shared_veto_voting_majority_and_self_decision_guard() {
     )
     .await
     .expect("foreign yes vote");
+
+    let voting_entries = list_proposals_for_viewer(&pool, Some(WEBER_B))
+        .await
+        .expect("list voting participation for viewer");
+    let voting_entry = voting_entries
+        .iter()
+        .find(|entry| entry.proposal.id == proposal.id)
+        .expect("proposal in voting viewer list");
+    assert_eq!(voting_entry.own_vote.as_deref(), Some("ja"));
+    assert!(voting_entry.own_veto);
 
     let outcomes = finalize_due_proposals(&pool, t0 + Duration::days(14))
         .await

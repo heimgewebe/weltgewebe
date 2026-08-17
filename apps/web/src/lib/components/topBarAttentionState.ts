@@ -7,15 +7,20 @@ const UNREAD_COUNT_OVERFLOW = 100;
 export type AttentionItemKind =
   | "direct_message"
   | "weber_application"
+  | "own_proposal"
   | "governance";
+
+export type AttentionMeaning = "required" | "new" | "available" | "waiting";
 
 export interface AttentionItem {
   id: string;
   kind: AttentionItemKind;
+  meaning: AttentionMeaning;
   label: string;
   detail: string;
   href: string;
   occurredAt: string;
+  deadline?: string;
   count?: number;
 }
 
@@ -26,11 +31,22 @@ export interface AttentionProjectionInput {
   role: AuthRole;
 }
 
+const ATTENTION_MEANING_RANK: Record<AttentionMeaning, number> = {
+  required: 0,
+  new: 1,
+  available: 2,
+  waiting: 3,
+};
+
 function isOwnWeberApplication(proposal: Proposal, accountId: string): boolean {
   return (
     proposal.kind === "weberantrag" &&
     proposal.applicant_account_id === accountId
   );
+}
+
+function isOwnProposal(proposal: Proposal, accountId: string): boolean {
+  return proposal.applicant_account_id === accountId;
 }
 
 function boundedUnreadCount(value: number): number {
@@ -47,15 +63,47 @@ function proposalLabel(proposal: Proposal): string {
   return `Weberstatus für ${proposal.applicant_title}`;
 }
 
+function ownProposalLabel(proposal: Proposal): string {
+  if (proposal.kind === "weberantrag") return "Dein Weberantrag";
+  const title = proposal.title?.trim();
+  return title ? `Dein Antrag: ${title}` : "Dein Sachantrag";
+}
+
 function proposalDetail(proposal: Proposal): string {
   return proposal.status === "voting"
     ? "Gespräch und Abstimmung läuft"
     : "Offene Konsentphase";
 }
 
+function proposalRelevantTime(proposal: Proposal): string | undefined {
+  if (proposal.status === "voting" && proposal.consent_until) {
+    return proposal.consent_until;
+  }
+  return proposal.created_at;
+}
+
+function proposalDeadline(proposal: Proposal): string | undefined {
+  return proposal.status === "voting"
+    ? proposal.voting_until
+    : proposal.consent_until;
+}
+
 function sourceTime(value: string): number {
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+export function attentionMeaningLabel(meaning: AttentionMeaning): string {
+  switch (meaning) {
+    case "required":
+      return "Handlung erforderlich";
+    case "new":
+      return "Neu für dich";
+    case "available":
+      return "Mitwirkung möglich";
+    case "waiting":
+      return "Läuft ohne dein Zutun";
+  }
 }
 
 export function hasPendingWeberApplication(
@@ -127,6 +175,7 @@ export function projectTopBarAttention({
     items.push({
       id: `direct:${conversation.id}`,
       kind: "direct_message",
+      meaning: "new",
       label: conversation.counterpart_title || "Private Nachricht",
       detail: unreadMessageAccessibleCount(unread),
       href: `/nachrichten?id=${encodeURIComponent(conversation.id)}`,
@@ -135,25 +184,56 @@ export function projectTopBarAttention({
     });
   }
 
-  const canParticipateCollectively = role === "weber" || role === "admin";
+  const formalRole = role === "weber" || role === "admin";
   for (const proposal of proposals) {
     if (proposal.status !== "consent" && proposal.status !== "voting") continue;
 
-    const ownApplication = isOwnWeberApplication(proposal, accountId);
-    if (!ownApplication && !canParticipateCollectively) continue;
-    if (!proposal.created_at) continue;
+    const occurredAt = proposalRelevantTime(proposal);
+    if (!occurredAt) continue;
+
+    if (isOwnProposal(proposal, accountId)) {
+      items.push({
+        id: `proposal:${proposal.id}`,
+        kind: isOwnWeberApplication(proposal, accountId)
+          ? "weber_application"
+          : "own_proposal",
+        meaning: "waiting",
+        label: ownProposalLabel(proposal),
+        detail: proposalDetail(proposal),
+        href: `/antraege?id=${encodeURIComponent(proposal.id)}`,
+        occurredAt,
+        deadline: proposalDeadline(proposal),
+      });
+      continue;
+    }
+
+    const canParticipate =
+      formalRole &&
+      (proposal.can_veto === true ||
+        (proposal.can_vote === true && proposal.own_vote === undefined));
+    if (!canParticipate) continue;
 
     items.push({
       id: `proposal:${proposal.id}`,
-      kind: ownApplication ? "weber_application" : "governance",
-      label: ownApplication ? "Dein Weberantrag" : proposalLabel(proposal),
-      detail: proposalDetail(proposal),
+      kind: "governance",
+      meaning: "available",
+      label: proposalLabel(proposal),
+      detail:
+        proposal.status === "voting"
+          ? "Du kannst noch abstimmen"
+          : "Du kannst ein begründetes Veto einlegen",
       href: `/antraege?id=${encodeURIComponent(proposal.id)}`,
-      occurredAt: proposal.created_at,
+      occurredAt,
+      deadline: proposalDeadline(proposal),
     });
   }
 
   return items.sort((left, right) => {
+    const byMeaning =
+      ATTENTION_MEANING_RANK[left.meaning] -
+      ATTENTION_MEANING_RANK[right.meaning];
+    if (byMeaning) return byMeaning;
+
     const byTime = sourceTime(right.occurredAt) - sourceTime(left.occurredAt);
     return byTime || left.id.localeCompare(right.id);
   });

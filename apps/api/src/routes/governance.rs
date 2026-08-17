@@ -12,7 +12,8 @@
 
 use axum::{
     extract::{Path, State},
-    http::StatusCode,
+    http::{header, StatusCode},
+    response::{IntoResponse, Response},
     Extension, Json,
 };
 use chrono::{DateTime, Utc};
@@ -30,14 +31,18 @@ use crate::config::{
     DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
 };
 use crate::governance::{
-    self, CreateProposalError, GuestExitError, MessageError, ProposalMessage, ProposalStatus,
-    ProposalWithCounts, Veto, VetoError, VoteChoice, VoteError, VoteWriteOutcome,
+    self, CreateProposalError, GuestExitError, MessageError, ProposalListEntry, ProposalMessage,
+    ProposalStatus, ProposalWithCounts, Veto, VetoError, VoteChoice, VoteError, VoteWriteOutcome,
     MESSAGE_BODY_MAX_CHARS, PROPOSAL_TITLE_MAX_CHARS, SUMMARY_MAX_CHARS, VETO_REASON_MAX_CHARS,
 };
 use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
 
 type ApiError = (StatusCode, String);
+
+fn private_no_store_json<T: Serialize>(value: T) -> Response {
+    ([(header::CACHE_CONTROL, "private, no-store")], Json(value)).into_response()
+}
 
 fn record_guest_exit_session_cleanup(
     account_id: &str,
@@ -219,6 +224,50 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
     }
 }
 
+/// Listenprojektion mit ausschließlich betrachterbezogenen Beteiligungsfakten.
+/// Die Fachwahrheit bleibt Governance; Attention leitet daraus nur Bedeutung ab.
+#[derive(Debug, Serialize)]
+pub struct ProposalListView {
+    #[serde(flatten)]
+    pub proposal: ProposalView,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub own_vote: Option<String>,
+    pub own_veto: bool,
+    pub can_vote: bool,
+    pub can_veto: bool,
+}
+
+fn proposal_list_view(
+    entry: ProposalListEntry,
+    now: DateTime<Utc>,
+    auth: &AuthContext,
+) -> ProposalListView {
+    let ProposalListEntry {
+        proposal,
+        own_vote,
+        own_veto,
+    } = entry;
+    let formal_actor = auth.authenticated && matches!(auth.role, Role::Weber | Role::Admin);
+    let own_proposal = auth.account_id.as_deref() == proposal.applicant_account_id.as_deref();
+    let can_vote = formal_actor
+        && !own_proposal
+        && proposal.status == ProposalStatus::Voting
+        && proposal.voting_until.is_some_and(|until| now < until);
+    let can_veto = formal_actor
+        && !own_proposal
+        && proposal.status == ProposalStatus::Consent
+        && now < proposal.consent_until
+        && !own_veto;
+
+    ProposalListView {
+        proposal: proposal_view(proposal, now),
+        own_vote,
+        own_veto,
+        can_vote,
+        can_veto,
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct ProposalDetailView {
     #[serde(flatten)]
@@ -273,19 +322,25 @@ pub async fn governance_testing_advance_proposal(
 /// GET /proposals — öffentliche Liste, neueste zuerst.
 pub async fn list_proposals(
     State(state): State<ApiState>,
-) -> Result<Json<Vec<ProposalView>>, ApiError> {
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Response, ApiError> {
     let pool = require_pool(&state)?;
     finalize_due(&state, pool).await?;
 
     let now = Utc::now();
-    let proposals = governance::list_proposals(pool)
+    let viewer_account_id = if auth.authenticated {
+        auth.account_id.as_deref()
+    } else {
+        None
+    };
+    let proposals = governance::list_proposals_for_viewer(pool, viewer_account_id)
         .await
-        .map_err(internal_error("list_proposals"))?;
-    Ok(Json(
+        .map_err(internal_error("list_proposals_for_viewer"))?;
+    Ok(private_no_store_json(
         proposals
             .into_iter()
-            .map(|proposal| proposal_view(proposal, now))
-            .collect(),
+            .map(|proposal| proposal_list_view(proposal, now, &auth))
+            .collect::<Vec<_>>(),
     ))
 }
 
@@ -295,7 +350,7 @@ pub async fn get_proposal(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
     Path(id): Path<String>,
-) -> Result<Json<ProposalDetailView>, ApiError> {
+) -> Result<Response, ApiError> {
     let pool = require_pool(&state)?;
     finalize_due(&state, pool).await?;
 
@@ -315,7 +370,7 @@ pub async fn get_proposal(
         _ => None,
     };
 
-    Ok(Json(ProposalDetailView {
+    Ok(private_no_store_json(ProposalDetailView {
         proposal: proposal_view(proposal, Utc::now()),
         vetoes,
         own_vote,
@@ -933,8 +988,123 @@ pub async fn exit_own_account(
 
 #[cfg(test)]
 mod tests {
-    use super::record_guest_exit_session_cleanup;
-    use crate::auth::session::SessionBackendError;
+    use super::{private_no_store_json, proposal_list_view, record_guest_exit_session_cleanup};
+    use crate::{
+        auth::{role::Role, session::SessionBackendError},
+        governance::{ProposalListEntry, ProposalStatus, ProposalWithCounts},
+        middleware::auth::AuthContext,
+    };
+    use axum::http::header;
+    use chrono::{Duration, Utc};
+
+    fn proposal_entry(
+        status: ProposalStatus,
+        applicant_account_id: &str,
+        own_vote: Option<&str>,
+        own_veto: bool,
+    ) -> ProposalListEntry {
+        let now = Utc::now();
+        ProposalListEntry {
+            proposal: ProposalWithCounts {
+                id: "proposal-1".to_string(),
+                kind: "sachantrag".to_string(),
+                webgemeindezentrum_id: "wgz-1".to_string(),
+                title: Some("Testantrag".to_string()),
+                target_node_id: None,
+                target_node_title: None,
+                repeals_proposal_id: None,
+                pending_repeal_proposal_id: None,
+                repealed_by_proposal_id: None,
+                repealed_at: None,
+                applicant_account_id: Some(applicant_account_id.to_string()),
+                applicant_title: "Antragsteller".to_string(),
+                summary: None,
+                status,
+                created_at: now - Duration::hours(1),
+                consent_until: now + Duration::hours(1),
+                voting_until: Some(now + Duration::hours(1)),
+                finalized_at: None,
+                veto_count: 0,
+                message_count: 0,
+                yes_votes: 0,
+                no_votes: 0,
+                abstain_votes: 0,
+            },
+            own_vote: own_vote.map(str::to_string),
+            own_veto,
+        }
+    }
+
+    fn auth(account_id: &str, role: Role) -> AuthContext {
+        AuthContext {
+            authenticated: true,
+            account_id: Some(account_id.to_string()),
+            device_id: None,
+            role,
+            expires_at: None,
+        }
+    }
+
+    #[test]
+    fn proposal_list_actionability_is_viewer_and_phase_bound() {
+        let now = Utc::now();
+        let weber = auth("viewer", Role::Weber);
+
+        let consent = proposal_list_view(
+            proposal_entry(ProposalStatus::Consent, "other", None, false),
+            now,
+            &weber,
+        );
+        assert!(consent.can_veto);
+        assert!(!consent.can_vote);
+
+        let already_vetoed = proposal_list_view(
+            proposal_entry(ProposalStatus::Consent, "other", None, true),
+            now,
+            &weber,
+        );
+        assert!(!already_vetoed.can_veto);
+
+        let voting = proposal_list_view(
+            proposal_entry(ProposalStatus::Voting, "other", Some("ja"), false),
+            now,
+            &weber,
+        );
+        assert!(
+            voting.can_vote,
+            "a cast vote remains changeable while voting is open"
+        );
+        assert_eq!(voting.own_vote.as_deref(), Some("ja"));
+
+        let own = proposal_list_view(
+            proposal_entry(ProposalStatus::Voting, "viewer", None, false),
+            now,
+            &weber,
+        );
+        assert!(!own.can_vote);
+        assert!(!own.can_veto);
+
+        let guest = auth("guest", Role::Gast);
+        let foreign_for_guest = proposal_list_view(
+            proposal_entry(ProposalStatus::Consent, "other", None, false),
+            now,
+            &guest,
+        );
+        assert!(!foreign_for_guest.can_vote);
+        assert!(!foreign_for_guest.can_veto);
+    }
+
+    #[test]
+    fn personalized_governance_json_is_never_cacheable() {
+        let response = private_no_store_json(serde_json::json!({ "ok": true }));
+        assert_eq!(
+            response
+                .headers()
+                .get(header::CACHE_CONTROL)
+                .and_then(|value| value.to_str().ok()),
+            Some("private, no-store")
+        );
+    }
 
     #[test]
     fn failed_secondary_session_cleanup_does_not_fail_committed_guest_exit() {
