@@ -8,6 +8,13 @@ export type ProposalStatus =
   | "withdrawn";
 export type VoteChoice = "ja" | "nein" | "enthaltung";
 
+export interface ProposalViewerParticipation {
+  vote_choice: VoteChoice | null;
+  has_veto: boolean;
+  may_vote: boolean;
+  may_veto: boolean;
+}
+
 export interface Proposal {
   id: string;
   kind: "weberantrag" | "sachantrag";
@@ -33,9 +40,13 @@ export interface Proposal {
   no_votes: number;
   abstain_votes: number;
   remaining_seconds?: number;
+  viewer_participation?: ProposalViewerParticipation | null;
   own_vote?: VoteChoice;
+  /** @deprecated Transitional list-response compatibility; use viewer_participation. */
   own_veto?: boolean;
+  /** @deprecated Transitional list-response compatibility; use viewer_participation. */
   can_vote?: boolean;
+  /** @deprecated Transitional list-response compatibility; use viewer_participation. */
   can_veto?: boolean;
 }
 

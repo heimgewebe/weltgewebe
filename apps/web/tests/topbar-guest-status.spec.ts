@@ -68,7 +68,7 @@ test.describe("Topbar — guest role visibility", () => {
     ).toBeVisible();
   });
 
-  test("a pending Weber application and unread conversation move into attention bubbles", async ({
+  test("active unread attention suppresses the passive pending-application bubble", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -105,7 +105,7 @@ test.describe("Topbar — guest role visibility", () => {
     const attention = page.getByTestId("attention-bubbles");
     await expect(attention).toBeVisible();
     const bubbles = attention.locator(".attention-bubble");
-    await expect(bubbles).toHaveCount(2);
+    await expect(bubbles).toHaveCount(1);
     await expect(bubbles.first()).toHaveAttribute(
       "data-attention-id",
       "direct:dm-1",
@@ -118,14 +118,10 @@ test.describe("Topbar — guest role visibility", () => {
     ).toHaveAttribute("href", "/nachrichten?id=dm-1");
 
     await page.keyboard.press("Escape");
-    await attention
-      .locator('[data-attention-id="proposal:pending-weber"]')
-      .click();
     await expect(
-      page
-        .getByTestId("attention-card")
-        .getByRole("link", { name: "Weberantrag öffnen" }),
-    ).toHaveAttribute("href", "/antraege?id=pending-weber");
+      attention.locator('[data-attention-id="proposal:pending-weber"]'),
+    ).toHaveCount(0);
+    await expect(badge).toHaveAttribute("href", "/antraege");
   });
 
   test("a failed initial proposal read never masquerades as permission to apply", async ({

@@ -1,13 +1,15 @@
 import type { DirectConversation } from "$lib/api/directMessages";
-import type { Proposal } from "$lib/api/governance";
+import { formatRemaining, type Proposal } from "$lib/api/governance";
 import type { AuthRole } from "$lib/auth/store";
 
 const UNREAD_COUNT_OVERFLOW = 100;
+export const ATTENTION_DEADLINE_HORIZON_MS = 24 * 60 * 60 * 1000;
 
 export type AttentionItemKind =
   | "direct_message"
   | "weber_application"
   | "own_proposal"
+  | "waiting_summary"
   | "governance";
 
 export type AttentionMeaning = "required" | "new" | "available" | "waiting";
@@ -21,6 +23,7 @@ export interface AttentionItem {
   href: string;
   occurredAt: string;
   deadline?: string;
+  deadlineLabel?: string;
   count?: number;
 }
 
@@ -29,14 +32,8 @@ export interface AttentionProjectionInput {
   proposals: Proposal[];
   accountId?: string;
   role: AuthRole;
+  nowMs: number;
 }
-
-const ATTENTION_MEANING_RANK: Record<AttentionMeaning, number> = {
-  required: 0,
-  new: 1,
-  available: 2,
-  waiting: 3,
-};
 
 function isOwnWeberApplication(proposal: Proposal, accountId: string): boolean {
   return (
@@ -63,18 +60,6 @@ function proposalLabel(proposal: Proposal): string {
   return `Weberstatus für ${proposal.applicant_title}`;
 }
 
-function ownProposalLabel(proposal: Proposal): string {
-  if (proposal.kind === "weberantrag") return "Dein Weberantrag";
-  const title = proposal.title?.trim();
-  return title ? `Dein Antrag: ${title}` : "Dein Sachantrag";
-}
-
-function proposalDetail(proposal: Proposal): string {
-  return proposal.status === "voting"
-    ? "Gespräch und Abstimmung läuft"
-    : "Offene Konsentphase";
-}
-
 function proposalRelevantTime(proposal: Proposal): string | undefined {
   if (proposal.status === "voting" && proposal.consent_until) {
     return proposal.consent_until;
@@ -88,9 +73,40 @@ function proposalDeadline(proposal: Proposal): string | undefined {
     : proposal.consent_until;
 }
 
-function sourceTime(value: string): number {
+function sourceTime(value: string | undefined): number {
+  if (!value) return Number.NEGATIVE_INFINITY;
   const parsed = Date.parse(value);
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
+}
+
+function deadlineRemainingMs(item: AttentionItem, nowMs: number): number {
+  const deadlineMs = sourceTime(item.deadline);
+  return Number.isFinite(deadlineMs)
+    ? deadlineMs - nowMs
+    : Number.POSITIVE_INFINITY;
+}
+
+function isNearDeadline(item: AttentionItem, nowMs: number): boolean {
+  const remaining = deadlineRemainingMs(item, nowMs);
+  return remaining > 0 && remaining <= ATTENTION_DEADLINE_HORIZON_MS;
+}
+
+function attentionRank(item: AttentionItem, nowMs: number): number {
+  if (item.meaning === "required") return 0;
+  if (item.meaning === "available" && isNearDeadline(item, nowMs)) return 1;
+  if (item.meaning === "new") return 2;
+  if (item.meaning === "available") return 3;
+  return 4;
+}
+
+function compareDeadlineFirst(
+  left: AttentionItem,
+  right: AttentionItem,
+): number {
+  const leftDeadline = sourceTime(left.deadline);
+  const rightDeadline = sourceTime(right.deadline);
+  if (leftDeadline !== rightDeadline) return leftDeadline - rightDeadline;
+  return sourceTime(right.occurredAt) - sourceTime(left.occurredAt);
 }
 
 export function attentionMeaningLabel(meaning: AttentionMeaning): string {
@@ -104,6 +120,30 @@ export function attentionMeaningLabel(meaning: AttentionMeaning): string {
     case "waiting":
       return "Läuft ohne dein Zutun";
   }
+}
+
+export function attentionMeaningMark(meaning: AttentionMeaning): string {
+  switch (meaning) {
+    case "required":
+      return "!";
+    case "new":
+      return "•";
+    case "available":
+      return "+";
+    case "waiting":
+      return "…";
+  }
+}
+
+export function attentionDeadlineLabel(
+  deadline: string | undefined,
+  nowMs: number,
+): string | undefined {
+  const deadlineMs = sourceTime(deadline);
+  if (!Number.isFinite(deadlineMs) || deadlineMs <= nowMs) return undefined;
+  const seconds = Math.max(1, Math.ceil((deadlineMs - nowMs) / 1000));
+  if (seconds < 60) return "Endet in unter 1 Min.";
+  return `Endet in ${formatRemaining(seconds)}`;
 }
 
 export function hasPendingWeberApplication(
@@ -162,17 +202,19 @@ export function projectTopBarAttention({
   proposals,
   accountId,
   role,
+  nowMs,
 }: AttentionProjectionInput): AttentionItem[] {
   if (!accountId) return [];
 
-  const items: AttentionItem[] = [];
+  const activeItems: AttentionItem[] = [];
+  const waitingProposals: Proposal[] = [];
 
   for (const conversation of conversations) {
     const unread = boundedUnreadCount(conversation.unread_count);
     if (unread === 0) continue;
     const occurredAt = conversation.last_message_at ?? conversation.updated_at;
     if (!occurredAt) continue;
-    items.push({
+    activeItems.push({
       id: `direct:${conversation.id}`,
       kind: "direct_message",
       meaning: "new",
@@ -192,28 +234,21 @@ export function projectTopBarAttention({
     if (!occurredAt) continue;
 
     if (isOwnProposal(proposal, accountId)) {
-      items.push({
-        id: `proposal:${proposal.id}`,
-        kind: isOwnWeberApplication(proposal, accountId)
-          ? "weber_application"
-          : "own_proposal",
-        meaning: "waiting",
-        label: ownProposalLabel(proposal),
-        detail: proposalDetail(proposal),
-        href: `/antraege?id=${encodeURIComponent(proposal.id)}`,
-        occurredAt,
-        deadline: proposalDeadline(proposal),
-      });
+      waitingProposals.push(proposal);
       continue;
     }
 
-    const canParticipate =
-      formalRole &&
-      (proposal.can_veto === true ||
-        (proposal.can_vote === true && proposal.own_vote === undefined));
-    if (!canParticipate) continue;
+    const viewer = proposal.viewer_participation;
+    if (!formalRole || !viewer) continue;
+    const deadline = proposalDeadline(proposal);
+    const deadlineMs = sourceTime(deadline);
+    if (!Number.isFinite(deadlineMs) || deadlineMs <= nowMs) continue;
 
-    items.push({
+    const mayParticipate =
+      viewer.may_veto || (viewer.may_vote && viewer.vote_choice === null);
+    if (!mayParticipate) continue;
+
+    activeItems.push({
       id: `proposal:${proposal.id}`,
       kind: "governance",
       meaning: "available",
@@ -224,17 +259,48 @@ export function projectTopBarAttention({
           : "Du kannst ein begründetes Veto einlegen",
       href: `/antraege?id=${encodeURIComponent(proposal.id)}`,
       occurredAt,
-      deadline: proposalDeadline(proposal),
+      deadline,
+      deadlineLabel: attentionDeadlineLabel(deadline, nowMs),
     });
   }
 
-  return items.sort((left, right) => {
-    const byMeaning =
-      ATTENTION_MEANING_RANK[left.meaning] -
-      ATTENTION_MEANING_RANK[right.meaning];
-    if (byMeaning) return byMeaning;
+  activeItems.sort((left, right) => {
+    const leftRank = attentionRank(left, nowMs);
+    const rightRank = attentionRank(right, nowMs);
+    if (leftRank !== rightRank) return leftRank - rightRank;
 
-    const byTime = sourceTime(right.occurredAt) - sourceTime(left.occurredAt);
-    return byTime || left.id.localeCompare(right.id);
+    if (left.meaning === "available" || left.meaning === "required") {
+      const byDeadline = compareDeadlineFirst(left, right);
+      if (byDeadline) return byDeadline;
+    } else {
+      const byTime = sourceTime(right.occurredAt) - sourceTime(left.occurredAt);
+      if (byTime) return byTime;
+    }
+    return left.id.localeCompare(right.id);
   });
+
+  if (activeItems.length > 0 || waitingProposals.length === 0)
+    return activeItems;
+
+  const newestWaiting = waitingProposals
+    .map(proposalRelevantTime)
+    .filter((value): value is string => Boolean(value))
+    .sort((left, right) => sourceTime(right) - sourceTime(left))[0];
+  if (!newestWaiting) return [];
+  const count = waitingProposals.length;
+  return [
+    {
+      id: `waiting-summary:${accountId}`,
+      kind: "waiting_summary",
+      meaning: "waiting",
+      label:
+        count === 1
+          ? "1 eigener Vorgang läuft"
+          : `${count} eigene Vorgänge laufen`,
+      detail: "Du musst gerade nichts tun.",
+      href: "/antraege",
+      occurredAt: newestWaiting,
+      count,
+    },
+  ];
 }

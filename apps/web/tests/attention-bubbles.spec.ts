@@ -36,9 +36,12 @@ function proposal(
     yes_votes: 0,
     no_votes: 0,
     abstain_votes: 0,
-    own_veto: false,
-    can_vote: false,
-    can_veto: true,
+    viewer_participation: {
+      vote_choice: null,
+      has_veto: false,
+      may_vote: false,
+      may_veto: true,
+    },
     ...overrides,
   };
 }
@@ -387,6 +390,68 @@ test.describe("top-left attention bubbles", () => {
     );
   });
 
+  test("a real deadline inside 24 hours outranks newer unread information and stays visible in the card", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: "weber-attention",
+        role: "weber",
+      },
+    });
+    const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    await page.route("**/api/direct-conversations", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [
+            directConversation("fresh-message", 1, new Date().toISOString()),
+          ],
+        }),
+      });
+    });
+    await page.route("**/api/proposals", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          proposal("deadline-vote", "2026-08-16T08:00:00Z", {
+            status: "voting",
+            consent_until: "2026-08-16T08:00:00Z",
+            voting_until: deadline,
+            viewer_participation: {
+              vote_choice: null,
+              has_veto: false,
+              may_vote: true,
+              may_veto: false,
+            },
+          }),
+        ]),
+      });
+    });
+
+    await page.goto("/map");
+    const bubbles = page
+      .getByTestId("attention-bubbles")
+      .locator(".attention-bubble");
+    await expect(bubbles).toHaveCount(2);
+    await expect(bubbles.nth(0)).toHaveAttribute(
+      "data-attention-id",
+      "proposal:deadline-vote",
+    );
+    await expect(bubbles.nth(1)).toHaveAttribute(
+      "data-attention-id",
+      "direct:fresh-message",
+    );
+    await bubbles.nth(0).click();
+    const card = page.getByTestId("attention-card");
+    await expect(card).toContainText("Mitwirkung möglich");
+    await expect(card).toContainText("Endet in");
+    await expect(card.locator("time")).toHaveAttribute("datetime", deadline);
+  });
+
   test("already handled governance is not projected as attention", async ({
     page,
   }) => {
@@ -412,9 +477,12 @@ test.describe("top-left attention bubbles", () => {
           proposal("handled", "2026-08-17T07:00:00Z", {
             status: "voting",
             voting_until: "2026-08-24T07:00:00Z",
-            can_veto: false,
-            can_vote: true,
-            own_vote: "ja",
+            viewer_participation: {
+              vote_choice: "ja",
+              has_veto: false,
+              may_vote: true,
+              may_veto: false,
+            },
           }),
         ]),
       });
@@ -424,7 +492,7 @@ test.describe("top-left attention bubbles", () => {
     await expect(page.getByTestId("attention-bubbles")).toHaveCount(0);
   });
 
-  test("an own Sachantrag is waiting attention with a generic proposal action", async ({
+  test("own waiting matters collapse into one quiet summary", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -449,21 +517,29 @@ test.describe("top-left attention bubbles", () => {
           proposal("own-sach", "2026-08-17T07:00:00Z", {
             applicant_account_id: "weber-attention",
             applicant_title: "Eigener Account",
-            can_veto: false,
+            viewer_participation: {
+              vote_choice: null,
+              has_veto: false,
+              may_vote: false,
+              may_veto: false,
+            },
           }),
         ]),
       });
     });
 
     await page.goto("/map");
-    const bubble = page.locator('[data-attention-id="proposal:own-sach"]');
+    const bubble = page.locator(
+      '[data-attention-id="waiting-summary:weber-attention"]',
+    );
     await expect(bubble).toHaveAttribute("data-attention-meaning", "waiting");
     await bubble.click();
     const card = page.getByTestId("attention-card");
     await expect(card).toContainText("Läuft ohne dein Zutun");
+    await expect(card).toContainText("Du musst gerade nichts tun.");
     await expect(
-      card.getByRole("link", { name: "Antrag öffnen" }),
-    ).toHaveAttribute("href", "/antraege?id=own-sach");
+      card.getByRole("link", { name: "Anträge öffnen" }),
+    ).toHaveAttribute("href", "/antraege");
   });
 
   test("a newly observed item enters at the far left and shifts the older item right", async ({
