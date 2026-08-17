@@ -211,7 +211,7 @@ async function installGovernanceRoutes(
   };
 }
 
-test("governance views fan out from the top center and stay separate from weaving", async ({
+test("the map drops the Governance fan while the canonical governance filters stay available", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -219,49 +219,30 @@ test("governance views fan out from the top center and stay separate from weavin
   });
   await page.goto("/map");
 
-  const trigger = page.getByTestId("governance-fan-trigger");
-  const triggerBox = await trigger.boundingBox();
-  const viewport = page.viewportSize();
-  expect(triggerBox).not.toBeNull();
-  expect(viewport).not.toBeNull();
-  expect(
-    Math.abs(triggerBox!.x + triggerBox!.width / 2 - viewport!.width / 2),
-  ).toBeLessThan(2);
-
-  await trigger.click();
-  await expect(page.getByTestId("governance-fan-all")).toHaveAttribute(
-    "href",
-    "/antraege",
-  );
-  await expect(page.getByTestId("governance-fan-open")).toHaveAttribute(
-    "href",
-    "/antraege?status=consent",
-  );
-  await expect(page.getByTestId("governance-fan-vetoes")).toHaveAttribute(
-    "href",
-    "/antraege?ereignis=veto",
-  );
-  await expect(
-    page.getByTestId("governance-fan-conversations"),
-  ).toHaveAttribute("href", "/antraege?ereignis=gespraech");
-  await expect(page.getByTestId("governance-fan-voting")).toHaveAttribute(
-    "href",
-    "/antraege?status=voting",
-  );
-
+  await expect(page.getByTestId("governance-fan-trigger")).toHaveCount(0);
   await page.getByTestId("tool-fan-trigger").click();
-  await expect(page.getByTestId("governance-fan")).toHaveAttribute(
-    "data-expanded",
-    "false",
-  );
   await expect(page.getByTestId("tool-fan")).toHaveAttribute(
     "data-expanded",
     "true",
   );
   await expect(page.getByTestId("tool-fan-proposals")).toHaveCount(0);
+
+  await page.goto("/antraege");
+  const expectedFilters = [
+    ["Alle", "/antraege"],
+    ["Offen", "/antraege?status=consent"],
+    ["Vetos", "/antraege?ereignis=veto"],
+    ["Gespräche", "/antraege?ereignis=gespraech"],
+    ["Abstimmungen", "/antraege?status=voting"],
+  ] as const;
+  for (const [label, href] of expectedFilters) {
+    await expect(
+      page.getByRole("link", { name: label, exact: true }),
+    ).toHaveAttribute("href", href);
+  }
 });
 
-test("the five governance actions stay usable on a 320 pixel viewport", async ({
+test("the five canonical governance filters stay usable at 320 pixels", async ({
   page,
 }) => {
   await mockApiResponses(page, {
@@ -269,18 +250,13 @@ test("the five governance actions stay usable on a 320 pixel viewport", async ({
   });
   await page.setViewportSize({ width: 320, height: 568 });
   await page.emulateMedia({ reducedMotion: "reduce" });
-  await page.goto("/map");
-  await page.getByTestId("governance-fan-trigger").click();
+  await page.goto("/antraege");
 
-  for (const testId of [
-    "governance-fan-all",
-    "governance-fan-open",
-    "governance-fan-vetoes",
-    "governance-fan-conversations",
-    "governance-fan-voting",
-  ]) {
-    const box = await page.getByTestId(testId).boundingBox();
-    expect(box, `${testId} has no visible box`).not.toBeNull();
+  const filters = page.locator(".proposal-filters a");
+  await expect(filters).toHaveCount(5);
+  for (let index = 0; index < 5; index += 1) {
+    const box = await filters.nth(index).boundingBox();
+    expect(box, `governance filter ${index} has no visible box`).not.toBeNull();
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
     expect(box!.height).toBeGreaterThanOrEqual(44);

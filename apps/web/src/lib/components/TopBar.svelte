@@ -1,10 +1,14 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import GovernanceFan from "./GovernanceFan.svelte";
   import { contextPanelOpen } from "$lib/stores/uiView";
 
+  let AttentionSlot: any = $state();
   let AuthSlot: any = $state();
+
   onMount(() => {
+    void import("./AttentionBubbles.svelte").then((module) => {
+      AttentionSlot = module.default;
+    });
     void import("./TopBarAuth.svelte").then((module) => {
       AuthSlot = module.default;
     });
@@ -17,9 +21,9 @@
   role="toolbar"
   aria-label="Navigation"
 >
-  <div class="governance-slot">
-    <GovernanceFan />
-  </div>
+  {#if AttentionSlot}
+    <AttentionSlot />
+  {/if}
   {#if AuthSlot}
     <AuthSlot />
   {/if}
@@ -32,7 +36,7 @@
     min-height: var(--toolbar-offset);
     z-index: var(--z-map-topbar);
     display: grid;
-    grid-template-columns: minmax(44px, 1fr) auto minmax(44px, 1fr);
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
     align-items: center;
     padding: env(safe-area-inset-top) 12px 0;
     background: linear-gradient(
@@ -45,25 +49,9 @@
     transition: right var(--motion-ui);
   }
 
-  .governance-slot {
-    grid-column: 2;
-    justify-self: center;
-    pointer-events: auto;
-  }
-
   @media (min-width: 769px) {
     .topbar.panel-open {
       right: var(--context-panel-width);
-      --governance-fan-menu-width: max(
-        304px,
-        calc(100vw - var(--context-panel-width) - 24px)
-      );
-    }
-  }
-
-  @media (max-width: 420px) {
-    .governance-slot {
-      transform: translateX(-10px);
     }
   }
 

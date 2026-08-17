@@ -1,6 +1,36 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
+const PENDING_WEBER_PROPOSAL = {
+  id: "pending-weber",
+  kind: "weberantrag",
+  applicant_account_id: "guest-topbar",
+  applicant_title: "Gast Topbar",
+  status: "consent",
+  created_at: "2026-08-17T06:00:00Z",
+  consent_until: "2026-08-24T06:00:00Z",
+  webgemeindezentrum_id: "wgz-test",
+  veto_count: 0,
+  yes_votes: 0,
+  no_votes: 0,
+  abstain_votes: 0,
+};
+
+function directConversation(id: string, unreadCount: number, at: string) {
+  return {
+    id,
+    counterpart_account_id: `counterpart-${id}`,
+    counterpart_title: "Ada",
+    created_at: at,
+    updated_at: at,
+    unread_count: unreadCount,
+    last_message_preview: "Hallo",
+    last_message_at: at,
+    blocked_by_me: false,
+    can_send: true,
+  };
+}
+
 test.describe("Topbar — guest role visibility", () => {
   test("an authenticated guest sees a Gast badge that links to the Weber application", async ({
     page,
@@ -38,7 +68,7 @@ test.describe("Topbar — guest role visibility", () => {
     ).toBeVisible();
   });
 
-  test("a pending Weber application replaces the CTA and unread messages get a visible count", async ({
+  test("a pending Weber application and unread conversation move into attention bubbles", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -48,20 +78,16 @@ test.describe("Topbar — guest role visibility", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            kind: "weberantrag",
-            applicant_account_id: "guest-topbar",
-            status: "consent",
-          },
-        ]),
+        body: JSON.stringify([PENDING_WEBER_PROPOSAL]),
       });
     });
     await page.route("**/api/direct-conversations", async (route) => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ items: [{ unread_count: 3 }] }),
+        body: JSON.stringify({
+          items: [directConversation("dm-1", 3, "2026-08-17T07:00:00Z")],
+        }),
       });
     });
 
@@ -72,11 +98,34 @@ test.describe("Topbar — guest role visibility", () => {
     await expect(badge).toContainText("Weberstatus beantragt");
     await expect(badge).toHaveAttribute("href", "/antraege");
 
-    const messages = page.getByRole("link", {
-      name: "Private Nachrichten: 3 ungelesene Nachrichten",
-    });
+    const messages = page.getByRole("link", { name: "Private Nachrichten" });
     await expect(messages).toBeVisible();
-    await expect(messages.locator(".message-unread-badge")).toHaveText("3");
+    await expect(messages.locator(".message-unread-badge")).toHaveCount(0);
+
+    const attention = page.getByTestId("attention-bubbles");
+    await expect(attention).toBeVisible();
+    const bubbles = attention.locator(".attention-bubble");
+    await expect(bubbles).toHaveCount(2);
+    await expect(bubbles.first()).toHaveAttribute(
+      "data-attention-id",
+      "direct:dm-1",
+    );
+    await attention.locator('[data-attention-id="direct:dm-1"]').click();
+    await expect(
+      page
+        .getByTestId("attention-card")
+        .getByRole("link", { name: "Nachricht öffnen" }),
+    ).toHaveAttribute("href", "/nachrichten?id=dm-1");
+
+    await page.keyboard.press("Escape");
+    await attention
+      .locator('[data-attention-id="proposal:pending-weber"]')
+      .click();
+    await expect(
+      page
+        .getByTestId("attention-card")
+        .getByRole("link", { name: "Weberantrag öffnen" }),
+    ).toHaveAttribute("href", "/antraege?id=pending-weber");
   });
 
   test("a failed initial proposal read never masquerades as permission to apply", async ({
@@ -104,7 +153,9 @@ test.describe("Topbar — guest role visibility", () => {
     await expect(badge).not.toContainText("Weber werden");
   });
 
-  test("saturated unread totals use lower-bound wording", async ({ page }) => {
+  test("a saturated conversation bubble uses lower-bound wording", async ({
+    page,
+  }) => {
     await mockApiResponses(page, {
       auth: { authenticated: true, account_id: "guest-topbar", role: "gast" },
     });
@@ -113,21 +164,23 @@ test.describe("Topbar — guest role visibility", () => {
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          items: [{ unread_count: 80 }, { unread_count: 40 }],
+          items: [directConversation("dm-many", 120, "2026-08-17T07:00:00Z")],
         }),
       });
     });
 
     await page.goto("/map");
 
-    const messages = page.getByRole("link", {
-      name: "Private Nachrichten: 99 oder mehr ungelesene Nachrichten",
-    });
-    await expect(messages).toBeVisible();
-    await expect(messages.locator(".message-unread-badge")).toHaveText("99+");
+    const bubble = page.locator('[data-attention-id="direct:dm-many"]');
+    await expect(bubble).toBeVisible();
+    await expect(bubble).toHaveAttribute(
+      "aria-label",
+      "Ada: 99 oder mehr ungelesene Nachrichten",
+    );
+    await expect(bubble.locator(".attention-count")).toHaveText("99+");
   });
 
-  test("a pending guest stays compact and separated from governance at 320 pixels", async ({
+  test("a pending guest stays compact and separated from attention at 320 pixels", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -137,13 +190,7 @@ test.describe("Topbar — guest role visibility", () => {
       await route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify([
-          {
-            kind: "weberantrag",
-            applicant_account_id: "guest-topbar",
-            status: "consent",
-          },
-        ]),
+        body: JSON.stringify([PENDING_WEBER_PROPOSAL]),
       });
     });
     await page.setViewportSize({ width: 320, height: 568 });
@@ -162,17 +209,18 @@ test.describe("Topbar — guest role visibility", () => {
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(320);
 
-    const authSlot = page.locator(".auth-slot");
-    const governance = page.getByTestId("governance-fan-trigger");
-    const authBox = await authSlot.boundingBox();
-    const governanceBox = await governance.boundingBox();
+    const authBox = await page.locator(".auth-slot").boundingBox();
+    const attentionBox = await page
+      .getByTestId("attention-bubbles")
+      .boundingBox();
     expect(authBox, "auth slot has no visible box").not.toBeNull();
     expect(
-      governanceBox,
-      "governance trigger has no visible box",
+      attentionBox,
+      "attention bubbles have no visible box",
     ).not.toBeNull();
-    expect(authBox!.x).toBeGreaterThanOrEqual(
-      governanceBox!.x + governanceBox!.width,
+    expect(attentionBox!.x).toBeGreaterThanOrEqual(0);
+    expect(attentionBox!.x + attentionBox!.width).toBeLessThanOrEqual(
+      authBox!.x,
     );
 
     await expect(
@@ -196,7 +244,7 @@ test.describe("Topbar — guest role visibility", () => {
     await expect(page.getByTestId("topbar-guest-badge")).toHaveCount(0);
   });
 
-  test("an anonymous visitor does not see the guest badge", async ({
+  test("an anonymous visitor sees neither guest badge nor attention bubbles", async ({
     page,
   }) => {
     await mockApiResponses(page, { auth: { authenticated: false } });
@@ -204,5 +252,6 @@ test.describe("Topbar — guest role visibility", () => {
 
     await expect(page.getByRole("link", { name: "Anmelden" })).toBeVisible();
     await expect(page.getByTestId("topbar-guest-badge")).toHaveCount(0);
+    await expect(page.getByTestId("attention-bubbles")).toHaveCount(0);
   });
 });
