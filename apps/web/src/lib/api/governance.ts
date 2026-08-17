@@ -33,6 +33,10 @@ export interface Proposal {
   no_votes: number;
   abstain_votes: number;
   remaining_seconds?: number;
+  own_vote?: VoteChoice;
+  own_veto?: boolean;
+  can_vote?: boolean;
+  can_veto?: boolean;
 }
 
 export interface Veto {
@@ -44,7 +48,6 @@ export interface Veto {
 
 export interface ProposalDetail extends Proposal {
   vetoes: Veto[];
-  own_vote?: VoteChoice;
 }
 
 export interface ProposalMessage {
@@ -107,13 +110,13 @@ export async function createWeberProposal(
   return proposal;
 }
 
-export function createSachProposal(
+export async function createSachProposal(
   title: string,
   summary?: string,
   webgemeindezentrumId?: string,
   targetNodeId?: string,
 ): Promise<Proposal> {
-  return request<Proposal>("/api/proposals", {
+  const proposal = await request<Proposal>("/api/proposals", {
     method: "POST",
     body: JSON.stringify({
       kind: "sachantrag",
@@ -125,6 +128,8 @@ export function createSachProposal(
       ...(targetNodeId ? { target_node_id: targetNodeId } : {}),
     }),
   });
+  invalidateAccountAttention();
+  return proposal;
 }
 
 export async function withdrawProposal(id: string): Promise<Proposal> {
@@ -136,16 +141,21 @@ export async function withdrawProposal(id: string): Promise<Proposal> {
   return proposal;
 }
 
-export function requestProposalRepeal(
+export async function requestProposalRepeal(
   id: string,
   summary?: string,
 ): Promise<Proposal> {
-  return request<Proposal>(`/api/proposals/${encodeURIComponent(id)}/repeal`, {
-    method: "POST",
-    body: JSON.stringify({
-      ...(summary?.trim() ? { summary: summary.trim() } : {}),
-    }),
-  });
+  const proposal = await request<Proposal>(
+    `/api/proposals/${encodeURIComponent(id)}/repeal`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        ...(summary?.trim() ? { summary: summary.trim() } : {}),
+      }),
+    },
+  );
+  invalidateAccountAttention();
+  return proposal;
 }
 
 export function proposalTitle(proposal: Proposal): string {
@@ -154,24 +164,31 @@ export function proposalTitle(proposal: Proposal): string {
     : `Weberstatus für ${proposal.applicant_title}`;
 }
 
-export function submitVeto(id: string, reason: string): Promise<Veto> {
-  return request<Veto>(`/api/proposals/${encodeURIComponent(id)}/veto`, {
-    method: "POST",
-    body: JSON.stringify({ reason: reason.trim() }),
-  });
+export async function submitVeto(id: string, reason: string): Promise<Veto> {
+  const veto = await request<Veto>(
+    `/api/proposals/${encodeURIComponent(id)}/veto`,
+    {
+      method: "POST",
+      body: JSON.stringify({ reason: reason.trim() }),
+    },
+  );
+  invalidateAccountAttention();
+  return veto;
 }
 
-export function submitVote(
+export async function submitVote(
   id: string,
   choice: VoteChoice,
 ): Promise<{ choice: VoteChoice }> {
-  return request<{ choice: VoteChoice }>(
+  const vote = await request<{ choice: VoteChoice }>(
     `/api/proposals/${encodeURIComponent(id)}/vote`,
     {
       method: "PUT",
       body: JSON.stringify({ choice }),
     },
   );
+  invalidateAccountAttention();
+  return vote;
 }
 
 export function listProposalMessages(id: string): Promise<ProposalMessage[]> {

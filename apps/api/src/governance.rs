@@ -142,6 +142,16 @@ pub struct ProposalWithCounts {
     pub abstain_votes: i64,
 }
 
+/// Ein Listeneintrag mit ausschließlich der Sicht des aktuellen Betrachters.
+/// Die persönlichen Felder werden in derselben SQL-Abfrage wie die öffentliche
+/// Liste gelesen, damit Attention keinen N+1-Detailpfad benötigt.
+#[derive(Clone, Debug)]
+pub struct ProposalListEntry {
+    pub proposal: ProposalWithCounts,
+    pub own_vote: Option<String>,
+    pub own_veto: bool,
+}
+
 /// Begründetes Veto eines Webers oder Administrators (öffentlich sichtbare Webungsaktion).
 #[derive(Clone, Debug, Serialize)]
 pub struct Veto {
@@ -1227,6 +1237,37 @@ pub async fn list_proposals(pool: &PgPool) -> Result<Vec<ProposalWithCounts>, sq
     let query = format!("{PROPOSAL_WITH_COUNTS_SELECT} ORDER BY p.created_at DESC, p.id");
     let rows = sqlx::query(&query).fetch_all(pool).await?;
     rows.iter().map(proposal_from_row).collect()
+}
+
+/// Alle Anträge mit der persönlichen Beteiligung des optionalen Betrachters.
+/// Ohne Account bleiben `own_vote` leer und `own_veto` falsch. Der Pfad ist
+/// bewusst eine einzelne Listenabfrage statt eines Detailrequests je Antrag.
+pub async fn list_proposals_for_viewer(
+    pool: &PgPool,
+    viewer_account_id: Option<&str>,
+) -> Result<Vec<ProposalListEntry>, sqlx::Error> {
+    let query = format!(
+        "SELECT base.*, \
+            (SELECT gv.choice FROM governance_votes gv \
+                WHERE gv.proposal_id = base.id::uuid AND gv.voter_account_id = $1) AS own_vote, \
+            EXISTS(SELECT 1 FROM governance_vetoes vv \
+                WHERE vv.proposal_id = base.id::uuid AND vv.weber_account_id = $1) AS own_veto \
+         FROM ({PROPOSAL_WITH_COUNTS_SELECT}) base \
+         ORDER BY base.created_at DESC, base.id"
+    );
+    let rows = sqlx::query(&query)
+        .bind(viewer_account_id)
+        .fetch_all(pool)
+        .await?;
+    rows.iter()
+        .map(|row| {
+            Ok(ProposalListEntry {
+                proposal: proposal_from_row(row)?,
+                own_vote: row.try_get("own_vote")?,
+                own_veto: row.try_get("own_veto")?,
+            })
+        })
+        .collect()
 }
 
 /// Ein Antrag mit Zählständen; `None`, wenn er nicht existiert.

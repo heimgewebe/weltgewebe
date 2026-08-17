@@ -137,6 +137,7 @@ describe("accountAttentionRuntime", () => {
         {
           id: "direct:private-a",
           kind: "direct_message",
+          meaning: "new",
           label: "Private A",
           detail: "2 ungelesene Nachrichten",
           href: "/nachrichten?id=private-a",
@@ -176,6 +177,9 @@ describe("accountAttentionRuntime", () => {
       applicant_account_id: "account-b",
       applicant_title: "Berta",
       status: "voting",
+      consent_until: "2026-08-17T07:00:00Z",
+      voting_until: "2026-08-24T07:00:00Z",
+      can_vote: true,
       created_at: "2026-08-17T07:00:00Z",
     } as Proposal;
     const stale: AccountAttentionState = {
@@ -188,10 +192,11 @@ describe("accountAttentionRuntime", () => {
         {
           id: "proposal:collective",
           kind: "governance",
+          meaning: "available",
           label: "Parkbank",
-          detail: "Gespräch und Abstimmung läuft",
+          detail: "Du kannst noch abstimmen",
           href: "/antraege?id=collective",
-          occurredAt: proposal.created_at,
+          occurredAt: proposal.consent_until,
         },
       ],
     };

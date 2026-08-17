@@ -17,7 +17,11 @@ function directConversation(id: string, unreadCount: number, at: string) {
   };
 }
 
-function proposal(id: string, createdAt: string) {
+function proposal(
+  id: string,
+  createdAt: string,
+  overrides: Record<string, unknown> = {},
+) {
   return {
     id,
     kind: "sachantrag",
@@ -32,6 +36,10 @@ function proposal(id: string, createdAt: string) {
     yes_votes: 0,
     no_votes: 0,
     abstain_votes: 0,
+    own_veto: false,
+    can_vote: false,
+    can_veto: true,
+    ...overrides,
   };
 }
 
@@ -105,12 +113,15 @@ test.describe("top-left attention bubbles", () => {
 
     const bubble = page.locator('[data-attention-id="direct:card"]');
     await expect(bubble).toBeVisible();
+    await expect(bubble).toHaveAttribute("data-attention-meaning", "new");
     await bubble.click();
 
     await expect(page).toHaveURL(/\/map$/);
     await expect(bubble).toHaveAttribute("aria-expanded", "true");
     const card = page.getByTestId("attention-card");
     await expect(card).toBeVisible();
+    await expect(card).toHaveAttribute("data-attention-meaning", "new");
+    await expect(card.getByText("Neu für dich", { exact: true })).toBeVisible();
     await expect(
       card.getByRole("heading", { name: "Person card" }),
     ).toBeVisible();
@@ -204,6 +215,8 @@ test.describe("top-left attention bubbles", () => {
     await page.locator('[data-attention-id="direct:geometry"]').click();
     const card = page.getByTestId("attention-card");
     await expect(card).toBeVisible();
+    await expect(card).toHaveAttribute("data-attention-meaning", "new");
+    await expect(card.getByText("Neu für dich", { exact: true })).toBeVisible();
     const direction = page.getByTestId(
       "search-direction-node-attention-search-node",
     );
@@ -220,7 +233,7 @@ test.describe("top-left attention bubbles", () => {
     );
   });
 
-  test("mobile keeps newest items left and exposes the rest through +N", async ({
+  test("mobile keeps higher-semantic attention visible and exposes the rest through +N", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -372,6 +385,85 @@ test.describe("top-left attention bubbles", () => {
     expect(attentionBox!.x + attentionBox!.width).toBeLessThanOrEqual(
       authBox!.x,
     );
+  });
+
+  test("already handled governance is not projected as attention", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: "weber-attention",
+        role: "weber",
+      },
+    });
+    await page.route("**/api/direct-conversations", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: [] }),
+      });
+    });
+    await page.route("**/api/proposals", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          proposal("handled", "2026-08-17T07:00:00Z", {
+            status: "voting",
+            voting_until: "2026-08-24T07:00:00Z",
+            can_veto: false,
+            can_vote: true,
+            own_vote: "ja",
+          }),
+        ]),
+      });
+    });
+
+    await page.goto("/map");
+    await expect(page.getByTestId("attention-bubbles")).toHaveCount(0);
+  });
+
+  test("an own Sachantrag is waiting attention with a generic proposal action", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: "weber-attention",
+        role: "weber",
+      },
+    });
+    await page.route("**/api/direct-conversations", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: [] }),
+      });
+    });
+    await page.route("**/api/proposals", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify([
+          proposal("own-sach", "2026-08-17T07:00:00Z", {
+            applicant_account_id: "weber-attention",
+            applicant_title: "Eigener Account",
+            can_veto: false,
+          }),
+        ]),
+      });
+    });
+
+    await page.goto("/map");
+    const bubble = page.locator('[data-attention-id="proposal:own-sach"]');
+    await expect(bubble).toHaveAttribute("data-attention-meaning", "waiting");
+    await bubble.click();
+    const card = page.getByTestId("attention-card");
+    await expect(card).toContainText("Läuft ohne dein Zutun");
+    await expect(
+      card.getByRole("link", { name: "Antrag öffnen" }),
+    ).toHaveAttribute("href", "/antraege?id=own-sach");
   });
 
   test("a newly observed item enters at the far left and shifts the older item right", async ({

@@ -125,15 +125,24 @@ Die Kartenleiste zeigt oben links kleine Aufmerksamkeitsblasen für aktuell offe
 Regeln:
 
 - eine zugrunde liegende Sache erzeugt höchstens eine sichtbare Aufmerksamkeitseinheit; insbesondere gilt eine Direktunterhaltung als eine Einheit und ein Antrag als eine Einheit;
-- die neueste Einheit steht ganz links und schiebt ältere Einheiten nach rechts; die Reihenfolge folgt ausschließlich realen Quellzeitpunkten, nicht einer verdeckten Prioritätswertung;
-- Bedeutung oder persönliche Nähe dürfen über Symbol, Form oder Umrandung sichtbar werden, ohne die zeitliche Reihenfolge zu verändern;
-- auf schmalen Ansichten bleibt nur eine begrenzte Zahl von Blasen sichtbar; weitere Einheiten bleiben über einen berührbaren `+N`-Überlauf erreichbar;
-- jede direkte Bedienfläche besitzt mindestens 44 × 44 Pixel;
+- Aufmerksamkeit ist eine reine Projektion der kanonischen Fachwahrheit. Sie speichert weder einen eigenen Erledigt-Zustand noch eine parallele Benachrichtigungs- oder Aufgabenwahrheit;
+- jede sichtbare Einheit erhält genau eine abgeleitete Bedeutung: **Handlung erforderlich**, **Neu für dich**, **Mitwirkung möglich** oder **Läuft ohne dein Zutun**; diese Bedeutungen sind Darstellungssemantik und keine neuen Fachzustände;
+- die Bedeutungen werden sichtbar und deterministisch geordnet: Handlung erforderlich vor Neu für dich vor Mitwirkung möglich vor Läuft ohne dein Zutun. Innerhalb derselben Bedeutung steht die jüngste fachlich relevante Änderung links; bei gleichem Zeitpunkt entscheidet die stabile Identität;
+- **Handlung erforderlich** darf nur entstehen, wenn die Fachwahrheit eine konkrete notwendige Handlung dieses Accounts belegt. Fehlt diese Evidenz, wird keine Pflicht behauptet;
+- **Neu für dich** bezeichnet neue Information, etwa eine ungelesene Direktunterhaltung, und behauptet keine Antwortpflicht;
+- **Mitwirkung möglich** bezeichnet eine belegte freiwillige Beteiligungsmöglichkeit. Eine laufende Abstimmung darf nur dann persönlich so projiziert werden, wenn der Server die Teilnahmeberechtigung und den eigenen Abstimmungsstand für diesen Account belegt;
+- **Läuft ohne dein Zutun** ist auf eigene offene Vorgänge begrenzt und signalisiert ausdrücklich, dass aktuell keine Handlung des Accounts nötig ist;
+- echte Fachfristen dürfen zusätzlich sichtbar werden, verändern aber nicht die Bedeutungsklasse. Alter allein erzeugt niemals Dringlichkeit;
+- persönliche Beteiligungsfakten gehören in die kanonische Fach-API. Die Proposal-Liste liefert deshalb betrachterbezogen `can_vote`, `own_vote`, `can_veto` und `own_veto`; Attention darf diese Fakten nicht durch Detailabfragen je Antrag rekonstruieren;
+- Rollenwechsel werden zusätzlich clientseitig fail-closed maskiert: eine alte Beteiligungsberechtigung darf nach einer Herabstufung nicht bis zum nächsten Netzwerkabruf sichtbar bleiben;
+- auf schmalen Ansichten bleibt nur eine begrenzte Zahl von Blasen sichtbar; weitere Einheiten bleiben über einen berührbaren `+N`-Überlauf erreichbar und behalten dieselbe semantische Reihenfolge;
+- jede direkte Bedienfläche besitzt mindestens 44 × 44 Pixel; Bedeutung muss zusätzlich zu Farbe durch Form, Umrandung, Symbol oder Text erkennbar sein;
 - neue Aufmerksamkeit darf die Kartenkamera niemals selbständig bewegen;
-- das Öffnen einer Blase hält die Karte zunächst offen und zeigt eine kompakte, nichtmodale Aufmerksamkeitskarte mit Grund und genau einer Hauptaktion; erst diese Aktion führt in die bestehende kanonische Fachansicht, etwa die konkrete Direktunterhaltung oder den konkreten Antrag;
+- das Öffnen einer Blase markiert nichts als erledigt. Es hält die Karte offen und zeigt eine kompakte, nichtmodale Aufmerksamkeitskarte mit Bedeutung, Grund und genau einer Hauptaktion; erst diese Aktion führt in die bestehende kanonische Fachansicht;
+- generisches Wegwischen, Snooze, Pinning, Attention-Historie oder ein eigener `gesehen`-Zustand gehören nicht zu diesem Vertrag;
 - reduzierte Bewegung verhindert nicht die Zustandsänderung, sondern nur deren dekorative Animation.
 
-Der aktuelle belegte Quellensatz umfasst ungelesene Direktunterhaltungen, den eigenen offenen Weberantrag und offene kollektive Governance-Verfahren für Rollen, die an diesen Verfahren teilnehmen können. Die Listenansicht der Governance belegt derzeit nicht, ob eine konkrete Person bereits abgestimmt hat. Die Aufmerksamkeit darf deshalb ein laufendes Abstimmungsverfahren anzeigen, aber nicht behaupten, dass eine persönliche Stimme fehlt.
+Der aktuelle Quellensatz umfasst ungelesene Direktunterhaltungen, eigene offene Weber- und Sachanträge sowie kollektive Governance nur dann, wenn die kanonische Liste für den aktuellen Account eine noch offene formale Beteiligungsmöglichkeit belegt. Der aktuelle Produktstand besitzt noch keinen Fachfall, der zuverlässig **Handlung erforderlich** erzeugt; die Darstellung unterstützt ihn bereits, die Projektion erfindet ihn aber nicht.
 
 Allgemeine Governance-Navigation ist keine persönliche Aufmerksamkeit. Die Vollansicht `/antraege` bleibt der kanonische Lese- und Navigationsraum und bietet weiterhin reale Filter für:
 
