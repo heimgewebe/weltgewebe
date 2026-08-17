@@ -193,9 +193,10 @@
         }
       },
       "limitations": [
-        "The p95/p99 latency and failure-rate thresholds are blocking for this exact revision-bound domain-scale-ci scenario once the evidence artifact is generated; passing them does not establish production capacity.",
+        "The p95/p99 latency and failure-rate thresholds are blocking only for an evidence artifact whose measured API build_info commit matches the recorded git revision and whose domain-scale fixture manifest validates against the canonical measurements.database_scale config/profile; passing them does not establish production capacity.",
         "Health-endpoint smoke checks alone do not establish API capacity.",
-        "scripts/performance/api_runtime_evidence.py check produces a machine-readable evidence artifact bound to the exact git HEAD and this scenario contract; it reuses the existing search_request_duration_seconds, search_repository_duration_seconds and http_requests_total Prometheus telemetry rather than a new observability path, and its query-count evidence is a deterministic cross-check between two independently instrumented counters, not a sampled profiler.",
+        "scripts/performance/api_runtime_evidence.py check produces a machine-readable evidence artifact bound to the measured API build_info commit, the exact git HEAD, the validated domain-scale fixture manifest and this scenario contract; it reuses the existing search_request_duration_seconds, search_repository_duration_seconds and http_requests_total Prometheus telemetry rather than a new observability path, and its query-count evidence is a deterministic cross-check between two independently instrumented counters, not a sampled profiler.",
+        "The validated fixture-manifest binding authenticates the canonical deterministic dataset artifact supplied to the experiment; it does not independently attest the live target database contents, steady-state production capacity, or production data distribution.",
         "scripts/performance/api_runtime_evidence.py regression-fixture generates a self-consistent but threshold-violating fixture so the gate's fail-closed behaviour can be demonstrated and tested on demand.",
         "Database latency and query-count evidence describe the search read path only; they do not establish plan-shape at scale, which remains the responsibility of measurements.database_scale."
       ]

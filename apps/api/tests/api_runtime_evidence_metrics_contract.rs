@@ -29,6 +29,26 @@ fn test_metrics() -> Metrics {
 }
 
 #[test]
+fn build_info_exposes_the_measured_api_commit() {
+    let commit = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    let metrics = Metrics::try_new(BuildInfo {
+        version: "test",
+        commit,
+        build_timestamp: "test",
+    })
+    .expect("metrics registry must construct");
+
+    let rendered =
+        String::from_utf8(metrics.render().expect("render metrics")).expect("utf8 metrics text");
+    let build_info = rendered
+        .lines()
+        .find(|line| line.starts_with("build_info{"))
+        .expect("build_info sample");
+    assert!(build_info.contains(&format!("commit=\"{commit}\"")));
+    assert!(build_info.ends_with(" 1"));
+}
+
+#[test]
 fn search_repository_duration_seconds_is_an_unlabelled_histogram_with_the_inf_bucket() {
     let metrics = test_metrics();
     metrics.observe_search_repository_duration(Duration::from_millis(7));

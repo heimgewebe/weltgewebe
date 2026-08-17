@@ -15,7 +15,17 @@ if (!BASE_URL) {
 }
 
 const SEARCH_QUERY = __ENV.API_RUNTIME_SEARCH_QUERY || 'werkstatt';
-const DATASET_PROFILE = __ENV.API_RUNTIME_DATASET_PROFILE || 'domain-scale-ci';
+const DATASET_PROFILE = __ENV.API_RUNTIME_DATASET_PROFILE;
+if (!DATASET_PROFILE) {
+  throw new Error('API_RUNTIME_DATASET_PROFILE is required');
+}
+const DATASET_MANIFEST_SHA256 = __ENV.API_RUNTIME_DATASET_MANIFEST_SHA256;
+if (
+  !DATASET_MANIFEST_SHA256 ||
+  !/^[0-9a-f]{64}$/.test(DATASET_MANIFEST_SHA256)
+) {
+  throw new Error('API_RUNTIME_DATASET_MANIFEST_SHA256 must be a 64-hex sha256');
+}
 const CONCURRENCY_PROFILE =
   __ENV.API_RUNTIME_CONCURRENCY_PROFILE || 'mixed-health-and-read';
 
@@ -70,6 +80,7 @@ export default function () {
 // the canonical policy declares).
 export function handleSummary(data) {
   const enriched = Object.assign({}, data, {
+    weltgewebe_dataset_manifest_sha256: DATASET_MANIFEST_SHA256,
     weltgewebe_scenario: {
       virtual_users: options.vus,
       duration_seconds: Number(String(options.duration).replace(/s$/, '')),

@@ -30,6 +30,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import hashlib
+import importlib.util
 import json
 import math
 import os
@@ -47,6 +48,9 @@ DEFAULT_POLICY_PATH = Path("policies/performance.v1.json")
 SCHEMA_VERSION = 1
 CONTRACT_ID = "weltgewebe-performance-v1#/measurements/api_runtime"
 RESOURCE_RECEIPT_CONTRACT = "api-replica-resource-sample-v1"
+DOMAIN_SCALE_GENERATOR = "scripts/performance/domain_scale.py"
+BUILD_INFO_NAME = "build_info"
+DATASET_MANIFEST_SUMMARY_KEY = "weltgewebe_dataset_manifest_sha256"
 
 REQUIRED_SCENARIO_FIELDS = (
     "virtual_users",
@@ -190,6 +194,37 @@ def api_runtime_section(policy: Mapping[str, Any]) -> dict[str, Any]:
 
     scenario = _scalar_scenario(section.get("scenario"), "measurements.api_runtime.scenario")
 
+    dataset_profile = scenario["dataset_profile"]
+    prefix = "domain-scale-"
+    if not dataset_profile.startswith(prefix) or dataset_profile == prefix:
+        raise ApiRuntimeEvidenceError(
+            "measurements.api_runtime.scenario.dataset_profile must name a domain-scale profile"
+        )
+    profile = dataset_profile.removeprefix(prefix)
+
+    database_scale = policy["measurements"].get("database_scale")
+    if not isinstance(database_scale, dict):
+        raise ApiRuntimeEvidenceError(
+            "performance contract is missing measurements.database_scale for dataset binding"
+        )
+    generator = database_scale.get("runner")
+    config = database_scale.get("config")
+    profiles = database_scale.get("profiles")
+    if generator != DOMAIN_SCALE_GENERATOR:
+        raise ApiRuntimeEvidenceError(
+            f"measurements.database_scale.runner must be {DOMAIN_SCALE_GENERATOR!r}"
+        )
+    if not isinstance(config, str) or not config:
+        raise ApiRuntimeEvidenceError("measurements.database_scale.config must be a path")
+    if (
+        not isinstance(profiles, list)
+        or any(not isinstance(item, str) or not item for item in profiles)
+        or profile not in profiles
+    ):
+        raise ApiRuntimeEvidenceError(
+            "api_runtime dataset profile must be present in measurements.database_scale.profiles"
+        )
+
     metrics = section.get("metrics")
     if not isinstance(metrics, dict) or set(metrics) != set(REQUIRED_METRIC_KEYS):
         raise ApiRuntimeEvidenceError(
@@ -213,7 +248,82 @@ def api_runtime_section(policy: Mapping[str, Any]) -> dict[str, Any]:
             )
         thresholds[key] = float(max_value)
 
-    return {"scenario": scenario, "thresholds": thresholds}
+    return {
+        "scenario": scenario,
+        "dataset_proof": {
+            "generator": generator,
+            "config": config,
+            "profile": profile,
+        },
+        "thresholds": thresholds,
+    }
+
+
+def _load_domain_scale_module(generator_path: Path) -> Any:
+    spec = importlib.util.spec_from_file_location("weltgewebe_domain_scale", generator_path)
+    if spec is None or spec.loader is None:
+        raise ApiRuntimeEvidenceError(f"cannot load dataset generator {generator_path}")
+    module = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(module)
+    except (OSError, ImportError, RuntimeError) as exc:
+        raise ApiRuntimeEvidenceError(f"cannot load dataset generator {generator_path}: {exc}") from exc
+    return module
+
+
+def load_dataset_binding(
+    manifest_path: Path,
+    contract: Mapping[str, Any],
+    *,
+    repo_root: Path = REPO_ROOT,
+) -> dict[str, Any]:
+    proof = contract.get("dataset_proof")
+    if not isinstance(proof, dict):
+        raise ApiRuntimeEvidenceError("api_runtime contract is missing dataset_proof")
+
+    generator_path = Path(str(proof["generator"]))
+    if not generator_path.is_absolute():
+        generator_path = repo_root / generator_path
+    config_path = Path(str(proof["config"]))
+    if not config_path.is_absolute():
+        config_path = repo_root / config_path
+    if not generator_path.is_file():
+        raise ApiRuntimeEvidenceError(f"dataset generator is missing: {generator_path}")
+    if not config_path.is_file():
+        raise ApiRuntimeEvidenceError(f"dataset config is missing: {config_path}")
+
+    module = _load_domain_scale_module(generator_path)
+    try:
+        _, manifest = module.load_bound_manifest(manifest_path, config_path)
+    except module.DomainScaleError as exc:
+        raise ApiRuntimeEvidenceError(f"dataset manifest is not valid: {exc}") from exc
+    if manifest.get("profile") != proof.get("profile"):
+        raise ApiRuntimeEvidenceError(
+            "dataset manifest profile does not match the derived measurements.database_scale profile"
+        )
+
+    files = manifest["files"]
+    return {
+        "manifest_sha256": sha256_file(manifest_path),
+        "generator": manifest["generator"],
+        "config_sha256": manifest["config_sha256"],
+        "database_schema": manifest["database_schema"],
+        "profile": manifest["profile"],
+        "counts": dict(manifest["counts"]),
+        "files": {
+            "nodes": dict(files["nodes"]),
+            "edges": dict(files["edges"]),
+        },
+    }
+
+
+def extract_dataset_manifest_sha256(summary: Mapping[str, Any]) -> str:
+    digest = summary.get(DATASET_MANIFEST_SUMMARY_KEY)
+    if not isinstance(digest, str) or not SHA256_RE.fullmatch(digest):
+        raise ApiRuntimeEvidenceError(
+            f"k6 summary is missing a valid {DATASET_MANIFEST_SUMMARY_KEY} binding"
+        )
+    return digest
 
 
 # --------------------------------------------------------------------------
@@ -276,6 +386,23 @@ def sum_counter(
             f"Prometheus metric {name} has no samples matching labels {dict(label_filter or {})}"
         )
     return total
+
+
+def measured_api_commit(families: PrometheusFamilies) -> str:
+    samples = families.get(BUILD_INFO_NAME)
+    if not samples or len(samples) != 1:
+        raise ApiRuntimeEvidenceError(
+            "Prometheus build_info must contain exactly one sample for revision binding"
+        )
+    labels, value = samples[0]
+    if not math.isfinite(value) or value != 1.0:
+        raise ApiRuntimeEvidenceError("Prometheus build_info must have the gauge value 1")
+    commit = labels.get("commit")
+    if not isinstance(commit, str) or not GIT_SHA_RE.fullmatch(commit):
+        raise ApiRuntimeEvidenceError(
+            "Prometheus build_info commit must be a release-bound 40-hex git SHA"
+        )
+    return commit
 
 
 @dataclasses.dataclass(frozen=True)
@@ -486,6 +613,58 @@ def validate_database_connections(value: int) -> int:
     return value
 
 
+def validate_normalized_resource_receipt(value: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "container_name",
+        "sample_count",
+        "peak_cpu_percent",
+        "peak_memory_bytes",
+    }:
+        raise ApiRuntimeEvidenceError(
+            "normalized API replica resource evidence has an invalid shape"
+        )
+    container_name = value["container_name"]
+    sample_count = value["sample_count"]
+    cpu_percent = value["peak_cpu_percent"]
+    memory_bytes = value["peak_memory_bytes"]
+    if not isinstance(container_name, str) or not container_name:
+        raise ApiRuntimeEvidenceError("API replica resource evidence must name a container")
+    if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count < 1:
+        raise ApiRuntimeEvidenceError("API replica resource evidence must contain samples")
+    if (
+        not isinstance(cpu_percent, (int, float))
+        or isinstance(cpu_percent, bool)
+        or not math.isfinite(cpu_percent)
+        or cpu_percent < 0
+    ):
+        raise ApiRuntimeEvidenceError("API replica peak_cpu_percent is invalid")
+    if not isinstance(memory_bytes, int) or isinstance(memory_bytes, bool) or memory_bytes < 0:
+        raise ApiRuntimeEvidenceError("API replica peak_memory_bytes is invalid")
+    return dict(value)
+
+
+def threshold_failures(
+    http_metrics: Mapping[str, Any], thresholds: Mapping[str, float]
+) -> list[str]:
+    failures: list[str] = []
+    if http_metrics["p95_ms"] > thresholds["http_request_duration_ms"]:
+        failures.append(
+            f"http_request_duration_ms p95 {http_metrics['p95_ms']:.3f}ms exceeds the "
+            f"{thresholds['http_request_duration_ms']:.3f}ms budget"
+        )
+    if http_metrics["p99_ms"] > thresholds["http_request_duration_p99_ms"]:
+        failures.append(
+            f"http_request_duration_p99_ms {http_metrics['p99_ms']:.3f}ms exceeds the "
+            f"{thresholds['http_request_duration_p99_ms']:.3f}ms budget"
+        )
+    if http_metrics["failed_rate"] > thresholds["http_request_failed_rate"]:
+        failures.append(
+            f"http_request_failed_rate {http_metrics['failed_rate']:.4f} exceeds the "
+            f"{thresholds['http_request_failed_rate']:.4f} budget"
+        )
+    return failures
+
+
 # --------------------------------------------------------------------------
 # Evidence assembly
 # --------------------------------------------------------------------------
@@ -498,6 +677,7 @@ def assemble_report(
     metrics_before_text: str,
     metrics_after_text: str,
     resource_receipt: Mapping[str, Any] | None,
+    dataset_binding: Mapping[str, Any],
     database_connections: int,
     git_head: str,
     policy_sha256: str,
@@ -511,6 +691,7 @@ def assemble_report(
             "resource_receipt is required so api_runtime evidence cannot pass without "
             "API replica CPU/memory measurement"
         )
+    normalized_resource_receipt = validate_normalized_resource_receipt(resource_receipt)
 
     contract = api_runtime_section(policy)
     declared_scenario = extract_declared_scenario(k6_summary)
@@ -520,10 +701,33 @@ def assemble_report(
             f"performance contract: recorded={declared_scenario!r} canonical={contract['scenario']!r}"
         )
 
+    dataset_manifest_sha256 = extract_dataset_manifest_sha256(k6_summary)
+    recorded_dataset_sha256 = dataset_binding.get("manifest_sha256")
+    if dataset_manifest_sha256 != recorded_dataset_sha256:
+        raise ApiRuntimeEvidenceError(
+            "k6 summary dataset manifest digest does not match the validated fixture manifest"
+        )
+    if dataset_binding.get("profile") != contract["dataset_proof"]["profile"]:
+        raise ApiRuntimeEvidenceError(
+            "dataset binding profile does not match the performance contract"
+        )
+
     http_metrics = extract_http_metrics(k6_summary)
 
     before_families = parse_prometheus_text(metrics_before_text)
     after_families = parse_prometheus_text(metrics_after_text)
+
+    before_api_commit = measured_api_commit(before_families)
+    after_api_commit = measured_api_commit(after_families)
+    if before_api_commit != after_api_commit:
+        raise ApiRuntimeEvidenceError(
+            "measured API build_info commit changed between the before/after scrapes"
+        )
+    if before_api_commit != git_head:
+        raise ApiRuntimeEvidenceError(
+            f"measured API build_info commit {before_api_commit!r} does not match git HEAD "
+            f"{git_head!r}"
+        )
 
     http_search_before = sum_counter(before_families, HTTP_COUNTER_NAME, {"path": SEARCH_PATH_LABEL})
     http_search_after = sum_counter(after_families, HTTP_COUNTER_NAME, {"path": SEARCH_PATH_LABEL})
@@ -563,26 +767,11 @@ def assemble_report(
     resources: dict[str, Any] = {
         "database_connections": database_connections,
         "database_connections_source": "caller-supplied-pg_stat_activity-point-measurement",
-        "api_replica": dict(resource_receipt),
+        "api_replica": normalized_resource_receipt,
     }
 
     thresholds = contract["thresholds"]
-    failures: list[str] = []
-    if http_metrics["p95_ms"] > thresholds["http_request_duration_ms"]:
-        failures.append(
-            f"http_request_duration_ms p95 {http_metrics['p95_ms']:.3f}ms exceeds the "
-            f"{thresholds['http_request_duration_ms']:.3f}ms budget"
-        )
-    if http_metrics["p99_ms"] > thresholds["http_request_duration_p99_ms"]:
-        failures.append(
-            f"http_request_duration_p99_ms {http_metrics['p99_ms']:.3f}ms exceeds the "
-            f"{thresholds['http_request_duration_p99_ms']:.3f}ms budget"
-        )
-    if http_metrics["failed_rate"] > thresholds["http_request_failed_rate"]:
-        failures.append(
-            f"http_request_failed_rate {http_metrics['failed_rate']:.4f} exceeds the "
-            f"{thresholds['http_request_failed_rate']:.4f} budget"
-        )
+    failures = threshold_failures(http_metrics, thresholds)
 
     return {
         "schema_version": SCHEMA_VERSION,
@@ -590,8 +779,10 @@ def assemble_report(
         "status": "fail" if failures else "pass",
         "revision": {
             "git_head": git_head,
+            "measured_api_commit": before_api_commit,
             "policy_sha256": policy_sha256,
         },
+        "dataset": dict(dataset_binding),
         "scenario": contract["scenario"],
         "metrics": {
             "http": {
@@ -618,39 +809,78 @@ def assemble_report(
         "thresholds": thresholds,
         "failures": failures,
         "limitations": [
-            "This artifact establishes latency and failure-rate evidence for the exact k6 run and "
-            "PostgreSQL-backed dataset it was generated from; it does not establish steady-state "
-            "production capacity.",
+            "This artifact establishes latency and failure-rate evidence for the exact k6 run "
+            "against the measured API revision; it does not independently attest the live target "
+            "database contents or establish steady-state production capacity.",
             "api_replica peak_cpu_percent/peak_memory_bytes and database_connections are point "
             "measurements attached from the same run and are not yet gated by a blocking threshold "
             "(see measurements.api_replica_resources in the performance contract).",
             "database_connections is supplied explicitly from a pg_stat_activity point measurement; "
             "this runner does not collect PostgreSQL connection state automatically.",
+            "dataset is bound to a domain-scale fixture manifest validated against the canonical "
+            "measurements.database_scale config/profile; this authenticates the supplied deterministic "
+            "experiment artifact, not the live target database contents or production data distribution.",
         ],
     }
 
 
-def verify_report(
-    report: Mapping[str, Any], *, expected_git_head: str, expected_policy_sha256: str
-) -> None:
+def _finite_nonnegative(value: Any, label: str) -> float:
     if (
-        not isinstance(report, dict)
-        or report.get("schema_version") != SCHEMA_VERSION
-        or report.get("contract_id") != CONTRACT_ID
+        not isinstance(value, (int, float))
+        or isinstance(value, bool)
+        or not math.isfinite(value)
+        or value < 0
     ):
-        raise ApiRuntimeEvidenceError("report is not a recognizable api_runtime evidence artifact")
-    if report.get("status") != "pass":
+        raise ApiRuntimeEvidenceError(f"report {label} must be a finite number >= 0")
+    return float(value)
+
+
+def _validate_complete_report(
+    report: Mapping[str, Any],
+    *,
+    policy: Mapping[str, Any],
+    expected_git_head: str,
+    expected_policy_sha256: str,
+    expected_dataset_binding: Mapping[str, Any],
+) -> None:
+    expected_keys = {
+        "schema_version",
+        "contract_id",
+        "status",
+        "revision",
+        "dataset",
+        "scenario",
+        "metrics",
+        "thresholds",
+        "failures",
+        "limitations",
+    }
+    if not isinstance(report, dict) or set(report) != expected_keys:
         raise ApiRuntimeEvidenceError(
-            f"report is revision-bound but does not pass the performance gate: {report.get('status')!r}"
+            "report does not contain the complete api_runtime evidence schema"
         )
+    if report.get("schema_version") != SCHEMA_VERSION or report.get("contract_id") != CONTRACT_ID:
+        raise ApiRuntimeEvidenceError("report is not a recognizable api_runtime evidence artifact")
+
+    contract = api_runtime_section(policy)
     revision = report.get("revision")
-    if not isinstance(revision, dict):
-        raise ApiRuntimeEvidenceError("report is missing its revision binding")
+    if not isinstance(revision, dict) or set(revision) != {
+        "git_head",
+        "measured_api_commit",
+        "policy_sha256",
+    }:
+        raise ApiRuntimeEvidenceError("report is missing its complete revision binding")
     recorded_head = revision.get("git_head")
+    measured_commit = revision.get("measured_api_commit")
     recorded_policy_sha256 = revision.get("policy_sha256")
     if recorded_head != expected_git_head:
         raise ApiRuntimeEvidenceError(
             f"report is bound to git HEAD {recorded_head!r}, but the current checkout is at "
+            f"{expected_git_head!r}"
+        )
+    if measured_commit != expected_git_head:
+        raise ApiRuntimeEvidenceError(
+            f"report measured API commit {measured_commit!r} does not match current git HEAD "
             f"{expected_git_head!r}"
         )
     if recorded_policy_sha256 != expected_policy_sha256:
@@ -658,6 +888,121 @@ def verify_report(
             "report is bound to a different policies/performance.v1.json revision than the "
             f"current checkout (recorded {recorded_policy_sha256!r}, current "
             f"{expected_policy_sha256!r})"
+        )
+    if report.get("scenario") != contract["scenario"]:
+        raise ApiRuntimeEvidenceError("report scenario does not match the current performance contract")
+    if report.get("dataset") != expected_dataset_binding:
+        raise ApiRuntimeEvidenceError(
+            "report dataset binding does not match the validated fixture manifest"
+        )
+    if report.get("thresholds") != contract["thresholds"]:
+        raise ApiRuntimeEvidenceError(
+            "report thresholds do not match the current performance contract"
+        )
+
+    metrics = report.get("metrics")
+    if not isinstance(metrics, dict) or set(metrics) != {"http", "database", "resources"}:
+        raise ApiRuntimeEvidenceError("report metrics have an invalid shape")
+    http = metrics["http"]
+    if not isinstance(http, dict) or set(http) != {
+        "p50_ms",
+        "p95_ms",
+        "p99_ms",
+        "failed_rate",
+        "total_requests",
+    }:
+        raise ApiRuntimeEvidenceError("report HTTP metrics have an invalid shape")
+    p50 = _finite_nonnegative(http["p50_ms"], "metrics.http.p50_ms")
+    p95 = _finite_nonnegative(http["p95_ms"], "metrics.http.p95_ms")
+    p99 = _finite_nonnegative(http["p99_ms"], "metrics.http.p99_ms")
+    if not p50 <= p95 <= p99:
+        raise ApiRuntimeEvidenceError("report HTTP percentiles must be monotonic")
+    failed_rate = _finite_nonnegative(http["failed_rate"], "metrics.http.failed_rate")
+    if failed_rate > 1.0:
+        raise ApiRuntimeEvidenceError("report metrics.http.failed_rate must be <= 1")
+    total_requests = http["total_requests"]
+    if not isinstance(total_requests, int) or isinstance(total_requests, bool) or total_requests < 1:
+        raise ApiRuntimeEvidenceError(
+            "report metrics.http.total_requests must be a positive integer"
+        )
+
+    database = metrics["database"]
+    if not isinstance(database, dict) or set(database) != {
+        "search_repository_duration_ms",
+        "query_count",
+    }:
+        raise ApiRuntimeEvidenceError("report database metrics have an invalid shape")
+    duration = database["search_repository_duration_ms"]
+    if not isinstance(duration, dict) or set(duration) != {"p50", "p95", "p99", "mean"}:
+        raise ApiRuntimeEvidenceError("report database duration metrics have an invalid shape")
+    db_p50 = _finite_nonnegative(duration["p50"], "database duration p50")
+    db_p95 = _finite_nonnegative(duration["p95"], "database duration p95")
+    db_p99 = _finite_nonnegative(duration["p99"], "database duration p99")
+    _finite_nonnegative(duration["mean"], "database duration mean")
+    if not db_p50 <= db_p95 <= db_p99:
+        raise ApiRuntimeEvidenceError("report database percentiles must be monotonic")
+
+    query_count = database["query_count"]
+    if not isinstance(query_count, dict) or set(query_count) != {
+        "expected_from_http_requests_total",
+        "observed_from_search_repository_duration_seconds_count",
+    }:
+        raise ApiRuntimeEvidenceError("report query-count evidence has an invalid shape")
+    expected_queries = query_count["expected_from_http_requests_total"]
+    observed_queries = query_count["observed_from_search_repository_duration_seconds_count"]
+    for label, value in (("expected", expected_queries), ("observed", observed_queries)):
+        if not isinstance(value, int) or isinstance(value, bool) or value < 1:
+            raise ApiRuntimeEvidenceError(f"report {label} query count must be a positive integer")
+    if expected_queries != observed_queries:
+        raise ApiRuntimeEvidenceError("report contains contradictory query-count evidence")
+
+    resources = metrics["resources"]
+    if not isinstance(resources, dict) or set(resources) != {
+        "database_connections",
+        "database_connections_source",
+        "api_replica",
+    }:
+        raise ApiRuntimeEvidenceError("report resource evidence has an invalid shape")
+    validate_database_connections(resources["database_connections"])
+    if resources["database_connections_source"] != "caller-supplied-pg_stat_activity-point-measurement":
+        raise ApiRuntimeEvidenceError("report database_connections provenance is invalid")
+    validate_normalized_resource_receipt(resources["api_replica"])
+
+    recomputed_failures = threshold_failures(http, contract["thresholds"])
+    if report.get("failures") != recomputed_failures:
+        raise ApiRuntimeEvidenceError(
+            "report failure list does not match recomputed threshold results"
+        )
+    expected_status = "fail" if recomputed_failures else "pass"
+    if report.get("status") != expected_status:
+        raise ApiRuntimeEvidenceError(
+            "report status does not match recomputed threshold results"
+        )
+    limitations = report.get("limitations")
+    if not isinstance(limitations, list) or not limitations or any(
+        not isinstance(item, str) or not item for item in limitations
+    ):
+        raise ApiRuntimeEvidenceError("report limitations must be a non-empty string list")
+
+
+def verify_report(
+    report: Mapping[str, Any],
+    *,
+    policy: Mapping[str, Any],
+    expected_git_head: str,
+    expected_policy_sha256: str,
+    expected_dataset_binding: Mapping[str, Any],
+) -> None:
+    _validate_complete_report(
+        report,
+        policy=policy,
+        expected_git_head=expected_git_head,
+        expected_policy_sha256=expected_policy_sha256,
+        expected_dataset_binding=expected_dataset_binding,
+    )
+    if report.get("status") != "pass":
+        raise ApiRuntimeEvidenceError(
+            f"report is revision-bound but does not pass the performance gate: {report.get('status')!r}"
         )
 
 
@@ -670,9 +1015,10 @@ _HISTOGRAM_BUCKETS_SECONDS = (0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5
 
 
 def _render_prometheus_fixture(
-    *, search_count: int, search_sum_seconds: float, http_search_requests: int
+    *, search_count: int, search_sum_seconds: float, http_search_requests: int, git_commit: str
 ) -> str:
     lines = [
+        f'build_info{{build_timestamp="fixture",commit="{git_commit}",version="fixture"}} 1',
         "# HELP search_repository_duration_seconds fixture",
         "# TYPE search_repository_duration_seconds histogram",
     ]
@@ -689,7 +1035,13 @@ def _render_prometheus_fixture(
     return "\n".join(lines) + "\n"
 
 
-def render_regression_fixture(policy: Mapping[str, Any], output_dir: Path) -> dict[str, Path]:
+def render_regression_fixture(
+    policy: Mapping[str, Any],
+    output_dir: Path,
+    *,
+    dataset_manifest_sha256: str,
+    git_commit: str,
+) -> dict[str, Path]:
     """Write a self-consistent (query counts match) but threshold-violating
     fixture set, so `check` against it demonstrates the gate failing closed.
     """
@@ -714,15 +1066,19 @@ def render_regression_fixture(policy: Mapping[str, Any], output_dir: Path) -> di
             "http_req_failed": {"values": {"rate": breached_failed_rate}},
             "http_reqs": {"values": {"count": 300}},
         },
+        DATASET_MANIFEST_SUMMARY_KEY: dataset_manifest_sha256,
         "weltgewebe_scenario": dict(scenario),
     }
 
     query_count = 100
     metrics_before = _render_prometheus_fixture(
-        search_count=0, search_sum_seconds=0.0, http_search_requests=0
+        search_count=0, search_sum_seconds=0.0, http_search_requests=0, git_commit=git_commit
     )
     metrics_after = _render_prometheus_fixture(
-        search_count=query_count, search_sum_seconds=45.0, http_search_requests=query_count
+        search_count=query_count,
+        search_sum_seconds=45.0,
+        http_search_requests=query_count,
+        git_commit=git_commit,
     )
 
     paths = {
@@ -796,6 +1152,7 @@ def _cli_check(args: argparse.Namespace) -> int:
     metrics_after_text = _read_text(args.metrics_after, "metrics-after snapshot")
     resource_receipt = load_resource_receipt(args.resource_receipt)
     database_connections = validate_database_connections(args.database_connections)
+    dataset_binding = load_dataset_binding(args.dataset_manifest, api_runtime_section(policy))
     head = git_head(REPO_ROOT)
     policy_sha256 = sha256_file(args.policy)
 
@@ -805,6 +1162,7 @@ def _cli_check(args: argparse.Namespace) -> int:
         metrics_before_text=metrics_before_text,
         metrics_after_text=metrics_after_text,
         resource_receipt=resource_receipt,
+        dataset_binding=dataset_binding,
         database_connections=database_connections,
         git_head=head,
         policy_sha256=policy_sha256,
@@ -820,9 +1178,17 @@ def _cli_check(args: argparse.Namespace) -> int:
 
 def _cli_verify(args: argparse.Namespace) -> int:
     report = _read_json(args.report, "evidence report")
+    policy = load_policy(args.policy)
+    dataset_binding = load_dataset_binding(args.dataset_manifest, api_runtime_section(policy))
     head = git_head(REPO_ROOT)
     policy_sha256 = sha256_file(args.policy)
-    verify_report(report, expected_git_head=head, expected_policy_sha256=policy_sha256)
+    verify_report(
+        report,
+        policy=policy,
+        expected_git_head=head,
+        expected_policy_sha256=policy_sha256,
+        expected_dataset_binding=dataset_binding,
+    )
     print(
         json.dumps(
             {"schema_version": SCHEMA_VERSION, "status": "pass", "report": str(args.report)},
@@ -834,7 +1200,13 @@ def _cli_verify(args: argparse.Namespace) -> int:
 
 def _cli_regression_fixture(args: argparse.Namespace) -> int:
     policy = load_policy(args.policy)
-    paths = render_regression_fixture(policy, args.output_dir)
+    dataset_binding = load_dataset_binding(args.dataset_manifest, api_runtime_section(policy))
+    paths = render_regression_fixture(
+        policy,
+        args.output_dir,
+        dataset_manifest_sha256=dataset_binding["manifest_sha256"],
+        git_commit=git_head(REPO_ROOT),
+    )
     payload = {
         "schema_version": SCHEMA_VERSION,
         "status": "pass",
@@ -862,16 +1234,19 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--metrics-before", type=Path, required=True)
     check.add_argument("--metrics-after", type=Path, required=True)
     check.add_argument("--resource-receipt", type=Path, required=True)
+    check.add_argument("--dataset-manifest", type=Path, required=True)
     check.add_argument("--database-connections", type=int, required=True)
     check.add_argument("--report", type=Path, default=None)
 
     verify = subparsers.add_parser("verify", help="re-bind a previously assembled report")
     verify.add_argument("--report", type=Path, required=True)
+    verify.add_argument("--dataset-manifest", type=Path, required=True)
 
     regression = subparsers.add_parser(
         "regression-fixture", help="write a threshold-violating fixture that proves the gate fails"
     )
     regression.add_argument("--output-dir", type=Path, required=True)
+    regression.add_argument("--dataset-manifest", type=Path, required=True)
 
     return parser
 
