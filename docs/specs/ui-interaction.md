@@ -1,7 +1,7 @@
 ---
 id: specs.ui-interaction
 title: UI-Interaktionsvertrag
-summary: Kanonischer Vertrag für Karte, Fokuspanel, Werkzeugfächer, Kartenlinsen, Farbschema, Komposition und Zugänglichkeit.
+summary: Kanonischer Vertrag für Karte, Fokuspanel, Werkzeugfächer, Aufmerksamkeit, Kartenlinsen, Farbschema, Komposition und Zugänglichkeit.
 doc_type: specification
 status: canonical
 canonicality: normative
@@ -9,7 +9,7 @@ lifecycle_state: active
 role: norm
 organ: product-ui
 owner: product-ui
-last_reviewed: 2026-08-01
+last_reviewed: 2026-08-17
 review_after: 2026-10-11
 depends_on:
   - specs.ui-state-machine
@@ -22,7 +22,8 @@ relations:
 verifies_with:
   - apps/web/src/lib/components/ContextPanel.svelte
   - apps/web/src/lib/components/ToolFan.svelte
-  - apps/web/src/lib/components/GovernanceFan.svelte
+  - apps/web/src/lib/components/AttentionBubbles.svelte
+  - apps/web/src/lib/accountAttentionRuntime.ts
   - apps/web/src/app.html
   - apps/web/static/theme-init.js
   - apps/web/src/lib/styles/tokens.css
@@ -31,6 +32,7 @@ verifies_with:
   - apps/web/src/lib/stores/mapChrome.ts
   - apps/web/src/lib/components/SearchOverlay.svelte
   - apps/web/src/lib/components/FilterOverlay.svelte
+  - apps/web/tests/attention-bubbles.spec.ts
   - apps/web/tests/map-interaction.spec.ts
   - apps/web/tests/ui-filter.spec.ts
   - apps/web/tests/ui-search.spec.ts
@@ -47,12 +49,13 @@ Weltgewebe ist ein kartenbasiertes Koordinationsinterface. Die Karte ist der öf
 
 ## Drei Hauptflächen
 
-| Fläche           | Verantwortung                                       |
-| ---------------- | --------------------------------------------------- |
-| Karte            | räumlicher Überblick, Auswahl und sichtbares Gewebe |
-| Fokuspanel       | Details, Gespräche, Entscheidungen und Handlungen   |
-| Werkzeugfächer   | Finden, Karteninhalt und Webungsaktionen            |
-| Governancefächer | Anträge und gemeinsame Entscheidungsereignisse      |
+| Fläche         | Verantwortung                                       |
+| -------------- | --------------------------------------------------- |
+| Karte          | räumlicher Überblick, Auswahl und sichtbares Gewebe |
+| Fokuspanel     | Details, Gespräche, Entscheidungen und Handlungen   |
+| Werkzeugfächer | Finden, Karteninhalt und Webungsaktionen            |
+
+Aktuelle Aufmerksamkeit ist keine vierte Hauptfläche. Sie erscheint als kompakte, nichtmodale Orientierung in der Kartenleiste und führt in die bereits vorhandenen Fachräume.
 
 Es gibt keinen zweiten Detail-Drawer, kein dauerhaftes Seitenmenü für Objektinhalte und keine frei schwebenden Hauptformulare über der Karte.
 
@@ -115,9 +118,24 @@ Weitere Antragstypen dürfen erst erscheinen, wenn ihr Serververtrag tatsächlic
 
 Der Werkzeugfächer schließt durch erneutes Betätigen, Escape, Fokuswechsel nach außen oder Auswahl außerhalb. Er ist kein modaler Dialog und hält den Tastaturfokus daher nicht gefangen. Beim Schließen per Escape kehrt der Fokus zum Wurzelknopf zurück. Animationen verwenden Transformation und Deckkraft und entfallen bei reduzierter Bewegung.
 
-## Governancefächer
+## Aufmerksamkeit und Governance
 
-Gemeinsame Entscheidungsereignisse besitzen einen getrennten Wurzelknopf oben mittig. Der Governancefächer öffnet nach unten und enthält ausschließlich reale Lese- und Navigationssichten, derzeit:
+Die Kartenleiste zeigt oben links kleine Aufmerksamkeitsblasen für aktuell offene, für den angemeldeten Account relevante Sachverhalte. Diese Blasen sind keine Ereignishistorie, kein Benachrichtigungsarchiv und keine zweite Fachwahrheit. Sie werden aus den kanonischen Fach-APIs abgeleitet; ein Invalidierungssignal fordert lediglich eine erneute Lesung dieser Wahrheit an.
+
+Regeln:
+
+- eine zugrunde liegende Sache erzeugt höchstens eine sichtbare Aufmerksamkeitseinheit; insbesondere gilt eine Direktunterhaltung als eine Einheit und ein Antrag als eine Einheit;
+- die neueste Einheit steht ganz links und schiebt ältere Einheiten nach rechts; die Reihenfolge folgt ausschließlich realen Quellzeitpunkten, nicht einer verdeckten Prioritätswertung;
+- Bedeutung oder persönliche Nähe dürfen über Symbol, Form oder Umrandung sichtbar werden, ohne die zeitliche Reihenfolge zu verändern;
+- auf schmalen Ansichten bleibt nur eine begrenzte Zahl von Blasen sichtbar; weitere Einheiten bleiben über einen berührbaren `+N`-Überlauf erreichbar;
+- jede direkte Bedienfläche besitzt mindestens 44 × 44 Pixel;
+- neue Aufmerksamkeit darf die Kartenkamera niemals selbständig bewegen;
+- das Öffnen einer Blase führt in die bestehende kanonische Fachansicht, etwa die konkrete Direktunterhaltung oder den konkreten Antrag;
+- reduzierte Bewegung verhindert nicht die Zustandsänderung, sondern nur deren dekorative Animation.
+
+Der aktuelle belegte Quellensatz umfasst ungelesene Direktunterhaltungen, den eigenen offenen Weberantrag und offene kollektive Governance-Verfahren für Rollen, die an diesen Verfahren teilnehmen können. Die Listenansicht der Governance belegt derzeit nicht, ob eine konkrete Person bereits abgestimmt hat. Die Aufmerksamkeit darf deshalb ein laufendes Abstimmungsverfahren anzeigen, aber nicht behaupten, dass eine persönliche Stimme fehlt.
+
+Allgemeine Governance-Navigation ist keine persönliche Aufmerksamkeit. Die Vollansicht `/antraege` bleibt der kanonische Lese- und Navigationsraum und bietet weiterhin reale Filter für:
 
 - alle Anträge;
 - offene Konsentverfahren;
@@ -125,7 +143,7 @@ Gemeinsame Entscheidungsereignisse besitzen einen getrennten Wurzelknopf oben mi
 - Gespräche mit tatsächlichen Beiträgen;
 - laufende Abstimmungen.
 
-Werkzeug- und Governancefächer sind gegenseitig exklusiv. Dadurch konkurrieren nicht zwei offene Menüs um dieselbe Kartenfläche. Das Stellen eines Antrags gehört nicht in den lesenden Governancefächer, sondern als Webungsaktion in die untere Webungsebene.
+Das Stellen eines Antrags bleibt eine Webungsaktion im Werkzeugfächer beziehungsweise im passenden Fachraum. Ein zusätzlicher Governancefächer in der Kartenmitte ist nicht Teil der kanonischen Chrome.
 
 ## Kartenlinsen
 
@@ -138,7 +156,7 @@ Finden und Karteninhalt sind lokale Kartenlinsen:
 - die Karte bleibt die primäre Trefferfläche; Finden zeigt höchstens sechs automatische Vorschläge, weitere Treffer öffnen nur auf bewusste Anforderung; Sicht zeigt keine automatische Trefferliste, nur Typauswahl, aktive Anzahl und Rücksetzen;
 - passende Knoten und Garnrollen werden auf der Karte hervorgehoben;
 - liegt ein Treffer außerhalb des nutzbaren Kartenausschnitts, zeigt ein Richtungsmarker am Bildschirmrand zu ihm;
-- Richtungsmarker bleiben außerhalb von Topbar, sichtbaren Kartenlinsen, Werkzeugfächer und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
+- Richtungsmarker bleiben außerhalb von Topbar, sichtbaren Kartenlinsen, sichtbarem Aufmerksamkeitsüberlauf, Werkzeugfächer und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
 - ein Treffer oder Richtungsmarker kann die Karte fokussieren und das Fokuspanel öffnen;
 - ein API-Fehler darf nicht wie eine normale leere Ergebnismenge aussehen.
 
@@ -190,7 +208,7 @@ Die Oberfläche bietet genau drei Darstellungspräferenzen:
 - **Hell** als bewusste helle Darstellung;
 - **Dunkel** als bewusste dunkle Darstellung.
 
-Die Auswahl liegt im zentralen Einstellungsmenü. Die Kartenleiste führt mit einem einzigen Einstieg dorthin, statt dort parallele Darstellungsschalter zu zeigen. Private Nachrichten bleiben davon getrennt als direkter Arbeitsweg in der Kartenleiste erreichbar; sie sind keine Einstellung. Die Farbschema-Auswahl wird ausschließlich lokal im Browser gespeichert; sie gehört weder zum Konto noch zur öffentlichen Garnrolle und wird nicht föderiert.
+Die Auswahl liegt im zentralen Einstellungsmenü. Die Kartenleiste führt mit einem einzigen Einstieg dorthin, statt dort parallele Darstellungsschalter zu zeigen. Private Nachrichten bleiben davon getrennt als direkter Arbeitsweg in der Kartenleiste erreichbar; ungelesene Direktunterhaltungen können zusätzlich als aktuelle Aufmerksamkeit erscheinen. Die Farbschema-Auswahl wird ausschließlich lokal im Browser gespeichert; sie gehört weder zum Konto noch zur öffentlichen Garnrolle und wird nicht föderiert.
 
 Farben und Flächen stammen aus gemeinsamen semantischen Darstellungstokens. Komponenten dürfen daher keine dunkle oder helle Grunddarstellung voraussetzen. Status, Auswahl, Warnung und Fehler müssen zusätzlich zu Farbe durch Text, Form, Umrandung oder Symbol verständlich bleiben.
 
@@ -218,6 +236,7 @@ Die Hauptführung verwendet Produktbegriffe. Technische Namen bleiben in Diagnos
 
 - mehrere konkurrierende Detailflächen;
 - Finden oder Karteninhalt als globale Hauptzustände;
+- Aufmerksamkeitsblasen als persistente zweite Kopie von Fachzuständen;
 - stille API-Fallbacks, die Fehler als Leere darstellen;
 - technische Feldnamen in der Nutzerführung;
 - ein Kompositionsformular ohne eindeutigen Abbruch- und Erfolgsweg.

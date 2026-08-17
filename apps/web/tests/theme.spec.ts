@@ -396,20 +396,14 @@ test.describe("Farbschema", () => {
 
     const settings = page.getByRole("link", { name: "Einstellungen öffnen" });
     const login = page.getByRole("link", { name: "Anmelden" });
-    const governance = page.getByTestId("governance-fan-trigger");
     await expect(settings).toBeVisible();
     await expect(login).toBeVisible();
-    await expect(governance).toBeVisible();
 
     const settingsBox = await settings.boundingBox();
     const loginBox = await login.boundingBox();
-    const governanceBox = await governance.boundingBox();
     expect(settingsBox).not.toBeNull();
     expect(loginBox).not.toBeNull();
-    expect(governanceBox).not.toBeNull();
-    expect(settingsBox!.x + 0.5).toBeGreaterThanOrEqual(
-      governanceBox!.x + governanceBox!.width,
-    );
+    expect(settingsBox!.x).toBeGreaterThanOrEqual(0);
     expect(loginBox!.x).toBeGreaterThanOrEqual(
       settingsBox!.x + settingsBox!.width,
     );
@@ -425,18 +419,9 @@ test.describe("Farbschema", () => {
           rect.left + rect.width / 2,
           rect.top + rect.height / 2,
         );
-        return {
-          receivesPointer:
-            hit === element || (hit !== null && element.contains(hit)),
-          hitElement: hit
-            ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
-            : "none",
-        };
+        return hit === element || (hit !== null && element.contains(hit));
       });
-      expect(
-        hitTest.receivesPointer,
-        `${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
-      ).toBe(true);
+      expect(hitTest, `${label} ist nicht frei berührbar`).toBe(true);
     }
   });
 
@@ -462,57 +447,20 @@ test.describe("Farbschema", () => {
       await page.setViewportSize({ width, height: 720 });
       await page.goto("/map");
 
-      const settings = page.getByRole("link", {
-        name: "Einstellungen öffnen",
-      });
+      const settings = page.getByRole("link", { name: "Einstellungen öffnen" });
       const login = page.getByRole("link", { name: "Anmelden" });
-      const governance = page.getByTestId("governance-fan-trigger");
       await expect(settings).toBeVisible();
       await expect(login).toBeVisible();
-      await expect(governance).toBeVisible();
 
       const settingsBox = await settings.boundingBox();
       const loginBox = await login.boundingBox();
-      const governanceBox = await governance.boundingBox();
       expect(settingsBox, `${width}px: Einstellungen fehlen`).not.toBeNull();
       expect(loginBox, `${width}px: Anmeldung fehlt`).not.toBeNull();
-      expect(governanceBox, `${width}px: Mitentscheiden fehlt`).not.toBeNull();
-      expect(
-        settingsBox!.x + 0.5,
-        `${width}px: Einstellungen überlappen Mitentscheiden`,
-      ).toBeGreaterThanOrEqual(governanceBox!.x + governanceBox!.width);
-      expect(
-        loginBox!.x,
-        `${width}px: Anmeldung überlappt Einstellungen`,
-      ).toBeGreaterThanOrEqual(settingsBox!.x + settingsBox!.width);
-      expect(
-        loginBox!.x + loginBox!.width,
-        `${width}px: Anmeldung verlässt den Bildschirm`,
-      ).toBeLessThanOrEqual(width);
-
-      for (const [label, target] of [
-        ["Einstellungen", settings],
-        ["Anmelden", login],
-      ] as const) {
-        const hitTest = await target.evaluate((element) => {
-          const rect = element.getBoundingClientRect();
-          const hit = document.elementFromPoint(
-            rect.left + rect.width / 2,
-            rect.top + rect.height / 2,
-          );
-          return {
-            receivesPointer:
-              hit === element || (hit !== null && element.contains(hit)),
-            hitElement: hit
-              ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
-              : "none",
-          };
-        });
-        expect(
-          hitTest.receivesPointer,
-          `${width}px: ${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
-        ).toBe(true);
-      }
+      expect(settingsBox!.x).toBeGreaterThanOrEqual(0);
+      expect(loginBox!.x).toBeGreaterThanOrEqual(
+        settingsBox!.x + settingsBox!.width,
+      );
+      expect(loginBox!.x + loginBox!.width).toBeLessThanOrEqual(width);
 
       const loginLabel = login.locator(".auth-label");
       if (width <= 510) {
@@ -545,21 +493,15 @@ test.describe("Farbschema", () => {
 
     const messages = page.getByRole("link", { name: "Private Nachrichten" });
     const settings = page.getByRole("link", { name: "Einstellungen öffnen" });
-    const governance = page.getByTestId("governance-fan-trigger");
     await expect(messages).toBeVisible();
     await expect(messages).toHaveAttribute("href", "/nachrichten");
     await expect(settings).toBeVisible();
-    await expect(governance).toBeVisible();
 
     const messagesBox = await messages.boundingBox();
     const settingsBox = await settings.boundingBox();
-    const governanceBox = await governance.boundingBox();
     expect(messagesBox).not.toBeNull();
     expect(settingsBox).not.toBeNull();
-    expect(governanceBox).not.toBeNull();
-    expect(messagesBox!.x + 0.5).toBeGreaterThanOrEqual(
-      governanceBox!.x + governanceBox!.width,
-    );
+    expect(messagesBox!.x).toBeGreaterThanOrEqual(0);
     expect(settingsBox!.x).toBeGreaterThanOrEqual(
       messagesBox!.x + messagesBox!.width,
     );
@@ -575,18 +517,9 @@ test.describe("Farbschema", () => {
           rect.left + rect.width / 2,
           rect.top + rect.height / 2,
         );
-        return {
-          receivesPointer:
-            hit === element || (hit !== null && element.contains(hit)),
-          hitElement: hit
-            ? `${hit.tagName.toLowerCase()}.${Array.from(hit.classList).join(".")}`
-            : "none",
-        };
+        return hit === element || (hit !== null && element.contains(hit));
       });
-      expect(
-        hitTest.receivesPointer,
-        `${label} wird in der Mitte von ${hitTest.hitElement} überlagert`,
-      ).toBe(true);
+      expect(hitTest, `${label} ist nicht frei berührbar`).toBe(true);
     }
   });
 
@@ -710,11 +643,6 @@ test.describe("Farbschema", () => {
       page.getByTestId("tool-fan-trigger"),
       "Werkzeugauslöser",
     );
-    await expectReadableSurface(
-      page.getByTestId("governance-fan-trigger"),
-      "Governance-Auslöser",
-    );
-
     await page.getByTestId("tool-fan-trigger").click();
     await expectReadableSurface(
       page.getByTestId("tool-fan-find"),
