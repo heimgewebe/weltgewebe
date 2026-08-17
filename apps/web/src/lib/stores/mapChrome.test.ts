@@ -4,6 +4,7 @@ import {
   TOOL_FAN_BRANCH,
   closeMapFans,
   mapChrome,
+  setAttentionCardOpen,
   setAttentionOverflowOpen,
   showToolFanBranch,
   toggleToolFan,
@@ -18,6 +19,7 @@ describe("mapChrome", () => {
       toolFanOpen: true,
       toolFanBranch: TOOL_FAN_BRANCH.root,
       attentionOverflowOpen: false,
+      attentionCardOpen: false,
     });
 
     toggleToolFan();
@@ -25,20 +27,26 @@ describe("mapChrome", () => {
       toolFanOpen: false,
       toolFanBranch: TOOL_FAN_BRANCH.root,
       attentionOverflowOpen: false,
+      attentionCardOpen: false,
     });
   });
 
-  it("tracks attention overflow independently from the tool fan", () => {
+  it("tracks attention surfaces independently from the tool fan", () => {
     setAttentionOverflowOpen(true);
     toggleToolFan();
     expect(get(mapChrome)).toEqual({
       toolFanOpen: true,
       toolFanBranch: TOOL_FAN_BRANCH.root,
       attentionOverflowOpen: true,
+      attentionCardOpen: false,
     });
+
+    setAttentionCardOpen(true);
+    expect(get(mapChrome).attentionCardOpen).toBe(true);
 
     closeMapFans();
     expect(get(mapChrome).attentionOverflowOpen).toBe(false);
+    expect(get(mapChrome).attentionCardOpen).toBe(false);
   });
 
   it("resets the weaving branch whenever the tool fan closes", () => {
@@ -50,6 +58,7 @@ describe("mapChrome", () => {
       toolFanOpen: false,
       toolFanBranch: TOOL_FAN_BRANCH.root,
       attentionOverflowOpen: false,
+      attentionCardOpen: false,
     });
   });
 });

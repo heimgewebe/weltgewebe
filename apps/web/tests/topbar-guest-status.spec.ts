@@ -110,11 +110,21 @@ test.describe("Topbar — guest role visibility", () => {
       "data-attention-id",
       "direct:dm-1",
     );
+    await attention.locator('[data-attention-id="direct:dm-1"]').click();
     await expect(
-      attention.locator('[data-attention-id="direct:dm-1"]'),
+      page
+        .getByTestId("attention-card")
+        .getByRole("link", { name: "Nachricht öffnen" }),
     ).toHaveAttribute("href", "/nachrichten?id=dm-1");
+
+    await page.keyboard.press("Escape");
+    await attention
+      .locator('[data-attention-id="proposal:pending-weber"]')
+      .click();
     await expect(
-      attention.locator('[data-attention-id="proposal:pending-weber"]'),
+      page
+        .getByTestId("attention-card")
+        .getByRole("link", { name: "Weberantrag öffnen" }),
     ).toHaveAttribute("href", "/antraege?id=pending-weber");
   });
 

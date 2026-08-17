@@ -220,14 +220,16 @@
     if (topBarRect)
       top = Math.max(top, topBarRect.bottom - mapRect.top + edgeInset);
 
-    const attentionOverflowRect = document
-      .querySelector<HTMLElement>('[data-testid="attention-overflow-menu"]')
-      ?.getBoundingClientRect();
-    if (attentionOverflowRect && attentionOverflowRect.height > 0) {
-      top = Math.max(
-        top,
-        attentionOverflowRect.bottom - mapRect.top + edgeInset,
-      );
+    for (const selector of [
+      '[data-testid="attention-overflow-menu"]',
+      '[data-testid="attention-card"]',
+    ]) {
+      const attentionRect = document
+        .querySelector<HTMLElement>(selector)
+        ?.getBoundingClientRect();
+      if (attentionRect && attentionRect.height > 0) {
+        top = Math.max(top, attentionRect.bottom - mapRect.top + edgeInset);
+      }
     }
 
     const searchRect = document
@@ -290,6 +292,7 @@
       '[data-testid="search-overlay"]',
       '[data-testid="filter-overlay"]',
       '[data-testid="attention-overflow-menu"]',
+      '[data-testid="attention-card"]',
       '[data-testid="tool-fan"]',
       "#tool-fan-actions",
       '[data-testid="context-panel"]',
@@ -1129,6 +1132,7 @@
     $mapChrome.toolFanOpen;
     $mapChrome.toolFanBranch;
     $mapChrome.attentionOverflowOpen;
+    $mapChrome.attentionCardOpen;
     if (map) tick().then(refreshSearchViewportObservers);
   });
   // Lines require visible node endpoints. Hiding nodes must therefore hide

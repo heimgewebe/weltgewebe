@@ -130,7 +130,7 @@ Regeln:
 - auf schmalen Ansichten bleibt nur eine begrenzte Zahl von Blasen sichtbar; weitere Einheiten bleiben über einen berührbaren `+N`-Überlauf erreichbar;
 - jede direkte Bedienfläche besitzt mindestens 44 × 44 Pixel;
 - neue Aufmerksamkeit darf die Kartenkamera niemals selbständig bewegen;
-- das Öffnen einer Blase führt in die bestehende kanonische Fachansicht, etwa die konkrete Direktunterhaltung oder den konkreten Antrag;
+- das Öffnen einer Blase hält die Karte zunächst offen und zeigt eine kompakte, nichtmodale Aufmerksamkeitskarte mit Grund und genau einer Hauptaktion; erst diese Aktion führt in die bestehende kanonische Fachansicht, etwa die konkrete Direktunterhaltung oder den konkreten Antrag;
 - reduzierte Bewegung verhindert nicht die Zustandsänderung, sondern nur deren dekorative Animation.
 
 Der aktuelle belegte Quellensatz umfasst ungelesene Direktunterhaltungen, den eigenen offenen Weberantrag und offene kollektive Governance-Verfahren für Rollen, die an diesen Verfahren teilnehmen können. Die Listenansicht der Governance belegt derzeit nicht, ob eine konkrete Person bereits abgestimmt hat. Die Aufmerksamkeit darf deshalb ein laufendes Abstimmungsverfahren anzeigen, aber nicht behaupten, dass eine persönliche Stimme fehlt.
@@ -156,7 +156,7 @@ Finden und Karteninhalt sind lokale Kartenlinsen:
 - die Karte bleibt die primäre Trefferfläche; Finden zeigt höchstens sechs automatische Vorschläge, weitere Treffer öffnen nur auf bewusste Anforderung; Sicht zeigt keine automatische Trefferliste, nur Typauswahl, aktive Anzahl und Rücksetzen;
 - passende Knoten und Garnrollen werden auf der Karte hervorgehoben;
 - liegt ein Treffer außerhalb des nutzbaren Kartenausschnitts, zeigt ein Richtungsmarker am Bildschirmrand zu ihm;
-- Richtungsmarker bleiben außerhalb von Topbar, sichtbaren Kartenlinsen, sichtbarem Aufmerksamkeitsüberlauf, Werkzeugfächer und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
+- Richtungsmarker bleiben außerhalb von Topbar, sichtbaren Kartenlinsen, sichtbarer Aufmerksamkeitskarte oder sichtbarem Aufmerksamkeitsüberlauf, Werkzeugfächer und Fokuspanel und besitzen mindestens 44 × 44 Pixel;
 - ein Treffer oder Richtungsmarker kann die Karte fokussieren und das Fokuspanel öffnen;
 - ein API-Fehler darf nicht wie eine normale leere Ergebnismenge aussehen.
 

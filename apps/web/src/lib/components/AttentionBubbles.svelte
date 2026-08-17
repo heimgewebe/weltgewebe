@@ -5,12 +5,17 @@
     accountAttentionRuntime,
     retainAccountAttentionRuntime,
   } from "$lib/accountAttentionRuntime";
-  import { setAttentionOverflowOpen } from "$lib/stores/mapChrome";
+  import {
+    setAttentionCardOpen,
+    setAttentionOverflowOpen,
+  } from "$lib/stores/mapChrome";
   import { unreadMessageBadgeLabel } from "./topBarAttentionState";
 
+  let attentionEl: HTMLElement | undefined = $state();
   let controlCapacity = $state(3);
   let reducedMotion = $state(false);
   let overflowOpen = $state(false);
+  let activeItemId: string | null = $state(null);
 
   let visibleCount = $derived.by(() => {
     const total = $accountAttentionRuntime.items.length;
@@ -22,6 +27,9 @@
   let hiddenItems = $derived(
     $accountAttentionRuntime.items.slice(visibleCount),
   );
+  let activeItem = $derived(
+    $accountAttentionRuntime.items.find((item) => item.id === activeItemId),
+  );
 
   function attentionSymbol(kind: string): string {
     switch (kind) {
@@ -32,6 +40,43 @@
       default:
         return "◇";
     }
+  }
+
+  function attentionActionLabel(kind: string): string {
+    switch (kind) {
+      case "direct_message":
+        return "Nachricht öffnen";
+      case "weber_application":
+        return "Weberantrag öffnen";
+      default:
+        return "Antrag öffnen";
+    }
+  }
+
+  function selectAttention(id: string): void {
+    activeItemId = activeItemId === id ? null : id;
+    overflowOpen = false;
+  }
+
+  function selectOverflowAttention(id: string): void {
+    activeItemId = id;
+    overflowOpen = false;
+  }
+
+  function closeAttentionSurfaces(): void {
+    activeItemId = null;
+    overflowOpen = false;
+  }
+
+  function handleWindowPointerDown(event: PointerEvent): void {
+    if ((!activeItem && !overflowOpen) || !attentionEl) return;
+    if (!attentionEl.contains(event.target as Node)) closeAttentionSurfaces();
+  }
+
+  function handleWindowKeydown(event: KeyboardEvent): void {
+    if (event.key !== "Escape" || (!activeItem && !overflowOpen)) return;
+    event.preventDefault();
+    closeAttentionSurfaces();
   }
 
   function syncViewportState(): void {
@@ -53,6 +98,14 @@
     setAttentionOverflowOpen(hiddenItems.length > 0 && overflowOpen);
   });
 
+  $effect(() => {
+    setAttentionCardOpen(Boolean(activeItem));
+  });
+
+  $effect(() => {
+    if (activeItemId !== null && !activeItem) activeItemId = null;
+  });
+
   onMount(() => {
     const releaseRuntime = retainAccountAttentionRuntime();
     const motionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
@@ -68,6 +121,7 @@
 
     return () => {
       setAttentionOverflowOpen(false);
+      setAttentionCardOpen(false);
       releaseRuntime();
       resizeObserver.disconnect();
       motionQuery.removeEventListener("change", syncMotion);
@@ -75,22 +129,32 @@
   });
 </script>
 
+<svelte:window
+  onpointerdown={handleWindowPointerDown}
+  onkeydown={handleWindowKeydown}
+/>
+
 {#if $accountAttentionRuntime.items.length > 0}
   <nav
     class="attention-bubbles"
+    bind:this={attentionEl}
     data-testid="attention-bubbles"
     aria-label="Aktuelle Aufmerksamkeit"
   >
     <div class="attention-row">
       {#each visibleItems as item (item.id)}
-        <a
+        <button
+          type="button"
           class="attention-bubble"
           class:personal={item.kind !== "governance"}
+          class:active={activeItem?.id === item.id}
           data-attention-id={item.id}
           data-attention-kind={item.kind}
-          href={item.href}
           aria-label={`${item.label}: ${item.detail}`}
+          aria-expanded={activeItem?.id === item.id}
+          aria-controls="attention-card"
           title={`${item.label} · ${item.detail}`}
+          onclick={() => selectAttention(item.id)}
           animate:flip={{ duration: reducedMotion ? 0 : 170 }}
         >
           <span class="attention-symbol" aria-hidden="true">
@@ -101,11 +165,17 @@
               {unreadMessageBadgeLabel(item.count)}
             </span>
           {/if}
-        </a>
+        </button>
       {/each}
 
       {#if hiddenItems.length > 0}
-        <details class="attention-overflow" bind:open={overflowOpen}>
+        <details
+          class="attention-overflow"
+          bind:open={overflowOpen}
+          ontoggle={() => {
+            if (overflowOpen) activeItemId = null;
+          }}
+        >
           <summary
             class="attention-overflow-trigger"
             aria-label={`${hiddenItems.length} weitere Aufmerksamkeitseinheiten`}
@@ -117,10 +187,11 @@
             data-testid="attention-overflow-menu"
           >
             {#each hiddenItems as item (item.id)}
-              <a
+              <button
+                type="button"
                 class="attention-overflow-item"
-                href={item.href}
                 data-attention-id={item.id}
+                onclick={() => selectOverflowAttention(item.id)}
               >
                 <span class="overflow-symbol" aria-hidden="true">
                   {attentionSymbol(item.kind)}
@@ -134,17 +205,38 @@
                     {unreadMessageBadgeLabel(item.count)}
                   </span>
                 {/if}
-              </a>
+              </button>
             {/each}
           </div>
         </details>
       {/if}
     </div>
+
+    {#if activeItem}
+      <section
+        id="attention-card"
+        class="attention-card"
+        data-testid="attention-card"
+        aria-labelledby="attention-card-title"
+      >
+        <div class="attention-card-symbol" aria-hidden="true">
+          {attentionSymbol(activeItem.kind)}
+        </div>
+        <div class="attention-card-copy">
+          <h2 id="attention-card-title">{activeItem.label}</h2>
+          <p>{activeItem.detail}</p>
+        </div>
+        <a class="attention-card-action" href={activeItem.href}>
+          {attentionActionLabel(activeItem.kind)}
+        </a>
+      </section>
+    {/if}
   </nav>
 {/if}
 
 <style>
   .attention-bubbles {
+    position: relative;
     grid-column: 1;
     justify-self: start;
     min-width: 0;
@@ -174,8 +266,16 @@
     color: var(--text);
     box-shadow: var(--shadow);
     backdrop-filter: blur(var(--map-lens-blur));
+    font: inherit;
     text-decoration: none;
     cursor: pointer;
+  }
+
+  .attention-bubble.active {
+    border-color: var(--accent);
+    box-shadow:
+      0 0 0 2px var(--accent-soft),
+      var(--shadow);
   }
 
   .attention-bubble.personal {
@@ -249,14 +349,19 @@
   .attention-overflow-item {
     box-sizing: border-box;
     display: grid;
+    width: 100%;
     grid-template-columns: 32px minmax(0, 1fr) auto;
     align-items: center;
     gap: 0.5rem;
     min-height: 44px;
     padding: 0.35rem 0.45rem;
+    border: 0;
     border-radius: 12px;
+    background: transparent;
     color: var(--text);
-    text-decoration: none;
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
   }
 
   .attention-overflow-item:hover {
@@ -305,9 +410,75 @@
     text-align: center;
   }
 
+  .attention-card {
+    box-sizing: border-box;
+    position: absolute;
+    top: calc(100% + 8px);
+    left: 0;
+    width: min(290px, calc(100vw - 24px));
+    display: grid;
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 0.6rem;
+    padding: 0.7rem;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 16px;
+    background: var(--panel);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(var(--map-lens-blur));
+  }
+
+  .attention-card-symbol {
+    display: grid;
+    place-items: center;
+    width: 36px;
+    height: 36px;
+    border: 1px solid var(--panel-border-strong);
+    border-radius: 50%;
+    font-size: 1rem;
+  }
+
+  .attention-card-copy {
+    min-width: 0;
+  }
+
+  .attention-card-copy h2,
+  .attention-card-copy p {
+    margin: 0;
+  }
+
+  .attention-card-copy h2 {
+    overflow-wrap: anywhere;
+    font-size: 0.86rem;
+    line-height: 1.25;
+  }
+
+  .attention-card-copy p {
+    margin-top: 0.2rem;
+    color: var(--text-muted, var(--text));
+    font-size: 0.74rem;
+    line-height: 1.35;
+  }
+
+  .attention-card-action {
+    grid-column: 1 / -1;
+    box-sizing: border-box;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 44px;
+    padding: 0.45rem 0.7rem;
+    border-radius: 999px;
+    background: var(--accent);
+    color: var(--accent-contrast, #fff);
+    font-size: 0.78rem;
+    font-weight: 800;
+    text-decoration: none;
+  }
+
   .attention-bubble:focus-visible,
   .attention-overflow-trigger:focus-visible,
-  .attention-overflow-item:focus-visible {
+  .attention-overflow-item:focus-visible,
+  .attention-card-action:focus-visible {
     outline: 3px solid var(--accent);
     outline-offset: 3px;
   }
@@ -315,7 +486,8 @@
   @media (prefers-reduced-transparency: reduce) {
     .attention-bubble,
     .attention-overflow-trigger,
-    .attention-overflow-menu {
+    .attention-overflow-menu,
+    .attention-card {
       background: var(--panel-solid);
       backdrop-filter: none;
     }

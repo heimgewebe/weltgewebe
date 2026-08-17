@@ -12,12 +12,14 @@ export interface MapChromeState {
   toolFanOpen: boolean;
   toolFanBranch: ToolFanBranch;
   attentionOverflowOpen: boolean;
+  attentionCardOpen: boolean;
 }
 
 const initialState: MapChromeState = {
   toolFanOpen: false,
   toolFanBranch: TOOL_FAN_BRANCH.root,
   attentionOverflowOpen: false,
+  attentionCardOpen: false,
 };
 
 export const mapChrome = writable<MapChromeState>(initialState);
@@ -51,6 +53,14 @@ export function setAttentionOverflowOpen(open: boolean): void {
     state.attentionOverflowOpen === open
       ? state
       : { ...state, attentionOverflowOpen: open },
+  );
+}
+
+export function setAttentionCardOpen(open: boolean): void {
+  mapChrome.update((state) =>
+    state.attentionCardOpen === open
+      ? state
+      : { ...state, attentionCardOpen: open },
   );
 }
 
