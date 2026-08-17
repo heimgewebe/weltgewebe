@@ -1,4 +1,4 @@
-import { get, writable, type Readable } from "svelte/store";
+import { derived, get, writable, type Readable } from "svelte/store";
 import { accountAttentionInvalidation } from "$lib/accountAttention";
 import {
   listDirectConversations,
@@ -46,6 +46,30 @@ function initialState(): AccountAttentionState {
     conversations: [],
     proposals: [],
     items: [],
+  };
+}
+
+export function maskAccountAttentionForAuth(
+  state: AccountAttentionState,
+  status: AuthStatus,
+): AccountAttentionState {
+  const accountId = status.account_id;
+  if (!status.authenticated || !accountId || state.accountId !== accountId) {
+    return { ...initialState(), role: status.role };
+  }
+  if (state.role === status.role) return state;
+
+  return {
+    ...state,
+    role: status.role,
+    weberApplicationState:
+      status.role === "gast" ? state.weberApplicationState : "unknown",
+    items: projectTopBarAttention({
+      conversations: state.conversations,
+      proposals: state.proposals,
+      accountId,
+      role: status.role,
+    }),
   };
 }
 
@@ -182,9 +206,10 @@ const controller = createAccountAttentionController({
   listProposals: () => listProposals(),
 });
 
-export const accountAttentionRuntime: Readable<AccountAttentionState> = {
-  subscribe: controller.subscribe,
-};
+export const accountAttentionRuntime: Readable<AccountAttentionState> = derived(
+  [controller, authStore],
+  ([state, status]) => maskAccountAttentionForAuth(state, status),
+);
 
 export function refreshAccountAttention(): Promise<void> {
   return controller.refresh(get(authStore));

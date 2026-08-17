@@ -3,7 +3,11 @@ import { describe, expect, it, vi } from "vitest";
 import type { DirectConversation } from "$lib/api/directMessages";
 import type { Proposal } from "$lib/api/governance";
 import type { AuthStatus } from "$lib/auth/store";
-import { createAccountAttentionController } from "$lib/accountAttentionRuntime";
+import {
+  createAccountAttentionController,
+  maskAccountAttentionForAuth,
+  type AccountAttentionState,
+} from "$lib/accountAttentionRuntime";
 
 function authenticated(
   accountId: string,
@@ -120,6 +124,84 @@ describe("accountAttentionRuntime", () => {
 
     await controller.refresh(current);
     expect(get(controller).weberApplicationState).toBe("unknown");
+  });
+
+  it("masks retained personal state before a different or logged-out account can render it", () => {
+    const stale: AccountAttentionState = {
+      accountId: "account-a",
+      role: "weber",
+      weberApplicationState: "unknown",
+      conversations: [conversation("private-a", 2, "2026-08-17T07:00:00Z")],
+      proposals: [],
+      items: [
+        {
+          id: "direct:private-a",
+          kind: "direct_message",
+          label: "Private A",
+          detail: "2 ungelesene Nachrichten",
+          href: "/nachrichten?id=private-a",
+          occurredAt: "2026-08-17T07:00:00Z",
+          count: 2,
+        },
+      ],
+    };
+
+    expect(
+      maskAccountAttentionForAuth(stale, {
+        state: "unauthenticated",
+        authenticated: false,
+        role: "gast",
+      }),
+    ).toMatchObject({
+      accountId: "",
+      conversations: [],
+      proposals: [],
+      items: [],
+    });
+    expect(
+      maskAccountAttentionForAuth(stale, authenticated("account-b")),
+    ).toMatchObject({
+      accountId: "",
+      conversations: [],
+      proposals: [],
+      items: [],
+    });
+  });
+
+  it("reprojects retained governance immediately when a role loses collective participation", () => {
+    const proposal = {
+      id: "collective",
+      kind: "sachantrag",
+      title: "Parkbank",
+      applicant_account_id: "account-b",
+      applicant_title: "Berta",
+      status: "voting",
+      created_at: "2026-08-17T07:00:00Z",
+    } as Proposal;
+    const stale: AccountAttentionState = {
+      accountId: "account-a",
+      role: "weber",
+      weberApplicationState: "unknown",
+      conversations: [],
+      proposals: [proposal],
+      items: [
+        {
+          id: "proposal:collective",
+          kind: "governance",
+          label: "Parkbank",
+          detail: "Gespräch und Abstimmung läuft",
+          href: "/antraege?id=collective",
+          occurredAt: proposal.created_at,
+        },
+      ],
+    };
+
+    const masked = maskAccountAttentionForAuth(
+      stale,
+      authenticated("account-a", "gast"),
+    );
+    expect(masked.role).toBe("gast");
+    expect(masked.items).toEqual([]);
   });
 
   it("resets personal attention when authentication disappears", async () => {
