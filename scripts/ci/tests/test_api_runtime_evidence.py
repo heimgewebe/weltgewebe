@@ -28,6 +28,8 @@ POLICY_PATH = ROOT / "policies/performance.v1.json"
 FAKE_GIT_HEAD = "a" * 40
 FAKE_POLICY_SHA256 = "b" * 64
 FAKE_DATASET_MANIFEST_SHA256 = "c" * 64
+FAKE_K6_IMAGE = "grafana/k6@sha256:" + ("1" * 64)
+FAKE_RUN_ID = "api-runtime-test-run"
 
 
 def _load_policy() -> dict:
@@ -52,6 +54,9 @@ def _k6_summary(
     total_requests=300,
     scenario=None,
     dataset_manifest_sha256=FAKE_DATASET_MANIFEST_SHA256,
+    search_query="Scale",
+    k6_image=FAKE_K6_IMAGE,
+    run_id=FAKE_RUN_ID,
 ) -> dict:
     return {
         "metrics": {
@@ -60,6 +65,9 @@ def _k6_summary(
             "http_reqs": {"values": {"count": total_requests}},
         },
         evidence.DATASET_MANIFEST_SUMMARY_KEY: dataset_manifest_sha256,
+        evidence.live_binding.SEARCH_QUERY_SUMMARY_KEY: search_query,
+        evidence.live_binding.RUN_ID_SUMMARY_KEY: run_id,
+        evidence.live_binding.K6_IMAGE_SUMMARY_KEY: k6_image,
         "weltgewebe_scenario": scenario if scenario is not None else _canonical_scenario(),
     }
 
@@ -94,22 +102,109 @@ def _dataset_binding() -> dict:
     }
 
 
-def _resource_receipt() -> dict:
+def _runtime_binding(
+    *,
+    git_head: str = FAKE_GIT_HEAD,
+    manifest_sha256: str = FAKE_DATASET_MANIFEST_SHA256,
+    node_count: int = 20000,
+    search_query: str = "Scale",
+    k6_image: str = FAKE_K6_IMAGE,
+    run_id: str = FAKE_RUN_ID,
+) -> dict:
+    candidate_limit, candidate_source_sha256 = evidence.live_binding.candidate_limit_binding(ROOT)
+    active = min(candidate_limit, node_count)
+    content_sha256 = "2" * 64
+    image_id = "sha256:" + ("3" * 64)
+    return evidence.live_binding.validate_receipt(
+        {
+            "schema_version": evidence.live_binding.SCHEMA_VERSION,
+            "contract": evidence.live_binding.CONTRACT,
+            "run_id": run_id,
+            "git_head": git_head,
+            "dataset": {
+                "manifest_sha256": manifest_sha256,
+                "domain_nodes_count": node_count,
+                "fixture_nodes_content_sha256": content_sha256,
+                "database_nodes_content_sha256": content_sha256,
+            },
+            "search": {
+                "query": search_query,
+                "mode": "lexical_fallback",
+                "generation_id": "search-generation-test",
+                "candidate_limit_contract": candidate_limit,
+                "candidate_limit_source": str(evidence.live_binding.CANDIDATE_LIMIT_SOURCE),
+                "candidate_limit_source_sha256": candidate_source_sha256,
+                "expected_nodes": active,
+                "completed_nodes": active,
+                "active_projection_count": active,
+                "fixture_projection_content_sha256": content_sha256,
+                "database_projection_content_sha256": content_sha256,
+                "sampled_items": [{"id": "node-test", "title": "Scale node test"}],
+            },
+            "runtime": {
+                "api_commit": git_head,
+                "api_container": {
+                    "name": "api-test",
+                    "image_reference": "fixture/api@sha256:" + ("4" * 64),
+                    "image_id": image_id,
+                },
+                "postgres_container": {
+                    "name": "db-test",
+                    "image_reference": "fixture/postgres@sha256:" + ("5" * 64),
+                    "image_id": image_id,
+                },
+                "k6_image_reference": k6_image,
+            },
+        }
+    )
+
+
+def _resource_receipt(*, run_id: str = FAKE_RUN_ID, container_name: str = "api-test") -> dict:
     return {
-        "container_name": "weltgewebe-api",
+        "run_id": run_id,
+        "container_name": container_name,
         "sample_count": 30,
         "peak_cpu_percent": 12.5,
         "peak_memory_bytes": 104857600,
     }
 
 
-def _raw_resource_receipt() -> dict:
+def _raw_resource_receipt(*, run_id: str = FAKE_RUN_ID, container_name: str = "api-test") -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "contract": evidence.RESOURCE_RECEIPT_CONTRACT,
-        "container_name": "weltgewebe-api",
+        "run_id": run_id,
+        "container_name": container_name,
         "sample_count": 30,
         "peaks": {"cpu_percent": 12.5, "memory_bytes": 104857600},
+    }
+
+
+def _database_connection_receipt(
+    *,
+    run_id: str = FAKE_RUN_ID,
+    database_container: str = "db-test",
+    samples: list[int] | None = None,
+) -> dict:
+    values = [4, 5, 4] if samples is None else list(samples)
+    return {
+        "run_id": run_id,
+        "database_container": database_container,
+        "max_connections": max(values),
+        "sample_count": len(values),
+        "samples": values,
+    }
+
+
+def _raw_database_connection_receipt(
+    *, run_id: str = FAKE_RUN_ID, database_container: str = "db-test"
+) -> dict:
+    return {
+        "schema_version": 1,
+        "contract": evidence.DATABASE_CONNECTION_RECEIPT_CONTRACT,
+        **_database_connection_receipt(
+            run_id=run_id, database_container=database_container
+        ),
     }
 
 
@@ -294,7 +389,14 @@ class K6ScriptContractTests(unittest.TestCase):
         self.assertIn("API_RUNTIME_DATASET_PROFILE is required", source)
         self.assertIn("API_RUNTIME_DATASET_MANIFEST_SHA256", source)
         self.assertIn("weltgewebe_dataset_manifest_sha256", source)
+        self.assertIn("API_RUNTIME_SEARCH_QUERY is required", source)
+        self.assertIn("API_RUNTIME_K6_IMAGE must be an exact @sha256 image reference", source)
+        self.assertIn("weltgewebe_search_query", source)
+        self.assertIn("API_RUNTIME_RUN_ID has an invalid format", source)
+        self.assertIn("weltgewebe_run_id", source)
+        self.assertIn("weltgewebe_k6_image", source)
         self.assertNotIn("API_RUNTIME_DATASET_PROFILE || 'domain-scale-ci'", source)
+        self.assertNotIn("API_RUNTIME_SEARCH_QUERY ||", source)
 
 
 class AssembleReportTests(unittest.TestCase):
@@ -313,7 +415,8 @@ class AssembleReportTests(unittest.TestCase):
             metrics_after_text=after,
             resource_receipt=_resource_receipt(),
             dataset_binding=_dataset_binding(),
-            database_connections=4,
+            runtime_binding=_runtime_binding(),
+            database_connection_receipt=_database_connection_receipt(),
             git_head=FAKE_GIT_HEAD,
             policy_sha256=FAKE_POLICY_SHA256,
         )
@@ -330,10 +433,9 @@ class AssembleReportTests(unittest.TestCase):
                 "observed_from_search_repository_duration_seconds_count": 100,
             },
         )
-        self.assertEqual(report["metrics"]["resources"]["database_connections"], 4)
         self.assertEqual(
-            report["metrics"]["resources"]["database_connections_source"],
-            "caller-supplied-pg_stat_activity-point-measurement",
+            report["metrics"]["resources"]["postgres_connections"],
+            _database_connection_receipt(),
         )
         self.assertEqual(report["metrics"]["resources"]["api_replica"], _resource_receipt())
 
@@ -349,7 +451,8 @@ class AssembleReportTests(unittest.TestCase):
             metrics_after_text=after,
             resource_receipt=receipt,
             dataset_binding=_dataset_binding(),
-            database_connections=2,
+            runtime_binding=_runtime_binding(),
+            database_connection_receipt=_database_connection_receipt(),
             git_head=FAKE_GIT_HEAD,
             policy_sha256=FAKE_POLICY_SHA256,
         )
@@ -367,7 +470,8 @@ class AssembleReportTests(unittest.TestCase):
             metrics_after_text=after,
             resource_receipt=_resource_receipt(),
             dataset_binding=_dataset_binding(),
-            database_connections=1,
+            runtime_binding=_runtime_binding(),
+            database_connection_receipt=_database_connection_receipt(),
             git_head=FAKE_GIT_HEAD,
             policy_sha256=FAKE_POLICY_SHA256,
         )
@@ -386,7 +490,8 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=None,
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
             )
@@ -406,7 +511,8 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=_resource_receipt(),
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
             )
@@ -427,7 +533,8 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=_resource_receipt(),
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
             )
@@ -445,7 +552,8 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=_resource_receipt(),
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
             )
@@ -462,7 +570,8 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=_resource_receipt(),
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head="not-a-sha",
                 policy_sha256=FAKE_POLICY_SHA256,
             )
@@ -488,7 +597,8 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=_resource_receipt(),
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
             )
@@ -511,7 +621,8 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=_resource_receipt(),
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
             )
@@ -531,10 +642,156 @@ class AssembleReportTests(unittest.TestCase):
                 metrics_after_text=after,
                 resource_receipt=_resource_receipt(),
                 dataset_binding=_dataset_binding(),
-                database_connections=1,
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
                 git_head=FAKE_GIT_HEAD,
                 policy_sha256=FAKE_POLICY_SHA256,
             )
+
+
+    def test_missing_runtime_binding_is_a_hard_failure(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "runtime_binding is required"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=None,
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_runtime_binding_manifest_must_match_the_fixture(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "live binding manifest digest"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(manifest_sha256="9" * 64),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_k6_query_must_match_live_search_binding(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "k6 search query"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(search_query="Other"),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_k6_image_must_match_live_runtime_binding(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "k6 image identity"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(k6_image="grafana/k6@sha256:" + ("9" * 64)),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_missing_database_connection_receipt_is_a_hard_failure(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "database_connection_receipt is required"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=None,
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_k6_run_id_must_match_live_runtime_binding(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "k6 run_id"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(run_id="other-run"),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_api_resource_run_id_must_match_live_runtime_binding(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "API resource receipt run_id"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(run_id="old-run"),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_database_resource_run_id_must_match_live_runtime_binding(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "PostgreSQL connection receipt run_id"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(run_id="old-run"),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_resource_containers_must_match_live_runtime_binding(self) -> None:
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "API resource receipt container"):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(search_count=0, search_sum_seconds=0.0, http_search_requests=0),
+                metrics_after_text=_prometheus_text(search_count=10, search_sum_seconds=0.1, http_search_requests=10),
+                resource_receipt=_resource_receipt(container_name="other-api"),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_live_binding_rejects_candidate_count_above_product_limit(self) -> None:
+        receipt = _runtime_binding()
+        limit = receipt["search"]["candidate_limit_contract"]
+        receipt["search"]["active_projection_count"] = limit + 1
+        receipt["search"]["expected_nodes"] = limit + 1
+        receipt["search"]["completed_nodes"] = limit + 1
+        with self.assertRaisesRegex(evidence.live_binding.LiveBindingError, "exceeds candidate limit"):
+            evidence.live_binding.validate_receipt(receipt)
 
 
 class MissingAndInvalidInputTests(unittest.TestCase):
@@ -552,8 +809,9 @@ class MissingAndInvalidInputTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "contract": "something-else",
+                        "run_id": FAKE_RUN_ID,
                         "container_name": "x",
                         "sample_count": 1,
                         "peaks": {"cpu_percent": 1.0, "memory_bytes": 1},
@@ -570,8 +828,9 @@ class MissingAndInvalidInputTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "schema_version": 1,
+                        "schema_version": 2,
                         "contract": evidence.RESOURCE_RECEIPT_CONTRACT,
+                        "run_id": FAKE_RUN_ID,
                         "container_name": "x",
                         "sample_count": 1,
                         "peaks": {"cpu_percent": 1.0, "memory_bytes": -1},
@@ -582,10 +841,17 @@ class MissingAndInvalidInputTests(unittest.TestCase):
             with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "memory_bytes"):
                 evidence.load_resource_receipt(path)
 
-    def test_database_connections_must_be_non_negative(self) -> None:
-        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "non-negative"):
-            evidence.validate_database_connections(-1)
-        self.assertEqual(evidence.validate_database_connections(0), 0)
+    def test_database_connection_receipt_rejects_inconsistent_maximum(self) -> None:
+        receipt = _database_connection_receipt()
+        receipt["max_connections"] += 1
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "max_connections"):
+            evidence.validate_normalized_database_connection_receipt(receipt)
+
+    def test_database_connection_receipt_rejects_invalid_sample(self) -> None:
+        receipt = _database_connection_receipt()
+        receipt["samples"][1] = -1
+        with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "invalid sample"):
+            evidence.validate_normalized_database_connection_receipt(receipt)
 
 
 class RevisionBindingTests(unittest.TestCase):
@@ -601,7 +867,8 @@ class RevisionBindingTests(unittest.TestCase):
             ),
             resource_receipt=_resource_receipt(),
             dataset_binding=_dataset_binding(),
-            database_connections=2,
+            runtime_binding=_runtime_binding(),
+            database_connection_receipt=_database_connection_receipt(),
             git_head=FAKE_GIT_HEAD,
             policy_sha256=FAKE_POLICY_SHA256,
         )
@@ -724,8 +991,10 @@ class RegressionFixtureCliTests(unittest.TestCase):
                     str(fixture_dir / "resource-receipt.json"),
                     "--dataset-manifest",
                     str(dataset_manifest),
-                    "--database-connections",
-                    "1",
+                    "--runtime-binding",
+                    str(fixture_dir / "runtime-binding.json"),
+                    "--database-connections-receipt",
+                    str(fixture_dir / "database-connections.json"),
                     "--report",
                     str(report_path),
                 ],
@@ -772,6 +1041,8 @@ class RegressionFixtureCliTests(unittest.TestCase):
             after_path = root / "after.prom"
             report_path = root / "report.json"
             resource_path = root / "resource-receipt.json"
+            runtime_path = root / "runtime-binding.json"
+            database_connections_path = root / "database-connections.json"
 
             k6_path.write_text(
                 json.dumps(_k6_summary(dataset_manifest_sha256=manifest_sha256)),
@@ -796,6 +1067,19 @@ class RegressionFixtureCliTests(unittest.TestCase):
                 encoding="utf-8",
             )
             resource_path.write_text(json.dumps(_raw_resource_receipt()), encoding="utf-8")
+            database_connections_path.write_text(
+                json.dumps(_raw_database_connection_receipt()), encoding="utf-8"
+            )
+            runtime_path.write_text(
+                json.dumps(
+                    _runtime_binding(
+                        git_head=current_head,
+                        manifest_sha256=manifest_sha256,
+                        node_count=4,
+                    )
+                ),
+                encoding="utf-8",
+            )
 
             result = subprocess.run(
                 [
@@ -815,8 +1099,10 @@ class RegressionFixtureCliTests(unittest.TestCase):
                     str(resource_path),
                     "--dataset-manifest",
                     str(dataset_manifest),
-                    "--database-connections",
-                    "0",
+                    "--runtime-binding",
+                    str(runtime_path),
+                    "--database-connections-receipt",
+                    str(database_connections_path),
                     "--report",
                     str(report_path),
                 ],

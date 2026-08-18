@@ -11,6 +11,9 @@ const exactRevisionEnvironment = buildExactRevisionAliases();
 const webServer = Array.isArray(baseConfig.webServer)
   ? baseConfig.webServer.map((server) => ({
       ...server,
+      // Performance evidence must never come from an unrelated preview that
+      // happens to occupy the configured port. A collision fails closed.
+      reuseExistingServer: false,
       env: {
         ...inheritedEnvironment,
         ...server.env,
@@ -20,6 +23,8 @@ const webServer = Array.isArray(baseConfig.webServer)
   : baseConfig.webServer
     ? {
         ...baseConfig.webServer,
+        // Keep local and CI evidence on the same isolation rule.
+        reuseExistingServer: false,
         env: {
           ...inheritedEnvironment,
           ...baseConfig.webServer.env,

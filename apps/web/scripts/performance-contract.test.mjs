@@ -161,6 +161,15 @@ test("loads the repository canonical contract", () => {
   );
 });
 
+test("isolates web runtime evidence from unrelated preview servers", () => {
+  const config = readFileSync(
+    resolve(repositoryRoot, "apps/web/playwright.performance.config.ts"),
+    "utf8",
+  );
+  assert.match(config, /reuseExistingServer:\s*false/);
+  assert.doesNotMatch(config, /reuseExistingServer:\s*!process\.env\.CI/);
+});
+
 test("packages the canonical contract before the Docker web build", () => {
   const dockerfile = readFileSync(
     resolve(repositoryRoot, "apps/web/Dockerfile"),
