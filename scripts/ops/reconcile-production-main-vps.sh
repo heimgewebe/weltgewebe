@@ -34,6 +34,7 @@ ARTIFACT_ROOT="$STATE_ROOT/artifacts"
 RECEIPT_ROOT="$STATE_ROOT/reconcile-receipts"
 DEPLOY_RECEIPT_ROOT="$STATE_ROOT/receipts"
 MIN_FREE_KIB="${WELTGEWEBE_MIN_FREE_KIB:-4194304}"
+BUILD_MIN_FREE_BYTES="${WELTGEWEBE_PRODUCTION_BUILD_MIN_FREE_BYTES:-51539607552}"
 temporary_artifact=""
 temporary_source=""
 source_archive=""
@@ -109,6 +110,137 @@ acquire_production_lock() {
 
 new_deploy_invocation_id() {
   python3 -I -c 'import secrets; print(secrets.token_hex(32))'
+}
+
+measure_available_build_bytes() {
+  df -B1 --output=avail "$ARTIFACT_ROOT" | awk 'NR==2 {print $1}'
+}
+
+measure_docker_build_cache_metrics() {
+  local raw
+  raw="$(docker system df --format '{{json .}}')" || return 1
+  DOCKER_SYSTEM_DF_JSON_LINES="$raw" run_ops_python << 'PY_DOCKER_BUILD_CACHE_METRICS'
+from decimal import Decimal, InvalidOperation
+import json
+import os
+import re
+
+SIZE = re.compile(r"^(?P<number>[0-9]+(?:\.[0-9]+)?)(?P<unit>B|kB|MB|GB|TB|PB)$")
+FACTORS = {
+    "B": 1,
+    "kB": 1000,
+    "MB": 1000**2,
+    "GB": 1000**3,
+    "TB": 1000**4,
+    "PB": 1000**5,
+}
+
+def parse_size(value: object, field: str) -> int:
+    if not isinstance(value, str):
+        raise SystemExit(f"Docker {field} is not text")
+    token = value.strip().split(" ", 1)[0]
+    match = SIZE.fullmatch(token)
+    if match is None:
+        raise SystemExit(f"Docker {field} has unsupported size syntax: {value!r}")
+    try:
+        number = Decimal(match.group("number"))
+    except InvalidOperation as exc:
+        raise SystemExit(f"Docker {field} is not numeric: {exc}")
+    return int(number * FACTORS[match.group("unit")])
+
+rows = []
+for line in os.environ.get("DOCKER_SYSTEM_DF_JSON_LINES", "").splitlines():
+    if not line.strip():
+        continue
+    try:
+        row = json.loads(line)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Docker system df emitted invalid JSON: {exc}")
+    if not isinstance(row, dict):
+        raise SystemExit("Docker system df row is not an object")
+    if row.get("Type") == "Build Cache":
+        rows.append(row)
+
+if not rows:
+    print("0\t0\t0")
+    raise SystemExit(0)
+if len(rows) != 1:
+    raise SystemExit("Docker system df emitted multiple Build Cache summaries")
+row = rows[0]
+try:
+    active = int(row.get("Active", ""))
+except (TypeError, ValueError) as exc:
+    raise SystemExit(f"Docker Build Cache Active is invalid: {exc}")
+if active < 0:
+    raise SystemExit("Docker Build Cache Active must not be negative")
+size = parse_size(row.get("Size"), "Build Cache Size")
+reclaimable = parse_size(row.get("Reclaimable"), "Build Cache Reclaimable")
+if reclaimable > size:
+    raise SystemExit("Docker reclaimable build cache exceeds total build cache")
+print(f"{active}\t{size}\t{reclaimable}")
+PY_DOCKER_BUILD_CACHE_METRICS
+}
+
+ensure_production_build_disk_headroom() {
+  local commit="$1"
+  local available_before
+  local available_after
+  local metrics_before
+  local metrics_after
+  local active_before
+  local total_before
+  local reclaimable_before
+  local active_after
+  local total_after
+  local reclaimable_after
+
+  available_before="$(measure_available_build_bytes)" ||
+    fail "production build disk preflight could not measure free space"
+  [[ "$available_before" =~ ^[0-9]+$ ]] ||
+    fail "production build disk preflight returned invalid free-space data"
+  metrics_before="$(measure_docker_build_cache_metrics)" ||
+    fail "production build disk preflight could not inspect Docker build cache"
+  IFS=$'\t' read -r active_before total_before reclaimable_before <<< "$metrics_before"
+  [[ "$active_before" =~ ^[0-9]+$ && "$total_before" =~ ^[0-9]+$ && "$reclaimable_before" =~ ^[0-9]+$ ]] ||
+    fail "production build disk preflight returned invalid Docker build-cache metrics"
+
+  echo "production_disk_preflight=observed commit=$commit available_bytes=$available_before required_bytes=$BUILD_MIN_FREE_BYTES build_cache_total_bytes=$total_before build_cache_reclaimable_bytes=$reclaimable_before build_cache_active=$active_before"
+  if ((available_before >= BUILD_MIN_FREE_BYTES)); then
+    echo "production_disk_preflight=decision commit=$commit action=none result=sufficient_headroom"
+    return 0
+  fi
+
+  if ((active_before > 0)); then
+    echo "production_disk_preflight=decision commit=$commit action=blocked reason=active_build_cache"
+    fail "production build disk pressure cannot be recovered while Docker build cache is active"
+  fi
+  if ((reclaimable_before <= 0)); then
+    echo "production_disk_preflight=decision commit=$commit action=blocked reason=no_reclaimable_build_cache"
+    fail "insufficient production build disk headroom and no reclaimable Docker build cache"
+  fi
+
+  echo "production_disk_preflight=decision commit=$commit action=prune scope=unused_build_cache_only policy=min_free_space target_free_bytes=$BUILD_MIN_FREE_BYTES"
+  if ! docker builder prune --force --min-free-space "$BUILD_MIN_FREE_BYTES" > /dev/null; then
+    echo "production_disk_preflight=cleanup commit=$commit result=failed"
+    fail "bounded Docker build-cache cleanup failed"
+  fi
+
+  available_after="$(measure_available_build_bytes)" ||
+    fail "post-cleanup production build disk preflight could not measure free space"
+  [[ "$available_after" =~ ^[0-9]+$ ]] ||
+    fail "post-cleanup production build disk preflight returned invalid free-space data"
+  metrics_after="$(measure_docker_build_cache_metrics)" ||
+    fail "post-cleanup production build disk preflight could not inspect Docker build cache"
+  IFS=$'\t' read -r active_after total_after reclaimable_after <<< "$metrics_after"
+  [[ "$active_after" =~ ^[0-9]+$ && "$total_after" =~ ^[0-9]+$ && "$reclaimable_after" =~ ^[0-9]+$ ]] ||
+    fail "post-cleanup production build disk preflight returned invalid Docker build-cache metrics"
+  echo "production_disk_preflight=post_cleanup commit=$commit available_bytes=$available_after required_bytes=$BUILD_MIN_FREE_BYTES build_cache_total_bytes=$total_after build_cache_reclaimable_bytes=$reclaimable_after build_cache_active=$active_after"
+
+  if ((available_after < BUILD_MIN_FREE_BYTES)); then
+    echo "production_disk_preflight=decision commit=$commit action=blocked reason=insufficient_headroom_after_cleanup"
+    fail "insufficient production build disk headroom after bounded Docker build-cache cleanup"
+  fi
+  echo "production_disk_preflight=decision commit=$commit action=continue result=cleanup_sufficient"
 }
 
 fetch_main() {
@@ -1233,6 +1365,9 @@ prune_releases() {
 [[ -x "$ARCHIVE_VALIDATOR" ]] || fail "archive validator is not installed: $ARCHIVE_VALIDATOR"
 getent passwd "$BUILD_USER" > /dev/null || fail "build user does not exist: $BUILD_USER"
 [[ "$MIN_FREE_KIB" =~ ^[0-9]+$ ]] || fail "minimum free space is invalid"
+[[ "$BUILD_MIN_FREE_BYTES" =~ ^[0-9]+$ ]] || fail "production build minimum free disk is invalid"
+((BUILD_MIN_FREE_BYTES >= 8589934592)) ||
+  fail "production build minimum free disk must preserve at least the semantic-search reserve"
 
 for command_name in git docker sha256sum flock install id rm mv awk getent chmod ln readlink find sort cut df stat rmdir python3 realpath tar curl mktemp; do
   require_command "$command_name"
@@ -1373,6 +1508,8 @@ if "$LIVE_VERIFIER" \
     "public commit matched but nationwide Germany basemap identity or delivery routes did not; rebuild required"
   echo "production_reconcile=repair_required commit=$target_commit reason=basemap_identity_drift"
 fi
+
+ensure_production_build_disk_headroom "$target_commit"
 
 build_uid="$(id -u "$BUILD_USER")"
 build_gid="$(id -g "$BUILD_USER")"

@@ -372,12 +372,33 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                   printf 'DOCKER_CONFIG mode is not 700\n' >&2
                   exit 93
                 }
+                if [[ "$1" == "system" && "${2:-}" == "df" ]]; then
+                  printf '{"Active":"0","Reclaimable":"0B","Size":"0B","TotalCount":"0","Type":"Build Cache"}\n'
+                  exit 0
+                fi
                 cat "$TEST_WEB_ARTIFACT"
                 """
             ),
             encoding="utf-8",
         )
         docker.chmod(0o755)
+
+        df = self.bin / "df"
+        df.write_text(
+            textwrap.dedent(
+                """\
+                #!/usr/bin/env bash
+                set -euo pipefail
+                if [[ "${1:-}" == "-B1" && "${2:-}" == "--output=avail" ]]; then
+                  printf 'Avail\n100000000000\n'
+                  exit 0
+                fi
+                exec /usr/bin/df "$@"
+                """
+            ),
+            encoding="utf-8",
+        )
+        df.chmod(0o755)
 
         curl = self.bin / "curl"
         curl.write_text(

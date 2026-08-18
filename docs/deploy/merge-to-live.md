@@ -4,7 +4,7 @@ title: Merge-to-Live-Vertrag
 status: active
 doc_type: runbook
 summary: Verbindlicher Pfad von origin/main bis zum öffentlich verifizierten Produktionsstand.
-last_reviewed: "2026-07-19"
+last_reviewed: "2026-08-18"
 relations:
   - type: relates_to
     target: docs/deployment.md
@@ -43,8 +43,15 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
 2. liest den vollständigen Zielcommit;
 3. beendet sich ohne Änderung, wenn Frontend, API und Build-Header diesen
    Commit bereits öffentlich liefern;
-4. prüft mindestens 4 GiB freien Platz und einen vollständig root-eigenen,
-   nicht für Gruppe oder Welt beschreibbaren Git-Objektspeicher;
+4. prüft mindestens 4 GiB freien Platz als absolute Host-Untergrenze und
+   einen vollständig root-eigenen, nicht für Gruppe oder Welt beschreibbaren
+   Git-Objektspeicher; unmittelbar vor einem tatsächlich nötigen Build verlangt
+   er zusätzlich standardmäßig 48 GiB Build-Headroom. Reicht dieser nicht, darf
+   der Reconciler ausschließlich unbenutzten Docker-Build-Cache mit
+   `docker builder prune --min-free-space` bis zu diesem Freiraumziel begrenzen.
+   Aktiver Buildcache, fehlender reclaimable Cache oder weiterhin zu wenig
+   Freiraum stoppen fail-closed; Images, Container und Volumes gehören nie zu
+   diesem automatischen Löschscope;
 5. exportiert den Commit als vorübergehendes root-eigenes Quellarchiv;
 6. baut das Frontend im flüchtigen Arbeitsspeicher eines digestgepinnten
    Node-Containers;
@@ -69,6 +76,13 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
 
 Der Produktionsserver benötigt dadurch weder den Heim-PC noch einen allgemein
 berechtigten GitHub-Runner, um einen gemergten Stand auszuliefern.
+
+Der Build-Headroom wird als `WELTGEWEBE_PRODUCTION_BUILD_MIN_FREE_BYTES` in der
+root-eigenen `/etc/weltgewebe/production-reconciler.env` installiert. Der kanonische
+Default beträgt 51.539.607.552 Bytes (48 GiB). Der Wert ist kein pauschales
+Cache-Löschbudget: Erst bei einem tatsächlich erforderlichen Build und zu wenig
+Freiraum wird der Docker-Buildcache gemessen. Eine Bereinigung zielt mit
+`--min-free-space` nur auf den fehlenden Freiraum; danach misst der Reconciler erneut.
 
 Vor dem Start oder der Änderung von Docker-Containern eines commitgebundenen
 VPS-Releases aktiviert `scripts/weltgewebe-up` außerdem den Operatorvertrag aus
