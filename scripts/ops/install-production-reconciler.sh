@@ -3,6 +3,7 @@ set -Eeuo pipefail
 
 REPO_DIR="${WELTGEWEBE_SOURCE_CHECKOUT:-/opt/weltgewebe}"
 BUILD_USER="${WELTGEWEBE_BUILD_USER:-alex}"
+BUILD_MIN_FREE_BYTES="${WELTGEWEBE_PRODUCTION_BUILD_MIN_FREE_BYTES:-51539607552}"
 COMMIT=""
 DEFER_RECONCILE=0
 staging=""
@@ -45,6 +46,8 @@ done
 [[ "$EUID" -eq 0 ]] || fail "install-production-reconciler.sh must run as root"
 [[ "$COMMIT" =~ ^[0-9a-f]{40}$ ]] || fail "--commit must be a full lowercase SHA-1"
 [[ "$BUILD_USER" =~ ^[A-Za-z_][A-Za-z0-9_-]*\$?$ ]] || fail "build user name is unsafe"
+[[ "$BUILD_MIN_FREE_BYTES" =~ ^[0-9]+$ ]] || fail "production build minimum free disk is invalid"
+((BUILD_MIN_FREE_BYTES >= 8589934592)) || fail "production build minimum free disk is too small"
 getent passwd "$BUILD_USER" > /dev/null || fail "build user does not exist: $BUILD_USER"
 [[ -d "$REPO_DIR" && ! -L "$REPO_DIR" ]] || fail "source checkout is missing or unsafe: $REPO_DIR"
 
@@ -170,7 +173,10 @@ require_matching_sha256 "$staging/weltgewebe-production-reconcile.timer" \
   /etc/systemd/system/weltgewebe-production-reconcile.timer
 
 install -d -o root -g root -m 0700 /etc/weltgewebe
-printf 'WELTGEWEBE_BUILD_USER=%s\n' "$BUILD_USER" > "$staging/production-reconciler.env"
+{
+  printf 'WELTGEWEBE_BUILD_USER=%s\n' "$BUILD_USER"
+  printf 'WELTGEWEBE_PRODUCTION_BUILD_MIN_FREE_BYTES=%s\n' "$BUILD_MIN_FREE_BYTES"
+} > "$staging/production-reconciler.env"
 atomic_install "$staging/production-reconciler.env" \
   /etc/weltgewebe/production-reconciler.env 0600
 
