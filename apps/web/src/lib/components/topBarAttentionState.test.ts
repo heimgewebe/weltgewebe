@@ -220,6 +220,32 @@ describe("topBarAttentionState", () => {
     expect(items[0].deadlineLabel).toBe("Endet in 1 Std. 0 Min.");
   });
 
+  it("uses server remaining time instead of a skewed device wall clock", () => {
+    const skewedNow = Date.parse("2030-01-01T00:00:00Z");
+    const items = projectTopBarAttention({
+      accountId: "weber-a",
+      role: "weber",
+      nowMs: skewedNow,
+      proposalsObservedAtMs: skewedNow,
+      conversations: [],
+      proposals: [
+        proposal({
+          id: "server-timed-vote",
+          status: "voting",
+          voting_until: "2026-08-17T13:00:00Z",
+          remaining_seconds: 3_600,
+          viewer_participation: viewer({ may_vote: true }),
+        }),
+      ],
+    });
+
+    expect(items[0]).toMatchObject({
+      id: "proposal:server-timed-vote",
+      deadlineLabel: "Endet in 1 Std. 0 Min.",
+      remainingMs: 3_600_000,
+    });
+  });
+
   it("keeps far-deadline optional participation behind new information", () => {
     const items = projectTopBarAttention({
       accountId: "weber-a",

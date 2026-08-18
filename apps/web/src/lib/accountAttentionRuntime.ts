@@ -21,6 +21,7 @@ export interface AccountAttentionState {
   weberApplicationState: WeberApplicationState;
   conversations: DirectConversation[];
   proposals: Proposal[];
+  proposalsObservedAtMs?: number;
   items: AttentionItem[];
 }
 
@@ -71,6 +72,7 @@ export function maskAccountAttentionForAuth(
       accountId,
       role: status.role,
       nowMs: Date.now(),
+      proposalsObservedAtMs: state.proposalsObservedAtMs,
     }),
   };
 }
@@ -102,6 +104,7 @@ export function createAccountAttentionController(
         accountId: state.accountId || undefined,
         role: state.role,
         nowMs: Date.now(),
+        proposalsObservedAtMs: state.proposalsObservedAtMs,
       }),
     };
   }
@@ -174,8 +177,14 @@ export function createAccountAttentionController(
         acceptedApplicationNeedsAuthRefresh = !pending && accepted;
       }
 
+      const proposalsObservedAtMs = Date.now();
       store.update((state) =>
-        project({ ...state, proposals, weberApplicationState }),
+        project({
+          ...state,
+          proposals,
+          proposalsObservedAtMs,
+          weberApplicationState,
+        }),
       );
 
       if (acceptedApplicationNeedsAuthRefresh && ownsResult(accountId)) {

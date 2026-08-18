@@ -421,6 +421,7 @@ test.describe("top-left attention bubbles", () => {
             status: "voting",
             consent_until: "2026-08-16T08:00:00Z",
             voting_until: deadline,
+            remaining_seconds: 3600,
             viewer_participation: {
               vote_choice: null,
               has_veto: false,

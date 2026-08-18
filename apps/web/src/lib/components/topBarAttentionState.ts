@@ -24,6 +24,8 @@ export interface AttentionItem {
   occurredAt: string;
   deadline?: string;
   deadlineLabel?: string;
+  /** Ephemeral projection value; never domain truth or persisted state. */
+  remainingMs?: number;
   count?: number;
 }
 
@@ -33,6 +35,7 @@ export interface AttentionProjectionInput {
   accountId?: string;
   role: AuthRole;
   nowMs: number;
+  proposalsObservedAtMs?: number;
 }
 
 function isOwnWeberApplication(proposal: Proposal, accountId: string): boolean {
@@ -80,7 +83,41 @@ function sourceTime(value: string | undefined): number {
 }
 
 function deadlineRemainingMs(item: AttentionItem, nowMs: number): number {
+  if (
+    typeof item.remainingMs === "number" &&
+    Number.isFinite(item.remainingMs)
+  ) {
+    return item.remainingMs;
+  }
   const deadlineMs = sourceTime(item.deadline);
+  return Number.isFinite(deadlineMs)
+    ? deadlineMs - nowMs
+    : Number.POSITIVE_INFINITY;
+}
+
+function proposalRemainingMs(
+  proposal: Proposal,
+  deadline: string | undefined,
+  nowMs: number,
+  proposalsObservedAtMs: number | undefined,
+): number {
+  const serverRemainingSeconds = proposal.remaining_seconds;
+  if (
+    typeof serverRemainingSeconds === "number" &&
+    Number.isFinite(serverRemainingSeconds) &&
+    serverRemainingSeconds >= 0 &&
+    typeof proposalsObservedAtMs === "number" &&
+    Number.isFinite(proposalsObservedAtMs)
+  ) {
+    // The server calculated remaining_seconds from its own clock. The client
+    // only subtracts elapsed time since that response was accepted, so a
+    // misconfigured device wall clock cannot hide or promote participation.
+    const elapsedMs = Math.max(0, nowMs - proposalsObservedAtMs);
+    return Math.max(0, serverRemainingSeconds * 1000 - elapsedMs);
+  }
+
+  // Compatibility fallback for older/mocked responses without remaining_seconds.
+  const deadlineMs = sourceTime(deadline);
   return Number.isFinite(deadlineMs)
     ? deadlineMs - nowMs
     : Number.POSITIVE_INFINITY;
@@ -138,10 +175,15 @@ export function attentionMeaningMark(meaning: AttentionMeaning): string {
 export function attentionDeadlineLabel(
   deadline: string | undefined,
   nowMs: number,
+  calibratedRemainingMs?: number,
 ): string | undefined {
-  const deadlineMs = sourceTime(deadline);
-  if (!Number.isFinite(deadlineMs) || deadlineMs <= nowMs) return undefined;
-  const seconds = Math.max(1, Math.ceil((deadlineMs - nowMs) / 1000));
+  const remainingMs =
+    typeof calibratedRemainingMs === "number" &&
+    Number.isFinite(calibratedRemainingMs)
+      ? calibratedRemainingMs
+      : sourceTime(deadline) - nowMs;
+  if (!Number.isFinite(remainingMs) || remainingMs <= 0) return undefined;
+  const seconds = Math.max(1, Math.ceil(remainingMs / 1000));
   if (seconds < 60) return "Endet in unter 1 Min.";
   return `Endet in ${formatRemaining(seconds)}`;
 }
@@ -203,6 +245,7 @@ export function projectTopBarAttention({
   accountId,
   role,
   nowMs,
+  proposalsObservedAtMs,
 }: AttentionProjectionInput): AttentionItem[] {
   if (!accountId) return [];
 
@@ -241,8 +284,13 @@ export function projectTopBarAttention({
     const viewer = proposal.viewer_participation;
     if (!formalRole || !viewer) continue;
     const deadline = proposalDeadline(proposal);
-    const deadlineMs = sourceTime(deadline);
-    if (!Number.isFinite(deadlineMs) || deadlineMs <= nowMs) continue;
+    const remainingMs = proposalRemainingMs(
+      proposal,
+      deadline,
+      nowMs,
+      proposalsObservedAtMs,
+    );
+    if (!Number.isFinite(remainingMs) || remainingMs <= 0) continue;
 
     const mayParticipate =
       viewer.may_veto || (viewer.may_vote && viewer.vote_choice === null);
@@ -260,7 +308,8 @@ export function projectTopBarAttention({
       href: `/antraege?id=${encodeURIComponent(proposal.id)}`,
       occurredAt,
       deadline,
-      deadlineLabel: attentionDeadlineLabel(deadline, nowMs),
+      deadlineLabel: attentionDeadlineLabel(deadline, nowMs, remainingMs),
+      remainingMs,
     });
   }
 

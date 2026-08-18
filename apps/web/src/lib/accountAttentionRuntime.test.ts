@@ -239,6 +239,7 @@ describe("accountAttentionRuntime", () => {
           created_at: "2026-08-16T12:00:00Z",
           consent_until: "2026-08-17T10:00:00Z",
           voting_until: "2026-08-17T12:01:00Z",
+          remaining_seconds: 60,
           veto_count: 0,
           yes_votes: 0,
           no_votes: 0,
