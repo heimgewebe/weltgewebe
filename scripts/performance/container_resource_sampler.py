@@ -21,6 +21,7 @@ import argparse
 import importlib.util
 import json
 import os
+import re
 import stat
 import sys
 import tempfile
@@ -31,12 +32,19 @@ from typing import Any, Callable, Sequence
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MEASURED_CONTAINER_SCRIPT = REPO_ROOT / "scripts" / "basemap" / "run-measured-container.py"
 
-SCHEMA_VERSION = 1
-CONTRACT = "api-replica-resource-sample-v1"
+SCHEMA_VERSION = 2
+CONTRACT = "api-replica-resource-sample-v2"
+RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
 class SamplerError(RuntimeError):
     pass
+
+
+def validate_run_id(value: str) -> str:
+    if not isinstance(value, str) or not RUN_ID_RE.fullmatch(value):
+        raise SamplerError("run-id must match [A-Za-z0-9][A-Za-z0-9._-]{0,127}")
+    return value
 
 
 def _load_measured_container_module() -> Any:
@@ -100,11 +108,15 @@ def run_sampling_loop(
     return samples
 
 
-def build_receipt(*, container_name: str, samples: Sequence[dict[str, Any]]) -> dict[str, Any]:
+def build_receipt(
+    *, run_id: str, container_name: str, samples: Sequence[dict[str, Any]]
+) -> dict[str, Any]:
+    run_id = validate_run_id(run_id)
     peaks = accumulate_peaks(samples)
     return {
         "schema_version": SCHEMA_VERSION,
         "contract": CONTRACT,
+        "run_id": run_id,
         "container_name": container_name,
         "peaks": {
             "cpu_percent": peaks["cpu_percent"],
@@ -138,6 +150,7 @@ def write_atomic_json(path: Path, payload: dict[str, Any]) -> None:
 
 def _cli_sample(args: argparse.Namespace) -> int:
     module = _load_measured_container_module()
+    run_id = validate_run_id(args.run_id)
 
     def read_stats(name: str) -> dict[str, Any]:
         try:
@@ -153,7 +166,7 @@ def _cli_sample(args: argparse.Namespace) -> int:
         sleep=time.sleep,
         monotonic=time.monotonic,
     )
-    receipt = build_receipt(container_name=args.container_name, samples=samples)
+    receipt = build_receipt(run_id=run_id, container_name=args.container_name, samples=samples)
     write_atomic_json(args.receipt, receipt)
     print(json.dumps(receipt, sort_keys=True))
     return 0
@@ -165,6 +178,7 @@ def build_parser() -> argparse.ArgumentParser:
     sample = subparsers.add_parser(
         "sample", help="sample docker stats peaks for an already-running container"
     )
+    sample.add_argument("--run-id", required=True)
     sample.add_argument("--container-name", required=True)
     sample.add_argument("--duration-seconds", type=float, required=True)
     sample.add_argument("--sample-interval-seconds", type=float, default=1.0)

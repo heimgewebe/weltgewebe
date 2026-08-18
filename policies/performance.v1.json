@@ -171,7 +171,7 @@
     },
     "api_runtime": {
       "status": "calibration_required",
-      "runner": "scripts/performance/api_runtime_evidence.py check (k6 workload: scripts/performance/api_runtime_k6.js)",
+      "runner": "scripts/performance/api_runtime_evidence.py check (k6 workload: scripts/performance/api_runtime_k6.js; live binding: scripts/performance/api_runtime_live_binding.py)",
       "artifact_kind": "api-runtime-evidence-v1",
       "scenario": {
         "virtual_users": 10,
@@ -194,10 +194,10 @@
         }
       },
       "limitations": [
-        "The p95/p99 latency and failure-rate thresholds are blocking only for an evidence artifact whose measured API build_info commit matches the recorded git revision and whose domain-scale fixture manifest validates against the canonical measurements.database_scale config/profile; passing them does not establish production capacity.",
+        "The p95/p99 latency and failure-rate thresholds are blocking only for an evidence artifact whose measured API build_info commit matches the recorded git revision, whose domain-scale fixture manifest validates against the canonical measurements.database_scale config/profile, and whose live binding proves the isolated target database/search state matches that fixture; passing them does not establish production capacity.",
         "Health-endpoint smoke checks alone do not establish API capacity.",
-        "scripts/performance/api_runtime_evidence.py check produces a machine-readable evidence artifact bound to the measured API build_info commit, the exact git HEAD, the validated domain-scale fixture manifest and this scenario contract; it reuses the existing search_request_duration_seconds, search_repository_duration_seconds and http_requests_total Prometheus telemetry rather than a new observability path, and its query-count evidence is a deterministic cross-check between two independently instrumented counters, not a sampled profiler.",
-        "The validated fixture-manifest binding authenticates the canonical deterministic dataset artifact supplied to the experiment; it does not independently attest the live target database contents, steady-state production capacity, or production data distribution.",
+        "scripts/performance/api_runtime_evidence.py check produces a machine-readable evidence artifact bound to the measured API build_info commit, the exact git HEAD, the validated domain-scale fixture manifest, the live database/search binding, the explicit search query, digest-pinned API/PostgreSQL/k6 image identities and this scenario contract; it reuses the existing search_request_duration_seconds, search_repository_duration_seconds and http_requests_total Prometheus telemetry rather than a new observability path, and its query-count evidence is a deterministic cross-check between two independently instrumented counters, not a sampled profiler.",
+        "The live binding content-hashes all isolated domain_nodes against the deterministic fixture, binds the active search generation and projections to fixture nodes, and reads the search candidate safety limit from product source in the same git revision; this attests the experiment state only, not steady-state production capacity or production data distribution.",
         "scripts/performance/api_runtime_evidence.py regression-fixture generates a self-consistent but threshold-violating fixture so the gate's fail-closed behaviour can be demonstrated and tested on demand.",
         "Database latency and query-count evidence describe the search read path only; they do not establish plan-shape at scale, which remains the responsibility of measurements.database_scale."
       ]
@@ -225,8 +225,9 @@
       ],
       "limitations": [
         "No blocking resource thresholds exist until reproducible measurements cover projection refresh and steady-state traffic.",
-        "Runner: scripts/performance/container_resource_sampler.py samples peak Docker CPU percent and cgroup memory bytes for the already-running API replica container over the same window as the api_runtime k6 workload. These are peak_cpu_percent and peak_memory_bytes; they are not mislabeled as CPU-seconds or process max RSS.",
-        "database_connections must be supplied to api_runtime_evidence.py from a point-in-time count of PostgreSQL's built-in pg_stat_activity view captured for the same run; the runner does not collect this value automatically and does not require a new extension such as pg_stat_statements.",
+        "Runner: scripts/performance/container_resource_sampler.py samples peak Docker CPU percent and cgroup memory bytes for the already-running API replica container over the same bounded window as the api_runtime k6 workload. These are peak_cpu_percent and peak_memory_bytes; they are not mislabeled as CPU-seconds or process max RSS.",
+        "Runner: scripts/performance/postgres_connection_sampler.py samples PostgreSQL's built-in pg_stat_activity connection count over the same bounded load window and records the maximum plus the underlying samples; no extension such as pg_stat_statements is required.",
+        "k6, the live database/search binding, the API resource receipt and the PostgreSQL connection receipt carry one explicit run_id. api_runtime_evidence.py fails closed if run identities or measured container names disagree, preventing stale sampler output from being attached to a different load run.",
         "These samples are attached to the api_runtime evidence artifact produced by scripts/performance/api_runtime_evidence.py check; they remain calibration_required until repeated across hardware baselines."
       ]
     }

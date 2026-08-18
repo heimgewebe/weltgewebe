@@ -15,8 +15,8 @@ Evidence flow:
   3. Scrape /metrics again after the run (--metrics-after).
   4. Sample CPU/memory for the API replica with
      scripts/performance/container_resource_sampler.py (--resource-receipt)
-     and read PostgreSQL's connection count from pg_stat_activity
-     (--database-connections).
+     and PostgreSQL connections with scripts/performance/
+     postgres_connection_sampler.py (--database-connections-receipt).
   5. Run `check` to assemble a single machine-readable, revision-bound
      evidence artifact and apply the canonical thresholds.
 
@@ -42,12 +42,18 @@ import tempfile
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+try:
+    from scripts.performance import api_runtime_live_binding as live_binding
+except ModuleNotFoundError:  # direct script execution: sibling module is on sys.path
+    import api_runtime_live_binding as live_binding
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_POLICY_PATH = Path("policies/performance.v1.json")
 
 SCHEMA_VERSION = 1
 CONTRACT_ID = "weltgewebe-performance-v1#/measurements/api_runtime"
-RESOURCE_RECEIPT_CONTRACT = "api-replica-resource-sample-v1"
+RESOURCE_RECEIPT_CONTRACT = "api-replica-resource-sample-v2"
+DATABASE_CONNECTION_RECEIPT_CONTRACT = "postgres-connection-sample-v1"
 DOMAIN_SCALE_GENERATOR = "scripts/performance/domain_scale.py"
 BUILD_INFO_NAME = "build_info"
 DATASET_MANIFEST_SUMMARY_KEY = "weltgewebe_dataset_manifest_sha256"
@@ -331,6 +337,37 @@ def extract_dataset_manifest_sha256(summary: Mapping[str, Any]) -> str:
     return digest
 
 
+def extract_runtime_workload_bindings(summary: Mapping[str, Any]) -> dict[str, str]:
+    search_query = summary.get(live_binding.SEARCH_QUERY_SUMMARY_KEY)
+    if not isinstance(search_query, str) or not search_query:
+        raise ApiRuntimeEvidenceError(
+            f"k6 summary is missing a valid {live_binding.SEARCH_QUERY_SUMMARY_KEY} binding"
+        )
+    run_id = summary.get(live_binding.RUN_ID_SUMMARY_KEY)
+    if not isinstance(run_id, str) or not live_binding.RUN_ID_RE.fullmatch(run_id):
+        raise ApiRuntimeEvidenceError(
+            f"k6 summary is missing a valid {live_binding.RUN_ID_SUMMARY_KEY} binding"
+        )
+    k6_image = summary.get(live_binding.K6_IMAGE_SUMMARY_KEY)
+    if not isinstance(k6_image, str) or not live_binding.DIGEST_IMAGE_RE.fullmatch(k6_image):
+        raise ApiRuntimeEvidenceError(
+            f"k6 summary is missing a digest-bound {live_binding.K6_IMAGE_SUMMARY_KEY}"
+        )
+    return {
+        "search_query": search_query,
+        "run_id": run_id,
+        "k6_image_reference": k6_image,
+    }
+
+
+def load_live_runtime_binding(path: Path) -> dict[str, Any]:
+    parsed = _read_json(path, "api runtime live binding")
+    try:
+        return live_binding.validate_receipt(parsed)
+    except live_binding.LiveBindingError as exc:
+        raise ApiRuntimeEvidenceError(f"api runtime live binding is invalid: {exc}") from exc
+
+
 # --------------------------------------------------------------------------
 # Prometheus text-exposition parsing
 # --------------------------------------------------------------------------
@@ -578,12 +615,15 @@ def load_resource_receipt(path: Path) -> dict[str, Any]:
     parsed = _read_json(path, "container resource receipt")
     if not isinstance(parsed, dict):
         raise ApiRuntimeEvidenceError("container resource receipt must be a JSON object")
-    if parsed.get("schema_version") != 1:
-        raise ApiRuntimeEvidenceError("container resource receipt must use schema_version 1")
+    if parsed.get("schema_version") != 2:
+        raise ApiRuntimeEvidenceError("container resource receipt must use schema_version 2")
     if parsed.get("contract") != RESOURCE_RECEIPT_CONTRACT:
         raise ApiRuntimeEvidenceError(
             f"container resource receipt must use contract {RESOURCE_RECEIPT_CONTRACT!r}"
         )
+    run_id = parsed.get("run_id")
+    if not isinstance(run_id, str) or not live_binding.RUN_ID_RE.fullmatch(run_id):
+        raise ApiRuntimeEvidenceError("container resource receipt run_id is invalid")
     container_name = parsed.get("container_name")
     if not isinstance(container_name, str) or not container_name:
         raise ApiRuntimeEvidenceError("container resource receipt must name a container")
@@ -605,6 +645,7 @@ def load_resource_receipt(path: Path) -> dict[str, Any]:
     if not isinstance(memory_bytes, int) or isinstance(memory_bytes, bool) or memory_bytes < 0:
         raise ApiRuntimeEvidenceError("container resource receipt peaks.memory_bytes is invalid")
     return {
+        "run_id": run_id,
         "container_name": container_name,
         "sample_count": sample_count,
         "peak_cpu_percent": float(cpu_percent),
@@ -612,14 +653,29 @@ def load_resource_receipt(path: Path) -> dict[str, Any]:
     }
 
 
-def validate_database_connections(value: int) -> int:
-    if not isinstance(value, int) or isinstance(value, bool) or value < 0:
-        raise ApiRuntimeEvidenceError("database_connections must be a non-negative integer")
-    return value
+def load_database_connection_receipt(path: Path) -> dict[str, Any]:
+    parsed = _read_json(path, "PostgreSQL connection receipt")
+    if not isinstance(parsed, dict):
+        raise ApiRuntimeEvidenceError("PostgreSQL connection receipt must be a JSON object")
+    if parsed.get("schema_version") != 1:
+        raise ApiRuntimeEvidenceError("PostgreSQL connection receipt must use schema_version 1")
+    if parsed.get("contract") != DATABASE_CONNECTION_RECEIPT_CONTRACT:
+        raise ApiRuntimeEvidenceError(
+            f"PostgreSQL connection receipt must use contract {DATABASE_CONNECTION_RECEIPT_CONTRACT!r}"
+        )
+    normalized = {
+        "run_id": parsed.get("run_id"),
+        "database_container": parsed.get("database_container"),
+        "max_connections": parsed.get("max_connections"),
+        "sample_count": parsed.get("sample_count"),
+        "samples": parsed.get("samples"),
+    }
+    return validate_normalized_database_connection_receipt(normalized)
 
 
 def validate_normalized_resource_receipt(value: Mapping[str, Any]) -> dict[str, Any]:
     if not isinstance(value, dict) or set(value) != {
+        "run_id",
         "container_name",
         "sample_count",
         "peak_cpu_percent",
@@ -628,6 +684,9 @@ def validate_normalized_resource_receipt(value: Mapping[str, Any]) -> dict[str, 
         raise ApiRuntimeEvidenceError(
             "normalized API replica resource evidence has an invalid shape"
         )
+    run_id = value["run_id"]
+    if not isinstance(run_id, str) or not live_binding.RUN_ID_RE.fullmatch(run_id):
+        raise ApiRuntimeEvidenceError("API replica resource evidence run_id is invalid")
     container_name = value["container_name"]
     sample_count = value["sample_count"]
     cpu_percent = value["peak_cpu_percent"]
@@ -646,6 +705,53 @@ def validate_normalized_resource_receipt(value: Mapping[str, Any]) -> dict[str, 
     if not isinstance(memory_bytes, int) or isinstance(memory_bytes, bool) or memory_bytes < 0:
         raise ApiRuntimeEvidenceError("API replica peak_memory_bytes is invalid")
     return dict(value)
+
+
+def validate_normalized_database_connection_receipt(value: Mapping[str, Any]) -> dict[str, Any]:
+    if not isinstance(value, dict) or set(value) != {
+        "run_id",
+        "database_container",
+        "max_connections",
+        "sample_count",
+        "samples",
+    }:
+        raise ApiRuntimeEvidenceError("normalized PostgreSQL connection evidence has an invalid shape")
+    run_id = value["run_id"]
+    if not isinstance(run_id, str) or not live_binding.RUN_ID_RE.fullmatch(run_id):
+        raise ApiRuntimeEvidenceError("PostgreSQL connection evidence run_id is invalid")
+    database_container = value["database_container"]
+    if not isinstance(database_container, str) or not live_binding.CONTAINER_RE.fullmatch(
+        database_container
+    ):
+        raise ApiRuntimeEvidenceError("PostgreSQL connection evidence container is invalid")
+    sample_count = value["sample_count"]
+    samples = value["samples"]
+    max_connections = value["max_connections"]
+    if not isinstance(sample_count, int) or isinstance(sample_count, bool) or sample_count < 1:
+        raise ApiRuntimeEvidenceError("PostgreSQL connection evidence must contain samples")
+    if not isinstance(samples, list) or len(samples) != sample_count:
+        raise ApiRuntimeEvidenceError(
+            "PostgreSQL connection evidence samples must match sample_count"
+        )
+    for sample in samples:
+        if not isinstance(sample, int) or isinstance(sample, bool) or sample < 0:
+            raise ApiRuntimeEvidenceError("PostgreSQL connection evidence contains an invalid sample")
+    if (
+        not isinstance(max_connections, int)
+        or isinstance(max_connections, bool)
+        or max_connections < 0
+        or max_connections != max(samples)
+    ):
+        raise ApiRuntimeEvidenceError(
+            "PostgreSQL connection evidence max_connections must equal max(samples)"
+        )
+    return {
+        "run_id": run_id,
+        "database_container": database_container,
+        "max_connections": max_connections,
+        "sample_count": sample_count,
+        "samples": list(samples),
+    }
 
 
 def threshold_failures(
@@ -683,7 +789,8 @@ def assemble_report(
     metrics_after_text: str,
     resource_receipt: Mapping[str, Any] | None,
     dataset_binding: Mapping[str, Any],
-    database_connections: int,
+    runtime_binding: Mapping[str, Any] | None,
+    database_connection_receipt: Mapping[str, Any] | None,
     git_head: str,
     policy_sha256: str,
 ) -> dict[str, Any]:
@@ -697,6 +804,72 @@ def assemble_report(
             "API replica CPU/memory measurement"
         )
     normalized_resource_receipt = validate_normalized_resource_receipt(resource_receipt)
+    if database_connection_receipt is None:
+        raise ApiRuntimeEvidenceError(
+            "database_connection_receipt is required so DB connection evidence cannot be reused blindly"
+        )
+    normalized_database_connection_receipt = validate_normalized_database_connection_receipt(
+        database_connection_receipt
+    )
+    if runtime_binding is None:
+        raise ApiRuntimeEvidenceError(
+            "runtime_binding is required so fixture hashes cannot pass without live database/search binding"
+        )
+    try:
+        normalized_runtime_binding = live_binding.validate_receipt(runtime_binding)
+    except live_binding.LiveBindingError as exc:
+        raise ApiRuntimeEvidenceError(f"api runtime live binding is invalid: {exc}") from exc
+
+    if normalized_runtime_binding["git_head"] != git_head:
+        raise ApiRuntimeEvidenceError(
+            "api runtime live binding git_head does not match the evidence checkout revision"
+        )
+    runtime_dataset = normalized_runtime_binding["dataset"]
+    if runtime_dataset["manifest_sha256"] != dataset_binding.get("manifest_sha256"):
+        raise ApiRuntimeEvidenceError(
+            "api runtime live binding manifest digest does not match the validated fixture"
+        )
+    expected_node_count = dataset_binding.get("counts", {}).get("nodes")
+    if runtime_dataset["domain_nodes_count"] != expected_node_count:
+        raise ApiRuntimeEvidenceError(
+            "api runtime live binding domain-node count does not match the validated fixture"
+        )
+    current_candidate_limit, current_candidate_source_sha256 = live_binding.candidate_limit_binding(
+        REPO_ROOT
+    )
+    runtime_search = normalized_runtime_binding["search"]
+    if (
+        runtime_search["candidate_limit_contract"] != current_candidate_limit
+        or runtime_search["candidate_limit_source_sha256"] != current_candidate_source_sha256
+    ):
+        raise ApiRuntimeEvidenceError(
+            "api runtime live binding search-candidate safety contract does not match this checkout"
+        )
+    runtime_identity = normalized_runtime_binding["runtime"]
+    if runtime_identity["api_commit"] != git_head:
+        raise ApiRuntimeEvidenceError(
+            "api runtime live binding measured API commit does not match git HEAD"
+        )
+    run_id = normalized_runtime_binding["run_id"]
+    if normalized_resource_receipt["run_id"] != run_id:
+        raise ApiRuntimeEvidenceError(
+            "API resource receipt run_id does not match the live runtime binding"
+        )
+    if normalized_resource_receipt["container_name"] != runtime_identity["api_container"]["name"]:
+        raise ApiRuntimeEvidenceError(
+            "API resource receipt container does not match the measured API container"
+        )
+    if normalized_database_connection_receipt["run_id"] != run_id:
+        raise ApiRuntimeEvidenceError(
+            "PostgreSQL connection receipt run_id does not match the live runtime binding"
+        )
+    if (
+        normalized_database_connection_receipt["database_container"]
+        != runtime_identity["postgres_container"]["name"]
+    ):
+        raise ApiRuntimeEvidenceError(
+            "PostgreSQL connection receipt container does not match the measured database container"
+        )
 
     contract = api_runtime_section(policy)
     declared_scenario = extract_declared_scenario(k6_summary)
@@ -707,6 +880,19 @@ def assemble_report(
         )
 
     dataset_manifest_sha256 = extract_dataset_manifest_sha256(k6_summary)
+    workload_binding = extract_runtime_workload_bindings(k6_summary)
+    if workload_binding["run_id"] != run_id:
+        raise ApiRuntimeEvidenceError(
+            "k6 run_id does not match the live runtime binding"
+        )
+    if workload_binding["search_query"] != runtime_search["query"]:
+        raise ApiRuntimeEvidenceError(
+            "k6 search query does not match the query proven by the live runtime binding"
+        )
+    if workload_binding["k6_image_reference"] != runtime_identity["k6_image_reference"]:
+        raise ApiRuntimeEvidenceError(
+            "k6 image identity does not match the digest proven by the live runtime binding"
+        )
     recorded_dataset_sha256 = dataset_binding.get("manifest_sha256")
     if dataset_manifest_sha256 != recorded_dataset_sha256:
         raise ApiRuntimeEvidenceError(
@@ -770,9 +956,8 @@ def assemble_report(
     db_mean = (delta_hist.total_sum / delta_hist.total_count) * 1000.0
 
     resources: dict[str, Any] = {
-        "database_connections": database_connections,
-        "database_connections_source": "caller-supplied-pg_stat_activity-point-measurement",
         "api_replica": normalized_resource_receipt,
+        "postgres_connections": normalized_database_connection_receipt,
     }
 
     thresholds = contract["thresholds"]
@@ -788,6 +973,7 @@ def assemble_report(
             "policy_sha256": policy_sha256,
         },
         "dataset": dict(dataset_binding),
+        "runtime_binding": normalized_runtime_binding,
         "scenario": contract["scenario"],
         "metrics": {
             "http": {
@@ -815,16 +1001,15 @@ def assemble_report(
         "failures": failures,
         "limitations": [
             "This artifact establishes latency and failure-rate evidence for the exact k6 run "
-            "against the measured API revision; it does not independently attest the live target "
-            "database contents or establish steady-state production capacity.",
-            "api_replica peak_cpu_percent/peak_memory_bytes and database_connections are point "
-            "measurements attached from the same run and are not yet gated by a blocking threshold "
-            "(see measurements.api_replica_resources in the performance contract).",
-            "database_connections is supplied explicitly from a pg_stat_activity point measurement; "
-            "this runner does not collect PostgreSQL connection state automatically.",
-            "dataset is bound to a domain-scale fixture manifest validated against the canonical "
-            "measurements.database_scale config/profile; this authenticates the supplied deterministic "
-            "experiment artifact, not the live target database contents or production data distribution.",
+            "against the measured API revision and a live binding that content-hashes domain_nodes "
+            "against the deterministic fixture and binds the active search generation/projections; "
+            "it does not establish steady-state production capacity or production data distribution.",
+            "api_replica peak_cpu_percent/peak_memory_bytes and PostgreSQL connection samples are "
+            "bound to the same explicit run_id as k6 and the live-runtime receipt and are not yet "
+            "gated by a blocking threshold (see measurements.api_replica_resources in the contract).",
+            "dataset is bound both to the canonical domain-scale fixture manifest and to the isolated "
+            "live database/search state recorded in runtime_binding; this is experiment-data evidence, "
+            "not evidence about production contents, production distribution, or future revisions.",
         ],
     }
 
@@ -854,6 +1039,7 @@ def _validate_complete_report(
         "status",
         "revision",
         "dataset",
+        "runtime_binding",
         "scenario",
         "metrics",
         "thresholds",
@@ -899,6 +1085,32 @@ def _validate_complete_report(
     if report.get("dataset") != expected_dataset_binding:
         raise ApiRuntimeEvidenceError(
             "report dataset binding does not match the validated fixture manifest"
+        )
+    try:
+        report_runtime_binding = live_binding.validate_receipt(report.get("runtime_binding"))
+    except live_binding.LiveBindingError as exc:
+        raise ApiRuntimeEvidenceError(f"report runtime binding is invalid: {exc}") from exc
+    if report_runtime_binding["git_head"] != expected_git_head:
+        raise ApiRuntimeEvidenceError("report runtime binding does not match current git HEAD")
+    if (
+        report_runtime_binding["dataset"]["manifest_sha256"]
+        != expected_dataset_binding.get("manifest_sha256")
+        or report_runtime_binding["dataset"]["domain_nodes_count"]
+        != expected_dataset_binding.get("counts", {}).get("nodes")
+    ):
+        raise ApiRuntimeEvidenceError(
+            "report runtime binding does not match the validated dataset binding"
+        )
+    current_candidate_limit, current_candidate_source_sha256 = live_binding.candidate_limit_binding(
+        REPO_ROOT
+    )
+    if (
+        report_runtime_binding["search"]["candidate_limit_contract"] != current_candidate_limit
+        or report_runtime_binding["search"]["candidate_limit_source_sha256"]
+        != current_candidate_source_sha256
+    ):
+        raise ApiRuntimeEvidenceError(
+            "report runtime binding candidate safety contract does not match current checkout"
         )
     if report.get("thresholds") != contract["thresholds"]:
         raise ApiRuntimeEvidenceError(
@@ -963,15 +1175,24 @@ def _validate_complete_report(
 
     resources = metrics["resources"]
     if not isinstance(resources, dict) or set(resources) != {
-        "database_connections",
-        "database_connections_source",
         "api_replica",
+        "postgres_connections",
     }:
         raise ApiRuntimeEvidenceError("report resource evidence has an invalid shape")
-    validate_database_connections(resources["database_connections"])
-    if resources["database_connections_source"] != "caller-supplied-pg_stat_activity-point-measurement":
-        raise ApiRuntimeEvidenceError("report database_connections provenance is invalid")
-    validate_normalized_resource_receipt(resources["api_replica"])
+    report_api_resource = validate_normalized_resource_receipt(resources["api_replica"])
+    report_db_resource = validate_normalized_database_connection_receipt(
+        resources["postgres_connections"]
+    )
+    report_run_id = report_runtime_binding["run_id"]
+    if report_api_resource["run_id"] != report_run_id or report_db_resource["run_id"] != report_run_id:
+        raise ApiRuntimeEvidenceError("report resource receipts do not match runtime_binding run_id")
+    if (
+        report_api_resource["container_name"]
+        != report_runtime_binding["runtime"]["api_container"]["name"]
+        or report_db_resource["database_container"]
+        != report_runtime_binding["runtime"]["postgres_container"]["name"]
+    ):
+        raise ApiRuntimeEvidenceError("report resource receipts do not match runtime containers")
 
     recomputed_failures = threshold_failures(http, contract["thresholds"])
     if report.get("failures") != recomputed_failures:
@@ -1045,6 +1266,7 @@ def render_regression_fixture(
     output_dir: Path,
     *,
     dataset_manifest_sha256: str,
+    dataset_node_count: int,
     git_commit: str,
 ) -> dict[str, Path]:
     """Write a self-consistent (query counts match) but threshold-violating
@@ -1059,6 +1281,9 @@ def render_regression_fixture(
     breached_p99 = thresholds["http_request_duration_p99_ms"] * 4.0 + 100.0
     breached_failed_rate = min(1.0, thresholds["http_request_failed_rate"] * 10.0 + 0.5)
 
+    regression_run_id = "api-runtime-regression-fixture"
+    regression_search_query = "Scale"
+    regression_k6_image = "grafana/k6@sha256:" + ("9" * 64)
     k6_summary = {
         "metrics": {
             "http_req_duration": {
@@ -1072,6 +1297,9 @@ def render_regression_fixture(
             "http_reqs": {"values": {"count": 300}},
         },
         DATASET_MANIFEST_SUMMARY_KEY: dataset_manifest_sha256,
+        live_binding.SEARCH_QUERY_SUMMARY_KEY: regression_search_query,
+        live_binding.RUN_ID_SUMMARY_KEY: regression_run_id,
+        live_binding.K6_IMAGE_SUMMARY_KEY: regression_k6_image,
         "weltgewebe_scenario": dict(scenario),
     }
 
@@ -1091,6 +1319,8 @@ def render_regression_fixture(
         "metrics_before": output_dir / "metrics-before.prom",
         "metrics_after": output_dir / "metrics-after.prom",
         "resource_receipt": output_dir / "resource-receipt.json",
+        "runtime_binding": output_dir / "runtime-binding.json",
+        "database_connection_receipt": output_dir / "database-connections.json",
     }
     _atomic_json(paths["k6_summary"], k6_summary)
     _atomic_text(paths["metrics_before"], metrics_before)
@@ -1098,11 +1328,75 @@ def render_regression_fixture(
     _atomic_json(
         paths["resource_receipt"],
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "contract": RESOURCE_RECEIPT_CONTRACT,
-            "container_name": "weltgewebe-api-regression-fixture",
+            "run_id": regression_run_id,
+            "container_name": "api-regression-fixture",
             "peaks": {"cpu_percent": 25.0, "memory_bytes": 134217728},
             "sample_count": 30,
+        },
+    )
+    candidate_limit, candidate_source_sha256 = live_binding.candidate_limit_binding(REPO_ROOT)
+    active_projection_count = min(candidate_limit, dataset_node_count)
+    if active_projection_count < 1:
+        raise ApiRuntimeEvidenceError("regression fixture requires at least one dataset node")
+    synthetic_content_sha256 = "8" * 64
+    synthetic_image_id = "sha256:" + ("7" * 64)
+    regression_runtime_binding = {
+        "schema_version": live_binding.SCHEMA_VERSION,
+        "contract": live_binding.CONTRACT,
+        "run_id": regression_run_id,
+        "git_head": git_commit,
+        "dataset": {
+            "manifest_sha256": dataset_manifest_sha256,
+            "domain_nodes_count": dataset_node_count,
+            "fixture_nodes_content_sha256": synthetic_content_sha256,
+            "database_nodes_content_sha256": synthetic_content_sha256,
+        },
+        "search": {
+            "query": regression_search_query,
+            "mode": "lexical_fallback",
+            "generation_id": "regression-fixture-generation",
+            "candidate_limit_contract": candidate_limit,
+            "candidate_limit_source": str(live_binding.CANDIDATE_LIMIT_SOURCE),
+            "candidate_limit_source_sha256": candidate_source_sha256,
+            "expected_nodes": active_projection_count,
+            "completed_nodes": active_projection_count,
+            "active_projection_count": active_projection_count,
+            "fixture_projection_content_sha256": synthetic_content_sha256,
+            "database_projection_content_sha256": synthetic_content_sha256,
+            "sampled_items": [{"id": "fixture-node", "title": "Scale fixture node"}],
+        },
+        "runtime": {
+            "api_commit": git_commit,
+            "api_container": {
+                "name": "api-regression-fixture",
+                "image_reference": "fixture/api@sha256:" + ("6" * 64),
+                "image_id": synthetic_image_id,
+            },
+            "postgres_container": {
+                "name": "db-regression-fixture",
+                "image_reference": "fixture/postgres@sha256:" + ("5" * 64),
+                "image_id": synthetic_image_id,
+            },
+            "k6_image_reference": regression_k6_image,
+        },
+    }
+    try:
+        regression_runtime_binding = live_binding.validate_receipt(regression_runtime_binding)
+    except live_binding.LiveBindingError as exc:
+        raise ApiRuntimeEvidenceError(f"cannot build regression runtime binding: {exc}") from exc
+    _atomic_json(paths["runtime_binding"], regression_runtime_binding)
+    _atomic_json(
+        paths["database_connection_receipt"],
+        {
+            "schema_version": 1,
+            "contract": DATABASE_CONNECTION_RECEIPT_CONTRACT,
+            "run_id": regression_run_id,
+            "database_container": "db-regression-fixture",
+            "max_connections": 5,
+            "sample_count": 3,
+            "samples": [4, 5, 4],
         },
     )
     return paths
@@ -1156,7 +1450,10 @@ def _cli_check(args: argparse.Namespace) -> int:
     metrics_before_text = _read_text(args.metrics_before, "metrics-before snapshot")
     metrics_after_text = _read_text(args.metrics_after, "metrics-after snapshot")
     resource_receipt = load_resource_receipt(args.resource_receipt)
-    database_connections = validate_database_connections(args.database_connections)
+    runtime_binding = load_live_runtime_binding(args.runtime_binding)
+    database_connection_receipt = load_database_connection_receipt(
+        args.database_connections_receipt
+    )
     dataset_binding = load_dataset_binding(args.dataset_manifest, api_runtime_section(policy))
     head = git_head(REPO_ROOT)
     policy_sha256 = sha256_file(args.policy)
@@ -1168,7 +1465,8 @@ def _cli_check(args: argparse.Namespace) -> int:
         metrics_after_text=metrics_after_text,
         resource_receipt=resource_receipt,
         dataset_binding=dataset_binding,
-        database_connections=database_connections,
+        runtime_binding=runtime_binding,
+        database_connection_receipt=database_connection_receipt,
         git_head=head,
         policy_sha256=policy_sha256,
     )
@@ -1210,6 +1508,7 @@ def _cli_regression_fixture(args: argparse.Namespace) -> int:
         policy,
         args.output_dir,
         dataset_manifest_sha256=dataset_binding["manifest_sha256"],
+        dataset_node_count=dataset_binding["counts"]["nodes"],
         git_commit=git_head(REPO_ROOT),
     )
     payload = {
@@ -1219,7 +1518,8 @@ def _cli_regression_fixture(args: argparse.Namespace) -> int:
         "note": (
             "This fixture is self-consistent (query counts match) but breaches every canonical "
             "api_runtime threshold on purpose. Run `check` against it with the generated "
-            "--resource-receipt and any non-negative --database-connections value to prove the "
+            "--resource-receipt, --runtime-binding, and --database-connections-receipt "
+            "to prove the "
             "gate fails closed; it must exit with status 2."
         ),
     }
@@ -1240,7 +1540,8 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--metrics-after", type=Path, required=True)
     check.add_argument("--resource-receipt", type=Path, required=True)
     check.add_argument("--dataset-manifest", type=Path, required=True)
-    check.add_argument("--database-connections", type=int, required=True)
+    check.add_argument("--runtime-binding", type=Path, required=True)
+    check.add_argument("--database-connections-receipt", type=Path, required=True)
     check.add_argument("--report", type=Path, default=None)
 
     verify = subparsers.add_parser("verify", help="re-bind a previously assembled report")
