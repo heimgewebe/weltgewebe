@@ -224,12 +224,25 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
     }
 }
 
-/// Listenprojektion mit ausschließlich betrachterbezogenen Beteiligungsfakten.
-/// Die Fachwahrheit bleibt Governance; Attention leitet daraus nur Bedeutung ab.
+/// Explizite, rein betrachterbezogene Beteiligungsfakten. `vote_choice = null`
+/// bedeutet belastbar „noch keine Stimme“, nicht „Feld fehlt“.
+#[derive(Debug, Serialize)]
+pub struct ProposalViewerParticipation {
+    pub vote_choice: Option<String>,
+    pub has_veto: bool,
+    pub may_vote: bool,
+    pub may_veto: bool,
+}
+
+/// Listenprojektion. Die Fachwahrheit bleibt Governance; Attention leitet
+/// daraus nur Bedeutung ab. Anonyme Leser erhalten `viewer_participation: null`.
 #[derive(Debug, Serialize)]
 pub struct ProposalListView {
     #[serde(flatten)]
     pub proposal: ProposalView,
+    pub viewer_participation: Option<ProposalViewerParticipation>,
+    // Transitional wire compatibility for browser tabs loaded before the
+    // viewer_participation cutover. New consumers must use the nested contract.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub own_vote: Option<String>,
     pub own_veto: bool,
@@ -249,22 +262,33 @@ fn proposal_list_view(
     } = entry;
     let formal_actor = auth.authenticated && matches!(auth.role, Role::Weber | Role::Admin);
     let own_proposal = auth.account_id.as_deref() == proposal.applicant_account_id.as_deref();
-    let can_vote = formal_actor
+    let may_vote = formal_actor
         && !own_proposal
         && proposal.status == ProposalStatus::Voting
         && proposal.voting_until.is_some_and(|until| now < until);
-    let can_veto = formal_actor
+    let may_veto = formal_actor
         && !own_proposal
         && proposal.status == ProposalStatus::Consent
         && now < proposal.consent_until
         && !own_veto;
+    let viewer_participation = if auth.authenticated && auth.account_id.is_some() {
+        Some(ProposalViewerParticipation {
+            vote_choice: own_vote.clone(),
+            has_veto: own_veto,
+            may_vote,
+            may_veto,
+        })
+    } else {
+        None
+    };
 
     ProposalListView {
         proposal: proposal_view(proposal, now),
+        viewer_participation,
         own_vote,
         own_veto,
-        can_vote,
-        can_veto,
+        can_vote: may_vote,
+        can_veto: may_veto,
     }
 }
 
@@ -1055,6 +1079,11 @@ mod tests {
             now,
             &weber,
         );
+        let consent_viewer = consent.viewer_participation.expect("authenticated viewer");
+        assert!(consent_viewer.may_veto);
+        assert!(!consent_viewer.may_vote);
+        assert_eq!(consent_viewer.vote_choice, None);
+        assert!(!consent_viewer.has_veto);
         assert!(consent.can_veto);
         assert!(!consent.can_vote);
 
@@ -1063,26 +1092,34 @@ mod tests {
             now,
             &weber,
         );
-        assert!(!already_vetoed.can_veto);
+        let veto_viewer = already_vetoed
+            .viewer_participation
+            .expect("authenticated viewer");
+        assert!(!veto_viewer.may_veto);
+        assert!(veto_viewer.has_veto);
 
         let voting = proposal_list_view(
             proposal_entry(ProposalStatus::Voting, "other", Some("ja"), false),
             now,
             &weber,
         );
+        let voting_viewer = voting.viewer_participation.expect("authenticated viewer");
         assert!(
-            voting.can_vote,
+            voting_viewer.may_vote,
             "a cast vote remains changeable while voting is open"
         );
+        assert_eq!(voting_viewer.vote_choice.as_deref(), Some("ja"));
         assert_eq!(voting.own_vote.as_deref(), Some("ja"));
+        assert!(voting.can_vote);
 
         let own = proposal_list_view(
             proposal_entry(ProposalStatus::Voting, "viewer", None, false),
             now,
             &weber,
         );
-        assert!(!own.can_vote);
-        assert!(!own.can_veto);
+        let own_viewer = own.viewer_participation.expect("authenticated viewer");
+        assert!(!own_viewer.may_vote);
+        assert!(!own_viewer.may_veto);
 
         let guest = auth("guest", Role::Gast);
         let foreign_for_guest = proposal_list_view(
@@ -1090,8 +1127,29 @@ mod tests {
             now,
             &guest,
         );
-        assert!(!foreign_for_guest.can_vote);
-        assert!(!foreign_for_guest.can_veto);
+        let guest_viewer = foreign_for_guest
+            .viewer_participation
+            .expect("authenticated guest");
+        assert!(!guest_viewer.may_vote);
+        assert!(!guest_viewer.may_veto);
+
+        let anonymous = AuthContext {
+            authenticated: false,
+            account_id: None,
+            device_id: None,
+            role: Role::Gast,
+            expires_at: None,
+        };
+        let public_view = proposal_list_view(
+            proposal_entry(ProposalStatus::Consent, "other", None, false),
+            now,
+            &anonymous,
+        );
+        assert!(public_view.viewer_participation.is_none());
+        assert!(public_view.own_vote.is_none());
+        assert!(!public_view.own_veto);
+        assert!(!public_view.can_vote);
+        assert!(!public_view.can_veto);
     }
 
     #[test]

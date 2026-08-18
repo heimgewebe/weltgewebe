@@ -21,6 +21,7 @@ export interface AccountAttentionState {
   weberApplicationState: WeberApplicationState;
   conversations: DirectConversation[];
   proposals: Proposal[];
+  proposalsObservedAtMs?: number;
   items: AttentionItem[];
 }
 
@@ -34,6 +35,7 @@ export interface AccountAttentionControllerDependencies {
 export interface AccountAttentionController extends Readable<AccountAttentionState> {
   refresh: (status?: AuthStatus) => Promise<void>;
   refreshMessages: (status?: AuthStatus) => Promise<void>;
+  reproject: () => void;
 }
 
 const MESSAGE_POLL_MS = 30_000;
@@ -69,6 +71,8 @@ export function maskAccountAttentionForAuth(
       proposals: state.proposals,
       accountId,
       role: status.role,
+      nowMs: Date.now(),
+      proposalsObservedAtMs: state.proposalsObservedAtMs,
     }),
   };
 }
@@ -99,6 +103,8 @@ export function createAccountAttentionController(
         proposals: state.proposals,
         accountId: state.accountId || undefined,
         role: state.role,
+        nowMs: Date.now(),
+        proposalsObservedAtMs: state.proposalsObservedAtMs,
       }),
     };
   }
@@ -171,8 +177,14 @@ export function createAccountAttentionController(
         acceptedApplicationNeedsAuthRefresh = !pending && accepted;
       }
 
+      const proposalsObservedAtMs = Date.now();
       store.update((state) =>
-        project({ ...state, proposals, weberApplicationState }),
+        project({
+          ...state,
+          proposals,
+          proposalsObservedAtMs,
+          weberApplicationState,
+        }),
       );
 
       if (acceptedApplicationNeedsAuthRefresh && ownsResult(accountId)) {
@@ -192,10 +204,15 @@ export function createAccountAttentionController(
     await Promise.all([refreshMessages(status), refreshProposals(status)]);
   }
 
+  function reproject(): void {
+    store.update((state) => project(state));
+  }
+
   return {
     subscribe: store.subscribe,
     refresh,
     refreshMessages,
+    reproject,
   };
 }
 
@@ -255,6 +272,11 @@ function installRuntime(): () => void {
       void controller.refreshMessages(get(authStore));
     }
   }, MESSAGE_POLL_MS);
+  // Deadlines can cross an attention boundary without a network event. Reproject
+  // the already confirmed facts locally; this does not invent or refresh domain truth.
+  const deadlineProjectionClock = window.setInterval(() => {
+    if (document.visibilityState === "visible") controller.reproject();
+  }, 60_000);
 
   document.addEventListener("visibilitychange", refreshWhenVisible);
   window.addEventListener("focus", refreshOnFocus);
@@ -263,6 +285,7 @@ function installRuntime(): () => void {
     unsubscribeAuth();
     unsubscribeAttention();
     window.clearInterval(messagePoll);
+    window.clearInterval(deadlineProjectionClock);
     document.removeEventListener("visibilitychange", refreshWhenVisible);
     window.removeEventListener("focus", refreshOnFocus);
   };

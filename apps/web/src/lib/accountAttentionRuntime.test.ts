@@ -1,5 +1,5 @@
 import { get } from "svelte/store";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DirectConversation } from "$lib/api/directMessages";
 import type { Proposal } from "$lib/api/governance";
 import type { AuthStatus } from "$lib/auth/store";
@@ -49,6 +49,9 @@ function deferred<T>() {
 }
 
 describe("accountAttentionRuntime", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
   it("drops a late message result after the authenticated account changes", async () => {
     let current = authenticated("account-a");
     const first = deferred<DirectConversation[]>();
@@ -170,18 +173,28 @@ describe("accountAttentionRuntime", () => {
   });
 
   it("reprojects retained governance immediately when a role loses collective participation", () => {
-    const proposal = {
+    const proposal: Proposal = {
       id: "collective",
       kind: "sachantrag",
+      webgemeindezentrum_id: "wgz-test",
       title: "Parkbank",
       applicant_account_id: "account-b",
       applicant_title: "Berta",
       status: "voting",
       consent_until: "2026-08-17T07:00:00Z",
       voting_until: "2026-08-24T07:00:00Z",
-      can_vote: true,
       created_at: "2026-08-17T07:00:00Z",
-    } as Proposal;
+      veto_count: 0,
+      yes_votes: 0,
+      no_votes: 0,
+      abstain_votes: 0,
+      viewer_participation: {
+        vote_choice: null,
+        has_veto: false,
+        may_vote: true,
+        may_veto: false,
+      },
+    };
     const stale: AccountAttentionState = {
       accountId: "account-a",
       role: "weber",
@@ -207,6 +220,59 @@ describe("accountAttentionRuntime", () => {
     );
     expect(masked.role).toBe("gast");
     expect(masked.items).toEqual([]);
+  });
+
+  it("reprojects a crossed governance deadline locally without another network read", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-08-17T12:00:00Z"));
+    const current = authenticated("account-a");
+    const listProposals = vi.fn(
+      async (): Promise<Proposal[]> => [
+        {
+          id: "deadline-vote",
+          kind: "sachantrag",
+          webgemeindezentrum_id: "wgz-test",
+          title: "Parkbank",
+          applicant_account_id: "account-b",
+          applicant_title: "Berta",
+          status: "voting",
+          created_at: "2026-08-16T12:00:00Z",
+          consent_until: "2026-08-17T10:00:00Z",
+          voting_until: "2026-08-17T12:01:00Z",
+          remaining_seconds: 60,
+          veto_count: 0,
+          yes_votes: 0,
+          no_votes: 0,
+          abstain_votes: 0,
+          viewer_participation: {
+            vote_choice: null,
+            has_veto: false,
+            may_vote: true,
+            may_veto: false,
+          },
+        },
+      ],
+    );
+    const listDirectConversations = vi.fn(
+      async () => [] as DirectConversation[],
+    );
+    const controller = createAccountAttentionController({
+      getAuthStatus: () => current,
+      checkAuth: vi.fn(async () => current),
+      listDirectConversations,
+      listProposals,
+    });
+
+    await controller.refresh(current);
+    expect(get(controller).items.map((item) => item.id)).toEqual([
+      "proposal:deadline-vote",
+    ]);
+
+    vi.setSystemTime(new Date("2026-08-17T12:02:00Z"));
+    controller.reproject();
+    expect(get(controller).items).toEqual([]);
+    expect(listProposals).toHaveBeenCalledTimes(1);
+    expect(listDirectConversations).toHaveBeenCalledTimes(1);
   });
 
   it("resets personal attention when authentication disappears", async () => {
