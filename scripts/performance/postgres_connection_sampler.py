@@ -21,8 +21,8 @@ import time
 from pathlib import Path
 from typing import Callable, Sequence
 
-SCHEMA_VERSION = 1
-CONTRACT = "postgres-connection-sample-v1"
+SCHEMA_VERSION = 2
+CONTRACT = "postgres-connection-sample-v2"
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 CONTAINER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
@@ -115,9 +115,25 @@ def run_sampling_loop(
     return samples
 
 
-def build_receipt(*, run_id: str, database_container: str, samples: Sequence[int]) -> dict:
+def build_receipt(
+    *,
+    run_id: str,
+    database_container: str,
+    samples: Sequence[int],
+    started_at_unix_ms: int,
+    finished_at_unix_ms: int,
+) -> dict:
     validate_run_id(run_id)
     validate_container_name(database_container)
+    if (
+        not isinstance(started_at_unix_ms, int)
+        or isinstance(started_at_unix_ms, bool)
+        or not isinstance(finished_at_unix_ms, int)
+        or isinstance(finished_at_unix_ms, bool)
+        or started_at_unix_ms < 0
+        or finished_at_unix_ms <= started_at_unix_ms
+    ):
+        raise SamplerError("PostgreSQL sample wall-clock interval is invalid")
     if not samples:
         raise SamplerError("at least one PostgreSQL connection sample is required")
     normalized: list[int] = []
@@ -130,6 +146,8 @@ def build_receipt(*, run_id: str, database_container: str, samples: Sequence[int
         "contract": CONTRACT,
         "run_id": run_id,
         "database_container": database_container,
+        "started_at_unix_ms": started_at_unix_ms,
+        "finished_at_unix_ms": finished_at_unix_ms,
         "max_connections": max(normalized),
         "sample_count": len(normalized),
         "samples": normalized,
@@ -169,6 +187,7 @@ def _cli_sample(args: argparse.Namespace) -> int:
             database_name=args.database_name,
         )
 
+    started_at_unix_ms = time.time_ns() // 1_000_000
     samples = run_sampling_loop(
         duration_seconds=args.duration_seconds,
         interval_seconds=args.sample_interval_seconds,
@@ -176,7 +195,14 @@ def _cli_sample(args: argparse.Namespace) -> int:
         sleep=time.sleep,
         monotonic=time.monotonic,
     )
-    receipt = build_receipt(run_id=run_id, database_container=container, samples=samples)
+    finished_at_unix_ms = time.time_ns() // 1_000_000
+    receipt = build_receipt(
+        run_id=run_id,
+        database_container=container,
+        samples=samples,
+        started_at_unix_ms=started_at_unix_ms,
+        finished_at_unix_ms=finished_at_unix_ms,
+    )
     write_atomic_json(args.receipt, receipt)
     print(json.dumps(receipt, sort_keys=True))
     return 0

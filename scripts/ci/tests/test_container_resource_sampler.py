@@ -123,11 +123,15 @@ class BuildReceiptAndWriteTests(unittest.TestCase):
             run_id="api-runtime-test-run",
             container_name="weltgewebe-api",
             samples=[_sample(30.0, 1000), _sample(10.0, 2000)],
+            started_at_unix_ms=1000,
+            finished_at_unix_ms=2000,
         )
-        self.assertEqual(receipt["schema_version"], 2)
-        self.assertEqual(receipt["contract"], "api-replica-resource-sample-v2")
+        self.assertEqual(receipt["schema_version"], 3)
+        self.assertEqual(receipt["contract"], "api-replica-resource-sample-v3")
         self.assertEqual(receipt["run_id"], "api-runtime-test-run")
         self.assertEqual(receipt["container_name"], "weltgewebe-api")
+        self.assertEqual(receipt["started_at_unix_ms"], 1000)
+        self.assertEqual(receipt["finished_at_unix_ms"], 2000)
         self.assertEqual(receipt["peaks"], {"cpu_percent": 30.0, "memory_bytes": 2000})
         self.assertEqual(receipt["sample_count"], 2)
 
@@ -137,6 +141,18 @@ class BuildReceiptAndWriteTests(unittest.TestCase):
                 run_id="contains spaces",
                 container_name="weltgewebe-api",
                 samples=[_sample(1.0, 1)],
+                started_at_unix_ms=1000,
+                finished_at_unix_ms=2000,
+            )
+
+    def test_rejects_invalid_wall_clock_window(self) -> None:
+        with self.assertRaisesRegex(sampler.SamplerError, "wall-clock interval"):
+            sampler.build_receipt(
+                run_id="api-runtime-test-run",
+                container_name="weltgewebe-api",
+                samples=[_sample(1.0, 1)],
+                started_at_unix_ms=2000,
+                finished_at_unix_ms=2000,
             )
 
     def test_write_atomic_json_round_trips_and_refuses_symlink_targets(self) -> None:

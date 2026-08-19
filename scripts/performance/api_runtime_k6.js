@@ -92,10 +92,21 @@ export default function () {
 // experiment. The live binding and resource receipts independently record
 // the same run identity; the assembler rejects disagreement.
 export function handleSummary(data) {
+  const loadFinishedAtUnixMs = Date.now();
+  const testRunDurationMs = data?.state?.testRunDurationMs;
+  if (!Number.isFinite(testRunDurationMs) || testRunDurationMs <= 0) {
+    throw new Error('k6 summary testRunDurationMs is invalid');
+  }
+  const loadStartedAtUnixMs = Math.floor(loadFinishedAtUnixMs - testRunDurationMs);
+  if (loadStartedAtUnixMs < 0 || loadStartedAtUnixMs >= loadFinishedAtUnixMs) {
+    throw new Error('k6 load wall-clock interval is invalid');
+  }
   const enriched = Object.assign({}, data, {
     weltgewebe_dataset_manifest_sha256: DATASET_MANIFEST_SHA256,
     weltgewebe_search_query: SEARCH_QUERY,
     weltgewebe_run_id: RUN_ID,
+    weltgewebe_load_started_at_unix_ms: loadStartedAtUnixMs,
+    weltgewebe_load_finished_at_unix_ms: loadFinishedAtUnixMs,
     weltgewebe_k6_image: K6_IMAGE,
     weltgewebe_scenario: {
       virtual_users: options.vus,

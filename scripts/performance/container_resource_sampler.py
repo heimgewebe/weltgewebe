@@ -32,8 +32,8 @@ from typing import Any, Callable, Sequence
 REPO_ROOT = Path(__file__).resolve().parents[2]
 MEASURED_CONTAINER_SCRIPT = REPO_ROOT / "scripts" / "basemap" / "run-measured-container.py"
 
-SCHEMA_VERSION = 2
-CONTRACT = "api-replica-resource-sample-v2"
+SCHEMA_VERSION = 3
+CONTRACT = "api-replica-resource-sample-v3"
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
 
 
@@ -109,15 +109,31 @@ def run_sampling_loop(
 
 
 def build_receipt(
-    *, run_id: str, container_name: str, samples: Sequence[dict[str, Any]]
+    *,
+    run_id: str,
+    container_name: str,
+    samples: Sequence[dict[str, Any]],
+    started_at_unix_ms: int,
+    finished_at_unix_ms: int,
 ) -> dict[str, Any]:
     run_id = validate_run_id(run_id)
+    if (
+        not isinstance(started_at_unix_ms, int)
+        or isinstance(started_at_unix_ms, bool)
+        or not isinstance(finished_at_unix_ms, int)
+        or isinstance(finished_at_unix_ms, bool)
+        or started_at_unix_ms < 0
+        or finished_at_unix_ms <= started_at_unix_ms
+    ):
+        raise SamplerError("resource sample wall-clock interval is invalid")
     peaks = accumulate_peaks(samples)
     return {
         "schema_version": SCHEMA_VERSION,
         "contract": CONTRACT,
         "run_id": run_id,
         "container_name": container_name,
+        "started_at_unix_ms": started_at_unix_ms,
+        "finished_at_unix_ms": finished_at_unix_ms,
         "peaks": {
             "cpu_percent": peaks["cpu_percent"],
             "memory_bytes": peaks["memory_bytes"],
@@ -158,6 +174,7 @@ def _cli_sample(args: argparse.Namespace) -> int:
         except module.MeasurementError as exc:
             raise SamplerError(str(exc)) from exc
 
+    started_at_unix_ms = time.time_ns() // 1_000_000
     samples = run_sampling_loop(
         container_name=args.container_name,
         duration_seconds=args.duration_seconds,
@@ -166,7 +183,14 @@ def _cli_sample(args: argparse.Namespace) -> int:
         sleep=time.sleep,
         monotonic=time.monotonic,
     )
-    receipt = build_receipt(run_id=run_id, container_name=args.container_name, samples=samples)
+    finished_at_unix_ms = time.time_ns() // 1_000_000
+    receipt = build_receipt(
+        run_id=run_id,
+        container_name=args.container_name,
+        samples=samples,
+        started_at_unix_ms=started_at_unix_ms,
+        finished_at_unix_ms=finished_at_unix_ms,
+    )
     write_atomic_json(args.receipt, receipt)
     print(json.dumps(receipt, sort_keys=True))
     return 0
