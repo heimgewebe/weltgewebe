@@ -52,8 +52,10 @@ DEFAULT_POLICY_PATH = Path("policies/performance.v1.json")
 
 SCHEMA_VERSION = 1
 CONTRACT_ID = "weltgewebe-performance-v1#/measurements/api_runtime"
-RESOURCE_RECEIPT_CONTRACT = "api-replica-resource-sample-v2"
-DATABASE_CONNECTION_RECEIPT_CONTRACT = "postgres-connection-sample-v1"
+RESOURCE_RECEIPT_CONTRACT = "api-replica-resource-sample-v3"
+DATABASE_CONNECTION_RECEIPT_CONTRACT = "postgres-connection-sample-v2"
+K6_LOAD_STARTED_SUMMARY_KEY = "weltgewebe_load_started_at_unix_ms"
+K6_LOAD_FINISHED_SUMMARY_KEY = "weltgewebe_load_finished_at_unix_ms"
 DOMAIN_SCALE_GENERATOR = "scripts/performance/domain_scale.py"
 BUILD_INFO_NAME = "build_info"
 DATASET_MANIFEST_SUMMARY_KEY = "weltgewebe_dataset_manifest_sha256"
@@ -81,6 +83,21 @@ SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 
 class ApiRuntimeEvidenceError(RuntimeError):
     """Raised when an input, the policy, or the assembled evidence is invalid."""
+
+
+def validate_wall_clock_window(
+    started_at_unix_ms: Any, finished_at_unix_ms: Any, label: str
+) -> tuple[int, int]:
+    if (
+        not isinstance(started_at_unix_ms, int)
+        or isinstance(started_at_unix_ms, bool)
+        or not isinstance(finished_at_unix_ms, int)
+        or isinstance(finished_at_unix_ms, bool)
+        or started_at_unix_ms < 0
+        or finished_at_unix_ms <= started_at_unix_ms
+    ):
+        raise ApiRuntimeEvidenceError(f"{label} wall-clock interval is invalid")
+    return started_at_unix_ms, finished_at_unix_ms
 
 
 # --------------------------------------------------------------------------
@@ -337,7 +354,7 @@ def extract_dataset_manifest_sha256(summary: Mapping[str, Any]) -> str:
     return digest
 
 
-def extract_runtime_workload_bindings(summary: Mapping[str, Any]) -> dict[str, str]:
+def extract_runtime_workload_bindings(summary: Mapping[str, Any]) -> dict[str, Any]:
     search_query = summary.get(live_binding.SEARCH_QUERY_SUMMARY_KEY)
     if not isinstance(search_query, str) or not search_query:
         raise ApiRuntimeEvidenceError(
@@ -353,10 +370,17 @@ def extract_runtime_workload_bindings(summary: Mapping[str, Any]) -> dict[str, s
         raise ApiRuntimeEvidenceError(
             f"k6 summary is missing a digest-bound {live_binding.K6_IMAGE_SUMMARY_KEY}"
         )
+    started_at_unix_ms, finished_at_unix_ms = validate_wall_clock_window(
+        summary.get(K6_LOAD_STARTED_SUMMARY_KEY),
+        summary.get(K6_LOAD_FINISHED_SUMMARY_KEY),
+        "k6 load",
+    )
     return {
         "search_query": search_query,
         "run_id": run_id,
         "k6_image_reference": k6_image,
+        "started_at_unix_ms": started_at_unix_ms,
+        "finished_at_unix_ms": finished_at_unix_ms,
     }
 
 
@@ -615,8 +639,8 @@ def load_resource_receipt(path: Path) -> dict[str, Any]:
     parsed = _read_json(path, "container resource receipt")
     if not isinstance(parsed, dict):
         raise ApiRuntimeEvidenceError("container resource receipt must be a JSON object")
-    if parsed.get("schema_version") != 2:
-        raise ApiRuntimeEvidenceError("container resource receipt must use schema_version 2")
+    if parsed.get("schema_version") != 3:
+        raise ApiRuntimeEvidenceError("container resource receipt must use schema_version 3")
     if parsed.get("contract") != RESOURCE_RECEIPT_CONTRACT:
         raise ApiRuntimeEvidenceError(
             f"container resource receipt must use contract {RESOURCE_RECEIPT_CONTRACT!r}"
@@ -644,21 +668,24 @@ def load_resource_receipt(path: Path) -> dict[str, Any]:
         raise ApiRuntimeEvidenceError("container resource receipt peaks.cpu_percent is invalid")
     if not isinstance(memory_bytes, int) or isinstance(memory_bytes, bool) or memory_bytes < 0:
         raise ApiRuntimeEvidenceError("container resource receipt peaks.memory_bytes is invalid")
-    return {
+    normalized = {
         "run_id": run_id,
         "container_name": container_name,
+        "started_at_unix_ms": parsed.get("started_at_unix_ms"),
+        "finished_at_unix_ms": parsed.get("finished_at_unix_ms"),
         "sample_count": sample_count,
         "peak_cpu_percent": float(cpu_percent),
         "peak_memory_bytes": memory_bytes,
     }
+    return validate_normalized_resource_receipt(normalized)
 
 
 def load_database_connection_receipt(path: Path) -> dict[str, Any]:
     parsed = _read_json(path, "PostgreSQL connection receipt")
     if not isinstance(parsed, dict):
         raise ApiRuntimeEvidenceError("PostgreSQL connection receipt must be a JSON object")
-    if parsed.get("schema_version") != 1:
-        raise ApiRuntimeEvidenceError("PostgreSQL connection receipt must use schema_version 1")
+    if parsed.get("schema_version") != 2:
+        raise ApiRuntimeEvidenceError("PostgreSQL connection receipt must use schema_version 2")
     if parsed.get("contract") != DATABASE_CONNECTION_RECEIPT_CONTRACT:
         raise ApiRuntimeEvidenceError(
             f"PostgreSQL connection receipt must use contract {DATABASE_CONNECTION_RECEIPT_CONTRACT!r}"
@@ -666,6 +693,8 @@ def load_database_connection_receipt(path: Path) -> dict[str, Any]:
     normalized = {
         "run_id": parsed.get("run_id"),
         "database_container": parsed.get("database_container"),
+        "started_at_unix_ms": parsed.get("started_at_unix_ms"),
+        "finished_at_unix_ms": parsed.get("finished_at_unix_ms"),
         "max_connections": parsed.get("max_connections"),
         "sample_count": parsed.get("sample_count"),
         "samples": parsed.get("samples"),
@@ -677,6 +706,8 @@ def validate_normalized_resource_receipt(value: Mapping[str, Any]) -> dict[str, 
     if not isinstance(value, dict) or set(value) != {
         "run_id",
         "container_name",
+        "started_at_unix_ms",
+        "finished_at_unix_ms",
         "sample_count",
         "peak_cpu_percent",
         "peak_memory_bytes",
@@ -688,6 +719,11 @@ def validate_normalized_resource_receipt(value: Mapping[str, Any]) -> dict[str, 
     if not isinstance(run_id, str) or not live_binding.RUN_ID_RE.fullmatch(run_id):
         raise ApiRuntimeEvidenceError("API replica resource evidence run_id is invalid")
     container_name = value["container_name"]
+    validate_wall_clock_window(
+        value["started_at_unix_ms"],
+        value["finished_at_unix_ms"],
+        "API replica resource evidence",
+    )
     sample_count = value["sample_count"]
     cpu_percent = value["peak_cpu_percent"]
     memory_bytes = value["peak_memory_bytes"]
@@ -711,6 +747,8 @@ def validate_normalized_database_connection_receipt(value: Mapping[str, Any]) ->
     if not isinstance(value, dict) or set(value) != {
         "run_id",
         "database_container",
+        "started_at_unix_ms",
+        "finished_at_unix_ms",
         "max_connections",
         "sample_count",
         "samples",
@@ -724,6 +762,11 @@ def validate_normalized_database_connection_receipt(value: Mapping[str, Any]) ->
         database_container
     ):
         raise ApiRuntimeEvidenceError("PostgreSQL connection evidence container is invalid")
+    validate_wall_clock_window(
+        value["started_at_unix_ms"],
+        value["finished_at_unix_ms"],
+        "PostgreSQL connection evidence",
+    )
     sample_count = value["sample_count"]
     samples = value["samples"]
     max_connections = value["max_connections"]
@@ -748,6 +791,8 @@ def validate_normalized_database_connection_receipt(value: Mapping[str, Any]) ->
     return {
         "run_id": run_id,
         "database_container": database_container,
+        "started_at_unix_ms": value["started_at_unix_ms"],
+        "finished_at_unix_ms": value["finished_at_unix_ms"],
         "max_connections": max_connections,
         "sample_count": sample_count,
         "samples": list(samples),
@@ -893,6 +938,19 @@ def assemble_report(
         raise ApiRuntimeEvidenceError(
             "k6 image identity does not match the digest proven by the live runtime binding"
         )
+    load_started_at_unix_ms = workload_binding["started_at_unix_ms"]
+    load_finished_at_unix_ms = workload_binding["finished_at_unix_ms"]
+    for label, receipt in (
+        ("API resource", normalized_resource_receipt),
+        ("PostgreSQL connection", normalized_database_connection_receipt),
+    ):
+        if (
+            receipt["started_at_unix_ms"] > load_started_at_unix_ms
+            or receipt["finished_at_unix_ms"] < load_finished_at_unix_ms
+        ):
+            raise ApiRuntimeEvidenceError(
+                f"{label} sampler interval does not cover the complete k6 load window"
+            )
     recorded_dataset_sha256 = dataset_binding.get("manifest_sha256")
     if dataset_manifest_sha256 != recorded_dataset_sha256:
         raise ApiRuntimeEvidenceError(
@@ -976,6 +1034,11 @@ def assemble_report(
         "runtime_binding": normalized_runtime_binding,
         "scenario": contract["scenario"],
         "metrics": {
+            "load_window": {
+                "run_id": run_id,
+                "started_at_unix_ms": load_started_at_unix_ms,
+                "finished_at_unix_ms": load_finished_at_unix_ms,
+            },
             "http": {
                 "p50_ms": http_metrics["p50_ms"],
                 "p95_ms": http_metrics["p95_ms"],
@@ -1005,8 +1068,9 @@ def assemble_report(
             "against the deterministic fixture and binds the active search generation/projections; "
             "it does not establish steady-state production capacity or production data distribution.",
             "api_replica peak_cpu_percent/peak_memory_bytes and PostgreSQL connection samples are "
-            "bound to the same explicit run_id as k6 and the live-runtime receipt and are not yet "
-            "gated by a blocking threshold (see measurements.api_replica_resources in the contract).",
+            "bound to the same explicit run_id as k6 and the live-runtime receipt; both sampler "
+            "wall-clock intervals must cover the complete k6 load window. These resource metrics "
+            "are not yet gated by a blocking threshold (see measurements.api_replica_resources).",
             "dataset is bound both to the canonical domain-scale fixture manifest and to the isolated "
             "live database/search state recorded in runtime_binding; this is experiment-data evidence, "
             "not evidence about production contents, production distribution, or future revisions.",
@@ -1118,8 +1182,27 @@ def _validate_complete_report(
         )
 
     metrics = report.get("metrics")
-    if not isinstance(metrics, dict) or set(metrics) != {"http", "database", "resources"}:
+    if not isinstance(metrics, dict) or set(metrics) != {
+        "load_window",
+        "http",
+        "database",
+        "resources",
+    }:
         raise ApiRuntimeEvidenceError("report metrics have an invalid shape")
+    load_window = metrics["load_window"]
+    if not isinstance(load_window, dict) or set(load_window) != {
+        "run_id",
+        "started_at_unix_ms",
+        "finished_at_unix_ms",
+    }:
+        raise ApiRuntimeEvidenceError("report load_window has an invalid shape")
+    if load_window["run_id"] != report_runtime_binding["run_id"]:
+        raise ApiRuntimeEvidenceError("report load_window run_id does not match runtime_binding")
+    load_started_at_unix_ms, load_finished_at_unix_ms = validate_wall_clock_window(
+        load_window["started_at_unix_ms"],
+        load_window["finished_at_unix_ms"],
+        "report k6 load",
+    )
     http = metrics["http"]
     if not isinstance(http, dict) or set(http) != {
         "p50_ms",
@@ -1193,6 +1276,17 @@ def _validate_complete_report(
         != report_runtime_binding["runtime"]["postgres_container"]["name"]
     ):
         raise ApiRuntimeEvidenceError("report resource receipts do not match runtime containers")
+    for label, receipt in (
+        ("API resource", report_api_resource),
+        ("PostgreSQL connection", report_db_resource),
+    ):
+        if (
+            receipt["started_at_unix_ms"] > load_started_at_unix_ms
+            or receipt["finished_at_unix_ms"] < load_finished_at_unix_ms
+        ):
+            raise ApiRuntimeEvidenceError(
+                f"report {label} sampler interval does not cover the complete k6 load window"
+            )
 
     recomputed_failures = threshold_failures(http, contract["thresholds"])
     if report.get("failures") != recomputed_failures:
@@ -1282,6 +1376,10 @@ def render_regression_fixture(
     breached_failed_rate = min(1.0, thresholds["http_request_failed_rate"] * 10.0 + 0.5)
 
     regression_run_id = "api-runtime-regression-fixture"
+    regression_load_started_at_unix_ms = 1_000_000
+    regression_load_finished_at_unix_ms = 1_030_000
+    regression_sample_started_at_unix_ms = 999_000
+    regression_sample_finished_at_unix_ms = 1_031_000
     regression_search_query = "Scale"
     regression_k6_image = "grafana/k6@sha256:" + ("9" * 64)
     k6_summary = {
@@ -1299,6 +1397,8 @@ def render_regression_fixture(
         DATASET_MANIFEST_SUMMARY_KEY: dataset_manifest_sha256,
         live_binding.SEARCH_QUERY_SUMMARY_KEY: regression_search_query,
         live_binding.RUN_ID_SUMMARY_KEY: regression_run_id,
+        K6_LOAD_STARTED_SUMMARY_KEY: regression_load_started_at_unix_ms,
+        K6_LOAD_FINISHED_SUMMARY_KEY: regression_load_finished_at_unix_ms,
         live_binding.K6_IMAGE_SUMMARY_KEY: regression_k6_image,
         "weltgewebe_scenario": dict(scenario),
     }
@@ -1328,10 +1428,12 @@ def render_regression_fixture(
     _atomic_json(
         paths["resource_receipt"],
         {
-            "schema_version": 2,
+            "schema_version": 3,
             "contract": RESOURCE_RECEIPT_CONTRACT,
             "run_id": regression_run_id,
             "container_name": "api-regression-fixture",
+            "started_at_unix_ms": regression_sample_started_at_unix_ms,
+            "finished_at_unix_ms": regression_sample_finished_at_unix_ms,
             "peaks": {"cpu_percent": 25.0, "memory_bytes": 134217728},
             "sample_count": 30,
         },
@@ -1390,10 +1492,12 @@ def render_regression_fixture(
     _atomic_json(
         paths["database_connection_receipt"],
         {
-            "schema_version": 1,
+            "schema_version": 2,
             "contract": DATABASE_CONNECTION_RECEIPT_CONTRACT,
             "run_id": regression_run_id,
             "database_container": "db-regression-fixture",
+            "started_at_unix_ms": regression_sample_started_at_unix_ms,
+            "finished_at_unix_ms": regression_sample_finished_at_unix_ms,
             "max_connections": 5,
             "sample_count": 3,
             "samples": [4, 5, 4],

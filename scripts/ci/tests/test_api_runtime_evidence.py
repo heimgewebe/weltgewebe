@@ -30,6 +30,10 @@ FAKE_POLICY_SHA256 = "b" * 64
 FAKE_DATASET_MANIFEST_SHA256 = "c" * 64
 FAKE_K6_IMAGE = "grafana/k6@sha256:" + ("1" * 64)
 FAKE_RUN_ID = "api-runtime-test-run"
+FAKE_LOAD_STARTED_AT_UNIX_MS = 1_000_000
+FAKE_LOAD_FINISHED_AT_UNIX_MS = 1_030_000
+FAKE_SAMPLE_STARTED_AT_UNIX_MS = 999_000
+FAKE_SAMPLE_FINISHED_AT_UNIX_MS = 1_031_000
 
 
 def _load_policy() -> dict:
@@ -59,6 +63,8 @@ def _k6_summary(
     search_query="Scale",
     k6_image=FAKE_K6_IMAGE,
     run_id=FAKE_RUN_ID,
+    load_started_at_unix_ms=FAKE_LOAD_STARTED_AT_UNIX_MS,
+    load_finished_at_unix_ms=FAKE_LOAD_FINISHED_AT_UNIX_MS,
 ) -> dict:
     return {
         "metrics": {
@@ -69,6 +75,8 @@ def _k6_summary(
         evidence.DATASET_MANIFEST_SUMMARY_KEY: dataset_manifest_sha256,
         evidence.live_binding.SEARCH_QUERY_SUMMARY_KEY: search_query,
         evidence.live_binding.RUN_ID_SUMMARY_KEY: run_id,
+        evidence.K6_LOAD_STARTED_SUMMARY_KEY: load_started_at_unix_ms,
+        evidence.K6_LOAD_FINISHED_SUMMARY_KEY: load_finished_at_unix_ms,
         evidence.live_binding.K6_IMAGE_SUMMARY_KEY: k6_image,
         "weltgewebe_scenario": scenario if scenario is not None else _canonical_scenario(),
     }
@@ -161,22 +169,38 @@ def _runtime_binding(
     )
 
 
-def _resource_receipt(*, run_id: str = FAKE_RUN_ID, container_name: str = "api-test") -> dict:
+def _resource_receipt(
+    *,
+    run_id: str = FAKE_RUN_ID,
+    container_name: str = "api-test",
+    started_at_unix_ms: int = FAKE_SAMPLE_STARTED_AT_UNIX_MS,
+    finished_at_unix_ms: int = FAKE_SAMPLE_FINISHED_AT_UNIX_MS,
+) -> dict:
     return {
         "run_id": run_id,
         "container_name": container_name,
+        "started_at_unix_ms": started_at_unix_ms,
+        "finished_at_unix_ms": finished_at_unix_ms,
         "sample_count": 30,
         "peak_cpu_percent": 12.5,
         "peak_memory_bytes": 104857600,
     }
 
 
-def _raw_resource_receipt(*, run_id: str = FAKE_RUN_ID, container_name: str = "api-test") -> dict:
+def _raw_resource_receipt(
+    *,
+    run_id: str = FAKE_RUN_ID,
+    container_name: str = "api-test",
+    started_at_unix_ms: int = FAKE_SAMPLE_STARTED_AT_UNIX_MS,
+    finished_at_unix_ms: int = FAKE_SAMPLE_FINISHED_AT_UNIX_MS,
+) -> dict:
     return {
-        "schema_version": 2,
+        "schema_version": 3,
         "contract": evidence.RESOURCE_RECEIPT_CONTRACT,
         "run_id": run_id,
         "container_name": container_name,
+        "started_at_unix_ms": started_at_unix_ms,
+        "finished_at_unix_ms": finished_at_unix_ms,
         "sample_count": 30,
         "peaks": {"cpu_percent": 12.5, "memory_bytes": 104857600},
     }
@@ -187,11 +211,15 @@ def _database_connection_receipt(
     run_id: str = FAKE_RUN_ID,
     database_container: str = "db-test",
     samples: list[int] | None = None,
+    started_at_unix_ms: int = FAKE_SAMPLE_STARTED_AT_UNIX_MS,
+    finished_at_unix_ms: int = FAKE_SAMPLE_FINISHED_AT_UNIX_MS,
 ) -> dict:
     values = [4, 5, 4] if samples is None else list(samples)
     return {
         "run_id": run_id,
         "database_container": database_container,
+        "started_at_unix_ms": started_at_unix_ms,
+        "finished_at_unix_ms": finished_at_unix_ms,
         "max_connections": max(values),
         "sample_count": len(values),
         "samples": values,
@@ -199,13 +227,20 @@ def _database_connection_receipt(
 
 
 def _raw_database_connection_receipt(
-    *, run_id: str = FAKE_RUN_ID, database_container: str = "db-test"
+    *,
+    run_id: str = FAKE_RUN_ID,
+    database_container: str = "db-test",
+    started_at_unix_ms: int = FAKE_SAMPLE_STARTED_AT_UNIX_MS,
+    finished_at_unix_ms: int = FAKE_SAMPLE_FINISHED_AT_UNIX_MS,
 ) -> dict:
     return {
-        "schema_version": 1,
+        "schema_version": 2,
         "contract": evidence.DATABASE_CONNECTION_RECEIPT_CONTRACT,
         **_database_connection_receipt(
-            run_id=run_id, database_container=database_container
+            run_id=run_id,
+            database_container=database_container,
+            started_at_unix_ms=started_at_unix_ms,
+            finished_at_unix_ms=finished_at_unix_ms,
         ),
     }
 
@@ -395,7 +430,7 @@ class K6ScriptContractTests(unittest.TestCase):
         self.assertIn("http.setResponseCallback(http.expectedStatuses(200));", source)
         self.assertIn("READY_RESPONSE_CALLBACK = http.expectedStatuses(200, 503)", source)
         self.assertIn("responseCallback: READY_RESPONSE_CALLBACK", source)
-        self.assertIn("'search 200': (r) => r.status === 200", source)
+        self.assertRegex(source, r"[\'\"]search 200[\'\"]: \(r\) => r\.status === 200")
         self.assertNotIn("http.setResponseCallback(http.expectedStatuses(200, 503));", source)
         self.assertIn("API_RUNTIME_DATASET_PROFILE is required", source)
         self.assertIn("API_RUNTIME_SEARCH_QUERY is required", source)
@@ -406,6 +441,9 @@ class K6ScriptContractTests(unittest.TestCase):
         self.assertIn("weltgewebe_search_query", source)
         self.assertIn("API_RUNTIME_RUN_ID has an invalid format", source)
         self.assertIn("weltgewebe_run_id", source)
+        self.assertIn("weltgewebe_load_started_at_unix_ms", source)
+        self.assertIn("weltgewebe_load_finished_at_unix_ms", source)
+        self.assertIn("data?.state?.testRunDurationMs", source)
         self.assertIn("weltgewebe_k6_image", source)
         self.assertNotIn("API_RUNTIME_DATASET_PROFILE || 'domain-scale-ci'", source)
         self.assertNotRegex(source, r"API_RUNTIME_SEARCH_QUERY\s*\|\|")
@@ -438,6 +476,14 @@ class AssembleReportTests(unittest.TestCase):
         self.assertEqual(report["revision"]["git_head"], FAKE_GIT_HEAD)
         self.assertEqual(report["revision"]["policy_sha256"], FAKE_POLICY_SHA256)
         self.assertEqual(report["scenario"], _canonical_scenario())
+        self.assertEqual(
+            report["metrics"]["load_window"],
+            {
+                "run_id": FAKE_RUN_ID,
+                "started_at_unix_ms": FAKE_LOAD_STARTED_AT_UNIX_MS,
+                "finished_at_unix_ms": FAKE_LOAD_FINISHED_AT_UNIX_MS,
+            },
+        )
         self.assertEqual(
             report["metrics"]["database"]["query_count"],
             {
@@ -781,6 +827,77 @@ class AssembleReportTests(unittest.TestCase):
                 policy_sha256=FAKE_POLICY_SHA256,
             )
 
+    def test_k6_load_window_must_be_strictly_positive(self) -> None:
+        with self.assertRaisesRegex(
+            evidence.ApiRuntimeEvidenceError, "k6 load wall-clock interval is invalid"
+        ):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(
+                    load_finished_at_unix_ms=FAKE_LOAD_STARTED_AT_UNIX_MS
+                ),
+                metrics_before_text=_prometheus_text(
+                    search_count=0, search_sum_seconds=0.0, http_search_requests=0
+                ),
+                metrics_after_text=_prometheus_text(
+                    search_count=10, search_sum_seconds=0.1, http_search_requests=10
+                ),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_api_resource_sampler_must_cover_complete_k6_window(self) -> None:
+        with self.assertRaisesRegex(
+            evidence.ApiRuntimeEvidenceError,
+            "API resource sampler interval does not cover",
+        ):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(
+                    search_count=0, search_sum_seconds=0.0, http_search_requests=0
+                ),
+                metrics_after_text=_prometheus_text(
+                    search_count=10, search_sum_seconds=0.1, http_search_requests=10
+                ),
+                resource_receipt=_resource_receipt(
+                    started_at_unix_ms=FAKE_LOAD_STARTED_AT_UNIX_MS + 1
+                ),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
+    def test_database_sampler_must_cover_complete_k6_window(self) -> None:
+        with self.assertRaisesRegex(
+            evidence.ApiRuntimeEvidenceError,
+            "PostgreSQL connection sampler interval does not cover",
+        ):
+            evidence.assemble_report(
+                policy=self.policy,
+                k6_summary=_k6_summary(),
+                metrics_before_text=_prometheus_text(
+                    search_count=0, search_sum_seconds=0.0, http_search_requests=0
+                ),
+                metrics_after_text=_prometheus_text(
+                    search_count=10, search_sum_seconds=0.1, http_search_requests=10
+                ),
+                resource_receipt=_resource_receipt(),
+                dataset_binding=_dataset_binding(),
+                runtime_binding=_runtime_binding(),
+                database_connection_receipt=_database_connection_receipt(
+                    finished_at_unix_ms=FAKE_LOAD_FINISHED_AT_UNIX_MS - 1
+                ),
+                git_head=FAKE_GIT_HEAD,
+                policy_sha256=FAKE_POLICY_SHA256,
+            )
+
     def test_resource_containers_must_match_live_runtime_binding(self) -> None:
         with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "API resource receipt container"):
             evidence.assemble_report(
@@ -821,10 +938,12 @@ class MissingAndInvalidInputTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "schema_version": 2,
+                        "schema_version": 3,
                         "contract": "something-else",
                         "run_id": FAKE_RUN_ID,
                         "container_name": "x",
+                        "started_at_unix_ms": FAKE_SAMPLE_STARTED_AT_UNIX_MS,
+                        "finished_at_unix_ms": FAKE_SAMPLE_FINISHED_AT_UNIX_MS,
                         "sample_count": 1,
                         "peaks": {"cpu_percent": 1.0, "memory_bytes": 1},
                     }
@@ -840,10 +959,12 @@ class MissingAndInvalidInputTests(unittest.TestCase):
             path.write_text(
                 json.dumps(
                     {
-                        "schema_version": 2,
+                        "schema_version": 3,
                         "contract": evidence.RESOURCE_RECEIPT_CONTRACT,
                         "run_id": FAKE_RUN_ID,
                         "container_name": "x",
+                        "started_at_unix_ms": FAKE_SAMPLE_STARTED_AT_UNIX_MS,
+                        "finished_at_unix_ms": FAKE_SAMPLE_FINISHED_AT_UNIX_MS,
                         "sample_count": 1,
                         "peaks": {"cpu_percent": 1.0, "memory_bytes": -1},
                     }
@@ -941,6 +1062,17 @@ class RevisionBindingTests(unittest.TestCase):
         report["metrics"]["http"]["p95_ms"] = 500.0
         report["metrics"]["http"]["p99_ms"] = 600.0
         with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "failure list"):
+            self._verify(report)
+
+    def test_verify_rejects_tampered_resource_load_window_binding(self) -> None:
+        report = self._report()
+        report["metrics"]["resources"]["api_replica"]["started_at_unix_ms"] = (
+            FAKE_LOAD_STARTED_AT_UNIX_MS + 1
+        )
+        with self.assertRaisesRegex(
+            evidence.ApiRuntimeEvidenceError,
+            "report API resource sampler interval does not cover",
+        ):
             self._verify(report)
 
     def test_verify_rejects_a_different_dataset_binding(self) -> None:

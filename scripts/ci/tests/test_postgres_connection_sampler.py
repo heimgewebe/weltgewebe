@@ -62,14 +62,18 @@ class ReceiptTests(unittest.TestCase):
             run_id="api-runtime-test-run",
             database_container="wg-t048-db-test",
             samples=[4, 6, 5],
+            started_at_unix_ms=1000,
+            finished_at_unix_ms=2000,
         )
         self.assertEqual(
             receipt,
             {
-                "schema_version": 1,
-                "contract": "postgres-connection-sample-v1",
+                "schema_version": 2,
+                "contract": "postgres-connection-sample-v2",
                 "run_id": "api-runtime-test-run",
                 "database_container": "wg-t048-db-test",
+                "started_at_unix_ms": 1000,
+                "finished_at_unix_ms": 2000,
                 "max_connections": 6,
                 "sample_count": 3,
                 "samples": [4, 6, 5],
@@ -82,12 +86,26 @@ class ReceiptTests(unittest.TestCase):
                 run_id="bad run",
                 database_container="db",
                 samples=[1],
+                started_at_unix_ms=1000,
+                finished_at_unix_ms=2000,
             )
         with self.assertRaisesRegex(sampler.SamplerError, "invalid"):
             sampler.build_receipt(
                 run_id="good-run",
                 database_container="db",
                 samples=[1, -1],
+                started_at_unix_ms=1000,
+                finished_at_unix_ms=2000,
+            )
+
+    def test_rejects_invalid_wall_clock_window(self) -> None:
+        with self.assertRaisesRegex(sampler.SamplerError, "wall-clock interval"):
+            sampler.build_receipt(
+                run_id="good-run",
+                database_container="db",
+                samples=[1],
+                started_at_unix_ms=2000,
+                finished_at_unix_ms=2000,
             )
 
     def test_atomic_writer_round_trips(self) -> None:
@@ -97,6 +115,8 @@ class ReceiptTests(unittest.TestCase):
                 run_id="run-1",
                 database_container="db",
                 samples=[3],
+                started_at_unix_ms=1000,
+                finished_at_unix_ms=2000,
             )
             sampler.write_atomic_json(path, payload)
             self.assertEqual(json.loads(path.read_text(encoding="utf-8")), payload)
