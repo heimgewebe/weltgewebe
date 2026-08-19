@@ -68,6 +68,8 @@ RUN groupadd --gid 10001 weltgewebe \
 
 # Expose the port
 COPY policies /app/policies
+RUN find /app/policies -type d -exec chmod 0755 {} + \
+    && find /app/policies -type f -exec chmod 0644 {} +
 EXPOSE 8080
 USER 10001:10001
 
