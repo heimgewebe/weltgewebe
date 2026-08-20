@@ -7,6 +7,7 @@ use super::{
         edge_create_persist_lock, edge_references_node_for_delete,
         edge_value_references_node_for_delete, EdgeEndpointCollisionEvidence,
     },
+    health::{ensure_jsonl_size, load_policy_limits, PolicyLimits},
     query::{
         cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
         MAX_PAGE_SIZE,
@@ -46,6 +47,17 @@ use tokio::{
     },
 };
 use uuid::Uuid;
+
+fn policy_io_error(errors: Vec<String>) -> std::io::Error {
+    std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        format!("JSONL limits policy unavailable: {}", errors.join("; ")),
+    )
+}
+
+async fn jsonl_policy_limits() -> std::io::Result<PolicyLimits> {
+    load_policy_limits().await.map_err(policy_io_error)
+}
 
 pub enum NodeMutationError {
     Status(StatusCode),
@@ -733,6 +745,7 @@ pub async fn get_node(
 /// truncated fixture), a separator newline is written first so the previous
 /// record and the new record are never glued into one unparseable line.
 async fn append_node_line(record: &Value) -> std::io::Result<()> {
+    let maximum_bytes = jsonl_policy_limits().await?.max_nodes_jsonl_bytes();
     let path = nodes_path();
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -748,13 +761,27 @@ async fn append_node_line(record: &Value) -> std::io::Result<()> {
         .await?;
 
     let len = file.metadata().await?.len();
+    let mut separator_bytes = 0_u64;
     if len > 0 {
         file.seek(SeekFrom::Start(len - 1)).await?;
         let mut last = [0_u8; 1];
         file.read_exact(&mut last).await?;
         if last[0] != b'\n' {
-            file.write_all(b"\n").await?;
+            separator_bytes = 1;
         }
+    }
+
+    let line_bytes = u64::try_from(line.len())
+        .map_err(|_| std::io::Error::other("node JSONL record length exceeds u64"))?;
+    let resulting_bytes = len
+        .checked_add(separator_bytes)
+        .and_then(|bytes| bytes.checked_add(line_bytes))
+        .and_then(|bytes| bytes.checked_add(1))
+        .ok_or_else(|| std::io::Error::other("node JSONL resulting size overflow"))?;
+    ensure_jsonl_size("nodes", resulting_bytes, maximum_bytes)?;
+
+    if separator_bytes == 1 {
+        file.write_all(b"\n").await?;
     }
 
     file.write_all(line.as_bytes()).await?;
@@ -2243,6 +2270,9 @@ fn set_node_record_fields(record: &mut Value, node: &Node) -> std::io::Result<()
 #[cfg(test)]
 mod node_record_tests {
     use super::*;
+    use crate::test_helpers::EnvGuard;
+    use serial_test::serial;
+    use std::{fs, sync::Arc};
 
     #[test]
     fn jsonl_replace_does_not_promote_fallback_time_to_creation_time() {
@@ -2264,9 +2294,98 @@ mod node_record_tests {
         let reloaded = map_json_to_node(&record).expect("updated legacy node must reload");
         assert!(!reloaded.has_authoritative_created_at);
     }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_node_append_boundary_remains_safe_under_serialized_concurrency() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        fs::create_dir_all(&in_dir).expect("create input directory");
+        let policy = tmp.path().join("limits.yaml");
+        fs::write(&policy, "max_nodes_jsonl_mb: 1\nmax_edges_jsonl_mb: 1\n")
+            .expect("write limits policy");
+        let _policy = EnvGuard::set(
+            "POLICY_LIMITS_PATH",
+            policy.to_str().expect("UTF-8 policy path"),
+        );
+        let _data = EnvGuard::set("GEWEBE_IN_DIR", in_dir.to_str().expect("UTF-8 input path"));
+
+        let record = json!({"id": "boundary-node"});
+        let appended_bytes = serde_json::to_vec(&record).expect("record").len() + 1;
+        let maximum_bytes = 1024 * 1024;
+        let existing_bytes = maximum_bytes - appended_bytes;
+        let mut existing = vec![b'x'; existing_bytes];
+        *existing.last_mut().expect("non-empty fixture") = b'\n';
+        fs::write(nodes_path(), &existing).expect("write near-limit nodes");
+
+        let serialization = Arc::new(tokio::sync::Mutex::new(()));
+        let first_lock = serialization.clone();
+        let first_record = record.clone();
+        let first = tokio::spawn(async move {
+            let _guard = first_lock.lock().await;
+            append_node_line(&first_record).await
+        });
+        let second_lock = serialization;
+        let second = tokio::spawn(async move {
+            let _guard = second_lock.lock().await;
+            append_node_line(&record).await
+        });
+        let results = [
+            first.await.expect("first task"),
+            second.await.expect("second task"),
+        ];
+
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+        assert_eq!(
+            fs::metadata(nodes_path()).expect("nodes metadata").len(),
+            1024 * 1024
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_node_rewrite_rejects_growth_before_canonical_rename() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        fs::create_dir_all(&in_dir).expect("create input directory");
+        let policy = tmp.path().join("limits.yaml");
+        fs::write(&policy, "max_nodes_jsonl_mb: 1\nmax_edges_jsonl_mb: 1\n")
+            .expect("write limits policy");
+        let _policy = EnvGuard::set(
+            "POLICY_LIMITS_PATH",
+            policy.to_str().expect("UTF-8 policy path"),
+        );
+        let _data = EnvGuard::set("GEWEBE_IN_DIR", in_dir.to_str().expect("UTF-8 input path"));
+
+        let record = json!({
+            "id": "rewrite-node",
+            "kind": "Ort",
+            "title": "A",
+            "location": {"lat": 53.5, "lon": 10.0}
+        });
+        let first_line = serde_json::to_string(&record).expect("node record");
+        let maximum_bytes = 1024 * 1024;
+        let filler_len = maximum_bytes - first_line.len() - 2;
+        let original = format!("{first_line}\n{}\n", "x".repeat(filler_len));
+        fs::write(nodes_path(), original.as_bytes()).expect("write boundary nodes");
+        assert_eq!(original.len(), maximum_bytes);
+        let mut node = map_json_to_node(&record).expect("node projection");
+        node.title = "A".repeat(100);
+
+        let error = replace_node_jsonl(&node)
+            .await
+            .expect_err("growing rewrite must exceed cap");
+        assert_eq!(error.kind(), std::io::ErrorKind::FileTooLarge);
+        assert_eq!(
+            fs::read(nodes_path()).expect("canonical nodes remain readable"),
+            original.as_bytes()
+        );
+    }
 }
 
 async fn replace_node_jsonl(node: &Node) -> std::io::Result<bool> {
+    let maximum_bytes = jsonl_policy_limits().await?.max_nodes_jsonl_bytes();
     let path = nodes_path();
     let file = File::open(&path).await?;
     let mut lines = BufReader::new(file).lines();
@@ -2304,6 +2423,7 @@ async fn replace_node_jsonl(node: &Node) -> std::io::Result<bool> {
         }
         writer.flush().await?;
         let file = writer.into_inner();
+        ensure_jsonl_size("nodes", file.metadata().await?.len(), maximum_bytes)?;
         file.sync_all().await?;
         Ok::<bool, std::io::Error>(replaced)
     }
@@ -2657,6 +2777,7 @@ async fn prepare_node_delete_tmp(
     source_path: &FsPath,
     tmp_path: &FsPath,
     node_id: &str,
+    maximum_bytes: u64,
 ) -> std::io::Result<bool> {
     let file = File::open(source_path).await?;
     let mut lines = BufReader::new(file).lines();
@@ -2679,6 +2800,7 @@ async fn prepare_node_delete_tmp(
     }
     writer.flush().await?;
     let file = writer.into_inner();
+    ensure_jsonl_size("nodes", file.metadata().await?.len(), maximum_bytes)?;
     file.sync_all().await?;
     Ok(deleted)
 }
@@ -2688,6 +2810,7 @@ async fn prepare_edge_delete_tmp(
     tmp_path: &FsPath,
     node_id: &str,
     evidence: EdgeEndpointCollisionEvidence,
+    maximum_bytes: u64,
 ) -> std::io::Result<Vec<String>> {
     let maybe_file = match File::open(source_path).await {
         Ok(file) => Some(file),
@@ -2727,6 +2850,7 @@ async fn prepare_edge_delete_tmp(
 
     writer.flush().await?;
     let file = writer.into_inner();
+    ensure_jsonl_size("edges", file.metadata().await?.len(), maximum_bytes)?;
     file.sync_all().await?;
     Ok(removed)
 }
@@ -2784,6 +2908,7 @@ async fn delete_node_and_edges_jsonl_with_injection(
     injection: JsonlNodeDeleteFailureInjection,
 ) -> std::io::Result<JsonlNodeDeleteOutcome> {
     recover_node_delete_jsonl_journal().await?;
+    let limits = jsonl_policy_limits().await?;
 
     let paths = node_delete_paths()?;
     tokio::fs::create_dir_all(&paths.dir).await?;
@@ -2801,9 +2926,21 @@ async fn delete_node_and_edges_jsonl_with_injection(
     let edge_backup = journal_child_path(&paths.dir, &journal.edge_backup)?;
 
     let result = async {
-        let removed_edge_ids =
-            prepare_edge_delete_tmp(&paths.edges, &edge_tmp, node_id, evidence).await?;
-        let node_deleted = prepare_node_delete_tmp(&paths.nodes, &node_tmp, node_id).await?;
+        let removed_edge_ids = prepare_edge_delete_tmp(
+            &paths.edges,
+            &edge_tmp,
+            node_id,
+            evidence,
+            limits.max_edges_jsonl_bytes(),
+        )
+        .await?;
+        let node_deleted = prepare_node_delete_tmp(
+            &paths.nodes,
+            &node_tmp,
+            node_id,
+            limits.max_nodes_jsonl_bytes(),
+        )
+        .await?;
         if !node_deleted {
             return Err(JsonlNodeDeleteTxError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -3300,6 +3437,10 @@ async fn patch_node_jsonl(
     let start_persist_wait = std::time::Instant::now();
     let _persist_guard = state.nodes_persist.lock().await;
     let persist_lock_wait_ms = start_persist_wait.elapsed().as_millis();
+    let maximum_bytes = jsonl_policy_limits()
+        .await
+        .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?
+        .max_nodes_jsonl_bytes();
 
     let path = nodes_path();
     // Open source file for reading
@@ -3429,6 +3570,8 @@ async fn patch_node_jsonl(
 
         // Ensure durability
         let file = writer.into_inner();
+        ensure_jsonl_size("nodes", file.metadata().await.map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?.len(), maximum_bytes)
+            .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
         file.sync_all()
             .await
             .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;

@@ -190,7 +190,12 @@ wg-compose exec api wget -qO- http://localhost:8080/health/live
 
 Ein erfolgreicher Liveness-Aufruf darf einen fehlgeschlagenen Readiness-Aufruf
 nicht überstimmen: Der Container bleibt ungesund, solange die API ihre
-Abhängigkeiten und Policy-Verträge nicht als bereit meldet.
+Abhängigkeiten und Policy-Verträge nicht als bereit meldet. Im
+PostgreSQL-Produktionspfad umfasst dies ausdrücklich die beaufsichtigten
+Outbox-Worker, den semantisch passenden JetStream/Durable-Consumer sowie die
+60-Sekunden-Grenzen für aktiven unveröffentlichten Rückstand und fehlende
+durable Consumption-Receipts. Quarantäne wird über private Metriken beobachtet;
+eine einzelne bewusst quarantänisierte Nachricht überstimmt Readiness nicht.
 
 Startet die API gar nicht und meldet `AUTH_TRUSTED_PROXIES is not set`, dann
 läuft der Stack ohne `compose.vps.override.yml` (siehe oben) oder die

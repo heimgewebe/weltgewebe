@@ -204,6 +204,12 @@ Serverzustand muss zusätzlich durch Runtime-Evidence belegt werden.
 
 - **MAX_EDGES_CACHE**: Obergrenze der beim Start geladenen Edges (Default `500000`).
   Bei Erreichen wird die Datei nicht weiter gelesen und eine Warnung geloggt.
+- **policies/limits.yaml / max_nodes_jsonl_mb**: maximale resultierende Größe
+  für kanonische JSONL-Knoten-Appends und -Rewrites. Der Grenzfall ist erlaubt;
+  ein zusätzliches Byte wird vor dem kanonischen Commit abgewiesen.
+- **policies/limits.yaml / max_edges_jsonl_mb**: entsprechender wirksamer
+  Grenzwert für JSONL-Fäden einschließlich Reaktivierungs- und
+  Kaskaden-Rewrites. PostgreSQL-Schreibpfade lesen diese Dateigrenzen nicht.
 - **WELTGEWEBE_DOMAIN_READ_SOURCE**: lokal `jsonl`, Produktion `postgres`.
   `postgres` lädt Accounts, Knoten und Fäden beim API-Start aus den
   PostgreSQL-Domänentabellen.

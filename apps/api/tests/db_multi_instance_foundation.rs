@@ -227,8 +227,8 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
         std::env::var("NATS_URL").unwrap_or_else(|_| "nats://127.0.0.1:54222".to_string());
     let nats_a = async_nats::connect(&nats_url).await?;
     let nats_b = async_nats::connect(&nats_url).await?;
-    outbox::start(pool.clone(), nats_a.clone()).await?;
-    outbox::start(pool.clone(), nats_b.clone()).await?;
+    outbox::start(pool.clone(), nats_a.clone(), metrics()).await?;
+    outbox::start(pool.clone(), nats_b.clone(), metrics()).await?;
 
     let state_a = api_state(pool.clone(), nats_a).await?;
     let state_b = api_state(pool.clone(), nats_b).await?;
@@ -417,6 +417,10 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
     .fetch_one(&pool)
     .await?;
     wait_for_event_receipt(&pool, event_id).await?;
+    let healthy_chain = outbox::load_event_chain_db_snapshot(&pool).await?;
+    assert_eq!(healthy_chain.pending, 0);
+    assert_eq!(healthy_chain.quarantined, 0);
+    assert_eq!(healthy_chain.receipts_missing, 0);
 
     state_b.refresh_domain_projection_if_stale().await?;
     assert_eq!(
@@ -503,6 +507,8 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
     .fetch_one(&pool)
     .await?;
     assert_eq!(quarantined, (true, Some("terminal".to_string())));
+    let quarantined_chain = outbox::load_event_chain_db_snapshot(&pool).await?;
+    assert_eq!(quarantined_chain.quarantined, 1);
     assert!(outbox::requeue_quarantined(&pool, failed_id).await?);
     let requeued: (bool, i32, bool, bool) = sqlx::query_as(
         "SELECT quarantined_at IS NULL, attempt_count, available_at <= NOW(), \

@@ -11,6 +11,20 @@ import yaml
 FIXED_FADEN_FADE_DAYS = 7
 
 
+def find_key_paths(value: object, target: str, prefix: str = "") -> list[str]:
+    paths: list[str] = []
+    if isinstance(value, dict):
+        for key, child in value.items():
+            path = f"{prefix}.{key}" if prefix else str(key)
+            if key == target:
+                paths.append(path)
+            paths.extend(find_key_paths(child, target, path))
+    elif isinstance(value, list):
+        for index, child in enumerate(value):
+            paths.extend(find_key_paths(child, target, f"{prefix}[{index}]"))
+    return paths
+
+
 def main() -> int:
     policy_path = pathlib.Path("policies/retention.yml")
     if not policy_path.exists():
@@ -18,6 +32,9 @@ def main() -> int:
         return 1
 
     data = yaml.safe_load(policy_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        print("::error::policies/retention.yml root must be a mapping")
+        return 1
     lifecycle = data.get("data_lifecycle")
     if not isinstance(lifecycle, dict):
         print("::error::data_lifecycle section missing")
@@ -28,6 +45,28 @@ def main() -> int:
         print("::error::configs/app.defaults.yml missing")
         return 1
     defaults = yaml.safe_load(default_path.read_text(encoding="utf-8")) or {}
+    if not isinstance(defaults, dict):
+        print("::error::configs/app.defaults.yml root must be a mapping")
+        return 1
+
+    if "forget_pipeline" in data:
+        print(
+            "::error::policies/retention.yml must not publish forget_pipeline; "
+            "guest exit is immediate and no deferred forget scheduler exists"
+        )
+        return 1
+
+    for source, mapping in (
+        ("policies/retention.yml", data),
+        ("configs/app.defaults.yml", defaults),
+    ):
+        deadline_paths = find_key_paths(mapping, "deadline_days")
+        if deadline_paths:
+            print(
+                f"::error::{source} must not publish unsupported deadline_days "
+                f"at {', '.join(deadline_paths)}; no runtime deadline consumer exists"
+            )
+            return 1
 
     for source, mapping in (
         ("policies/retention.yml data_lifecycle", lifecycle),

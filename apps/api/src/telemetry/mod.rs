@@ -55,6 +55,21 @@ pub enum NodeMutationJsonlRecoveryOutcome {
     Aborted,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DomainEventWorker {
+    Relay,
+    ReceiptConsumer,
+}
+
+impl DomainEventWorker {
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::Relay => "relay",
+            Self::ReceiptConsumer => "receipt_consumer",
+        }
+    }
+}
+
 impl NodeMutationJsonlRecoveryOutcome {
     fn as_label(self) -> &'static str {
         match self {
@@ -177,6 +192,13 @@ struct MetricsInner {
     pub node_mutation_admin_bypass_total: IntCounterVec,
     pub node_mutation_jsonl_recovery_total: IntCounterVec,
     pub node_mutation_duration_seconds: HistogramVec,
+    pub domain_event_worker_up: IntGaugeVec,
+    pub domain_outbox_pending: IntGauge,
+    pub domain_outbox_retrying: IntGauge,
+    pub domain_outbox_quarantined: IntGauge,
+    pub domain_outbox_oldest_pending_age_seconds: IntGauge,
+    pub domain_event_receipts_missing: IntGauge,
+    pub domain_event_oldest_missing_receipt_age_seconds: IntGauge,
 }
 
 impl Metrics {
@@ -300,6 +322,37 @@ impl Metrics {
             ]),
             &["operation"],
         )?;
+        let domain_event_worker_up = IntGaugeVec::new(
+            Opts::new(
+                "domain_event_worker_up",
+                "Liveness of the essential transactional outbox workers",
+            ),
+            &["worker"],
+        )?;
+        let domain_outbox_pending = IntGauge::new(
+            "domain_outbox_pending",
+            "Unpublished, non-quarantined domain outbox events",
+        )?;
+        let domain_outbox_retrying = IntGauge::new(
+            "domain_outbox_retrying",
+            "Unpublished, non-quarantined domain outbox events with prior attempts",
+        )?;
+        let domain_outbox_quarantined = IntGauge::new(
+            "domain_outbox_quarantined",
+            "Unpublished domain outbox events intentionally held in quarantine",
+        )?;
+        let domain_outbox_oldest_pending_age_seconds = IntGauge::new(
+            "domain_outbox_oldest_pending_age_seconds",
+            "Age in seconds of the oldest unpublished, non-quarantined domain outbox event",
+        )?;
+        let domain_event_receipts_missing = IntGauge::new(
+            "domain_event_receipts_missing",
+            "Published domain events without the expected durable consumption receipt",
+        )?;
+        let domain_event_oldest_missing_receipt_age_seconds = IntGauge::new(
+            "domain_event_oldest_missing_receipt_age_seconds",
+            "Age in seconds since publication of the oldest domain event missing its durable receipt",
+        )?;
 
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
@@ -319,6 +372,15 @@ impl Metrics {
         registry.register(Box::new(node_mutation_admin_bypass_total.clone()))?;
         registry.register(Box::new(node_mutation_jsonl_recovery_total.clone()))?;
         registry.register(Box::new(node_mutation_duration_seconds.clone()))?;
+        registry.register(Box::new(domain_event_worker_up.clone()))?;
+        registry.register(Box::new(domain_outbox_pending.clone()))?;
+        registry.register(Box::new(domain_outbox_retrying.clone()))?;
+        registry.register(Box::new(domain_outbox_quarantined.clone()))?;
+        registry.register(Box::new(domain_outbox_oldest_pending_age_seconds.clone()))?;
+        registry.register(Box::new(domain_event_receipts_missing.clone()))?;
+        registry.register(Box::new(
+            domain_event_oldest_missing_receipt_age_seconds.clone(),
+        ))?;
 
         build_info_metric
             .with_label_values(&[
@@ -347,6 +409,13 @@ impl Metrics {
                 node_mutation_admin_bypass_total,
                 node_mutation_jsonl_recovery_total,
                 node_mutation_duration_seconds,
+                domain_event_worker_up,
+                domain_outbox_pending,
+                domain_outbox_retrying,
+                domain_outbox_quarantined,
+                domain_outbox_oldest_pending_age_seconds,
+                domain_event_receipts_missing,
+                domain_event_oldest_missing_receipt_age_seconds,
             }),
         })
     }
@@ -451,6 +520,44 @@ impl Metrics {
             .inc_by(count);
     }
 
+    pub fn set_domain_event_worker_up(&self, worker: DomainEventWorker, up: bool) {
+        self.inner
+            .domain_event_worker_up
+            .with_label_values(&[worker.as_label()])
+            .set(i64::from(up));
+    }
+
+    pub fn domain_event_worker_is_up(&self, worker: DomainEventWorker) -> bool {
+        self.inner
+            .domain_event_worker_up
+            .with_label_values(&[worker.as_label()])
+            .get()
+            == 1
+    }
+
+    pub fn set_domain_event_chain_snapshot(
+        &self,
+        pending: i64,
+        retrying: i64,
+        quarantined: i64,
+        oldest_pending_age_seconds: i64,
+        receipts_missing: i64,
+        oldest_missing_receipt_age_seconds: i64,
+    ) {
+        self.inner.domain_outbox_pending.set(pending);
+        self.inner.domain_outbox_retrying.set(retrying);
+        self.inner.domain_outbox_quarantined.set(quarantined);
+        self.inner
+            .domain_outbox_oldest_pending_age_seconds
+            .set(oldest_pending_age_seconds);
+        self.inner
+            .domain_event_receipts_missing
+            .set(receipts_missing);
+        self.inner
+            .domain_event_oldest_missing_receipt_age_seconds
+            .set(oldest_missing_receipt_age_seconds);
+    }
+
     pub fn render(&self) -> Result<Vec<u8>, prometheus::Error> {
         let metric_families = self.inner.registry.gather();
         let encoder = TextEncoder::new();
@@ -546,8 +653,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        BuildInfo, Metrics, MetricsLayer, NodeMutationJsonlRecoveryOutcome, NodeMutationOutcome,
-        SearchRequestOutcome, UNMATCHED_ROUTE_LABEL,
+        BuildInfo, DomainEventWorker, Metrics, MetricsLayer, NodeMutationJsonlRecoveryOutcome,
+        NodeMutationOutcome, SearchRequestOutcome, UNMATCHED_ROUTE_LABEL,
     };
     use crate::node_mutation::NodeMutationOperation;
     use axum::{body::Body, http::Request, routing::get, Router};
@@ -641,6 +748,29 @@ mod tests {
         assert!(rendered.contains(r#"node_mutation_jsonl_recovery_total{outcome="committed"} 2"#));
         assert!(rendered.contains(r#"node_mutation_jsonl_recovery_total{outcome="aborted"} 1"#));
         for forbidden in ["node_id=", "account_id=", "title=", "content="] {
+            assert!(!rendered.contains(forbidden));
+        }
+    }
+
+    #[test]
+    fn domain_event_health_metrics_are_bounded_and_identifier_free() {
+        let metrics = test_metrics();
+        metrics.set_domain_event_worker_up(DomainEventWorker::Relay, true);
+        metrics.set_domain_event_worker_up(DomainEventWorker::ReceiptConsumer, false);
+        metrics.set_domain_event_chain_snapshot(3, 2, 1, 61, 4, 62);
+
+        assert!(metrics.domain_event_worker_is_up(DomainEventWorker::Relay));
+        assert!(!metrics.domain_event_worker_is_up(DomainEventWorker::ReceiptConsumer));
+        let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        assert!(rendered.contains(r#"domain_event_worker_up{worker="relay"} 1"#));
+        assert!(rendered.contains(r#"domain_event_worker_up{worker="receipt_consumer"} 0"#));
+        assert!(rendered.contains("domain_outbox_pending 3"));
+        assert!(rendered.contains("domain_outbox_retrying 2"));
+        assert!(rendered.contains("domain_outbox_quarantined 1"));
+        assert!(rendered.contains("domain_outbox_oldest_pending_age_seconds 61"));
+        assert!(rendered.contains("domain_event_receipts_missing 4"));
+        assert!(rendered.contains("domain_event_oldest_missing_receipt_age_seconds 62"));
+        for forbidden in ["event_id=", "aggregate_id=", "last_error="] {
             assert!(!rendered.contains(forbidden));
         }
     }

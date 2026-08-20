@@ -371,25 +371,36 @@ pub async fn run() -> anyhow::Result<()> {
         crate::auth::ephemeral_db::spawn_cleanup_loop(pool);
     }
 
-    if let (Some(pool), Some(client)) = (state.db_pool.clone(), state.nats_client.clone()) {
-        if let Some(service) = state.web_push.clone() {
-            // Establish the durable consumer before the publisher starts. This
-            // closes the first-deployment window in which DeliverPolicy::New
-            // could otherwise miss a just-published message event.
-            notifications::start(pool.clone(), client.clone(), service)
-                .await
-                .context("failed to start Web Push event consumer")?;
-            tracing::info!("Web Push event consumer and retry worker started");
-        }
-        outbox::start(pool, client)
+    if let (Some(pool), Some(client), Some(service)) = (
+        state.db_pool.clone(),
+        state.nats_client.clone(),
+        state.web_push.clone(),
+    ) {
+        // Establish the durable consumer before the publisher starts. This
+        // closes the first-deployment window in which DeliverPolicy::New
+        // could otherwise miss a just-published message event.
+        notifications::start(pool, client, service)
             .await
-            .context("failed to start transactional domain outbox")?;
-        tracing::info!("Transactional domain outbox and idempotent receipt consumer started");
-    } else if state.db_pool.is_some() {
-        tracing::warn!(
-            nats_configured = state.nats_configured,
-            "PostgreSQL domain outbox is durable, but no NATS client is active; events remain pending"
-        );
+            .context("failed to start Web Push event consumer")?;
+        tracing::info!("Web Push event consumer and retry worker started");
+    }
+
+    if outbox::event_chain_required(&state.config) {
+        match (state.db_pool.clone(), state.nats_client.clone()) {
+            (Some(pool), Some(client)) => {
+                outbox::start(pool, client, state.metrics.clone())
+                    .await
+                    .context("failed to start transactional domain outbox")?;
+                tracing::info!(
+                    "Transactional domain outbox and idempotent receipt consumer started"
+                );
+            }
+            _ => tracing::warn!(
+                database_configured = state.db_pool_configured,
+                nats_configured = state.nats_configured,
+                "PostgreSQL domain event chain is configured but cannot start; readiness will fail closed"
+            ),
+        }
     }
 
     // Governance-Fristen-Sweeper: wertet Antragsfristen serverseitig und

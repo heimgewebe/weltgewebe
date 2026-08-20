@@ -63,6 +63,31 @@ Die Plattform verspricht keine globale Exactly-once-Zustellung. Sie verwendet:
 - beobachtbare Wiederholungen,
 - begrenzte Aufbewahrung und Replay-Verträge.
 
+## Operativer Readiness-Vertrag
+
+Sobald PostgreSQL als Domänenlesequelle oder für mindestens einen
+Domänenschreibpfad aktiviert ist, gehört die vollständige lokale Kette zur
+Readiness: PostgreSQL-Transaktion und
+`domain_outbox`, Relay, der erwartete Stream `WELTGEWEBE_DOMAIN`, der durable
+Pull-Consumer `weltgewebe-api-domain-receipts-v1` und dessen persistenter
+Verbrauchsbeleg in `domain_event_consumptions`. Streamname und Subjectbindung
+sowie Durable-Name, Filter und explizite Acknowledgements werden semantisch
+geprüft; eine bloße NATS-Verbindung genügt nicht.
+
+Relay und Receipt-Consumer sind essentielle beaufsichtigte Worker. Ein
+unerwarteter Exit setzt Readiness auf fehlgeschlagen. Ein unveröffentlichter,
+nicht quarantänisierter Rückstand oder ein veröffentlichter Beleg ohne durable
+Consumption-Receipt wird nach mehr als 60 Sekunden als ungesund bewertet. Die
+Grenze liegt oberhalb der 30-sekündigen Claim-Lease und bleibt fest an diesen
+ersten Implementierungsschnitt gebunden. Pending-, Retry-, Quarantäne- und
+Receipt-Lag-Werte werden ohne fachliche IDs als Metriken veröffentlicht.
+
+Quarantäne ist ein kontrollierter Betriebszustand, keine zweite Fachwahrheit.
+Ein absichtlich quarantänisiertes Poison Event bleibt beobachtbar, führt allein
+aber nicht zum globalen Readiness-Ausfall; es wird aus der aktiven
+Rückstandsalterung ausgeschlossen und nur durch einen expliziten Operatorpfad
+erneut eingereiht.
+
 ## Konsumenten
 
 Typische Konsumenten sind:

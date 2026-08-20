@@ -1,4 +1,5 @@
 use super::domain_write_guard::reject_edge_create_unless_writable;
+use super::health::{ensure_jsonl_size, load_policy_limits};
 use super::query::{
     cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
     MAX_PAGE_SIZE,
@@ -794,6 +795,15 @@ fn edge_endpoint_option_references_node_for_delete(
 /// truncated fixture), a separator newline is written first so the previous
 /// record and the new record are never glued into one unparseable line.
 async fn append_edge_line(record: &Value) -> std::io::Result<()> {
+    let maximum_bytes = load_policy_limits()
+        .await
+        .map_err(|errors| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("JSONL limits policy unavailable: {}", errors.join("; ")),
+            )
+        })?
+        .max_edges_jsonl_bytes();
     let path = edges_path();
     if let Some(parent) = path.parent() {
         tokio::fs::create_dir_all(parent).await?;
@@ -812,13 +822,27 @@ async fn append_edge_line(record: &Value) -> std::io::Result<()> {
     // check (no full-file scan, no rewrite). With O_APPEND the seek moves the
     // read position only; writes still always land at the end of the file.
     let len = file.metadata().await?.len();
+    let mut separator_bytes = 0_u64;
     if len > 0 {
         file.seek(SeekFrom::Start(len - 1)).await?;
         let mut last = [0_u8; 1];
         file.read_exact(&mut last).await?;
         if last[0] != b'\n' {
-            file.write_all(b"\n").await?;
+            separator_bytes = 1;
         }
+    }
+
+    let line_bytes = u64::try_from(line.len())
+        .map_err(|_| std::io::Error::other("edge JSONL record length exceeds u64"))?;
+    let resulting_bytes = len
+        .checked_add(separator_bytes)
+        .and_then(|bytes| bytes.checked_add(line_bytes))
+        .and_then(|bytes| bytes.checked_add(1))
+        .ok_or_else(|| std::io::Error::other("edge JSONL resulting size overflow"))?;
+    ensure_jsonl_size("edges", resulting_bytes, maximum_bytes)?;
+
+    if separator_bytes == 1 {
+        file.write_all(b"\n").await?;
     }
 
     file.write_all(line.as_bytes()).await?;
@@ -887,10 +911,22 @@ async fn replace_edge_operation_line(
     record: &Value,
     operation: &CreateOperationKey,
 ) -> std::io::Result<()> {
+    let maximum_bytes = load_policy_limits()
+        .await
+        .map_err(|errors| {
+            std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("JSONL limits policy unavailable: {}", errors.join("; ")),
+            )
+        })?
+        .max_edges_jsonl_bytes();
     let path = edges_path();
     let metadata = tokio::fs::metadata(&path).await?;
     let input = tokio::fs::read(&path).await?;
     let output = replace_edge_operation_record(&input, record, operation)?;
+    let output_bytes = u64::try_from(output.len())
+        .map_err(|_| std::io::Error::other("edge JSONL rewrite length exceeds u64"))?;
+    ensure_jsonl_size("edges", output_bytes, maximum_bytes)?;
 
     let parent = path.parent().ok_or_else(|| {
         std::io::Error::new(std::io::ErrorKind::InvalidInput, "edges path has no parent")
@@ -2301,15 +2337,17 @@ mod edge_create {
 #[cfg(test)]
 mod tests {
     use super::{
-        build_edge_record, edge_create::ValidatedCreateEdge, edge_has_valid_faden_metadata,
-        edge_is_active_at, edge_is_permanently_unreachable, edge_matches_list_at, faden_expires_at,
-        max_edges_cache_limit, projected_faden_expires_at, replace_edge_operation_record, Edge,
-        FadenType, LifecycleTimestamp, PublicEdge, DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
+        append_edge_line, build_edge_record, edge_create::ValidatedCreateEdge,
+        edge_has_valid_faden_metadata, edge_is_active_at, edge_is_permanently_unreachable,
+        edge_matches_list_at, faden_expires_at, max_edges_cache_limit, projected_faden_expires_at,
+        replace_edge_operation_line, replace_edge_operation_record, Edge, FadenType,
+        LifecycleTimestamp, PublicEdge, DEFAULT_MAX_EDGES_CACHE, FADEN_LIFETIME_HOURS,
     };
     use crate::{domain_db::CreateOperationKey, test_helpers::EnvGuard};
     use chrono::{DateTime, Duration, TimeZone, Utc};
     use serde_json::json;
     use serial_test::serial;
+    use std::{fs, sync::Arc};
 
     /// `expires_at: None` models an omitted key (legacy dated Fäden); use
     /// [`lifecycle_edge_with_null_expiry`] to model an explicit `null`.
@@ -2508,6 +2546,93 @@ mod tests {
         let duplicate_error =
             replace_edge_operation_record(&duplicate, &replacement, &operation_key()).unwrap_err();
         assert_eq!(duplicate_error.kind(), std::io::ErrorKind::InvalidData);
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_edge_append_boundary_remains_safe_under_serialized_concurrency() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        fs::create_dir_all(&in_dir).expect("create input directory");
+        let policy = tmp.path().join("limits.yaml");
+        fs::write(&policy, "max_nodes_jsonl_mb: 1\nmax_edges_jsonl_mb: 1\n")
+            .expect("write limits policy");
+        let _policy = EnvGuard::set(
+            "POLICY_LIMITS_PATH",
+            policy.to_str().expect("UTF-8 policy path"),
+        );
+        let _data = EnvGuard::set("GEWEBE_IN_DIR", in_dir.to_str().expect("UTF-8 input path"));
+
+        let record = json!({"id": "boundary-edge"});
+        let appended_bytes = serde_json::to_vec(&record).expect("record").len() + 1;
+        let maximum_bytes = 1024 * 1024;
+        let existing_bytes = maximum_bytes - appended_bytes;
+        let mut existing = vec![b'x'; existing_bytes];
+        *existing.last_mut().expect("non-empty fixture") = b'\n';
+        fs::write(crate::utils::edges_path(), &existing).expect("write near-limit edges");
+
+        let serialization = Arc::new(tokio::sync::Mutex::new(()));
+        let first_lock = serialization.clone();
+        let first_record = record.clone();
+        let first = tokio::spawn(async move {
+            let _guard = first_lock.lock().await;
+            append_edge_line(&first_record).await
+        });
+        let second_lock = serialization;
+        let second = tokio::spawn(async move {
+            let _guard = second_lock.lock().await;
+            append_edge_line(&record).await
+        });
+        let results = [
+            first.await.expect("first task"),
+            second.await.expect("second task"),
+        ];
+
+        assert_eq!(results.iter().filter(|result| result.is_ok()).count(), 1);
+        assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+        assert_eq!(
+            fs::metadata(crate::utils::edges_path())
+                .expect("edges metadata")
+                .len(),
+            1024 * 1024
+        );
+    }
+
+    #[tokio::test]
+    #[serial]
+    async fn jsonl_edge_rewrite_rejects_growth_before_canonical_rename() {
+        let tmp = tempfile::tempdir().expect("tmpdir");
+        let in_dir = tmp.path().join("in");
+        fs::create_dir_all(&in_dir).expect("create input directory");
+        let policy = tmp.path().join("limits.yaml");
+        fs::write(&policy, "max_nodes_jsonl_mb: 1\nmax_edges_jsonl_mb: 1\n")
+            .expect("write limits policy");
+        let _policy = EnvGuard::set(
+            "POLICY_LIMITS_PATH",
+            policy.to_str().expect("UTF-8 policy path"),
+        );
+        let _data = EnvGuard::set("GEWEBE_IN_DIR", in_dir.to_str().expect("UTF-8 input path"));
+
+        let existing_record = operation_record(
+            "00000000-0000-0000-0000-0000000000e1",
+            "2026-07-17T10:00:00Z",
+        );
+        let first_line = serde_json::to_string(&existing_record).expect("edge record");
+        let maximum_bytes = 1024 * 1024;
+        let filler_len = maximum_bytes - first_line.len() - 2;
+        let original = format!("{first_line}\n{}\n", "x".repeat(filler_len));
+        fs::write(crate::utils::edges_path(), original.as_bytes()).expect("write boundary edges");
+        let mut replacement = existing_record;
+        replacement["note"] = json!("x".repeat(1_000));
+
+        let error = replace_edge_operation_line(&replacement, &operation_key())
+            .await
+            .expect_err("growing rewrite must exceed cap");
+        assert_eq!(error.kind(), std::io::ErrorKind::FileTooLarge);
+        assert_eq!(
+            fs::read(crate::utils::edges_path()).expect("canonical edges remain readable"),
+            original.as_bytes()
+        );
     }
 
     #[test]

@@ -20,8 +20,12 @@ use sqlx::query_scalar;
 #[cfg(test)]
 use crate::auth::accounts::AccountStore;
 use crate::{
+    outbox::{self, EventChainDbSnapshot},
     state::ApiState,
-    telemetry::health::{readiness_check_failed, readiness_checks_succeeded},
+    telemetry::{
+        health::{readiness_check_failed, readiness_checks_succeeded},
+        DomainEventWorker,
+    },
 };
 
 pub fn health_routes() -> Router<ApiState> {
@@ -92,24 +96,57 @@ fn readiness_verbose() -> bool {
 const MAX_POLICY_FILE_BYTES: u64 = 64 * 1024;
 const READINESS_CHECK_TIMEOUT_MS: u64 = 750;
 const READINESS_TOTAL_TIMEOUT_MS: u64 = 1_000;
+const STALE_UNPUBLISHED_AFTER_SECONDS: i64 = 60;
+const DELAYED_RECEIPT_AFTER_SECONDS: i64 = 60;
+const BYTES_PER_MEBIBYTE: u64 = 1024 * 1024;
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Clone, Copy, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct PolicyLimits {
+pub(crate) struct PolicyLimits {
     max_nodes_jsonl_mb: u64,
     max_edges_jsonl_mb: u64,
 }
 
 impl PolicyLimits {
-    fn validate(self) -> Result<(), String> {
+    fn validate(self) -> Result<Self, String> {
         if self.max_nodes_jsonl_mb == 0 {
             return Err("max_nodes_jsonl_mb must be greater than zero".to_string());
         }
         if self.max_edges_jsonl_mb == 0 {
             return Err("max_edges_jsonl_mb must be greater than zero".to_string());
         }
-        Ok(())
+        self.max_nodes_jsonl_mb
+            .checked_mul(BYTES_PER_MEBIBYTE)
+            .ok_or_else(|| "max_nodes_jsonl_mb exceeds the supported byte range".to_string())?;
+        self.max_edges_jsonl_mb
+            .checked_mul(BYTES_PER_MEBIBYTE)
+            .ok_or_else(|| "max_edges_jsonl_mb exceeds the supported byte range".to_string())?;
+        Ok(self)
     }
+
+    pub(crate) fn max_nodes_jsonl_bytes(self) -> u64 {
+        self.max_nodes_jsonl_mb * BYTES_PER_MEBIBYTE
+    }
+
+    pub(crate) fn max_edges_jsonl_bytes(self) -> u64 {
+        self.max_edges_jsonl_mb * BYTES_PER_MEBIBYTE
+    }
+}
+
+pub(crate) fn ensure_jsonl_size(
+    label: &str,
+    resulting_bytes: u64,
+    maximum_bytes: u64,
+) -> std::io::Result<()> {
+    if resulting_bytes > maximum_bytes {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::FileTooLarge,
+            format!(
+                "{label} JSONL write would produce {resulting_bytes} bytes, exceeding the policy limit of {maximum_bytes} bytes"
+            ),
+        ));
+    }
+    Ok(())
 }
 
 async fn read_policy_bytes(
@@ -138,7 +175,7 @@ async fn read_policy_bytes(
     Ok(raw)
 }
 
-async fn check_policy_file(path: &Path) -> Result<(), String> {
+async fn load_policy_file(path: &Path) -> Result<PolicyLimits, String> {
     let mut options = fs::OpenOptions::new();
     options.read(true);
     #[cfg(unix)]
@@ -192,17 +229,15 @@ async fn check_policy_file(path: &Path) -> Result<(), String> {
         .map_err(|error| format!("invalid policy file at {}: {}", path.display(), error))
 }
 
-async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
+async fn load_policy_fallbacks(paths: &[PathBuf]) -> Result<PolicyLimits, Vec<String>> {
     let mut errors = Vec::new();
     for path in paths {
         match fs::metadata(path).await {
-            Ok(_) => match check_policy_file(path).await {
-                Ok(()) => return CheckResult::ready(),
-                Err(message) => {
-                    readiness_check_failed("policy", &message);
-                    return CheckResult::failure_with_message(message);
-                }
-            },
+            Ok(_) => {
+                return load_policy_file(path)
+                    .await
+                    .map_err(|message| vec![message])
+            }
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
                 errors.push(format!(
                     "failed to access policy file at {}: {}",
@@ -216,14 +251,9 @@ async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
                     path.display(),
                     error
                 );
-                readiness_check_failed("policy", &message);
-                return CheckResult::failure_with_message(message);
+                return Err(vec![message]);
             }
         }
-    }
-
-    for error in &errors {
-        readiness_check_failed("policy", error);
     }
 
     let message = format!(
@@ -234,10 +264,25 @@ async fn check_policy_fallbacks(paths: &[PathBuf]) -> CheckResult {
             .collect::<Vec<_>>()
             .join(", ")
     );
-    readiness_check_failed("policy", &message);
     errors.push(message);
+    Err(errors)
+}
 
-    CheckResult::failure(errors)
+pub(crate) async fn load_policy_limits() -> Result<PolicyLimits, Vec<String>> {
+    let env_path = env::var_os("POLICY_LIMITS_PATH").map(PathBuf::from);
+    let fallback_paths = [
+        Path::new("policies/limits.yaml").to_path_buf(),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../policies/limits.yaml"),
+        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../policies/limits.yaml"),
+    ];
+
+    if let Some(path) = env_path {
+        load_policy_file(&path)
+            .await
+            .map_err(|message| vec![message])
+    } else {
+        load_policy_fallbacks(&fallback_paths).await
+    }
 }
 
 async fn check_nats(state: &ApiState) -> CheckResult {
@@ -287,26 +332,96 @@ async fn check_database(state: &ApiState) -> CheckResult {
     }
 }
 
-async fn check_policy() -> CheckResult {
-    // Prefer an explicit configuration via env var to avoid hard-coded path assumptions.
-    // Fallbacks stay for dev/CI convenience.
-    let env_path = env::var_os("POLICY_LIMITS_PATH").map(PathBuf::from);
-    let fallback_paths = [
-        Path::new("policies/limits.yaml").to_path_buf(),
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../policies/limits.yaml"),
-        Path::new(env!("CARGO_MANIFEST_DIR")).join("../../policies/limits.yaml"),
-    ];
+fn event_chain_snapshot_errors(snapshot: EventChainDbSnapshot) -> Vec<String> {
+    let mut errors = Vec::new();
+    if snapshot.pending > 0 && snapshot.oldest_pending_age_seconds > STALE_UNPUBLISHED_AFTER_SECONDS
+    {
+        errors.push(format!(
+            "oldest unpublished domain outbox event is {} seconds old (limit: {} seconds)",
+            snapshot.oldest_pending_age_seconds, STALE_UNPUBLISHED_AFTER_SECONDS
+        ));
+    }
+    if snapshot.receipts_missing > 0
+        && snapshot.oldest_missing_receipt_age_seconds > DELAYED_RECEIPT_AFTER_SECONDS
+    {
+        errors.push(format!(
+            "oldest published domain event without durable receipt is {} seconds old (limit: {} seconds)",
+            snapshot.oldest_missing_receipt_age_seconds, DELAYED_RECEIPT_AFTER_SECONDS
+        ));
+    }
+    errors
+}
 
-    if let Some(path) = env_path {
-        match check_policy_file(&path).await {
-            Ok(()) => CheckResult::ready(),
-            Err(message) => {
-                readiness_check_failed("policy", &message);
-                CheckResult::failure_with_message(message)
-            }
+async fn check_event_chain(state: &ApiState) -> CheckResult {
+    if !outbox::event_chain_required(&state.config) {
+        return CheckResult::skipped();
+    }
+
+    let mut errors = Vec::new();
+    for worker in [DomainEventWorker::Relay, DomainEventWorker::ReceiptConsumer] {
+        if !state.metrics.domain_event_worker_is_up(worker) {
+            errors.push(format!(
+                "essential domain event worker {worker:?} is not running"
+            ));
         }
+    }
+
+    let Some(pool) = state.db_pool.as_ref() else {
+        errors.push("configured domain event chain has no PostgreSQL pool".to_string());
+        for error in &errors {
+            readiness_check_failed("event_chain", error);
+        }
+        return CheckResult::failure(errors);
+    };
+    let Some(client) = state.nats_client.as_ref() else {
+        errors.push("configured domain event chain has no NATS client".to_string());
+        for error in &errors {
+            readiness_check_failed("event_chain", error);
+        }
+        return CheckResult::failure(errors);
+    };
+
+    let (jetstream, database) = tokio::join!(
+        outbox::verify_jetstream_contract(client),
+        outbox::load_event_chain_db_snapshot(pool),
+    );
+    if let Err(error) = jetstream {
+        errors.push(error.to_string());
+    }
+    match database {
+        Ok(snapshot) => {
+            state.metrics.set_domain_event_chain_snapshot(
+                snapshot.pending,
+                snapshot.retrying,
+                snapshot.quarantined,
+                snapshot.oldest_pending_age_seconds,
+                snapshot.receipts_missing,
+                snapshot.oldest_missing_receipt_age_seconds,
+            );
+            errors.extend(event_chain_snapshot_errors(snapshot));
+        }
+        Err(error) => errors.push(error.to_string()),
+    }
+
+    if errors.is_empty() {
+        CheckResult::ready()
     } else {
-        check_policy_fallbacks(&fallback_paths).await
+        for error in &errors {
+            readiness_check_failed("event_chain", error);
+        }
+        CheckResult::failure(errors)
+    }
+}
+
+async fn check_policy() -> CheckResult {
+    match load_policy_limits().await {
+        Ok(_) => CheckResult::ready(),
+        Err(errors) => {
+            for error in &errors {
+                readiness_check_failed("policy", error);
+            }
+            CheckResult::failure(errors)
+        }
     }
 }
 
@@ -314,6 +429,7 @@ async fn check_policy() -> CheckResult {
 struct ReadinessResults {
     nats: CheckResult,
     database: CheckResult,
+    event_chain: CheckResult,
     policy: CheckResult,
 }
 
@@ -331,9 +447,10 @@ where
     }
 }
 
-async fn run_readiness_checks_with_budgets<N, D, P>(
+async fn run_readiness_checks_with_budgets<N, D, E, P>(
     nats: N,
     database: D,
+    event_chain: E,
     policy: P,
     check_budget: Duration,
     total_budget: Duration,
@@ -341,17 +458,20 @@ async fn run_readiness_checks_with_budgets<N, D, P>(
 where
     N: Future<Output = CheckResult>,
     D: Future<Output = CheckResult>,
+    E: Future<Output = CheckResult>,
     P: Future<Output = CheckResult>,
 {
     let checks = async {
-        let (nats, database, policy) = tokio::join!(
+        let (nats, database, event_chain, policy) = tokio::join!(
             bounded_check("nats", check_budget, nats),
             bounded_check("database", check_budget, database),
+            bounded_check("event_chain", check_budget, event_chain),
             bounded_check("policy", check_budget, policy),
         );
         ReadinessResults {
             nats,
             database,
+            event_chain,
             policy,
         }
     };
@@ -363,12 +483,13 @@ where
                 "readiness checks exceeded total budget of {} ms",
                 total_budget.as_millis()
             );
-            for name in ["nats", "database", "policy"] {
+            for name in ["nats", "database", "event_chain", "policy"] {
                 readiness_check_failed(name, &message);
             }
             ReadinessResults {
                 nats: CheckResult::failure_with_message(message.clone()),
                 database: CheckResult::failure_with_message(message.clone()),
+                event_chain: CheckResult::failure_with_message(message.clone()),
                 policy: CheckResult::failure_with_message(message),
             }
         }
@@ -379,6 +500,7 @@ async fn run_readiness_checks(state: &ApiState) -> ReadinessResults {
     run_readiness_checks_with_budgets(
         check_nats(state),
         check_database(state),
+        check_event_chain(state),
         check_policy(),
         Duration::from_millis(READINESS_CHECK_TIMEOUT_MS),
         Duration::from_millis(READINESS_TOTAL_TIMEOUT_MS),
@@ -394,11 +516,13 @@ fn readiness_response(
     ReadinessResults {
         nats,
         database,
+        event_chain,
         policy,
     }: ReadinessResults,
 ) -> Response {
     let status = if matches!(database.status, CheckStatus::Failed)
         || matches!(nats.status, CheckStatus::Failed)
+        || matches!(event_chain.status, CheckStatus::Failed)
         || matches!(policy.status, CheckStatus::Failed)
     {
         StatusCode::SERVICE_UNAVAILABLE
@@ -416,6 +540,7 @@ fn readiness_response(
         "status": if status == StatusCode::OK { "ok" } else { "error" },
         "checks": {
             "database": matches!(database.status, CheckStatus::Ready),
+            "event_chain": matches!(event_chain.status, CheckStatus::Ready),
             "nats": matches!(nats.status, CheckStatus::Ready),
             "policy": matches!(policy.status, CheckStatus::Ready),
         }
@@ -432,6 +557,10 @@ fn readiness_response(
 
         if !nats.errors.is_empty() {
             errors.insert("nats".to_string(), json!(nats.errors));
+        }
+
+        if !event_chain.errors.is_empty() {
+            errors.insert("event_chain".to_string(), json!(event_chain.errors));
         }
 
         if !policy.errors.is_empty() {
@@ -579,6 +708,7 @@ mod tests {
         );
         assert_eq!(body["status"], "ok");
         assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["event_chain"], false);
         assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 
@@ -618,6 +748,7 @@ mod tests {
                 async { CheckResult::ready() },
                 pending::<CheckResult>(),
                 async { CheckResult::ready() },
+                async { CheckResult::ready() },
                 Duration::from_millis(10),
                 Duration::from_millis(100),
             ),
@@ -627,6 +758,7 @@ mod tests {
 
         assert!(matches!(results.nats.status, CheckStatus::Ready));
         assert!(matches!(results.database.status, CheckStatus::Failed));
+        assert!(matches!(results.event_chain.status, CheckStatus::Ready));
         assert!(matches!(results.policy.status, CheckStatus::Ready));
         assert!(results
             .database
@@ -640,6 +772,7 @@ mod tests {
         let body: Value = serde_json::from_slice(&body_bytes)?;
         assert_eq!(body["status"], "error");
         assert_eq!(body["checks"]["database"], false);
+        assert_eq!(body["checks"]["event_chain"], true);
         assert_eq!(body["checks"]["nats"], true);
         assert_eq!(body["checks"]["policy"], true);
 
@@ -654,6 +787,7 @@ mod tests {
                 pending::<CheckResult>(),
                 pending::<CheckResult>(),
                 pending::<CheckResult>(),
+                pending::<CheckResult>(),
                 Duration::from_millis(100),
                 Duration::from_millis(10),
             ),
@@ -661,7 +795,12 @@ mod tests {
         .await
         .expect("readiness total budget must bound every check");
 
-        for result in [&results.nats, &results.database, &results.policy] {
+        for result in [
+            &results.nats,
+            &results.database,
+            &results.event_chain,
+            &results.policy,
+        ] {
             assert!(matches!(result.status, CheckStatus::Failed));
             assert!(result
                 .errors
@@ -682,14 +821,14 @@ mod tests {
     #[tokio::test]
     async fn policy_check_accepts_valid_contract() -> Result<()> {
         let file = policy_file("max_nodes_jsonl_mb: 10\nmax_edges_jsonl_mb: 10\n")?;
-        assert!(check_policy_file(file.path()).await.is_ok());
+        assert!(load_policy_file(file.path()).await.is_ok());
         Ok(())
     }
 
     #[tokio::test]
     async fn policy_check_rejects_malformed_yaml() -> Result<()> {
         let file = policy_file("max_nodes_jsonl_mb: [\n")?;
-        let error = check_policy_file(file.path())
+        let error = load_policy_file(file.path())
             .await
             .expect_err("malformed YAML");
         assert!(error.contains("failed to parse policy file"));
@@ -699,11 +838,11 @@ mod tests {
     #[tokio::test]
     async fn policy_check_rejects_missing_or_unknown_fields() -> Result<()> {
         let missing = policy_file("max_nodes_jsonl_mb: 10\n")?;
-        assert!(check_policy_file(missing.path()).await.is_err());
+        assert!(load_policy_file(missing.path()).await.is_err());
 
         let unknown =
             policy_file("max_nodes_jsonl_mb: 10\nmax_edges_jsonl_mb: 10\nunwired_limit: 1\n")?;
-        assert!(check_policy_file(unknown.path()).await.is_err());
+        assert!(load_policy_file(unknown.path()).await.is_err());
         Ok(())
     }
 
@@ -713,8 +852,8 @@ mod tests {
         let valid = policy_file("max_nodes_jsonl_mb: 10\nmax_edges_jsonl_mb: 10\n")?;
         let paths = [invalid.path().to_path_buf(), valid.path().to_path_buf()];
 
-        let result = check_policy_fallbacks(&paths).await;
-        assert!(matches!(result.status, CheckStatus::Failed));
+        let result = load_policy_fallbacks(&paths).await;
+        assert!(result.is_err());
         Ok(())
     }
 
@@ -727,7 +866,7 @@ mod tests {
         let created = unsafe { libc::mkfifo(c_path.as_ptr(), 0o600) };
         assert_eq!(created, 0, "mkfifo must succeed");
 
-        let result = tokio::time::timeout(Duration::from_millis(500), check_policy_file(&path))
+        let result = tokio::time::timeout(Duration::from_millis(500), load_policy_file(&path))
             .await
             .expect("FIFO policy check must not block");
         let error = result.expect_err("FIFO is not a regular policy file");
@@ -758,7 +897,7 @@ mod tests {
         file.write_all(&[0xff, 0xfe])?;
         file.flush()?;
 
-        let error = check_policy_file(file.path())
+        let error = load_policy_file(file.path())
             .await
             .expect_err("non-UTF-8 policy");
         assert!(error.contains("is not valid UTF-8"));
@@ -771,7 +910,7 @@ mod tests {
         file.write_all(&vec![b'a'; MAX_POLICY_FILE_BYTES as usize + 1])?;
         file.flush()?;
 
-        let error = check_policy_file(file.path())
+        let error = load_policy_file(file.path())
             .await
             .expect_err("oversized policy");
         assert!(error.contains("must contain between 1 and"));
@@ -781,10 +920,69 @@ mod tests {
     #[tokio::test]
     async fn policy_check_rejects_zero_limits() -> Result<()> {
         let file = policy_file("max_nodes_jsonl_mb: 0\nmax_edges_jsonl_mb: 10\n")?;
-        let error = check_policy_file(file.path())
-            .await
-            .expect_err("zero limit");
+        let error = load_policy_file(file.path()).await.expect_err("zero limit");
         assert!(error.contains("max_nodes_jsonl_mb must be greater than zero"));
+        Ok(())
+    }
+
+    #[test]
+    fn jsonl_size_policy_accepts_exact_boundary_and_rejects_one_byte_over() {
+        assert!(ensure_jsonl_size("nodes", 1024, 1024).is_ok());
+        let error = ensure_jsonl_size("edges", 1025, 1024)
+            .expect_err("one byte over the published cap must fail");
+        assert_eq!(error.kind(), std::io::ErrorKind::FileTooLarge);
+        assert!(error.to_string().contains("exceeding the policy limit"));
+    }
+
+    #[test]
+    fn one_quarantined_event_is_observable_but_not_a_global_outage() {
+        let snapshot = EventChainDbSnapshot {
+            pending: 0,
+            retrying: 0,
+            quarantined: 1,
+            oldest_pending_age_seconds: 0,
+            receipts_missing: 0,
+            oldest_missing_receipt_age_seconds: 0,
+        };
+        assert!(event_chain_snapshot_errors(snapshot).is_empty());
+    }
+
+    #[test]
+    fn stale_pending_and_delayed_receipt_thresholds_fail_only_after_boundary() {
+        let at_boundary = EventChainDbSnapshot {
+            pending: 1,
+            retrying: 1,
+            quarantined: 0,
+            oldest_pending_age_seconds: STALE_UNPUBLISHED_AFTER_SECONDS,
+            receipts_missing: 1,
+            oldest_missing_receipt_age_seconds: DELAYED_RECEIPT_AFTER_SECONDS,
+        };
+        assert!(event_chain_snapshot_errors(at_boundary).is_empty());
+
+        let unhealthy = EventChainDbSnapshot {
+            oldest_pending_age_seconds: STALE_UNPUBLISHED_AFTER_SECONDS + 1,
+            oldest_missing_receipt_age_seconds: DELAYED_RECEIPT_AFTER_SECONDS + 1,
+            ..at_boundary
+        };
+        let errors = event_chain_snapshot_errors(unhealthy);
+        assert_eq!(errors.len(), 2);
+        assert!(errors.iter().any(|error| error.contains("unpublished")));
+        assert!(errors.iter().any(|error| error.contains("durable receipt")));
+    }
+
+    #[tokio::test]
+    async fn postgres_read_source_requires_event_chain_even_with_jsonl_domain_writes() -> Result<()>
+    {
+        let mut state = test_state()?;
+        state.config.domain_read_source = crate::config::DomainReadSource::Postgres;
+
+        let result = check_event_chain(&state).await;
+        assert!(matches!(result.status, CheckStatus::Failed));
+        assert!(result.errors.iter().any(|error| error.contains("worker")));
+        assert!(result
+            .errors
+            .iter()
+            .any(|error| error.contains("PostgreSQL pool")));
         Ok(())
     }
 
