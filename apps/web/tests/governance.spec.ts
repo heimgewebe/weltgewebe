@@ -688,7 +688,7 @@ test("initial hash load does not steal focus after the user moves it", async ({
   await installGovernanceRoutes(page);
   await page.goto("/antraege#antrag-stellen");
 
-  const backLink = page.getByRole("link", { name: "Zum Gewebe" });
+  const backLink = page.getByRole("link", { name: "Zur Karte" });
   await backLink.focus();
   await expect(backLink).toBeFocused();
   releaseAuthResponse();

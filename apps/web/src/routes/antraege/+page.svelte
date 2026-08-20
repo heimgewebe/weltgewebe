@@ -254,7 +254,7 @@
   <main class="wg-page wg-page--paper" data-testid="applications-page">
     <div class="wg-page__shell">
       <header class="wg-page__header">
-        <a class="wg-back-link" href="/map">← Zum Gewebe</a>
+        <a class="wg-back-link" href="/map">← Zur Karte</a>
         <p class="wg-eyebrow">Gemeinsame Entscheidungen</p>
         <h1 class="wg-title">Anträge</h1>
         <p class="wg-lede">
