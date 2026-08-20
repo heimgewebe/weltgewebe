@@ -90,7 +90,7 @@
         <a
           class="back-link"
           href={mapHref}
-          data-testid="webgemeindezentrum-map-link">← Zur Kartenansicht</a
+          data-testid="webgemeindezentrum-map-link">← Zur Karte</a
         >
 
         <div class="hero-grid">
