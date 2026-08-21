@@ -5,172 +5,274 @@ TOOLING_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." > /dev/null 2>&1
 REPO_ROOT="${REPO_ROOT:-$TOOLING_ROOT}"
 POLICY_FILE="${REPO_ROOT}/policies/security.yml"
 
-failures=0
+if ! command -v uv > /dev/null 2>&1; then
+  echo "ERROR: uv is required for security-headers-guard (tools/py/uv.lock)." >&2
+  exit 1
+fi
 
-fail() {
-  printf 'ERROR: %s\n' "$*" >&2
-  failures=$((failures + 1))
-}
+uv run --project "$TOOLING_ROOT/tools/py" --locked python - "$REPO_ROOT" "$POLICY_FILE" << 'PY'
+from __future__ import annotations
 
-policy_value() {
-  local key="$1"
-  awk -F: -v key="$key" '
-    $1 ~ "^[[:space:]]*" key "$" {
-      gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2)
-      print $2
-      exit
-    }
-  ' "$POLICY_FILE"
-}
-
-named_matcher_block() {
-  local file="$1"
-  local matcher="$2"
-  # Same repo-canonical tools/py environment as make validate / UV_RUN.
-  if ! command -v uv > /dev/null 2>&1; then
-    echo "ERROR: uv is required for security-headers-guard (tools/py/uv.lock)." >&2
-    return 1
-  fi
-  uv run --project "$TOOLING_ROOT/tools/py" --locked python - "$file" "$matcher" << 'PY'
 from pathlib import Path
 import re
 import sys
 
-path = Path(sys.argv[1])
-matcher = sys.argv[2]
-lines = path.read_text(encoding="utf-8").splitlines()
-start_re = re.compile(rf"^\s*@{re.escape(matcher)}\s*\{{\s*$")
-for index, line in enumerate(lines):
-    if not start_re.match(line):
-        continue
-    depth = 0
-    block = []
-    for candidate in lines[index:]:
-        block.append(candidate)
-        depth += candidate.count("{") - candidate.count("}")
-        if depth == 0:
-            print("\n".join(block))
-            raise SystemExit(0)
-    break
-raise SystemExit(1)
-PY
+import yaml
+
+repo = Path(sys.argv[1]).resolve()
+policy_path = Path(sys.argv[2])
+errors: list[str] = []
+
+
+def fail(message: str) -> None:
+    errors.append(message)
+
+
+def exact_keys(value: object, expected: set[str], label: str) -> bool:
+    if not isinstance(value, dict):
+        fail(f"{label} must be a mapping")
+        return False
+    unknown = sorted(set(value) - expected)
+    missing = sorted(expected - set(value))
+    if unknown or missing:
+        fail(f"{label} keys drifted: unknown={unknown}, missing={missing}")
+        return False
+    return True
+
+
+def contract_file(relative: object, label: str) -> Path | None:
+    if not isinstance(relative, str) or not relative:
+        fail(f"{label} must be a non-empty repository-relative path")
+        return None
+    candidate = Path(relative)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        fail(f"{label} must be a safe repository-relative path: {relative!r}")
+        return None
+    resolved = (repo / candidate).resolve()
+    try:
+        resolved.relative_to(repo)
+    except ValueError:
+        fail(f"{label} escapes repository root: {relative!r}")
+        return None
+    if not resolved.is_file():
+        fail(f"{label} missing: {relative}")
+        return None
+    return resolved
+
+
+def named_matcher_block(text: str, matcher: str) -> str | None:
+    lines = text.splitlines()
+    start_re = re.compile(rf"^\s*@{re.escape(matcher)}\s*\{{\s*$")
+    for index, line in enumerate(lines):
+        if not start_re.match(line):
+            continue
+        depth = 0
+        block: list[str] = []
+        for candidate in lines[index:]:
+            block.append(candidate)
+            depth += candidate.count("{") - candidate.count("}")
+            if depth == 0:
+                return "\n".join(block)
+        break
+    return None
+
+
+def frontend_response_csp(text: str, relative: str) -> dict[str, set[str]] | None:
+    matches = re.findall(
+        r'(?m)^\s*header\s+@frontendResponse\s+Content-Security-Policy\s+"([^"]*)"\s*$',
+        text,
+    )
+    if len(matches) != 1:
+        fail(
+            f"{relative} must contain exactly one @frontendResponse Content-Security-Policy header; "
+            f"found {len(matches)}"
+        )
+        return None
+
+    parsed: dict[str, set[str]] = {}
+    for segment in matches[0].split(";"):
+        segment = segment.strip()
+        if not segment:
+            continue
+        parts = segment.split()
+        name, values = parts[0], set(parts[1:])
+        if name in parsed:
+            fail(f"{relative} @frontendResponse CSP repeats directive {name}")
+            return None
+        parsed[name] = values
+    return parsed
+
+
+if not policy_path.is_file():
+    print(f"ERROR: security policy missing: {policy_path}", file=sys.stderr)
+    raise SystemExit(1)
+
+try:
+    policy = yaml.safe_load(policy_path.read_text(encoding="utf-8")) or {}
+except (OSError, yaml.YAMLError) as error:
+    print(f"ERROR: failed to read security policy: {error}", file=sys.stderr)
+    raise SystemExit(1)
+
+root_keys = {
+    "version",
+    "content_security_policy",
+    "csp_exceptions",
+    "strict_transport_security",
 }
+if not exact_keys(policy, root_keys, "policies/security.yml"):
+    policy = policy if isinstance(policy, dict) else {}
+if policy.get("version") != 2:
+    fail("policies/security.yml version must be 2")
 
-if [[ ! -f "$POLICY_FILE" ]]; then
-  fail "security policy missing: $POLICY_FILE"
-  exit 1
-fi
+csp = policy.get("content_security_policy")
+if exact_keys(csp, {"script_delivery", "script_mode", "required_frontend_response_directives"}, "content_security_policy"):
+    assert isinstance(csp, dict)
+    if csp["script_delivery"] != "sveltekit_prerender_meta":
+        fail("content_security_policy.script_delivery must be sveltekit_prerender_meta")
+    if csp["script_mode"] != "hash":
+        fail("content_security_policy.script_mode must be hash")
+    directives = csp["required_frontend_response_directives"]
+    directive_names = {
+        "style-src", "connect-src", "img-src", "worker-src", "font-src",
+        "media-src", "manifest-src", "child-src", "frame-src", "object-src",
+        "base-uri", "form-action", "frame-ancestors",
+    }
+    if exact_keys(directives, directive_names, "content_security_policy.required_frontend_response_directives"):
+        assert isinstance(directives, dict)
+        for name, value in directives.items():
+            if not isinstance(value, str) or not value.strip():
+                fail(f"required CSP directive {name} must be a non-empty string")
+else:
+    directives = {}
 
-max_age="$(policy_value max_age_seconds)"
-if [[ -z "$max_age" || "$max_age" == *[!0-9]* ]]; then
-  fail "policies/security.yml must define numeric strict_transport_security.max_age_seconds"
-fi
+exceptions = policy.get("csp_exceptions")
+if not isinstance(exceptions, list) or len(exceptions) != 1:
+    fail("csp_exceptions must contain exactly the reviewed style-src residual risk")
+else:
+    exception = exceptions[0]
+    if exact_keys(exception, {"directive", "status", "reason"}, "csp_exceptions[0]"):
+        assert isinstance(exception, dict)
+        if exception["directive"] != "style-src 'unsafe-inline'":
+            fail("csp_exceptions[0].directive must be style-src 'unsafe-inline'")
+        if exception["status"] != "accepted_residual_risk":
+            fail("csp_exceptions[0].status must be accepted_residual_risk")
+        if not isinstance(exception["reason"], str) or not exception["reason"].strip():
+            fail("csp_exceptions[0].reason must document the accepted residual risk")
 
-expected_hsts="Strict-Transport-Security \"max-age=${max_age}; includeSubDomains\""
+hsts = policy.get("strict_transport_security")
+expected_hsts = None
+hsts_valid = exact_keys(hsts, {"max_age_seconds", "include_subdomains", "preload"}, "strict_transport_security")
+if hsts_valid:
+    assert isinstance(hsts, dict)
+    max_age = hsts["max_age_seconds"]
+    include_subdomains = hsts["include_subdomains"]
+    preload = hsts["preload"]
+    if isinstance(max_age, bool) or not isinstance(max_age, int) or max_age <= 0:
+        fail("strict_transport_security.max_age_seconds must be a positive integer")
+        hsts_valid = False
+    if not isinstance(include_subdomains, bool):
+        fail("strict_transport_security.include_subdomains must be boolean")
+        hsts_valid = False
+    if not isinstance(preload, bool):
+        fail("strict_transport_security.preload must be boolean")
+        hsts_valid = False
+    if hsts_valid:
+        parts = [f"max-age={max_age}"]
+        if include_subdomains:
+            parts.append("includeSubDomains")
+        if preload:
+            parts.append("preload")
+        expected_hsts = f'Strict-Transport-Security "{"; ".join(parts)}"'
 
-# Caddy expands this placeholder at runtime; it is intentionally literal here.
-# shellcheck disable=SC2016
-expected_build_header='X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"'
+# The set of active Caddy contracts is an architecture invariant, not a
+# policy switch. A policy edit must not be able to remove a production file
+# from security validation.
+production_paths = [
+    "infra/caddy/Caddyfile.vps",
+    "infra/caddy/Caddyfile.heim",
+    "infra/caddy/Caddyfile.prod",
+]
+static_paths = [
+    "infra/caddy/Caddyfile",
+    "infra/caddy/Caddyfile.vps",
+    "infra/caddy/Caddyfile.heim",
+]
 
-for caddy in \
-  "${REPO_ROOT}/infra/caddy/Caddyfile.vps" \
-  "${REPO_ROOT}/infra/caddy/Caddyfile.heim" \
-  "${REPO_ROOT}/infra/caddy/Caddyfile.prod"; do
-  if [[ ! -f "$caddy" ]]; then
-    fail "production-relevant Caddyfile missing: $caddy"
-    continue
-  fi
+fixed_headers = [
+    'X-Frame-Options "DENY"',
+    'Referrer-Policy "no-referrer"',
+    'X-Content-Type-Options "nosniff"',
+    'X-Weltgewebe-Build "{$WELTGEWEBE_BUILD}"',
+]
 
-  if ! grep -Fq "$expected_hsts" "$caddy"; then
-    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing HSTS policy: $expected_hsts"
-  fi
-  for header in \
-    'X-Frame-Options "DENY"' \
-    'Referrer-Policy "no-referrer"' \
-    'X-Content-Type-Options "nosniff"' \
-    "$expected_build_header"; do
-    if ! grep -Fq "$header" "$caddy"; then
-      fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing header: $header"
-    fi
-  done
-done
+for relative in production_paths:
+    path = contract_file(relative, "production HTTPS Caddyfile")
+    if path is None:
+        continue
+    text = path.read_text(encoding="utf-8")
+    if expected_hsts is not None and expected_hsts not in text:
+        fail(f"{relative} missing HSTS policy derived from policies/security.yml: {expected_hsts}")
+    for header in fixed_headers:
+        if header not in text:
+            fail(f"{relative} missing constitutional header: {header}")
 
-for caddy in \
-  "${REPO_ROOT}/infra/caddy/Caddyfile" \
-  "${REPO_ROOT}/infra/caddy/Caddyfile.vps" \
-  "${REPO_ROOT}/infra/caddy/Caddyfile.heim"; do
-  if [[ ! -f "$caddy" ]]; then
-    fail "static-app Caddyfile missing: $caddy"
-    continue
-  fi
-  if ! grep -Fq "Content-Security-Policy" "$caddy"; then
-    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing static-app CSP"
-    continue
-  fi
-  if grep -Eq "script-src[^;]*'unsafe-inline'" "$caddy"; then
-    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") must not allow script-src unsafe-inline"
-  fi
-  if ! grep -Fq "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';" "$caddy"; then
-    fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") missing strict non-document/error CSP baseline"
-  fi
-  relative_caddy="$(realpath --relative-to "$REPO_ROOT" "$caddy")"
-  if ! magic_block="$(named_matcher_block "$caddy" magicLinkConfirm)"; then
-    fail "$relative_caddy missing exact magic-link confirmation CSP matcher"
-  else
-    if [[ "$(printf '%s\n' "$magic_block" | grep -Ec '^[[:space:]]*method[[:space:]]+GET[[:space:]]*$')" -ne 1 ]]; then
-      fail "$relative_caddy magic-link confirmation matcher must contain exactly one GET method constraint"
-    fi
-    if [[ "$(printf '%s\n' "$magic_block" | grep -Ec '^[[:space:]]*path[[:space:]]+/api/auth/magic-link/consume[[:space:]]*$')" -ne 1 ]]; then
-      fail "$relative_caddy magic-link confirmation matcher must contain the exact consume path"
-    fi
-  fi
+magic_policy = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
+strict_policy = "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+for relative in static_paths:
+    path = contract_file(relative, "static-app Caddyfile")
+    if path is None:
+        continue
+    text = path.read_text(encoding="utf-8")
+    if "Content-Security-Policy" not in text:
+        fail(f"{relative} missing static-app CSP")
+        continue
+    if re.search(r"script-src[^;]*'unsafe-inline'", text):
+        fail(f"{relative} must not allow script-src unsafe-inline")
+    if strict_policy not in text:
+        fail(f"{relative} missing strict non-document/error CSP baseline")
 
-  magic_policy="default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
-  if ! grep -Fq "header @magicLinkConfirm >Content-Security-Policy \"${magic_policy}\"" "$caddy"; then
-    fail "$relative_caddy must defer and overwrite the canonical magic-link confirmation CSP"
-  fi
+    magic_block = named_matcher_block(text, "magicLinkConfirm")
+    if magic_block is None:
+        fail(f"{relative} missing exact magic-link confirmation CSP matcher")
+    else:
+        if len(re.findall(r"(?m)^\s*method\s+GET\s*$", magic_block)) != 1:
+            fail(f"{relative} magic-link matcher must contain exactly one GET method constraint")
+        if len(re.findall(r"(?m)^\s*path\s+/api/auth/magic-link/consume\s*$", magic_block)) != 1:
+            fail(f"{relative} magic-link matcher must contain the exact consume path")
+    expected_magic_header = f'header @magicLinkConfirm >Content-Security-Policy "{magic_policy}"'
+    if expected_magic_header not in text:
+        fail(f"{relative} must defer and overwrite the canonical magic-link confirmation CSP")
 
-  strict_policy="default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
-  strict_matcher="@apiResponse"
-  if [[ "$(basename "$caddy")" == "Caddyfile.vps" ]]; then
-    strict_matcher="@nonDocumentResponse"
-  fi
-  if ! grep -Fq "header ${strict_matcher} >Content-Security-Policy \"${strict_policy}\"" "$caddy"; then
-    fail "$relative_caddy must defer and overwrite the canonical strict API CSP"
-  fi
-  for directive in \
-    "style-src 'self' 'unsafe-inline'" \
-    "connect-src 'self'" \
-    "img-src 'self' data: blob:" \
-    "worker-src 'self' blob:" \
-    "font-src 'self'" \
-    "media-src 'self'" \
-    "manifest-src 'self'" \
-    "child-src 'self'" \
-    "frame-src 'self'" \
-    "object-src 'none'" \
-    "base-uri 'self'" \
-    "form-action 'self'" \
-    "frame-ancestors 'none'"; do
-    if ! grep -Fq "$directive" "$caddy"; then
-      fail "$(realpath --relative-to "$REPO_ROOT" "$caddy") CSP missing directive: $directive"
-    fi
-  done
-done
+    strict_matcher = "@nonDocumentResponse" if path.name == "Caddyfile.vps" else "@apiResponse"
+    expected_strict_header = f'header {strict_matcher} >Content-Security-Policy "{strict_policy}"'
+    if expected_strict_header not in text:
+        fail(f"{relative} must defer and overwrite the canonical strict API CSP")
 
-if grep -Fq "script-src 'unsafe-inline'" "$POLICY_FILE"; then
-  fail "policies/security.yml must not retain a script-src unsafe-inline exception"
-fi
-if ! grep -Fq "script_mode: hash" "$POLICY_FILE"; then
-  fail "policies/security.yml must record hash-bound script delivery"
-fi
-SVELTE_CONFIG="${REPO_ROOT}/apps/web/svelte.config.js"
-if ! grep -Fq 'mode: "hash"' "$SVELTE_CONFIG" || ! grep -Fq '"script-src": ["self"]' "$SVELTE_CONFIG"; then
-  fail "apps/web/svelte.config.js must enable SvelteKit hash CSP for script-src"
-fi
+    frontend_directives = frontend_response_csp(text, relative)
+    if frontend_directives is not None and isinstance(directives, dict):
+        for name, value in directives.items():
+            actual_tokens = frontend_directives.get(name)
+            required_tokens = set(value.split())
+            if actual_tokens is None:
+                fail(f"{relative} @frontendResponse CSP missing policy-required directive: {name} {value}")
+            elif not required_tokens.issubset(actual_tokens):
+                fail(
+                    f"{relative} @frontendResponse CSP weakens policy-required directive "
+                    f"{name}: required={sorted(required_tokens)}, actual={sorted(actual_tokens)}"
+                )
 
-if [[ "$failures" -ne 0 ]]; then
-  exit 1
-fi
+svelte = contract_file("apps/web/svelte.config.js", "SvelteKit CSP config")
+if svelte is not None and isinstance(csp, dict):
+    text = svelte.read_text(encoding="utf-8")
+    script_mode = csp.get("script_mode")
+    if f'mode: "{script_mode}"' not in text:
+        fail(f"apps/web/svelte.config.js must use policy script mode {script_mode!r}")
+    if '"script-src": ["self"]' not in text:
+        fail("apps/web/svelte.config.js must restrict SvelteKit script-src to self")
 
-printf 'PASS: security header policy matches production Caddyfiles\n'
+if errors:
+    for error in errors:
+        print(f"ERROR: {error}", file=sys.stderr)
+    raise SystemExit(1)
+print("PASS: security header policy drives production Caddy/Svelte contracts")
+PY
