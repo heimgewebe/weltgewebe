@@ -1,22 +1,22 @@
 ---
+version: 2
 content_security_policy:
-  script-src: "'self' plus build-generated sha256 hashes"
   script_delivery: sveltekit_prerender_meta
   script_mode: hash
-  style-src: "'self' 'unsafe-inline'"
-  connect-src:
-    - "'self'"
-  img-src: "'self' data: blob:"
-  worker-src: "'self' blob:"
-  font-src: "'self'"
-  media-src: "'self'"
-  manifest-src: "'self'"
-  child-src: "'self'"
-  frame-src: "'self'"
-  object-src: "'none'"
-  base-uri: "'self'"
-  form-action: "'self'"
-  frame-ancestors: "'none'"
+  required_static_directives:
+    style-src: "'self' 'unsafe-inline'"
+    connect-src: "'self'"
+    img-src: "'self' data: blob:"
+    worker-src: "'self' blob:"
+    font-src: "'self'"
+    media-src: "'self'"
+    manifest-src: "'self'"
+    child-src: "'self'"
+    frame-src: "'self'"
+    object-src: "'none'"
+    base-uri: "'self'"
+    form-action: "'self'"
+    frame-ancestors: "'none'"
 csp_exceptions:
   - directive: "style-src 'unsafe-inline'"
     status: accepted_residual_risk
@@ -24,9 +24,6 @@ csp_exceptions:
       Svelte transitions can create runtime inline style elements. Script execution
       does not share this exception: prerendered SvelteKit bootstrap scripts are
       bound to build-generated sha256 hashes in the document CSP meta tag.
-allowed_origins:
-  - https://weltgewebe.net
-  - https://www.weltgewebe.net
 strict_transport_security:
   max_age_seconds: 31536000
   include_subdomains: true
