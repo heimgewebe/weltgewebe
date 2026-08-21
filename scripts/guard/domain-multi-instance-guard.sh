@@ -72,12 +72,12 @@ require_literal "$OUTBOX" 'quarantined_at' 'poison-event quarantine'
 require_literal "$OUTBOX" 'requeue_quarantined' 'controlled quarantine recovery'
 require_literal "$OUTBOX" 'record_consumed_once' 'consumer idempotency ledger'
 require_literal "$OUTBOX" 'ack_policy: consumer::AckPolicy::Explicit' 'explicit consumer acknowledgement'
-require_literal "$LIB" 'outbox::start(pool, client)' 'runtime outbox startup'
+require_literal "$LIB" 'outbox::start(pool, client, state.metrics.clone())' 'runtime outbox startup with worker-liveness metrics'
 require_literal "$LIB" 'ensure_current_domain_projection' 'runtime projection middleware'
 
 for marker in 'let state_a =' 'let state_b =' 'let state_c =' \
-  'outbox::start(pool.clone(), nats_a.clone())' \
-  'outbox::start(pool.clone(), nats_b.clone())' \
+  'outbox::start(pool.clone(), nats_a.clone(), metrics())' \
+  'outbox::start(pool.clone(), nats_b.clone(), metrics())' \
   'refresh_domain_projection_if_stale' \
   'consume_shared(&restart_token)' \
   'logout-all challenge is visible on second instance' \

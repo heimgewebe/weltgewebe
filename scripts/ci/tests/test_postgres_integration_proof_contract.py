@@ -12,6 +12,7 @@ CONTRACT = REPO / "scripts/ci/postgres-proof-contract.json"
 RUNNER = REPO / "scripts/ci/run-postgres-integration-proofs.sh"
 RUST_SUPPORT = REPO / "apps/api/tests/support/postgres_proof.rs"
 CI = REPO / ".github/workflows/ci.yml"
+AUTH_PASSKEY_PROOF = REPO / ".github/workflows/auth-passkey-register-proof.yml"
 
 TARGETS = {
     "db_auto_provision_write_path",
@@ -70,6 +71,33 @@ def test_ci_delegates_jetstream_lifecycle_to_runner() -> None:
     rendered = json.dumps(job, sort_keys=True)
     assert "weltgewebe-ci-nats" not in rendered
     assert "run-postgres-integration-proofs.sh" in rendered
+
+
+def test_postgres_passkey_browser_proof_provisions_pinned_jetstream_for_readiness() -> None:
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    workflow = yaml.safe_load(AUTH_PASSKEY_PROOF.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["auth-passkey-register-proof"]
+    assert job["env"]["AUTH_PASSKEY_PROOF_POSTGRES"] == "1"
+    steps = job["steps"]
+    start = next(
+        step
+        for step in steps
+        if step.get("name") == "Start pinned JetStream for readiness-backed proof"
+    )
+    cleanup = next(
+        step
+        for step in steps
+        if step.get("name") == "Stop JetStream proof container"
+    )
+    rendered = start["run"]
+    assert "scripts/ci/postgres-proof-contract.json" in rendered
+    assert "jetstream_image" in rendered
+    assert "--publish 127.0.0.1::4222" in rendered
+    assert '"${IMAGE}" -js' in rendered
+    assert "NATS_URL=nats://127.0.0.1:%s" in rendered
+    assert contract["jetstream_image"].startswith("nats@sha256:")
+    assert cleanup["if"] == "always()"
+    assert "docker rm --force" in cleanup["run"]
 
 
 def test_runner_rejects_incidental_disposable_name_substrings() -> None:

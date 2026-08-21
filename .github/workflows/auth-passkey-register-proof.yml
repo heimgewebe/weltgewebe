@@ -176,9 +176,52 @@ jobs:
         run: pnpm exec playwright install --with-deps chromium
         working-directory: apps/web
 
+      - name: Start pinned JetStream for readiness-backed proof
+        shell: bash
+        run: |
+          set -euo pipefail
+          IMAGE="$(python3 -c 'import json; print(json.load(open("scripts/ci/postgres-proof-contract.json", encoding="utf-8"))["jetstream_image"])')"
+          CONTAINER="weltgewebe-passkey-nats-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          docker run --detach --rm \
+            --name "${CONTAINER}" \
+            --publish 127.0.0.1::4222 \
+            "${IMAGE}" -js > /dev/null
+          BINDING="$(docker port "${CONTAINER}" 4222/tcp)"
+          PORT="${BINDING##*:}"
+          if [[ ! "${PORT}" =~ ^[0-9]+$ ]]; then
+            echo "could not resolve JetStream port from ${BINDING}" >&2
+            exit 1
+          fi
+          python3 - "${PORT}" <<'PY'
+          import socket
+          import sys
+          import time
+
+          port = int(sys.argv[1])
+          deadline = time.monotonic() + 20
+          while time.monotonic() < deadline:
+              try:
+                  with socket.create_connection(("127.0.0.1", port), timeout=1):
+                      break
+              except OSError:
+                  time.sleep(0.2)
+          else:
+              raise SystemExit("JetStream proof port did not become reachable")
+          PY
+          printf 'NATS_URL=nats://127.0.0.1:%s\n' "${PORT}" >> "${GITHUB_ENV}"
+          printf 'PASSKEY_NATS_CONTAINER=%s\n' "${CONTAINER}" >> "${GITHUB_ENV}"
+
       - name: Run auth passkey register positive proof
         run: pnpm test:proof:auth-passkey-register
         working-directory: apps/web
+
+      - name: Stop JetStream proof container
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${PASSKEY_NATS_CONTAINER:-}" ]]; then
+            docker rm --force "${PASSKEY_NATS_CONTAINER}" > /dev/null 2>&1 || true
+          fi
 
       - name: Upload proof summary
         if: always()
