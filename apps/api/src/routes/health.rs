@@ -14,7 +14,7 @@ use axum::{
     Json, Router,
 };
 use serde::Deserialize;
-use serde_json::{json, Map};
+use serde_json::{json, Map, Value};
 use sqlx::query_scalar;
 
 #[cfg(test)]
@@ -98,6 +98,7 @@ const READINESS_CHECK_TIMEOUT_MS: u64 = 750;
 const READINESS_TOTAL_TIMEOUT_MS: u64 = 1_000;
 const STALE_UNPUBLISHED_AFTER_SECONDS: i64 = 60;
 const DELAYED_RECEIPT_AFTER_SECONDS: i64 = 60;
+const RECEIPT_HEALTH_WINDOW_SECONDS: i64 = 10 * 60;
 const BYTES_PER_MEBIBYTE: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, Deserialize)]
@@ -334,19 +335,18 @@ async fn check_database(state: &ApiState) -> CheckResult {
 
 fn event_chain_snapshot_errors(snapshot: EventChainDbSnapshot) -> Vec<String> {
     let mut errors = Vec::new();
-    if snapshot.pending > 0 && snapshot.oldest_pending_age_seconds > STALE_UNPUBLISHED_AFTER_SECONDS
+    if snapshot.actionable_pending
+        && snapshot.oldest_actionable_age_seconds > STALE_UNPUBLISHED_AFTER_SECONDS
     {
         errors.push(format!(
-            "oldest unpublished domain outbox event is {} seconds old (limit: {} seconds)",
-            snapshot.oldest_pending_age_seconds, STALE_UNPUBLISHED_AFTER_SECONDS
+            "oldest actionable domain outbox event has been eligible for {} seconds (limit: {} seconds)",
+            snapshot.oldest_actionable_age_seconds, STALE_UNPUBLISHED_AFTER_SECONDS
         ));
     }
-    if snapshot.receipts_missing > 0
-        && snapshot.oldest_missing_receipt_age_seconds > DELAYED_RECEIPT_AFTER_SECONDS
-    {
+    if snapshot.receipt_probe_missing {
         errors.push(format!(
-            "oldest published domain event without durable receipt is {} seconds old (limit: {} seconds)",
-            snapshot.oldest_missing_receipt_age_seconds, DELAYED_RECEIPT_AFTER_SECONDS
+            "bounded domain-event receipt probe found an event published {} seconds ago without a durable receipt",
+            snapshot.receipt_probe_age_seconds
         ));
     }
     errors
@@ -383,7 +383,11 @@ async fn check_event_chain(state: &ApiState) -> CheckResult {
 
     let (jetstream, database) = tokio::join!(
         outbox::verify_jetstream_contract(client),
-        outbox::load_event_chain_db_snapshot(pool),
+        outbox::load_event_chain_db_snapshot(
+            pool,
+            DELAYED_RECEIPT_AFTER_SECONDS,
+            RECEIPT_HEALTH_WINDOW_SECONDS,
+        ),
     );
     if let Err(error) = jetstream {
         errors.push(error.to_string());
@@ -391,16 +395,18 @@ async fn check_event_chain(state: &ApiState) -> CheckResult {
     match database {
         Ok(snapshot) => {
             state.metrics.set_domain_event_chain_snapshot(
-                snapshot.pending,
-                snapshot.retrying,
-                snapshot.quarantined,
-                snapshot.oldest_pending_age_seconds,
-                snapshot.receipts_missing,
-                snapshot.oldest_missing_receipt_age_seconds,
+                snapshot.actionable_pending,
+                snapshot.quarantine_present,
+                snapshot.oldest_actionable_age_seconds,
+                snapshot.receipt_probe_missing,
+                snapshot.receipt_probe_age_seconds,
             );
             errors.extend(event_chain_snapshot_errors(snapshot));
         }
-        Err(error) => errors.push(error.to_string()),
+        Err(error) => {
+            state.metrics.mark_domain_event_chain_snapshot_failed();
+            errors.push(error.to_string());
+        }
     }
 
     if errors.is_empty() {
@@ -512,6 +518,14 @@ async fn ready(State(state): State<ApiState>) -> Response {
     readiness_response(run_readiness_checks(&state).await)
 }
 
+fn readiness_check_json(status: CheckStatus) -> Value {
+    match status {
+        CheckStatus::Ready => json!(true),
+        CheckStatus::Failed => json!(false),
+        CheckStatus::Skipped => Value::Null,
+    }
+}
+
 fn readiness_response(
     ReadinessResults {
         nats,
@@ -540,7 +554,7 @@ fn readiness_response(
         "status": if status == StatusCode::OK { "ok" } else { "error" },
         "checks": {
             "database": matches!(database.status, CheckStatus::Ready),
-            "event_chain": matches!(event_chain.status, CheckStatus::Ready),
+            "event_chain": readiness_check_json(event_chain.status),
             "nats": matches!(nats.status, CheckStatus::Ready),
             "policy": matches!(policy.status, CheckStatus::Ready),
         }
@@ -708,7 +722,7 @@ mod tests {
         );
         assert_eq!(body["status"], "ok");
         assert_eq!(body["checks"]["database"], false);
-        assert_eq!(body["checks"]["event_chain"], false);
+        assert!(body["checks"]["event_chain"].is_null());
         assert_eq!(body["checks"]["nats"], false);
         assert_eq!(body["checks"]["policy"], true);
 
@@ -935,39 +949,39 @@ mod tests {
     }
 
     #[test]
-    fn one_quarantined_event_is_observable_but_not_a_global_outage() {
+    fn quarantine_and_scheduled_retry_are_observable_without_global_outage() {
         let snapshot = EventChainDbSnapshot {
-            pending: 0,
-            retrying: 0,
-            quarantined: 1,
-            oldest_pending_age_seconds: 0,
-            receipts_missing: 0,
-            oldest_missing_receipt_age_seconds: 0,
+            actionable_pending: false,
+            oldest_actionable_age_seconds: STALE_UNPUBLISHED_AFTER_SECONDS + 500,
+            quarantine_present: true,
+            receipt_probe_missing: false,
+            receipt_probe_age_seconds: 0,
         };
         assert!(event_chain_snapshot_errors(snapshot).is_empty());
     }
 
     #[test]
-    fn stale_pending_and_delayed_receipt_thresholds_fail_only_after_boundary() {
+    fn actionable_backlog_and_bounded_missing_receipt_fail_current_health() {
         let at_boundary = EventChainDbSnapshot {
-            pending: 1,
-            retrying: 1,
-            quarantined: 0,
-            oldest_pending_age_seconds: STALE_UNPUBLISHED_AFTER_SECONDS,
-            receipts_missing: 1,
-            oldest_missing_receipt_age_seconds: DELAYED_RECEIPT_AFTER_SECONDS,
+            actionable_pending: true,
+            oldest_actionable_age_seconds: STALE_UNPUBLISHED_AFTER_SECONDS,
+            quarantine_present: false,
+            receipt_probe_missing: false,
+            receipt_probe_age_seconds: 0,
         };
         assert!(event_chain_snapshot_errors(at_boundary).is_empty());
 
         let unhealthy = EventChainDbSnapshot {
-            oldest_pending_age_seconds: STALE_UNPUBLISHED_AFTER_SECONDS + 1,
-            oldest_missing_receipt_age_seconds: DELAYED_RECEIPT_AFTER_SECONDS + 1,
-            ..at_boundary
+            actionable_pending: true,
+            oldest_actionable_age_seconds: STALE_UNPUBLISHED_AFTER_SECONDS + 1,
+            quarantine_present: true,
+            receipt_probe_missing: true,
+            receipt_probe_age_seconds: DELAYED_RECEIPT_AFTER_SECONDS + 1,
         };
         let errors = event_chain_snapshot_errors(unhealthy);
         assert_eq!(errors.len(), 2);
-        assert!(errors.iter().any(|error| error.contains("unpublished")));
-        assert!(errors.iter().any(|error| error.contains("durable receipt")));
+        assert!(errors.iter().any(|error| error.contains("actionable")));
+        assert!(errors.iter().any(|error| error.contains("receipt probe")));
     }
 
     #[tokio::test]

@@ -385,22 +385,29 @@ pub async fn run() -> anyhow::Result<()> {
         tracing::info!("Web Push event consumer and retry worker started");
     }
 
-    if outbox::event_chain_required(&state.config) {
-        match (state.db_pool.clone(), state.nats_client.clone()) {
-            (Some(pool), Some(client)) => {
-                outbox::start(pool, client, state.metrics.clone())
-                    .await
-                    .context("failed to start transactional domain outbox")?;
-                tracing::info!(
+    let event_chain_required = outbox::event_chain_required(&state.config);
+    match (state.db_pool.clone(), state.nats_client.clone()) {
+        (Some(pool), Some(client)) => {
+            match outbox::start(pool, client, state.metrics.clone()).await {
+                Ok(()) => tracing::info!(
+                    required = event_chain_required,
                     "Transactional domain outbox and idempotent receipt consumer started"
-                );
+                ),
+                Err(error) if event_chain_required => {
+                    return Err(error.context("failed to start required transactional domain outbox"));
+                }
+                Err(error) => tracing::warn!(
+                    %error,
+                    "Optional transactional outbox backlog drain could not start"
+                ),
             }
-            _ => tracing::warn!(
-                database_configured = state.db_pool_configured,
-                nats_configured = state.nats_configured,
-                "PostgreSQL domain event chain is configured but cannot start; readiness will fail closed"
-            ),
         }
+        _ if event_chain_required => tracing::warn!(
+            database_configured = state.db_pool_configured,
+            nats_configured = state.nats_configured,
+            "PostgreSQL domain event chain is configured but cannot start; readiness will fail closed"
+        ),
+        _ => {}
     }
 
     // Governance-Fristen-Sweeper: wertet Antragsfristen serverseitig und

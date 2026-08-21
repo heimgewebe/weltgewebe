@@ -75,18 +75,34 @@ sowie Durable-Name, Filter und explizite Acknowledgements werden semantisch
 geprüft; eine bloße NATS-Verbindung genügt nicht.
 
 Relay und Receipt-Consumer sind essentielle beaufsichtigte Worker. Ein
-unerwarteter Exit setzt Readiness auf fehlgeschlagen. Ein unveröffentlichter,
-nicht quarantänisierter Rückstand oder ein veröffentlichter Beleg ohne durable
-Consumption-Receipt wird nach mehr als 60 Sekunden als ungesund bewertet. Die
-Grenze liegt oberhalb der 30-sekündigen Claim-Lease und bleibt fest an diesen
-ersten Implementierungsschnitt gebunden. Pending-, Retry-, Quarantäne- und
-Receipt-Lag-Werte werden ohne fachliche IDs als Metriken veröffentlicht.
+unerwarteter Exit setzt ihren Liveness-Wert zunächst auf fehlgeschlagen; der
+Supervisor startet den Worker nach kurzer Pause erneut. Solange PostgreSQL Teil
+der aktiven Domänenwahrheit ist, bleibt Readiness während eines tatsächlichen
+Worker-Ausfalls fail-closed. Sind PostgreSQL und NATS verfügbar, startet der
+Outbox-Drain auch im JSONL-Modus, damit ein Rollback keine bereits persistierte
+PostgreSQL-Outbox strandet.
+
+Readiness bewertet bewusst den **aktuellen** Lieferzustand und ist kein
+unbegrenzter Historien-Audit. Als ungesund gilt ein nicht quarantänisiertes
+Ereignis erst, wenn es *jetzt ausführbar* ist und seit mehr als 60 Sekunden
+überfällig bleibt. Geplante Retry-Backoffs (`available_at` in der Zukunft)
+werden daher nicht als festgefahrener Rückstand gezählt. Für durable Receipts
+prüft eine indexgestützte Sonde alle fälligen veröffentlichten Ereignisse im
+festen Zehn-Minuten-Fenster, die mindestens 60 Sekunden alt sind. Eine alte
+historische Receipt-Lücke kann damit die gegenwärtige Produktion nicht dauerhaft
+auf `503` festhalten; solche Lücken gehören in Audit/Recovery, nicht in
+Readiness. Die Readiness-Abfragen verwenden dafür die bestehenden
+`available_at`-Indizes plus eigene partielle Indizes für veröffentlichte und
+quarantänisierte Outbox-Zeilen.
 
 Quarantäne ist ein kontrollierter Betriebszustand, keine zweite Fachwahrheit.
 Ein absichtlich quarantänisiertes Poison Event bleibt beobachtbar, führt allein
-aber nicht zum globalen Readiness-Ausfall; es wird aus der aktiven
-Rückstandsalterung ausgeschlossen und nur durch einen expliziten Operatorpfad
-erneut eingereiht.
+aber nicht zum globalen Readiness-Ausfall. Ein syntaktisch beschädigtes internes
+JetStream-Ereignis wird nicht bestätigt und deshalb erneut zugestellt, statt
+ohne durable Receipt still verworfen zu werden. Die Metriken veröffentlichen
+nur begrenzte Health-Signale ohne fachliche IDs: Worker-Liveness, Erfolg der
+DB-Health-Sonde, aktuell ausführbaren Rückstand, Quarantäne-Präsenz, Alter des
+ältesten ausführbaren Ereignisses und den bounded Receipt-Probe.
 
 ## Konsumenten
 

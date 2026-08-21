@@ -59,6 +59,14 @@ async fn jsonl_policy_limits() -> std::io::Result<PolicyLimits> {
     load_policy_limits().await.map_err(policy_io_error)
 }
 
+fn jsonl_write_status(error: &std::io::Error) -> StatusCode {
+    if error.kind() == std::io::ErrorKind::FileTooLarge {
+        StatusCode::INSUFFICIENT_STORAGE
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
+
 pub enum NodeMutationError {
     Status(StatusCode),
     DomainReadSourceReadOnly,
@@ -1610,11 +1618,16 @@ pub async fn create_node(
             }
 
             // Only a successful durable append may be reflected in cache.
-            if let Err(e) = append_node_line(&record).await {
-                tracing::error!(error = %e, "failed to append node to JSONL");
+            if let Err(error) = append_node_line(&record).await {
+                let status = jsonl_write_status(&error);
+                tracing::error!(%error, %status, "failed to append node to JSONL");
                 return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to persist node".to_string(),
+                    status,
+                    if status == StatusCode::INSUFFICIENT_STORAGE {
+                        "node JSONL storage limit reached".to_string()
+                    } else {
+                        "failed to persist node".to_string()
+                    },
                 ));
             }
 
@@ -2382,6 +2395,20 @@ mod node_record_tests {
             original.as_bytes()
         );
     }
+
+    #[test]
+    fn oversized_jsonl_can_recover_by_shrinking_delete_rewrite() {
+        let over_limit = 2 * 1024 * 1024;
+        assert!(ensure_delete_rewrite_not_growing("nodes", over_limit, over_limit - 1).is_ok());
+        assert!(ensure_delete_rewrite_not_growing("edges", over_limit, over_limit).is_ok());
+        assert!(ensure_delete_rewrite_not_growing("nodes", over_limit, over_limit + 1).is_err());
+    }
+
+    #[test]
+    fn jsonl_capacity_breach_maps_to_insufficient_storage() {
+        let error = std::io::Error::new(std::io::ErrorKind::FileTooLarge, "cap");
+        assert_eq!(jsonl_write_status(&error), StatusCode::INSUFFICIENT_STORAGE);
+    }
 }
 
 async fn replace_node_jsonl(node: &Node) -> std::io::Result<bool> {
@@ -2773,12 +2800,25 @@ async fn edge_role_collision_jsonl(edge_path: &FsPath, node_id: &str) -> std::io
     Ok(false)
 }
 
+fn ensure_delete_rewrite_not_growing(
+    label: &str,
+    original_bytes: u64,
+    resulting_bytes: u64,
+) -> std::io::Result<()> {
+    if resulting_bytes > original_bytes {
+        return Err(std::io::Error::other(format!(
+            "{label} JSONL delete rewrite grew from {original_bytes} to {resulting_bytes} bytes"
+        )));
+    }
+    Ok(())
+}
+
 async fn prepare_node_delete_tmp(
     source_path: &FsPath,
     tmp_path: &FsPath,
     node_id: &str,
-    maximum_bytes: u64,
 ) -> std::io::Result<bool> {
+    let original_bytes = tokio::fs::metadata(source_path).await?.len();
     let file = File::open(source_path).await?;
     let mut lines = BufReader::new(file).lines();
     let tmp_file = OpenOptions::new()
@@ -2800,7 +2840,8 @@ async fn prepare_node_delete_tmp(
     }
     writer.flush().await?;
     let file = writer.into_inner();
-    ensure_jsonl_size("nodes", file.metadata().await?.len(), maximum_bytes)?;
+    let resulting_bytes = file.metadata().await?.len();
+    ensure_delete_rewrite_not_growing("nodes", original_bytes, resulting_bytes)?;
     file.sync_all().await?;
     Ok(deleted)
 }
@@ -2810,8 +2851,12 @@ async fn prepare_edge_delete_tmp(
     tmp_path: &FsPath,
     node_id: &str,
     evidence: EdgeEndpointCollisionEvidence,
-    maximum_bytes: u64,
 ) -> std::io::Result<Vec<String>> {
+    let original_bytes = match tokio::fs::metadata(source_path).await {
+        Ok(metadata) => metadata.len(),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => 0,
+        Err(error) => return Err(error),
+    };
     let maybe_file = match File::open(source_path).await {
         Ok(file) => Some(file),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
@@ -2850,7 +2895,8 @@ async fn prepare_edge_delete_tmp(
 
     writer.flush().await?;
     let file = writer.into_inner();
-    ensure_jsonl_size("edges", file.metadata().await?.len(), maximum_bytes)?;
+    let resulting_bytes = file.metadata().await?.len();
+    ensure_delete_rewrite_not_growing("edges", original_bytes, resulting_bytes)?;
     file.sync_all().await?;
     Ok(removed)
 }
@@ -2908,7 +2954,6 @@ async fn delete_node_and_edges_jsonl_with_injection(
     injection: JsonlNodeDeleteFailureInjection,
 ) -> std::io::Result<JsonlNodeDeleteOutcome> {
     recover_node_delete_jsonl_journal().await?;
-    let limits = jsonl_policy_limits().await?;
 
     let paths = node_delete_paths()?;
     tokio::fs::create_dir_all(&paths.dir).await?;
@@ -2926,21 +2971,9 @@ async fn delete_node_and_edges_jsonl_with_injection(
     let edge_backup = journal_child_path(&paths.dir, &journal.edge_backup)?;
 
     let result = async {
-        let removed_edge_ids = prepare_edge_delete_tmp(
-            &paths.edges,
-            &edge_tmp,
-            node_id,
-            evidence,
-            limits.max_edges_jsonl_bytes(),
-        )
-        .await?;
-        let node_deleted = prepare_node_delete_tmp(
-            &paths.nodes,
-            &node_tmp,
-            node_id,
-            limits.max_nodes_jsonl_bytes(),
-        )
-        .await?;
+        let removed_edge_ids =
+            prepare_edge_delete_tmp(&paths.edges, &edge_tmp, node_id, evidence).await?;
+        let node_deleted = prepare_node_delete_tmp(&paths.nodes, &node_tmp, node_id).await?;
         if !node_deleted {
             return Err(JsonlNodeDeleteTxError::Io(std::io::Error::new(
                 std::io::ErrorKind::NotFound,
@@ -3141,8 +3174,9 @@ pub async fn replace_node(
                 }
                 Err(error) => {
                     let _ = abort_jsonl_audit(&audit).await;
-                    tracing::error!(%error, node_id = %id, "failed to replace node JSONL record");
-                    return Err(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR));
+                    let status = jsonl_write_status(&error);
+                    tracing::error!(%error, %status, node_id = %id, "failed to replace node JSONL record");
+                    return Err(NodeMutationError::Status(status));
                 }
             }
         }
@@ -3570,8 +3604,15 @@ async fn patch_node_jsonl(
 
         // Ensure durability
         let file = writer.into_inner();
-        ensure_jsonl_size("nodes", file.metadata().await.map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?.len(), maximum_bytes)
-            .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;
+        ensure_jsonl_size(
+            "nodes",
+            file.metadata()
+                .await
+                .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?
+                .len(),
+            maximum_bytes,
+        )
+        .map_err(|error| NodeMutationError::Status(jsonl_write_status(&error)))?;
         file.sync_all()
             .await
             .map_err(|_| NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))?;

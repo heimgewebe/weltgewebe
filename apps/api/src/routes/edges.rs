@@ -42,6 +42,14 @@ pub(crate) fn edge_create_persist_lock() -> &'static Mutex<()> {
     EDGE_CREATE_PERSIST.get_or_init(|| Mutex::new(()))
 }
 
+fn jsonl_write_status(error: &std::io::Error) -> StatusCode {
+    if error.kind() == std::io::ErrorKind::FileTooLarge {
+        StatusCode::INSUFFICIENT_STORAGE
+    } else {
+        StatusCode::INTERNAL_SERVER_ERROR
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum FadenProjectionMode {
     /// Create a missing projection, but leave an existing operation replay unchanged.
@@ -1367,10 +1375,15 @@ async fn project_edge(
                     replace_edge_operation_line(&reactivated_record, operation)
                         .await
                         .map_err(|error| {
-                            tracing::error!(error = %error, edge_id = %existing.id, "failed to reactivate edge in JSONL");
+                            let status = jsonl_write_status(&error);
+                            tracing::error!(%error, %status, edge_id = %existing.id, "failed to reactivate edge in JSONL");
                             (
-                                StatusCode::INTERNAL_SERVER_ERROR,
-                                "failed to reactivate edge".to_string(),
+                                status,
+                                if status == StatusCode::INSUFFICIENT_STORAGE {
+                                    "edge JSONL storage limit reached".to_string()
+                                } else {
+                                    "failed to reactivate edge".to_string()
+                                },
                             )
                         })?;
                     let mut edges = state.edges.write().await;
@@ -1403,11 +1416,16 @@ async fn project_edge(
 
             // Cache mutation follows durable append; failed writes never
             // leave a phantom Faden in memory.
-            if let Err(e) = append_edge_line(&record).await {
-                tracing::error!(error = %e, "failed to append edge to JSONL");
+            if let Err(error) = append_edge_line(&record).await {
+                let status = jsonl_write_status(&error);
+                tracing::error!(%error, %status, "failed to append edge to JSONL");
                 return Err((
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    "failed to persist edge".to_string(),
+                    status,
+                    if status == StatusCode::INSUFFICIENT_STORAGE {
+                        "edge JSONL storage limit reached".to_string()
+                    } else {
+                        "failed to persist edge".to_string()
+                    },
                 ));
             }
 

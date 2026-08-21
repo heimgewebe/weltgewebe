@@ -44,12 +44,11 @@ pub struct OutboxEvent {
 
 #[derive(Debug, Clone, Copy, sqlx::FromRow)]
 pub struct EventChainDbSnapshot {
-    pub pending: i64,
-    pub retrying: i64,
-    pub quarantined: i64,
-    pub oldest_pending_age_seconds: i64,
-    pub receipts_missing: i64,
-    pub oldest_missing_receipt_age_seconds: i64,
+    pub actionable_pending: bool,
+    pub oldest_actionable_age_seconds: i64,
+    pub quarantine_present: bool,
+    pub receipt_probe_missing: bool,
+    pub receipt_probe_age_seconds: i64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -187,23 +186,60 @@ pub async fn verify_jetstream_contract(client: &Client) -> anyhow::Result<()> {
     validate_consumer_contract(&consumer_info)
 }
 
-pub async fn load_event_chain_db_snapshot(pool: &PgPool) -> anyhow::Result<EventChainDbSnapshot> {
+pub async fn load_event_chain_db_snapshot(
+    pool: &PgPool,
+    receipt_grace_seconds: i64,
+    receipt_window_seconds: i64,
+) -> anyhow::Result<EventChainDbSnapshot> {
+    anyhow::ensure!(receipt_grace_seconds > 0, "receipt grace must be positive");
+    anyhow::ensure!(
+        receipt_window_seconds > receipt_grace_seconds,
+        "receipt health window must exceed receipt grace"
+    );
     sqlx::query_as::<_, EventChainDbSnapshot>(
-        "SELECT \
-            COUNT(*) FILTER (WHERE event.published_at IS NULL AND event.quarantined_at IS NULL)::BIGINT AS pending, \
-            COUNT(*) FILTER (WHERE event.published_at IS NULL AND event.quarantined_at IS NULL AND event.attempt_count > 0)::BIGINT AS retrying, \
-            COUNT(*) FILTER (WHERE event.published_at IS NULL AND event.quarantined_at IS NOT NULL)::BIGINT AS quarantined, \
-            COALESCE(FLOOR(EXTRACT(EPOCH FROM (NOW() - MIN(event.created_at) FILTER (WHERE event.published_at IS NULL AND event.quarantined_at IS NULL)))), 0)::BIGINT AS oldest_pending_age_seconds, \
-            COUNT(*) FILTER (WHERE event.published_at IS NOT NULL AND receipt.event_id IS NULL)::BIGINT AS receipts_missing, \
-            COALESCE(FLOOR(EXTRACT(EPOCH FROM (NOW() - MIN(event.published_at) FILTER (WHERE event.published_at IS NOT NULL AND receipt.event_id IS NULL)))), 0)::BIGINT AS oldest_missing_receipt_age_seconds \
-         FROM domain_outbox event \
-         LEFT JOIN domain_event_consumptions receipt \
-           ON receipt.consumer_name = $1 AND receipt.event_id = event.id",
+        "WITH oldest_actionable AS MATERIALIZED (\
+             SELECT available_at FROM domain_outbox \
+              WHERE published_at IS NULL \
+                AND quarantined_at IS NULL \
+                AND available_at <= NOW() \
+              ORDER BY available_at ASC, id ASC \
+              LIMIT 1\
+         ), missing_receipt AS MATERIALIZED (\
+             SELECT event.published_at FROM domain_outbox event \
+              WHERE event.published_at IS NOT NULL \
+                AND event.published_at <= NOW() - make_interval(secs => $2) \
+                AND event.published_at >= NOW() - make_interval(secs => $3) \
+                AND NOT EXISTS (\
+                    SELECT 1 FROM domain_event_consumptions receipt \
+                     WHERE receipt.consumer_name = $1 \
+                       AND receipt.event_id = event.id\
+                ) \
+              ORDER BY event.published_at ASC, event.id ASC \
+              LIMIT 1\
+         ) \
+         SELECT \
+             EXISTS (SELECT 1 FROM oldest_actionable) AS actionable_pending, \
+             COALESCE((\
+                 SELECT FLOOR(EXTRACT(EPOCH FROM (NOW() - available_at)))::BIGINT \
+                   FROM oldest_actionable\
+             ), 0)::BIGINT AS oldest_actionable_age_seconds, \
+             EXISTS (\
+                 SELECT 1 FROM domain_outbox \
+                  WHERE published_at IS NULL AND quarantined_at IS NOT NULL \
+                  LIMIT 1\
+             ) AS quarantine_present, \
+             EXISTS (SELECT 1 FROM missing_receipt) AS receipt_probe_missing, \
+             COALESCE((\
+                 SELECT FLOOR(EXTRACT(EPOCH FROM (NOW() - published_at)))::BIGINT \
+                   FROM missing_receipt\
+             ), 0)::BIGINT AS receipt_probe_age_seconds",
     )
     .bind(CONSUMER_LEDGER_NAME)
+    .bind(receipt_grace_seconds)
+    .bind(receipt_window_seconds)
     .fetch_one(pool)
     .await
-    .context("failed to inspect transactional domain event chain")
+    .context("failed to inspect time-bounded transactional domain event-chain health")
 }
 
 pub async fn claim_pending(pool: &PgPool, limit: i64) -> anyhow::Result<Vec<OutboxEvent>> {
@@ -419,10 +455,10 @@ async fn receipt_consumer_loop(pool: PgPool, consumer: PullConsumer) {
             let envelope: PublishedDomainEvent = match serde_json::from_slice(&message.payload) {
                 Ok(envelope) => envelope,
                 Err(error) => {
-                    tracing::error!(error = %error, "Malformed internal domain event discarded");
-                    if let Err(ack_error) = message.ack().await {
-                        tracing::warn!(error = %ack_error, "Malformed domain event ack failed");
-                    }
+                    tracing::error!(
+                        error = %error,
+                        "Malformed internal domain event left unacknowledged for redelivery"
+                    );
                     continue;
                 }
             };
@@ -449,28 +485,32 @@ async fn receipt_consumer_loop(pool: PgPool, consumer: PullConsumer) {
     }
 }
 
-fn spawn_essential_worker<F>(
+fn spawn_essential_worker<F, Fut>(
     metrics: Metrics,
     worker: DomainEventWorker,
-    future: F,
-) -> tokio::task::AbortHandle
+    factory: F,
+) -> tokio::task::JoinHandle<()>
 where
-    F: Future<Output = ()> + Send + 'static,
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
 {
     metrics.set_domain_event_worker_up(worker, true);
-    let worker_handle = tokio::spawn(future);
-    let abort_handle = worker_handle.abort_handle();
     tokio::spawn(async move {
-        let outcome = worker_handle.await;
-        metrics.set_domain_event_worker_up(worker, false);
-        match outcome {
-            Ok(()) => tracing::error!(?worker, "Essential domain event worker exited"),
-            Err(error) => {
-                tracing::error!(?worker, %error, "Essential domain event worker stopped unexpectedly")
+        loop {
+            metrics.set_domain_event_worker_up(worker, true);
+            let outcome = tokio::spawn(factory()).await;
+            metrics.set_domain_event_worker_up(worker, false);
+            match outcome {
+                Ok(()) => tracing::error!(?worker, "Essential domain event worker exited"),
+                Err(error) => tracing::error!(
+                    ?worker,
+                    %error,
+                    "Essential domain event worker stopped unexpectedly"
+                ),
             }
+            tokio::time::sleep(Duration::from_secs(1)).await;
         }
-    });
-    abort_handle
+    })
 }
 
 pub async fn start(pool: PgPool, client: Client, metrics: Metrics) -> anyhow::Result<()> {
@@ -485,22 +525,30 @@ pub async fn start(pool: PgPool, client: Client, metrics: Metrics) -> anyhow::Re
         .context("failed to inspect domain receipt consumer")?;
     validate_consumer_contract(&consumer_info)?;
 
-    spawn_essential_worker(
-        metrics.clone(),
-        DomainEventWorker::Relay,
-        relay_loop(pool.clone(), context),
-    );
-    spawn_essential_worker(
-        metrics,
-        DomainEventWorker::ReceiptConsumer,
-        receipt_consumer_loop(pool, consumer),
-    );
+    let relay_pool = pool.clone();
+    let relay_context = context.clone();
+    spawn_essential_worker(metrics.clone(), DomainEventWorker::Relay, move || {
+        relay_loop(relay_pool.clone(), relay_context.clone())
+    });
+
+    let receipt_pool = pool;
+    let receipt_consumer = consumer;
+    spawn_essential_worker(metrics, DomainEventWorker::ReceiptConsumer, move || {
+        receipt_consumer_loop(receipt_pool.clone(), receipt_consumer.clone())
+    });
     Ok(())
 }
 
 #[cfg(test)]
 mod tests {
-    use std::{future::pending, time::Duration};
+    use std::{
+        future::pending,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
 
     use super::*;
     use crate::telemetry::BuildInfo;
@@ -545,19 +593,33 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn essential_worker_abort_is_reflected_by_shared_liveness() {
+    async fn essential_worker_restarts_after_unexpected_exit() {
         let metrics = metrics();
-        let abort =
-            spawn_essential_worker(metrics.clone(), DomainEventWorker::Relay, pending::<()>());
-        assert!(metrics.domain_event_worker_is_up(DomainEventWorker::Relay));
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let factory_attempts = attempts.clone();
+        let supervisor =
+            spawn_essential_worker(metrics.clone(), DomainEventWorker::Relay, move || {
+                let factory_attempts = factory_attempts.clone();
+                async move {
+                    let attempt = factory_attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                    if attempt > 1 {
+                        pending::<()>().await;
+                    }
+                }
+            });
 
-        abort.abort();
-        tokio::time::timeout(Duration::from_secs(1), async {
-            while metrics.domain_event_worker_is_up(DomainEventWorker::Relay) {
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if attempts.load(Ordering::SeqCst) >= 2
+                    && metrics.domain_event_worker_is_up(DomainEventWorker::Relay)
+                {
+                    break;
+                }
                 tokio::task::yield_now().await;
             }
         })
         .await
-        .expect("supervisor must expose an aborted essential worker");
+        .expect("essential worker supervisor must restart a terminated worker");
+        supervisor.abort();
     }
 }

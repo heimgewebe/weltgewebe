@@ -193,8 +193,10 @@ nicht überstimmen: Der Container bleibt ungesund, solange die API ihre
 Abhängigkeiten und Policy-Verträge nicht als bereit meldet. Im
 PostgreSQL-Produktionspfad umfasst dies ausdrücklich die beaufsichtigten
 Outbox-Worker, den semantisch passenden JetStream/Durable-Consumer sowie die
-60-Sekunden-Grenzen für aktiven unveröffentlichten Rückstand und fehlende
-durable Consumption-Receipts. Quarantäne wird über private Metriken beobachtet;
+60-Sekunden-Grenze für *jetzt ausführbaren* Outbox-Rückstand sowie den
+Receipt-Probe im festen aktuellen Zehn-Minuten-Fenster. Geplante Retry-Backoffs
+und ältere Historienlücken blockieren Readiness nicht. Quarantäne wird über
+private Metriken beobachtet;
 eine einzelne bewusst quarantänisierte Nachricht überstimmt Readiness nicht.
 
 Startet die API gar nicht und meldet `AUTH_TRUSTED_PROXIES is not set`, dann

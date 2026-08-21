@@ -180,8 +180,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          IMAGE="$(python3 -c 'import json; print(json.load(open("scripts/ci/postgres-proof-contract.json", encoding="utf-8"))["jetstream_image"])')"
+          IMAGE="$(
+            python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          contract = json.loads(
+              Path("scripts/ci/postgres-proof-contract.json").read_text(encoding="utf-8")
+          )
+          print(contract["jetstream_image"])
+          PY
+          )"
           CONTAINER="weltgewebe-passkey-nats-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          printf 'PASSKEY_NATS_CONTAINER=%s\n' "${CONTAINER}" >> "${GITHUB_ENV}"
           docker run --detach --rm \
             --name "${CONTAINER}" \
             --publish 127.0.0.1::4222 \
@@ -209,7 +220,6 @@ jobs:
               raise SystemExit("JetStream proof port did not become reachable")
           PY
           printf 'NATS_URL=nats://127.0.0.1:%s\n' "${PORT}" >> "${GITHUB_ENV}"
-          printf 'PASSKEY_NATS_CONTAINER=%s\n' "${CONTAINER}" >> "${GITHUB_ENV}"
 
       - name: Run auth passkey register positive proof
         run: pnpm test:proof:auth-passkey-register

@@ -210,6 +210,8 @@ Serverzustand muss zusätzlich durch Runtime-Evidence belegt werden.
 - **policies/limits.yaml / max_edges_jsonl_mb**: entsprechender wirksamer
   Grenzwert für JSONL-Fäden einschließlich Reaktivierungs- und
   Kaskaden-Rewrites. PostgreSQL-Schreibpfade lesen diese Dateigrenzen nicht.
+  Löschungen dürfen einen bereits übergroßen JSONL-Bestand weiterhin verkleinern;
+  ein Kapazitätsverstoß bei neuen/großen Writes antwortet mit HTTP 507 statt 500.
 - **WELTGEWEBE_DOMAIN_READ_SOURCE**: lokal `jsonl`, Produktion `postgres`.
   `postgres` lädt Accounts, Knoten und Fäden beim API-Start aus den
   PostgreSQL-Domänentabellen.

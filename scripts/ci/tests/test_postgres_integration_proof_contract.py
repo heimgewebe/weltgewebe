@@ -95,6 +95,8 @@ def test_postgres_passkey_browser_proof_provisions_pinned_jetstream_for_readines
     assert "--publish 127.0.0.1::4222" in rendered
     assert '"${IMAGE}" -js' in rendered
     assert "NATS_URL=nats://127.0.0.1:%s" in rendered
+    assert "PASSKEY_NATS_CONTAINER=%s" in rendered
+    assert rendered.index("PASSKEY_NATS_CONTAINER=%s") < rendered.index("docker run --detach")
     assert contract["jetstream_image"].startswith("nats@sha256:")
     assert cleanup["if"] == "always()"
     assert "docker rm --force" in cleanup["run"]

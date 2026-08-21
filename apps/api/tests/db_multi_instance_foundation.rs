@@ -417,10 +417,10 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
     .fetch_one(&pool)
     .await?;
     wait_for_event_receipt(&pool, event_id).await?;
-    let healthy_chain = outbox::load_event_chain_db_snapshot(&pool).await?;
-    assert_eq!(healthy_chain.pending, 0);
-    assert_eq!(healthy_chain.quarantined, 0);
-    assert_eq!(healthy_chain.receipts_missing, 0);
+    let healthy_chain = outbox::load_event_chain_db_snapshot(&pool, 1, 600).await?;
+    assert!(!healthy_chain.actionable_pending);
+    assert!(!healthy_chain.quarantine_present);
+    assert!(!healthy_chain.receipt_probe_missing);
 
     state_b.refresh_domain_projection_if_stale().await?;
     assert_eq!(
@@ -507,8 +507,8 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
     .fetch_one(&pool)
     .await?;
     assert_eq!(quarantined, (true, Some("terminal".to_string())));
-    let quarantined_chain = outbox::load_event_chain_db_snapshot(&pool).await?;
-    assert_eq!(quarantined_chain.quarantined, 1);
+    let quarantined_chain = outbox::load_event_chain_db_snapshot(&pool, 1, 600).await?;
+    assert!(quarantined_chain.quarantine_present);
     assert!(outbox::requeue_quarantined(&pool, failed_id).await?);
     let requeued: (bool, i32, bool, bool) = sqlx::query_as(
         "SELECT quarantined_at IS NULL, attempt_count, available_at <= NOW(), \
@@ -520,6 +520,56 @@ async fn two_instances_and_restart_share_truth_and_event_receipts() -> Result<()
     .await?;
     assert_eq!(requeued, (true, 0, true, true));
     assert!(!outbox::requeue_quarantined(&pool, failed_id).await?);
+
+    // Readiness is current-health, not an all-history integrity scan. A retry
+    // scheduled into the future is not actionable yet; an old missing receipt
+    // has aged out of the bounded health window; a recent missing receipt is
+    // detected until its durable ledger entry exists.
+    reset(&pool).await;
+    sqlx::query(
+        "INSERT INTO domain_outbox \
+         (aggregate_type, aggregate_id, event_type, payload, created_at, available_at) \
+         VALUES ('node', 'scheduled-retry', 'domain.node.updated', '{}'::jsonb, \
+                 NOW() - INTERVAL '20 minutes', NOW() + INTERVAL '5 minutes')",
+    )
+    .execute(&pool)
+    .await?;
+    let scheduled = outbox::load_event_chain_db_snapshot(&pool, 60, 600).await?;
+    assert!(!scheduled.actionable_pending);
+
+    sqlx::query(
+        "INSERT INTO domain_outbox \
+         (aggregate_type, aggregate_id, event_type, payload, published_at) \
+         VALUES ('node', 'historical-gap', 'domain.node.updated', '{}'::jsonb, \
+                 NOW() - INTERVAL '20 minutes')",
+    )
+    .execute(&pool)
+    .await?;
+    let historical = outbox::load_event_chain_db_snapshot(&pool, 60, 600).await?;
+    assert!(!historical.receipt_probe_missing);
+
+    let recent_missing_id: i64 = sqlx::query_scalar(
+        "INSERT INTO domain_outbox \
+         (aggregate_type, aggregate_id, event_type, payload, published_at) \
+         VALUES ('node', 'recent-gap', 'domain.node.updated', '{}'::jsonb, \
+                 NOW() - INTERVAL '2 minutes') \
+         RETURNING id",
+    )
+    .fetch_one(&pool)
+    .await?;
+    let recent_missing = outbox::load_event_chain_db_snapshot(&pool, 60, 600).await?;
+    assert!(recent_missing.receipt_probe_missing);
+    assert!(recent_missing.receipt_probe_age_seconds >= 60);
+    assert!(
+        outbox::record_consumed_once(
+            &pool,
+            "weltgewebe-api-domain-receipts-v1",
+            recent_missing_id,
+        )
+        .await?
+    );
+    let recovered = outbox::load_event_chain_db_snapshot(&pool, 60, 600).await?;
+    assert!(!recovered.receipt_probe_missing);
 
     reset(&pool).await;
     Ok(())
