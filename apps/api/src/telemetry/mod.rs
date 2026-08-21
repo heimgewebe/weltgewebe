@@ -55,6 +55,21 @@ pub enum NodeMutationJsonlRecoveryOutcome {
     Aborted,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum DomainEventWorker {
+    Relay,
+    ReceiptConsumer,
+}
+
+impl DomainEventWorker {
+    fn as_label(self) -> &'static str {
+        match self {
+            Self::Relay => "relay",
+            Self::ReceiptConsumer => "receipt_consumer",
+        }
+    }
+}
+
 impl NodeMutationJsonlRecoveryOutcome {
     fn as_label(self) -> &'static str {
         match self {
@@ -177,6 +192,13 @@ struct MetricsInner {
     pub node_mutation_admin_bypass_total: IntCounterVec,
     pub node_mutation_jsonl_recovery_total: IntCounterVec,
     pub node_mutation_duration_seconds: HistogramVec,
+    pub domain_event_worker_up: IntGaugeVec,
+    pub domain_event_chain_snapshot_up: IntGauge,
+    pub domain_outbox_actionable_pending: IntGauge,
+    pub domain_outbox_quarantine_present: IntGauge,
+    pub domain_outbox_oldest_actionable_age_seconds: IntGauge,
+    pub domain_event_receipt_probe_missing: IntGauge,
+    pub domain_event_receipt_probe_age_seconds: IntGauge,
 }
 
 impl Metrics {
@@ -300,6 +322,37 @@ impl Metrics {
             ]),
             &["operation"],
         )?;
+        let domain_event_worker_up = IntGaugeVec::new(
+            Opts::new(
+                "domain_event_worker_up",
+                "Liveness of the essential transactional outbox workers",
+            ),
+            &["worker"],
+        )?;
+        let domain_event_chain_snapshot_up = IntGauge::new(
+            "domain_event_chain_snapshot_up",
+            "Whether the bounded database health snapshot for the domain event chain succeeded",
+        )?;
+        let domain_outbox_actionable_pending = IntGauge::new(
+            "domain_outbox_actionable_pending",
+            "Whether at least one non-quarantined domain event is currently eligible for relay",
+        )?;
+        let domain_outbox_quarantine_present = IntGauge::new(
+            "domain_outbox_quarantine_present",
+            "Whether at least one unpublished domain event is intentionally quarantined",
+        )?;
+        let domain_outbox_oldest_actionable_age_seconds = IntGauge::new(
+            "domain_outbox_oldest_actionable_age_seconds",
+            "Age in seconds since the oldest currently actionable domain event became eligible",
+        )?;
+        let domain_event_receipt_probe_missing = IntGauge::new(
+            "domain_event_receipt_probe_missing",
+            "Whether the bounded current-health receipt probe found a missing durable receipt",
+        )?;
+        let domain_event_receipt_probe_age_seconds = IntGauge::new(
+            "domain_event_receipt_probe_age_seconds",
+            "Age in seconds of the event selected by the bounded missing-receipt health probe",
+        )?;
 
         let registry = Registry::new();
         registry.register(Box::new(http_requests_total.clone()))?;
@@ -319,6 +372,15 @@ impl Metrics {
         registry.register(Box::new(node_mutation_admin_bypass_total.clone()))?;
         registry.register(Box::new(node_mutation_jsonl_recovery_total.clone()))?;
         registry.register(Box::new(node_mutation_duration_seconds.clone()))?;
+        registry.register(Box::new(domain_event_worker_up.clone()))?;
+        registry.register(Box::new(domain_event_chain_snapshot_up.clone()))?;
+        registry.register(Box::new(domain_outbox_actionable_pending.clone()))?;
+        registry.register(Box::new(domain_outbox_quarantine_present.clone()))?;
+        registry.register(Box::new(
+            domain_outbox_oldest_actionable_age_seconds.clone(),
+        ))?;
+        registry.register(Box::new(domain_event_receipt_probe_missing.clone()))?;
+        registry.register(Box::new(domain_event_receipt_probe_age_seconds.clone()))?;
 
         build_info_metric
             .with_label_values(&[
@@ -347,6 +409,13 @@ impl Metrics {
                 node_mutation_admin_bypass_total,
                 node_mutation_jsonl_recovery_total,
                 node_mutation_duration_seconds,
+                domain_event_worker_up,
+                domain_event_chain_snapshot_up,
+                domain_outbox_actionable_pending,
+                domain_outbox_quarantine_present,
+                domain_outbox_oldest_actionable_age_seconds,
+                domain_event_receipt_probe_missing,
+                domain_event_receipt_probe_age_seconds,
             }),
         })
     }
@@ -451,6 +520,51 @@ impl Metrics {
             .inc_by(count);
     }
 
+    pub fn set_domain_event_worker_up(&self, worker: DomainEventWorker, up: bool) {
+        self.inner
+            .domain_event_worker_up
+            .with_label_values(&[worker.as_label()])
+            .set(i64::from(up));
+    }
+
+    pub fn domain_event_worker_is_up(&self, worker: DomainEventWorker) -> bool {
+        self.inner
+            .domain_event_worker_up
+            .with_label_values(&[worker.as_label()])
+            .get()
+            == 1
+    }
+
+    pub fn set_domain_event_chain_snapshot(
+        &self,
+        actionable_pending: bool,
+        quarantine_present: bool,
+        oldest_actionable_age_seconds: i64,
+        receipt_probe_missing: bool,
+        receipt_probe_age_seconds: i64,
+    ) {
+        self.inner.domain_event_chain_snapshot_up.set(1);
+        self.inner
+            .domain_outbox_actionable_pending
+            .set(i64::from(actionable_pending));
+        self.inner
+            .domain_outbox_quarantine_present
+            .set(i64::from(quarantine_present));
+        self.inner
+            .domain_outbox_oldest_actionable_age_seconds
+            .set(oldest_actionable_age_seconds);
+        self.inner
+            .domain_event_receipt_probe_missing
+            .set(i64::from(receipt_probe_missing));
+        self.inner
+            .domain_event_receipt_probe_age_seconds
+            .set(receipt_probe_age_seconds);
+    }
+
+    pub fn mark_domain_event_chain_snapshot_failed(&self) {
+        self.inner.domain_event_chain_snapshot_up.set(0);
+    }
+
     pub fn render(&self) -> Result<Vec<u8>, prometheus::Error> {
         let metric_families = self.inner.registry.gather();
         let encoder = TextEncoder::new();
@@ -546,8 +660,8 @@ mod tests {
     use std::time::Duration;
 
     use super::{
-        BuildInfo, Metrics, MetricsLayer, NodeMutationJsonlRecoveryOutcome, NodeMutationOutcome,
-        SearchRequestOutcome, UNMATCHED_ROUTE_LABEL,
+        BuildInfo, DomainEventWorker, Metrics, MetricsLayer, NodeMutationJsonlRecoveryOutcome,
+        NodeMutationOutcome, SearchRequestOutcome, UNMATCHED_ROUTE_LABEL,
     };
     use crate::node_mutation::NodeMutationOperation;
     use axum::{body::Body, http::Request, routing::get, Router};
@@ -641,6 +755,32 @@ mod tests {
         assert!(rendered.contains(r#"node_mutation_jsonl_recovery_total{outcome="committed"} 2"#));
         assert!(rendered.contains(r#"node_mutation_jsonl_recovery_total{outcome="aborted"} 1"#));
         for forbidden in ["node_id=", "account_id=", "title=", "content="] {
+            assert!(!rendered.contains(forbidden));
+        }
+    }
+
+    #[test]
+    fn domain_event_health_metrics_are_bounded_and_identifier_free() {
+        let metrics = test_metrics();
+        metrics.set_domain_event_worker_up(DomainEventWorker::Relay, true);
+        metrics.set_domain_event_worker_up(DomainEventWorker::ReceiptConsumer, false);
+        metrics.set_domain_event_chain_snapshot(true, true, 61, true, 62);
+
+        assert!(metrics.domain_event_worker_is_up(DomainEventWorker::Relay));
+        assert!(!metrics.domain_event_worker_is_up(DomainEventWorker::ReceiptConsumer));
+        let rendered = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        assert!(rendered.contains(r#"domain_event_worker_up{worker="relay"} 1"#));
+        assert!(rendered.contains(r#"domain_event_worker_up{worker="receipt_consumer"} 0"#));
+        assert!(rendered.contains("domain_event_chain_snapshot_up 1"));
+        assert!(rendered.contains("domain_outbox_actionable_pending 1"));
+        assert!(rendered.contains("domain_outbox_quarantine_present 1"));
+        assert!(rendered.contains("domain_outbox_oldest_actionable_age_seconds 61"));
+        assert!(rendered.contains("domain_event_receipt_probe_missing 1"));
+        assert!(rendered.contains("domain_event_receipt_probe_age_seconds 62"));
+        metrics.mark_domain_event_chain_snapshot_failed();
+        let failed = String::from_utf8(metrics.render().expect("render metrics")).expect("utf8");
+        assert!(failed.contains("domain_event_chain_snapshot_up 0"));
+        for forbidden in ["event_id=", "aggregate_id=", "last_error="] {
             assert!(!rendered.contains(forbidden));
         }
     }

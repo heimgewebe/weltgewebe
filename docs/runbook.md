@@ -92,7 +92,22 @@ Secretwerte enthalten sein könnten.
 | Login gilt nur scheinbar lokal | Cookie-Scope, Sessionstore, `/auth/me`, Browserprofil |
 | Änderung verschwindet nach Neustart | Domain-Lese- und Schreibquelle |
 | API startet nicht | Konfigurationsvalidierung, Proxyentscheidung, Migrationsmodus |
+| Readiness `event_chain=false` | Outbox-Worker, Stream-/Durable-Vertrag, aktuell ausführbaren Rückstand und bounded Receipt-Probe prüfen |
 | Karte bleibt leer | Web-Build, Basemap-Konfiguration, PMTiles-Range und API-Daten getrennt |
+
+Bei PostgreSQL als Domänenlesequelle oder aktiviertem Domänenschreibpfad bedeutet
+grüne Readiness, dass Relay und Receipt-Consumer laufen, der erwartete JetStream
+samt durablem Consumer semantisch passt, kein *jetzt ausführbares* Outbox-Ereignis
+mehr als 60 Sekunden überfällig ist und der bounded Receipt-Probe im aktuellen
+Zehn-Minuten-Fenster keine fällige Lücke findet. Retry-Backoff in der Zukunft und
+historische Lücken außerhalb dieses Fensters sind kein Readiness-Ausfall. Die
+privaten Metriken `domain_event_chain_snapshot_up`,
+`domain_outbox_actionable_pending`, `domain_outbox_quarantine_present`,
+`domain_outbox_oldest_actionable_age_seconds`,
+`domain_event_receipt_probe_missing`, `domain_event_receipt_probe_age_seconds`
+und `domain_event_worker_up` liefern die begrenzte Diagnose. Eine einzelne bewusst
+quarantänisierte Poison-Nachricht ist sichtbar, aber allein kein globaler
+Ausfall; Requeue bleibt eine explizite Operatorentscheidung.
 
 ### Webartefakt-Umschaltung und verifizierter Readback
 

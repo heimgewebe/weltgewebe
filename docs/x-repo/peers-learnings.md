@@ -19,9 +19,10 @@ relations:
 - **Terminologie & Synonyme pflegen:** Eine gepflegte Taxonomie (z. B.
   `synonyms.yml`, `entities.yml`) unterstützt Suche, Filter und konsistente
   Begriffsnutzung.
-- **Governance-Logik messbar machen:** Domänenregeln (**7-Tage** Verblassen,
-  **84-Tage** RoN-Anonymisierung, Delegationsabläufe) über konkrete Metriken,
-  Dashboards und Alerts operationalisieren.
+- **Governance-Logik messbar machen:** Wirksame Domänenregeln (das feste
+  **7-Tage**-Verblassen von Fäden, Datenschutz- und Delegationszustände) über
+  konkrete Metriken, Dashboards und Alerts operationalisieren; deklarative
+  Datenschutzversprechen dabei nicht als nicht vorhandene Runtime-Fristen ausgeben.
   → vgl. `docs/vision.md` und `docs/specs/garnrolle-knoten-faden.md`
 - **WGX-Profil als Task-SSoT:** Ein zentrales Profil `.wgx/profile.yml` definiert Env-Prioritäten &
   Standard-Tasks (`up/lint/test/build/smoke`) und vermeidet Drift zwischen lokal & CI.

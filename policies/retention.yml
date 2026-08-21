@@ -1,17 +1,8 @@
 ---
+# Normative privacy declarations only. This file intentionally publishes no
+# deferred deletion/anonymization deadlines and does not imply a scheduler.
 data_lifecycle:
   anonymize_opt_in_default: true
-forget_pipeline:
-  - name: primary_accounts
-    actions:
-      - type: anonymize
-        deadline_days: 7
-      - type: delete
-        deadline_days: 84
-  - name: delegation_tokens
-    actions:
-      - type: revoke
-        deadline_days: 28
 compliance:
   privacy_by_design: true
   ron_anonymization: enabled

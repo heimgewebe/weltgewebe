@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{future::Future, time::Duration};
 
 use anyhow::Context;
 use async_nats::{
@@ -15,10 +15,18 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::PgPool;
 
-const STREAM_NAME: &str = "WELTGEWEBE_DOMAIN";
-const STREAM_SUBJECT: &str = "weltgewebe.domain.>";
-const CONSUMER_NAME: &str = "weltgewebe-api-domain-receipts-v1";
-const CONSUMER_LEDGER_NAME: &str = "weltgewebe-api-domain-receipts-v1";
+use crate::{
+    config::{
+        AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
+        DomainReadSource,
+    },
+    telemetry::{DomainEventWorker, Metrics},
+};
+
+pub(crate) const STREAM_NAME: &str = "WELTGEWEBE_DOMAIN";
+pub(crate) const STREAM_SUBJECT: &str = "weltgewebe.domain.>";
+pub(crate) const CONSUMER_NAME: &str = "weltgewebe-api-domain-receipts-v1";
+pub(crate) const CONSUMER_LEDGER_NAME: &str = "weltgewebe-api-domain-receipts-v1";
 const CLAIM_BATCH_SIZE: i64 = 32;
 const CLAIM_LEASE_SECONDS: i32 = 30;
 const MAX_ATTEMPTS: i32 = 10;
@@ -34,6 +42,15 @@ pub struct OutboxEvent {
     pub attempt_count: i32,
 }
 
+#[derive(Debug, Clone, Copy, sqlx::FromRow)]
+pub struct EventChainDbSnapshot {
+    pub actionable_pending: bool,
+    pub oldest_actionable_age_seconds: i64,
+    pub quarantine_present: bool,
+    pub receipt_probe_missing: bool,
+    pub receipt_probe_age_seconds: i64,
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 struct PublishedDomainEvent {
     schema_version: u8,
@@ -45,22 +62,184 @@ struct PublishedDomainEvent {
     created_at: DateTime<Utc>,
 }
 
+fn expected_stream_config() -> stream::Config {
+    stream::Config {
+        name: STREAM_NAME.to_string(),
+        description: Some(
+            "Transactional Weltgewebe domain events emitted from PostgreSQL".to_string(),
+        ),
+        subjects: vec![STREAM_SUBJECT.to_string()],
+        max_age: Duration::from_secs(30 * 24 * 60 * 60),
+        duplicate_window: Duration::from_secs(2 * 60),
+        ..Default::default()
+    }
+}
+
+fn expected_consumer_config() -> consumer::pull::Config {
+    consumer::pull::Config {
+        durable_name: Some(CONSUMER_NAME.to_string()),
+        filter_subject: STREAM_SUBJECT.to_string(),
+        ack_policy: consumer::AckPolicy::Explicit,
+        ..Default::default()
+    }
+}
+
+pub(crate) fn validate_stream_contract(config: &stream::Config) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        config.name == STREAM_NAME,
+        "domain JetStream has name {:?}, expected {STREAM_NAME:?}",
+        config.name
+    );
+    anyhow::ensure!(
+        config.subjects == [STREAM_SUBJECT],
+        "domain JetStream subjects are {:?}, expected only {STREAM_SUBJECT:?}",
+        config.subjects
+    );
+    anyhow::ensure!(
+        config.max_age == Duration::from_secs(30 * 24 * 60 * 60),
+        "domain JetStream max_age is {:?}, expected 30 days",
+        config.max_age
+    );
+    anyhow::ensure!(
+        config.duplicate_window == Duration::from_secs(2 * 60),
+        "domain JetStream duplicate_window is {:?}, expected 120 seconds",
+        config.duplicate_window
+    );
+    Ok(())
+}
+
+fn validate_consumer_config(
+    stream_name: &str,
+    consumer_name: &str,
+    config: &consumer::Config,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(
+        stream_name == STREAM_NAME,
+        "domain receipt consumer is attached to {:?}, expected {STREAM_NAME:?}",
+        stream_name
+    );
+    anyhow::ensure!(
+        consumer_name == CONSUMER_NAME,
+        "domain receipt consumer has name {:?}, expected {CONSUMER_NAME:?}",
+        consumer_name
+    );
+    anyhow::ensure!(
+        config.durable_name.as_deref() == Some(CONSUMER_NAME),
+        "domain receipt consumer is not the expected durable consumer"
+    );
+    anyhow::ensure!(
+        config.deliver_subject.is_none(),
+        "domain receipt consumer must remain pull-based"
+    );
+    anyhow::ensure!(
+        config.filter_subject == STREAM_SUBJECT,
+        "domain receipt consumer filter is {:?}, expected {STREAM_SUBJECT:?}",
+        config.filter_subject
+    );
+    anyhow::ensure!(
+        config.ack_policy == consumer::AckPolicy::Explicit,
+        "domain receipt consumer must use explicit acknowledgements"
+    );
+    Ok(())
+}
+
+pub(crate) fn validate_consumer_contract(info: &consumer::Info) -> anyhow::Result<()> {
+    validate_consumer_config(&info.stream_name, &info.name, &info.config)
+}
+
+pub fn event_chain_required(config: &AppConfig) -> bool {
+    config.domain_read_source == DomainReadSource::Postgres
+        || config.domain_account_write_source == DomainAccountWriteSource::Postgres
+        || config.domain_node_write_source == DomainNodeWriteSource::Postgres
+        || config.domain_edge_write_source == DomainEdgeWriteSource::Postgres
+}
+
 pub async fn ensure_stream(client: Client) -> anyhow::Result<(jetstream::Context, stream::Stream)> {
     let context = jetstream::new(client);
-    let stream = context
-        .get_or_create_stream(stream::Config {
-            name: STREAM_NAME.to_string(),
-            description: Some(
-                "Transactional Weltgewebe domain events emitted from PostgreSQL".to_string(),
-            ),
-            subjects: vec![STREAM_SUBJECT.to_string()],
-            max_age: Duration::from_secs(30 * 24 * 60 * 60),
-            duplicate_window: Duration::from_secs(2 * 60),
-            ..Default::default()
-        })
+    let mut stream = context
+        .get_or_create_stream(expected_stream_config())
         .await
         .context("failed to get or create Weltgewebe domain JetStream")?;
+    let info = stream
+        .info()
+        .await
+        .context("failed to inspect Weltgewebe domain JetStream")?;
+    validate_stream_contract(&info.config)?;
     Ok((context, stream))
+}
+
+pub async fn verify_jetstream_contract(client: &Client) -> anyhow::Result<()> {
+    let context = jetstream::new(client.clone());
+    let mut stream = context
+        .get_stream(STREAM_NAME)
+        .await
+        .context("expected Weltgewebe domain JetStream is missing")?;
+    let stream_info = stream
+        .info()
+        .await
+        .context("failed to inspect Weltgewebe domain JetStream")?;
+    validate_stream_contract(&stream_info.config)?;
+    let consumer_info = stream
+        .consumer_info(CONSUMER_NAME)
+        .await
+        .context("expected durable domain receipt consumer is missing")?;
+    validate_consumer_contract(&consumer_info)
+}
+
+pub async fn load_event_chain_db_snapshot(
+    pool: &PgPool,
+    receipt_grace_seconds: i64,
+    receipt_window_seconds: i64,
+) -> anyhow::Result<EventChainDbSnapshot> {
+    anyhow::ensure!(receipt_grace_seconds > 0, "receipt grace must be positive");
+    anyhow::ensure!(
+        receipt_window_seconds > receipt_grace_seconds,
+        "receipt health window must exceed receipt grace"
+    );
+    sqlx::query_as::<_, EventChainDbSnapshot>(
+        "WITH oldest_actionable AS MATERIALIZED (\
+             SELECT available_at FROM domain_outbox \
+              WHERE published_at IS NULL \
+                AND quarantined_at IS NULL \
+                AND available_at <= NOW() \
+              ORDER BY available_at ASC, id ASC \
+              LIMIT 1\
+         ), missing_receipt AS MATERIALIZED (\
+             SELECT event.published_at FROM domain_outbox event \
+              WHERE event.published_at IS NOT NULL \
+                AND event.published_at <= NOW() - make_interval(secs => $2) \
+                AND event.published_at >= NOW() - make_interval(secs => $3) \
+                AND NOT EXISTS (\
+                    SELECT 1 FROM domain_event_consumptions receipt \
+                     WHERE receipt.consumer_name = $1 \
+                       AND receipt.event_id = event.id\
+                ) \
+              ORDER BY event.published_at ASC, event.id ASC \
+              LIMIT 1\
+         ) \
+         SELECT \
+             EXISTS (SELECT 1 FROM oldest_actionable) AS actionable_pending, \
+             COALESCE((\
+                 SELECT FLOOR(EXTRACT(EPOCH FROM (NOW() - available_at)))::BIGINT \
+                   FROM oldest_actionable\
+             ), 0)::BIGINT AS oldest_actionable_age_seconds, \
+             EXISTS (\
+                 SELECT 1 FROM domain_outbox \
+                  WHERE published_at IS NULL AND quarantined_at IS NOT NULL \
+                  LIMIT 1\
+             ) AS quarantine_present, \
+             EXISTS (SELECT 1 FROM missing_receipt) AS receipt_probe_missing, \
+             COALESCE((\
+                 SELECT FLOOR(EXTRACT(EPOCH FROM (NOW() - published_at)))::BIGINT \
+                   FROM missing_receipt\
+             ), 0)::BIGINT AS receipt_probe_age_seconds",
+    )
+    .bind(CONSUMER_LEDGER_NAME)
+    .bind(receipt_grace_seconds)
+    .bind(receipt_window_seconds)
+    .fetch_one(pool)
+    .await
+    .context("failed to inspect time-bounded transactional domain event-chain health")
 }
 
 pub async fn claim_pending(pool: &PgPool, limit: i64) -> anyhow::Result<Vec<OutboxEvent>> {
@@ -276,10 +455,10 @@ async fn receipt_consumer_loop(pool: PgPool, consumer: PullConsumer) {
             let envelope: PublishedDomainEvent = match serde_json::from_slice(&message.payload) {
                 Ok(envelope) => envelope,
                 Err(error) => {
-                    tracing::error!(error = %error, "Malformed internal domain event discarded");
-                    if let Err(ack_error) = message.ack().await {
-                        tracing::warn!(error = %ack_error, "Malformed domain event ack failed");
-                    }
+                    tracing::error!(
+                        error = %error,
+                        "Malformed internal domain event left unacknowledged for redelivery"
+                    );
                     continue;
                 }
             };
@@ -306,22 +485,141 @@ async fn receipt_consumer_loop(pool: PgPool, consumer: PullConsumer) {
     }
 }
 
-pub async fn start(pool: PgPool, client: Client) -> anyhow::Result<()> {
+fn spawn_essential_worker<F, Fut>(
+    metrics: Metrics,
+    worker: DomainEventWorker,
+    factory: F,
+) -> tokio::task::JoinHandle<()>
+where
+    F: Fn() -> Fut + Send + Sync + 'static,
+    Fut: Future<Output = ()> + Send + 'static,
+{
+    metrics.set_domain_event_worker_up(worker, true);
+    tokio::spawn(async move {
+        loop {
+            metrics.set_domain_event_worker_up(worker, true);
+            let outcome = tokio::spawn(factory()).await;
+            metrics.set_domain_event_worker_up(worker, false);
+            match outcome {
+                Ok(()) => tracing::error!(?worker, "Essential domain event worker exited"),
+                Err(error) => tracing::error!(
+                    ?worker,
+                    %error,
+                    "Essential domain event worker stopped unexpectedly"
+                ),
+            }
+            tokio::time::sleep(Duration::from_secs(1)).await;
+        }
+    })
+}
+
+pub async fn start(pool: PgPool, client: Client, metrics: Metrics) -> anyhow::Result<()> {
     let (context, stream) = ensure_stream(client).await?;
     let consumer: PullConsumer = stream
-        .get_or_create_consumer(
-            CONSUMER_NAME,
-            consumer::pull::Config {
-                durable_name: Some(CONSUMER_NAME.to_string()),
-                filter_subject: STREAM_SUBJECT.to_string(),
-                ack_policy: consumer::AckPolicy::Explicit,
-                ..Default::default()
-            },
-        )
+        .get_or_create_consumer(CONSUMER_NAME, expected_consumer_config())
         .await
         .context("failed to get or create domain receipt consumer")?;
+    let consumer_info = stream
+        .consumer_info(CONSUMER_NAME)
+        .await
+        .context("failed to inspect domain receipt consumer")?;
+    validate_consumer_contract(&consumer_info)?;
 
-    tokio::spawn(relay_loop(pool.clone(), context));
-    tokio::spawn(receipt_consumer_loop(pool, consumer));
+    let relay_pool = pool.clone();
+    let relay_context = context.clone();
+    spawn_essential_worker(metrics.clone(), DomainEventWorker::Relay, move || {
+        relay_loop(relay_pool.clone(), relay_context.clone())
+    });
+
+    let receipt_pool = pool;
+    let receipt_consumer = consumer;
+    spawn_essential_worker(metrics, DomainEventWorker::ReceiptConsumer, move || {
+        receipt_consumer_loop(receipt_pool.clone(), receipt_consumer.clone())
+    });
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        future::pending,
+        sync::{
+            atomic::{AtomicUsize, Ordering},
+            Arc,
+        },
+        time::Duration,
+    };
+
+    use super::*;
+    use crate::telemetry::BuildInfo;
+
+    fn metrics() -> Metrics {
+        Metrics::try_new(BuildInfo {
+            version: "outbox-test",
+            commit: "outbox-test",
+            build_timestamp: "outbox-test",
+        })
+        .expect("metrics")
+    }
+
+    #[test]
+    fn jetstream_contract_rejects_subject_and_durable_consumer_drift() {
+        let stream = expected_stream_config();
+        validate_stream_contract(&stream).expect("expected stream contract");
+        let mut wrong_stream = stream.clone();
+        wrong_stream.subjects = vec!["unrelated.>".to_string()];
+        assert!(validate_stream_contract(&wrong_stream).is_err());
+        let mut extra_subject = stream.clone();
+        extra_subject.subjects.push("unrelated.>".to_string());
+        assert!(validate_stream_contract(&extra_subject).is_err());
+        let mut wrong_retention = stream.clone();
+        wrong_retention.max_age = Duration::from_secs(60);
+        assert!(validate_stream_contract(&wrong_retention).is_err());
+        let mut wrong_deduplication = stream;
+        wrong_deduplication.duplicate_window = Duration::from_secs(30);
+        assert!(validate_stream_contract(&wrong_deduplication).is_err());
+
+        let consumer = consumer::Config {
+            durable_name: Some(CONSUMER_NAME.to_string()),
+            filter_subject: STREAM_SUBJECT.to_string(),
+            ack_policy: consumer::AckPolicy::Explicit,
+            ..Default::default()
+        };
+        validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &consumer)
+            .expect("expected durable receipt consumer contract");
+        let mut ephemeral = consumer;
+        ephemeral.durable_name = None;
+        assert!(validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &ephemeral).is_err());
+    }
+
+    #[tokio::test]
+    async fn essential_worker_restarts_after_unexpected_exit() {
+        let metrics = metrics();
+        let attempts = Arc::new(AtomicUsize::new(0));
+        let factory_attempts = attempts.clone();
+        let supervisor =
+            spawn_essential_worker(metrics.clone(), DomainEventWorker::Relay, move || {
+                let factory_attempts = factory_attempts.clone();
+                async move {
+                    let attempt = factory_attempts.fetch_add(1, Ordering::SeqCst) + 1;
+                    if attempt > 1 {
+                        pending::<()>().await;
+                    }
+                }
+            });
+
+        tokio::time::timeout(Duration::from_secs(3), async {
+            loop {
+                if attempts.load(Ordering::SeqCst) >= 2
+                    && metrics.domain_event_worker_is_up(DomainEventWorker::Relay)
+                {
+                    break;
+                }
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("essential worker supervisor must restart a terminated worker");
+        supervisor.abort();
+    }
 }
