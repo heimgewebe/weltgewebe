@@ -193,6 +193,10 @@ ensure_production_build_disk_headroom() {
   local active_after
   local total_after
   local reclaimable_after
+  local min_free_space_output
+  local min_free_space_error_excerpt
+  local cleanup_rc
+  local cleanup_failure
 
   available_before="$(measure_available_build_bytes)" ||
     fail "production build disk preflight could not measure free space"
@@ -220,9 +224,28 @@ ensure_production_build_disk_headroom() {
   fi
 
   echo "production_disk_preflight=decision commit=$commit action=prune scope=unused_build_cache_only policy=min_free_space target_free_bytes=$BUILD_MIN_FREE_BYTES"
-  if ! docker builder prune --force --min-free-space "$BUILD_MIN_FREE_BYTES" > /dev/null; then
-    echo "production_disk_preflight=cleanup commit=$commit result=failed"
-    fail "bounded Docker build-cache cleanup failed"
+  cleanup_rc=0
+  cleanup_failure=""
+  if min_free_space_output="$(docker builder prune --force --min-free-space "$BUILD_MIN_FREE_BYTES" 2>&1)"; then
+    echo "production_disk_preflight=capability commit=$commit operation=min_free_space capability=supported"
+  else
+    cleanup_rc=$?
+    if [[ "$min_free_space_output" == *"buildkit v0.17.0+ is required for max-used-space and min-free-space filters"* ]]; then
+      echo "production_disk_preflight=capability commit=$commit operation=min_free_space capability=unsupported"
+      echo "production_disk_preflight=decision commit=$commit action=prune scope=unused_build_cache_only policy=unused_for_168h"
+      if docker builder prune --force --filter until=168h > /dev/null; then
+        cleanup_rc=0
+      else
+        cleanup_rc=$?
+        cleanup_failure="unused_for_168h"
+      fi
+    else
+      echo "production_disk_preflight=capability commit=$commit operation=min_free_space capability=unknown"
+      printf -v min_free_space_error_excerpt '%q' "${min_free_space_output:0:512}"
+      printf 'production_disk_preflight_error=min_free_space_unknown commit=%s detail=%s\n' \
+        "$commit" "$min_free_space_error_excerpt" >&2
+      cleanup_failure="min_free_space_unknown"
+    fi
   fi
 
   available_after="$(measure_available_build_bytes)" ||
@@ -236,6 +259,10 @@ ensure_production_build_disk_headroom() {
     fail "post-cleanup production build disk preflight returned invalid Docker build-cache metrics"
   echo "production_disk_preflight=post_cleanup commit=$commit available_bytes=$available_after required_bytes=$BUILD_MIN_FREE_BYTES build_cache_total_bytes=$total_after build_cache_reclaimable_bytes=$reclaimable_after build_cache_active=$active_after"
 
+  if ((cleanup_rc != 0)); then
+    echo "production_disk_preflight=cleanup commit=$commit result=failed policy=$cleanup_failure exit_code=$cleanup_rc"
+    fail "bounded Docker build-cache cleanup failed"
+  fi
   if ((available_after < BUILD_MIN_FREE_BYTES)); then
     echo "production_disk_preflight=decision commit=$commit action=blocked reason=insufficient_headroom_after_cleanup"
     fail "insufficient production build disk headroom after bounded Docker build-cache cleanup"
