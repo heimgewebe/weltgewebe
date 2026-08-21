@@ -50,8 +50,11 @@ example.test {
     }
   }
   header @${strict_matcher} >Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+  @frontendResponse {
+    header Content-Type text/html*
+  }
+  header @frontendResponse Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src $connect; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
   header {
-    Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src $connect; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
     Strict-Transport-Security "max-age=31536000; includeSubDomains"
     X-Frame-Options "DENY"
     Referrer-Policy "no-referrer"
@@ -101,18 +104,20 @@ import yaml
 path = Path(sys.argv[1])
 operation = sys.argv[2]
 data = yaml.safe_load(path.read_text(encoding="utf-8"))
-if operation == "no-subdomains":
+if operation == "short-max-age":
+    data["strict_transport_security"]["max_age_seconds"] = 60
+elif operation == "no-subdomains":
     data["strict_transport_security"]["include_subdomains"] = False
 elif operation == "preload":
     data["strict_transport_security"]["preload"] = True
 elif operation == "frame-ancestors-self":
-    data["content_security_policy"]["required_static_directives"]["frame-ancestors"] = "'self'"
+    data["content_security_policy"]["required_frontend_response_directives"]["frame-ancestors"] = "'self'"
 elif operation == "unsupported-script-delivery":
     data["content_security_policy"]["script_delivery"] = "unsupported_delivery"
-elif operation == "missing-caddyfile":
-    data["effective_caddy_contract"]["production_https_caddyfiles"].append(
-        "infra/caddy/missing.caddy"
-    )
+elif operation == "nonce-script-mode":
+    data["content_security_policy"]["script_mode"] = "nonce"
+elif operation == "coverage-control":
+    data["effective_caddy_contract"] = {"production_https_caddyfiles": []}
 elif operation == "unknown-control":
     data["allowed_origins"] = ["https://example.test"]
 else:
@@ -120,6 +125,13 @@ else:
 path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
 PY
 }
+
+reset_policy
+mutate_policy "short-max-age"
+if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
+  echo "security headers guard should derive max_age_seconds from policy" >&2
+  exit 1
+fi
 
 reset_policy
 mutate_policy "no-subdomains"
@@ -150,9 +162,16 @@ if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
 fi
 
 reset_policy
-mutate_policy "missing-caddyfile"
+mutate_policy "nonce-script-mode"
 if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
-  echo "security headers guard should derive inspected Caddyfiles from policy" >&2
+  echo "security headers guard should derive SvelteKit script mode from policy" >&2
+  exit 1
+fi
+
+reset_policy
+mutate_policy "coverage-control"
+if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
+  echo "security headers guard should reject policy-controlled validation coverage" >&2
   exit 1
 fi
 
@@ -163,6 +182,30 @@ if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
   exit 1
 fi
 reset_policy
+
+uv run --project "$REPO_ROOT/tools/py" --locked python - "$TEMP_DIR/infra/caddy/Caddyfile.vps" << 'PY'
+from pathlib import Path
+import sys
+
+path = Path(sys.argv[1])
+lines = path.read_text(encoding="utf-8").splitlines()
+changed = 0
+for index, line in enumerate(lines):
+    if "header @frontendResponse Content-Security-Policy" not in line:
+        continue
+    replacement = line.replace(" frame-ancestors 'none';", "")
+    if replacement != line:
+        lines[index] = replacement
+        changed += 1
+if changed != 1:
+    raise SystemExit(f"expected one frontend CSP mutation, changed={changed}")
+path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+PY
+if REPO_ROOT="$TEMP_DIR" bash "$GUARD" > /dev/null 2>&1; then
+  echo "security headers guard should fail when frontend CSP loses frame-ancestors even if API CSP retains it" >&2
+  exit 1
+fi
+write_static_caddy "$TEMP_DIR/infra/caddy/Caddyfile.vps" "'self'"
 
 # Same repo-canonical tools/py environment as make validate / UV_RUN.
 if ! command -v uv > /dev/null 2>&1; then

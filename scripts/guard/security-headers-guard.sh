@@ -77,6 +77,32 @@ def named_matcher_block(text: str, matcher: str) -> str | None:
     return None
 
 
+def frontend_response_csp(text: str, relative: str) -> dict[str, set[str]] | None:
+    matches = re.findall(
+        r'(?m)^\s*header\s+@frontendResponse\s+Content-Security-Policy\s+"([^"]*)"\s*$',
+        text,
+    )
+    if len(matches) != 1:
+        fail(
+            f"{relative} must contain exactly one @frontendResponse Content-Security-Policy header; "
+            f"found {len(matches)}"
+        )
+        return None
+
+    parsed: dict[str, set[str]] = {}
+    for segment in matches[0].split(";"):
+        segment = segment.strip()
+        if not segment:
+            continue
+        parts = segment.split()
+        name, values = parts[0], set(parts[1:])
+        if name in parsed:
+            fail(f"{relative} @frontendResponse CSP repeats directive {name}")
+            return None
+        parsed[name] = values
+    return parsed
+
+
 if not policy_path.is_file():
     print(f"ERROR: security policy missing: {policy_path}", file=sys.stderr)
     raise SystemExit(1)
@@ -92,7 +118,6 @@ root_keys = {
     "content_security_policy",
     "csp_exceptions",
     "strict_transport_security",
-    "effective_caddy_contract",
 }
 if not exact_keys(policy, root_keys, "policies/security.yml"):
     policy = policy if isinstance(policy, dict) else {}
@@ -100,19 +125,19 @@ if policy.get("version") != 2:
     fail("policies/security.yml version must be 2")
 
 csp = policy.get("content_security_policy")
-if exact_keys(csp, {"script_delivery", "script_mode", "required_static_directives"}, "content_security_policy"):
+if exact_keys(csp, {"script_delivery", "script_mode", "required_frontend_response_directives"}, "content_security_policy"):
     assert isinstance(csp, dict)
     if csp["script_delivery"] != "sveltekit_prerender_meta":
         fail("content_security_policy.script_delivery must be sveltekit_prerender_meta")
     if csp["script_mode"] != "hash":
         fail("content_security_policy.script_mode must be hash")
-    directives = csp["required_static_directives"]
+    directives = csp["required_frontend_response_directives"]
     directive_names = {
         "style-src", "connect-src", "img-src", "worker-src", "font-src",
         "media-src", "manifest-src", "child-src", "frame-src", "object-src",
         "base-uri", "form-action", "frame-ancestors",
     }
-    if exact_keys(directives, directive_names, "content_security_policy.required_static_directives"):
+    if exact_keys(directives, directive_names, "content_security_policy.required_frontend_response_directives"):
         assert isinstance(directives, dict)
         for name, value in directives.items():
             if not isinstance(value, str) or not value.strip():
@@ -159,20 +184,19 @@ if hsts_valid:
             parts.append("preload")
         expected_hsts = f'Strict-Transport-Security "{"; ".join(parts)}"'
 
-contract = policy.get("effective_caddy_contract")
-production_paths: list[str] = []
-static_paths: list[str] = []
-if exact_keys(contract, {"production_https_caddyfiles", "static_app_caddyfiles"}, "effective_caddy_contract"):
-    assert isinstance(contract, dict)
-    for key, output in (("production_https_caddyfiles", production_paths), ("static_app_caddyfiles", static_paths)):
-        values = contract[key]
-        if not isinstance(values, list) or not values or not all(isinstance(v, str) and v for v in values):
-            fail(f"effective_caddy_contract.{key} must be a non-empty string list")
-            continue
-        if len(values) != len(set(values)):
-            fail(f"effective_caddy_contract.{key} must not contain duplicates")
-            continue
-        output.extend(values)
+# The set of active Caddy contracts is an architecture invariant, not a
+# policy switch. A policy edit must not be able to remove a production file
+# from security validation.
+production_paths = [
+    "infra/caddy/Caddyfile.vps",
+    "infra/caddy/Caddyfile.heim",
+    "infra/caddy/Caddyfile.prod",
+]
+static_paths = [
+    "infra/caddy/Caddyfile",
+    "infra/caddy/Caddyfile.vps",
+    "infra/caddy/Caddyfile.heim",
+]
 
 fixed_headers = [
     'X-Frame-Options "DENY"',
@@ -224,11 +248,18 @@ for relative in static_paths:
     if expected_strict_header not in text:
         fail(f"{relative} must defer and overwrite the canonical strict API CSP")
 
-    if isinstance(directives, dict):
+    frontend_directives = frontend_response_csp(text, relative)
+    if frontend_directives is not None and isinstance(directives, dict):
         for name, value in directives.items():
-            expected_directive = f"{name} {value}"
-            if expected_directive not in text:
-                fail(f"{relative} CSP missing policy-required directive: {expected_directive}")
+            actual_tokens = frontend_directives.get(name)
+            required_tokens = set(value.split())
+            if actual_tokens is None:
+                fail(f"{relative} @frontendResponse CSP missing policy-required directive: {name} {value}")
+            elif not required_tokens.issubset(actual_tokens):
+                fail(
+                    f"{relative} @frontendResponse CSP weakens policy-required directive "
+                    f"{name}: required={sorted(required_tokens)}, actual={sorted(actual_tokens)}"
+                )
 
 svelte = contract_file("apps/web/svelte.config.js", "SvelteKit CSP config")
 if svelte is not None and isinstance(csp, dict):
