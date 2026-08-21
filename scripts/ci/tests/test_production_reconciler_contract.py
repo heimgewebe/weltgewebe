@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -589,6 +590,71 @@ prune_releases
         self.assertIn('legacy release basemap escaped release root', script)
         self.assertIn('rm -rf --one-file-system -- "$basemap_real"', script)
         self.assertNotIn('rm -f -- "$release_dir/build/basemap"', script)
+
+    def test_reconciler_build_cache_cleanup_is_backend_capability_bounded(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        active_block = script.index("reason=active_build_cache")
+        min_free_prune = script.index(
+            'docker builder prune --force --min-free-space "$BUILD_MIN_FREE_BYTES"'
+        )
+        incompatibility = script.index(
+            "buildkit v0.17.0+ is required for max-used-space and "
+            "min-free-space filters"
+        )
+        fallback_prune = script.index(
+            "docker builder prune --force --filter until=168h"
+        )
+        post_cleanup = script.index("production_disk_preflight=post_cleanup")
+
+        self.assertLess(active_block, min_free_prune)
+        self.assertLess(min_free_prune, incompatibility)
+        self.assertLess(incompatibility, fallback_prune)
+        self.assertLess(min_free_prune, post_cleanup)
+        self.assertLess(fallback_prune, post_cleanup)
+        allowed_prune_shapes = (
+            re.compile(
+                r'^if min_free_space_output="\$\(docker builder prune --force '
+                r'--min-free-space "\$BUILD_MIN_FREE_BYTES" 2>&1\)"; then$'
+            ),
+            re.compile(
+                r"^if docker builder prune --force --filter until=168h "
+                r"> /dev/null; then$"
+            ),
+        )
+        prune_lines = [
+            line.strip()
+            for line in script.splitlines()
+            if "docker builder prune" in line
+        ]
+        matched_shapes = []
+        for line in prune_lines:
+            matches = [
+                index
+                for index, pattern in enumerate(allowed_prune_shapes)
+                if pattern.fullmatch(line)
+            ]
+            self.assertEqual(
+                len(matches), 1, f"unexpected Docker builder prune shape: {line}"
+            )
+            matched_shapes.append(matches[0])
+        self.assertCountEqual(matched_shapes, range(len(allowed_prune_shapes)))
+        self.assertIn("docker system df --format '{{json .}}'", script)
+        for forbidden_probe in (
+            r"\bdocker\s+buildx(?:\s|$)",
+            r"\bdocker\s+(?:--version|version|info)(?:\s|$)",
+            r"\bdocker\s+builder(?:\s+prune)?\s+--help(?:\s|$)",
+        ):
+            self.assertNotRegex(script, forbidden_probe)
+        for forbidden in (
+            "docker builder prune --all",
+            "docker system prune",
+            "docker image prune",
+            "docker container prune",
+            "docker volume prune",
+            "docker image rm",
+            "docker rmi",
+        ):
+            self.assertNotIn(forbidden, script)
 
     def test_reconciler_has_bounded_storage_and_state_transitions(self) -> None:
         script = self.read("scripts/ops/reconcile-production-main-vps.sh")

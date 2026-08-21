@@ -47,11 +47,17 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
    einen vollständig root-eigenen, nicht für Gruppe oder Welt beschreibbaren
    Git-Objektspeicher; unmittelbar vor einem tatsächlich nötigen Build verlangt
    er zusätzlich standardmäßig 48 GiB Build-Headroom. Reicht dieser nicht, darf
-   der Reconciler ausschließlich unbenutzten Docker-Build-Cache mit
-   `docker builder prune --min-free-space` bis zu diesem Freiraumziel begrenzen.
-   Aktiver Buildcache, fehlender reclaimable Cache oder weiterhin zu wenig
-   Freiraum stoppen fail-closed; Images, Container und Volumes gehören nie zu
-   diesem automatischen Löschscope;
+   der Reconciler ausschließlich unbenutzten Docker-Build-Cache bereinigen. Der
+   bevorzugte Pfad verwendet `docker builder prune --force --min-free-space`
+   mit 48 GiB als Freiraumziel. Nur die exakt bekannte Backend-Inkompatibilität
+   für `max-used-space`- und `min-free-space`-Filter öffnet den
+   Kompatibilitätsfallback `docker builder prune --force --filter until=168h`.
+   Dieser entfernt nur unbenutzten Buildcache, auf den seit 168 Stunden nicht
+   zugegriffen wurde, und kann mehr als den exakt fehlenden Platz freigeben.
+   Images, Container, Volumes und sonstiger Docker-Systemzustand gehören nie zu
+   diesem automatischen Löschscope. Unbekannte Fehler, aktiver Buildcache,
+   fehlender reclaimable Cache oder weiterhin zu wenig Freiraum stoppen
+   fail-closed;
 5. exportiert den Commit als vorübergehendes root-eigenes Quellarchiv;
 6. baut das Frontend im flüchtigen Arbeitsspeicher eines digestgepinnten
    Node-Containers;
@@ -81,8 +87,12 @@ Der Build-Headroom wird als `WELTGEWEBE_PRODUCTION_BUILD_MIN_FREE_BYTES` in der
 root-eigenen `/etc/weltgewebe/production-reconciler.env` installiert. Der kanonische
 Default beträgt 51.539.607.552 Bytes (48 GiB). Der Wert ist kein pauschales
 Cache-Löschbudget: Erst bei einem tatsächlich erforderlichen Build und zu wenig
-Freiraum wird der Docker-Buildcache gemessen. Eine Bereinigung zielt mit
-`--min-free-space` nur auf den fehlenden Freiraum; danach misst der Reconciler erneut.
+Freiraum wird der Docker-Buildcache gemessen. Der bevorzugte
+`--min-free-space`-Pfad zielt auf 48 GiB freien Platz. Ausschließlich bei der
+exakt klassifizierten bekannten Backend-Inkompatibilität darf der oben
+beschriebene 168-Stunden-Fallback laufen; unbekannte Fehler bleiben fail-closed.
+Nach jedem Bereinigungsversuch misst der Reconciler den freien Platz erneut und
+blockiert, wenn 51.539.607.552 Bytes nicht erreicht sind.
 
 Vor dem Start oder der Änderung von Docker-Containern eines commitgebundenen
 VPS-Releases aktiviert `scripts/weltgewebe-up` außerdem den Operatorvertrag aus
