@@ -10,7 +10,7 @@ if ! command -v uv > /dev/null 2>&1; then
   exit 1
 fi
 
-uv run --project "$TOOLING_ROOT/tools/py" --locked python - "$REPO_ROOT" "$POLICY_FILE" <<'PY'
+uv run --project "$TOOLING_ROOT/tools/py" --locked python - "$REPO_ROOT" "$POLICY_FILE" << 'PY'
 from __future__ import annotations
 
 from pathlib import Path
