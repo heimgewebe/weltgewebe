@@ -5,7 +5,6 @@ import type {
   ProposalViewerParticipation,
 } from "$lib/api/governance";
 import {
-  ATTENTION_DEADLINE_HORIZON_MS,
   attentionDeadlineLabel,
   attentionMeaningLabel,
   attentionMeaningMark,
@@ -186,7 +185,7 @@ describe("topBarAttentionState", () => {
     ]);
   });
 
-  it("suppresses the waiting summary whenever active attention exists", () => {
+  it("keeps the quiet waiting summary behind active attention", () => {
     const items = projectTopBarAttention({
       accountId: "weber-a",
       role: "weber",
@@ -194,10 +193,13 @@ describe("topBarAttentionState", () => {
       conversations: [conversation("new", 1, "2026-08-17T11:00:00Z")],
       proposals: [proposal({ applicant_account_id: "weber-a" })],
     });
-    expect(items.map((item) => item.id)).toEqual(["direct:new"]);
+    expect(items.map((item) => item.id)).toEqual([
+      "direct:new",
+      "waiting-summary:weber-a",
+    ]);
   });
 
-  it("puts a participation deadline inside 24 hours ahead of unread information", () => {
+  it("keeps unread information ahead of optional participation even near a deadline", () => {
     const items = projectTopBarAttention({
       accountId: "weber-a",
       role: "weber",
@@ -214,10 +216,10 @@ describe("topBarAttentionState", () => {
       ],
     });
     expect(items.map((item) => item.id)).toEqual([
-      "proposal:urgent-vote",
       "direct:newer-message",
+      "proposal:urgent-vote",
     ]);
-    expect(items[0].deadlineLabel).toBe("Endet in 1 Std. 0 Min.");
+    expect(items[1].deadlineLabel).toBe("Endet in 1 Std. 0 Min.");
   });
 
   it("uses server remaining time instead of a skewed device wall clock", () => {
@@ -257,9 +259,7 @@ describe("topBarAttentionState", () => {
           id: "later-vote",
           status: "voting",
           consent_until: "2026-08-16T12:00:00Z",
-          voting_until: new Date(
-            NOW + ATTENTION_DEADLINE_HORIZON_MS + 60_000,
-          ).toISOString(),
+          voting_until: "2026-08-18T12:01:00Z",
           viewer_participation: viewer({ may_vote: true }),
         }),
       ],
@@ -270,7 +270,7 @@ describe("topBarAttentionState", () => {
     ]);
   });
 
-  it("orders equally urgent participation by earliest real deadline", () => {
+  it("orders optional participation by relevant activity rather than deadline", () => {
     const items = projectTopBarAttention({
       accountId: "weber-a",
       role: "weber",
@@ -278,20 +278,22 @@ describe("topBarAttentionState", () => {
       conversations: [],
       proposals: [
         proposal({
-          id: "later",
-          consent_until: "2026-08-17T20:00:00Z",
+          id: "older-early-deadline",
+          created_at: "2026-08-17T05:00:00Z",
+          consent_until: "2026-08-17T13:00:00Z",
           viewer_participation: viewer({ may_veto: true }),
         }),
         proposal({
-          id: "earlier",
-          consent_until: "2026-08-17T13:00:00Z",
+          id: "newer-late-deadline",
+          created_at: "2026-08-17T07:00:00Z",
+          consent_until: "2026-08-17T20:00:00Z",
           viewer_participation: viewer({ may_veto: true }),
         }),
       ],
     });
     expect(items.map((item) => item.id)).toEqual([
-      "proposal:earlier",
-      "proposal:later",
+      "proposal:newer-late-deadline",
+      "proposal:older-early-deadline",
     ]);
   });
 

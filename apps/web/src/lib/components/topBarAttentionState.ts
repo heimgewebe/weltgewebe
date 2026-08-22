@@ -3,7 +3,6 @@ import { formatRemaining, type Proposal } from "$lib/api/governance";
 import type { AuthRole } from "$lib/auth/store";
 
 const UNREAD_COUNT_OVERFLOW = 100;
-export const ATTENTION_DEADLINE_HORIZON_MS = 24 * 60 * 60 * 1000;
 
 export type AttentionItemKind =
   | "direct_message"
@@ -82,19 +81,6 @@ function sourceTime(value: string | undefined): number {
   return Number.isFinite(parsed) ? parsed : Number.NEGATIVE_INFINITY;
 }
 
-function deadlineRemainingMs(item: AttentionItem, nowMs: number): number {
-  if (
-    typeof item.remainingMs === "number" &&
-    Number.isFinite(item.remainingMs)
-  ) {
-    return item.remainingMs;
-  }
-  const deadlineMs = sourceTime(item.deadline);
-  return Number.isFinite(deadlineMs)
-    ? deadlineMs - nowMs
-    : Number.POSITIVE_INFINITY;
-}
-
 function proposalRemainingMs(
   proposal: Proposal,
   deadline: string | undefined,
@@ -123,27 +109,17 @@ function proposalRemainingMs(
     : Number.POSITIVE_INFINITY;
 }
 
-function isNearDeadline(item: AttentionItem, nowMs: number): boolean {
-  const remaining = deadlineRemainingMs(item, nowMs);
-  return remaining > 0 && remaining <= ATTENTION_DEADLINE_HORIZON_MS;
-}
-
-function attentionRank(item: AttentionItem, nowMs: number): number {
-  if (item.meaning === "required") return 0;
-  if (item.meaning === "available" && isNearDeadline(item, nowMs)) return 1;
-  if (item.meaning === "new") return 2;
-  if (item.meaning === "available") return 3;
-  return 4;
-}
-
-function compareDeadlineFirst(
-  left: AttentionItem,
-  right: AttentionItem,
-): number {
-  const leftDeadline = sourceTime(left.deadline);
-  const rightDeadline = sourceTime(right.deadline);
-  if (leftDeadline !== rightDeadline) return leftDeadline - rightDeadline;
-  return sourceTime(right.occurredAt) - sourceTime(left.occurredAt);
+function attentionRank(item: AttentionItem): number {
+  switch (item.meaning) {
+    case "required":
+      return 0;
+    case "new":
+      return 1;
+    case "available":
+      return 2;
+    case "waiting":
+      return 3;
+  }
 }
 
 export function attentionMeaningLabel(meaning: AttentionMeaning): string {
@@ -313,43 +289,38 @@ export function projectTopBarAttention({
     });
   }
 
+  if (waitingProposals.length > 0) {
+    const newestWaiting = waitingProposals
+      .map(proposalRelevantTime)
+      .filter((value): value is string => Boolean(value))
+      .sort((left, right) => sourceTime(right) - sourceTime(left))[0];
+    if (newestWaiting) {
+      const count = waitingProposals.length;
+      activeItems.push({
+        id: `waiting-summary:${accountId}`,
+        kind: "waiting_summary",
+        meaning: "waiting",
+        label:
+          count === 1
+            ? "1 eigener Vorgang läuft"
+            : `${count} eigene Vorgänge laufen`,
+        detail: "Du musst gerade nichts tun.",
+        href: "/antraege",
+        occurredAt: newestWaiting,
+        count,
+      });
+    }
+  }
+
   activeItems.sort((left, right) => {
-    const leftRank = attentionRank(left, nowMs);
-    const rightRank = attentionRank(right, nowMs);
+    const leftRank = attentionRank(left);
+    const rightRank = attentionRank(right);
     if (leftRank !== rightRank) return leftRank - rightRank;
 
-    if (left.meaning === "available" || left.meaning === "required") {
-      const byDeadline = compareDeadlineFirst(left, right);
-      if (byDeadline) return byDeadline;
-    } else {
-      const byTime = sourceTime(right.occurredAt) - sourceTime(left.occurredAt);
-      if (byTime) return byTime;
-    }
+    const byTime = sourceTime(right.occurredAt) - sourceTime(left.occurredAt);
+    if (byTime) return byTime;
     return left.id.localeCompare(right.id);
   });
 
-  if (activeItems.length > 0 || waitingProposals.length === 0)
-    return activeItems;
-
-  const newestWaiting = waitingProposals
-    .map(proposalRelevantTime)
-    .filter((value): value is string => Boolean(value))
-    .sort((left, right) => sourceTime(right) - sourceTime(left))[0];
-  if (!newestWaiting) return [];
-  const count = waitingProposals.length;
-  return [
-    {
-      id: `waiting-summary:${accountId}`,
-      kind: "waiting_summary",
-      meaning: "waiting",
-      label:
-        count === 1
-          ? "1 eigener Vorgang läuft"
-          : `${count} eigene Vorgänge laufen`,
-      detail: "Du musst gerade nichts tun.",
-      href: "/antraege",
-      occurredAt: newestWaiting,
-      count,
-    },
-  ];
+  return activeItems;
 }
