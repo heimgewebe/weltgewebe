@@ -135,6 +135,10 @@ pub struct ProposalWithCounts {
     pub consent_until: DateTime<Utc>,
     pub voting_until: Option<DateTime<Utc>>,
     pub finalized_at: Option<DateTime<Utc>>,
+    /// Jüngster kanonischer öffentlicher Aktivitätszeitpunkt des Verfahrens.
+    /// Zukünftige Fristen zählen nicht; ein Fristzeitpunkt wird erst nach dem
+    /// tatsächlichen Phasenwechsel zum vergangenen Fachereignis.
+    pub last_activity_at: DateTime<Utc>,
     pub veto_count: i64,
     pub message_count: i64,
     pub yes_votes: i64,
@@ -466,6 +470,7 @@ pub async fn create_weber_proposal_at_center(
         consent_until,
         voting_until: None,
         finalized_at: None,
+        last_activity_at: now,
         veto_count: 0,
         message_count: 0,
         yes_votes: 0,
@@ -592,6 +597,7 @@ pub async fn create_sach_proposal_at_center(
         consent_until,
         voting_until: None,
         finalized_at: None,
+        last_activity_at: now,
         veto_count: 0,
         message_count: 0,
         yes_votes: 0,
@@ -1192,6 +1198,21 @@ const PROPOSAL_WITH_COUNTS_SELECT: &str = "SELECT p.id::text AS id, p.kind, \
             ORDER BY r.created_at DESC, r.id DESC LIMIT 1) AS repealed_at, \
         p.applicant_account_id, p.applicant_title, p.summary, p.status, \
         p.created_at, p.consent_until, p.voting_until, p.finalized_at, \
+        GREATEST( \
+            p.created_at, \
+            CASE \
+                WHEN p.status = 'voting' THEN p.consent_until \
+                WHEN p.status IN ('accepted', 'rejected', 'withdrawn') \
+                    THEN COALESCE(p.finalized_at, p.created_at) \
+                ELSE p.created_at \
+            END, \
+            COALESCE((SELECT max(v.created_at) FROM governance_vetoes v \
+                WHERE v.proposal_id = p.id), p.created_at), \
+            COALESCE((SELECT max(gm.created_at) FROM governance_messages gm \
+                WHERE gm.proposal_id = p.id), p.created_at), \
+            COALESCE((SELECT max(gv.updated_at) FROM governance_votes gv \
+                WHERE gv.proposal_id = p.id), p.created_at) \
+        ) AS last_activity_at, \
         (SELECT count(*) FROM governance_vetoes v \
             WHERE v.proposal_id = p.id) AS veto_count, \
         (SELECT count(*) FROM governance_messages gm \
@@ -1224,6 +1245,7 @@ fn proposal_from_row(row: &sqlx::postgres::PgRow) -> Result<ProposalWithCounts, 
         consent_until: row.try_get("consent_until")?,
         voting_until: row.try_get("voting_until")?,
         finalized_at: row.try_get("finalized_at")?,
+        last_activity_at: row.try_get("last_activity_at")?,
         veto_count: row.try_get("veto_count")?,
         message_count: row.try_get("message_count")?,
         yes_votes: row.try_get("yes_votes")?,
@@ -1710,6 +1732,17 @@ mod tests {
     fn proposal_list_projects_canonical_message_counts() {
         assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("FROM governance_messages gm"));
         assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("AS message_count"));
+    }
+
+    #[test]
+    fn proposal_list_projects_canonical_last_activity() {
+        assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("AS last_activity_at"));
+        assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("max(v.created_at)"));
+        assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("max(gm.created_at)"));
+        assert!(PROPOSAL_WITH_COUNTS_SELECT.contains("max(gv.updated_at)"));
+        assert!(
+            PROPOSAL_WITH_COUNTS_SELECT.contains("WHEN p.status = 'voting' THEN p.consent_until")
+        );
     }
 
     #[test]

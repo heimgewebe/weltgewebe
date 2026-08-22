@@ -669,6 +669,11 @@ async fn sachantrag_uses_shared_veto_voting_majority_and_self_decision_guard() {
         .expect("proposal in viewer list");
     assert!(consent_entry.own_veto);
     assert_eq!(consent_entry.own_vote, None);
+    assert_eq!(
+        consent_entry.proposal.last_activity_at,
+        t0 + Duration::days(1),
+        "latest veto is the canonical activity during consent",
+    );
 
     let anonymous_entries = list_proposals_for_viewer(&pool, None)
         .await
@@ -679,10 +684,26 @@ async fn sachantrag_uses_shared_veto_voting_majority_and_self_decision_guard() {
         .expect("proposal in anonymous list");
     assert!(!anonymous_entry.own_veto);
     assert_eq!(anonymous_entry.own_vote, None);
+    assert_eq!(
+        anonymous_entry.proposal.last_activity_at,
+        t0 + Duration::days(1),
+    );
 
     finalize_due_proposals(&pool, t0 + Duration::days(7))
         .await
         .expect("open voting");
+
+    let voting_before_vote = list_proposals_for_viewer(&pool, Some(WEBER_B))
+        .await
+        .expect("list proposal after voting phase transition")
+        .into_iter()
+        .find(|entry| entry.proposal.id == proposal.id)
+        .expect("proposal after voting phase transition");
+    assert_eq!(
+        voting_before_vote.proposal.last_activity_at,
+        t0 + Duration::days(7),
+        "completed phase transition becomes activity, not its future deadline",
+    );
 
     let own_vote = upsert_vote(
         &pool,
@@ -712,6 +733,11 @@ async fn sachantrag_uses_shared_veto_voting_majority_and_self_decision_guard() {
         .expect("proposal in voting viewer list");
     assert_eq!(voting_entry.own_vote.as_deref(), Some("ja"));
     assert!(voting_entry.own_veto);
+    assert_eq!(
+        voting_entry.proposal.last_activity_at,
+        t0 + Duration::days(8),
+        "latest vote update becomes the canonical activity",
+    );
 
     let outcomes = finalize_due_proposals(&pool, t0 + Duration::days(14))
         .await

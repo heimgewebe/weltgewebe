@@ -13,6 +13,7 @@ RUNNER = REPO / "scripts/ci/run-postgres-integration-proofs.sh"
 RUST_SUPPORT = REPO / "apps/api/tests/support/postgres_proof.rs"
 CI = REPO / ".github/workflows/ci.yml"
 AUTH_PASSKEY_PROOF = REPO / ".github/workflows/auth-passkey-register-proof.yml"
+GOVERNANCE_FULL_FLOW_PROOF = REPO / ".github/workflows/governance-full-flow-proof.yml"
 
 TARGETS = {
     "db_auto_provision_write_path",
@@ -97,6 +98,36 @@ def test_postgres_passkey_browser_proof_provisions_pinned_jetstream_for_readines
     assert "NATS_URL=nats://127.0.0.1:%s" in rendered
     assert "PASSKEY_NATS_CONTAINER=%s" in rendered
     assert rendered.index("PASSKEY_NATS_CONTAINER=%s") < rendered.index("docker run --detach")
+    assert contract["jetstream_image"].startswith("nats@sha256:")
+    assert cleanup["if"] == "always()"
+    assert "docker rm --force" in cleanup["run"]
+
+
+def test_governance_browser_proof_provisions_pinned_jetstream_for_readiness() -> None:
+    contract = json.loads(CONTRACT.read_text(encoding="utf-8"))
+    workflow = yaml.safe_load(GOVERNANCE_FULL_FLOW_PROOF.read_text(encoding="utf-8"))
+    job = workflow["jobs"]["governance-full-flow-proof"]
+    steps = job["steps"]
+    start = next(
+        step
+        for step in steps
+        if step.get("name") == "Start pinned JetStream for readiness-backed proof"
+    )
+    cleanup = next(
+        step
+        for step in steps
+        if step.get("name") == "Stop JetStream proof container"
+    )
+    rendered = start["run"]
+    assert "scripts/ci/postgres-proof-contract.json" in rendered
+    assert "jetstream_image" in rendered
+    assert "--publish 127.0.0.1::4222" in rendered
+    assert '"${IMAGE}" -js' in rendered
+    assert "NATS_URL=nats://127.0.0.1:%s" in rendered
+    assert "GOVERNANCE_NATS_CONTAINER=%s" in rendered
+    assert rendered.index("GOVERNANCE_NATS_CONTAINER=%s") < rendered.index(
+        "docker run --detach"
+    )
     assert contract["jetstream_image"].startswith("nats@sha256:")
     assert cleanup["if"] == "always()"
     assert "docker rm --force" in cleanup["run"]
