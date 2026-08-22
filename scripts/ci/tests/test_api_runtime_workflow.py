@@ -1,0 +1,196 @@
+"""Contract tests for the exact-revision API runtime evidence workflow."""
+
+from __future__ import annotations
+
+import unittest
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[3]
+WORKFLOW = ROOT / ".github" / "workflows" / "domain-scale.yml"
+
+
+class ApiRuntimeWorkflowContractTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        cls.source = WORKFLOW.read_text(encoding="utf-8")
+        marker = "  api-runtime-evidence:\n"
+        if marker not in cls.source:
+            raise AssertionError("api-runtime-evidence job is missing")
+        cls.job = marker + cls.source.split(marker, 1)[1]
+
+    def test_runtime_job_follows_the_real_domain_scale_plan_proof(self) -> None:
+        self.assertIn("needs: foundation", self.job)
+        self.assertIn(
+            "python3 -B scripts/performance/domain_scale.py generate \\\n", self.job
+        )
+        self.assertIn(
+            "python3 -B scripts/performance/domain_scale.py render-load \\\n", self.job
+        )
+        self.assertIn("SELECT count(*) FROM weltgewebe_perf.domain_nodes", self.job)
+        self.assertIn("SELECT count(*) FROM weltgewebe_perf.domain_edges", self.job)
+        self.assertIn("weltgewebe_search_generation_activation_ready", self.job)
+        self.assertIn("weltgewebe_activate_search_generation", self.job)
+
+    def test_scenario_values_come_from_the_canonical_policy(self) -> None:
+        self.assertIn(
+            "from scripts.performance.api_runtime_evidence import api_runtime_section, load_policy",
+            self.job,
+        )
+        self.assertIn('load_policy(Path("policies/performance.v1.json"))', self.job)
+        for output in (
+            "virtual_users",
+            "duration_seconds",
+            "dataset_profile",
+            "concurrency_profile",
+            "search_query",
+            "database_profile",
+            "node_count",
+            "edge_count",
+        ):
+            self.assertIn(f'"{output}"', self.job)
+        self.assertNotRegex(self.job, r"API_RUNTIME_VUS:\s*10")
+        self.assertNotRegex(self.job, r"API_RUNTIME_DURATION_SECONDS:\s*30")
+        self.assertNotIn("thresholds:", self.job)
+
+    def test_k6_binary_and_api_revision_are_reproducibly_bound(self) -> None:
+        self.assertRegex(self.job, r"K6_VERSION: v\d+\.\d+\.\d+")
+        self.assertRegex(self.job, r"K6_LINUX_AMD64_SHA256: [0-9a-f]{64}")
+        self.assertIn("sha256sum --check --status", self.job)
+        checkout = self.job[
+            self.job.index("uses: actions/checkout@") : self.job.index(
+                "uses: actions/setup-python@"
+            )
+        ]
+        self.assertIn(
+            "ref: ${{ github.event.pull_request.head.sha || github.sha }}", checkout
+        )
+        self.assertIn('COMMIT="$(git rev-parse HEAD)"', self.job)
+        self.assertIn('--build-arg "GIT_COMMIT_SHA=${COMMIT}"', self.job)
+        self.assertIn('--build-arg "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}"', self.job)
+        self.assertIn('"${API_IMAGE}"', self.job)
+        self.assertIn('commit=\\"${{ steps.image.outputs.commit }}\\"', self.job)
+
+    def test_live_measurement_collects_every_required_input_during_one_run(
+        self,
+    ) -> None:
+        measurement = self.job[
+            self.job.index(
+                "name: Measure the canonical mixed-health-and-read scenario"
+            ) : self.job.index(
+                "name: Assemble and independently verify exact-revision evidence"
+            )
+        ]
+        before = measurement.index("metrics-before.prom")
+        workload = measurement.index("k6 run scripts/performance/api_runtime_k6.js")
+        point_sample = measurement.index("SELECT count(*) FROM pg_stat_activity")
+        after = measurement.index("metrics-after.prom")
+        self.assertLess(before, workload)
+        self.assertLess(workload, point_sample)
+        self.assertLess(point_sample, after)
+        self.assertIn("container_resource_sampler.py sample", measurement)
+        self.assertIn('kill -0 "${K6_PID}"', measurement)
+        self.assertIn("API_RUNTIME_DATASET_MANIFEST_SHA256", measurement)
+        self.assertIn("API_RUNTIME_CONCURRENCY_PROFILE", measurement)
+        self.assertIn(
+            "API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}",
+            measurement,
+        )
+        self.assertNotRegex(measurement, r"API_RUNTIME_SEARCH_QUERY=\w+")
+
+    def test_evidence_is_assembled_verified_and_uploaded(self) -> None:
+        check = self.job.index(
+            "api_runtime_evidence.py check", self.job.index("Measure the canonical")
+        )
+        verify = self.job.index("api_runtime_evidence.py verify", check)
+        upload = self.job.index("name: Upload API runtime evidence", verify)
+        self.assertLess(check, verify)
+        self.assertLess(verify, upload)
+        for evidence_file in (
+            "report.json",
+            "k6-summary.json",
+            "metrics-before.prom",
+            "metrics-after.prom",
+            "resource-receipt.json",
+            "database-connections.txt",
+            "fixture/manifest.json",
+            "fixture/domain_nodes.csv",
+            "fixture/domain_edges.csv",
+        ):
+            self.assertIn(evidence_file, self.job[upload:])
+        self.assertIn("if-no-files-found: error", self.job[upload:])
+
+    def test_regression_fixture_proves_a_bound_threshold_failure(self) -> None:
+        regression = self.job[
+            self.job.index(
+                "name: Prove the API runtime gate fails closed"
+            ) : self.job.index("name: Build the exact API revision")
+        ]
+        self.assertIn("api_runtime_evidence.py regression-fixture", regression)
+        self.assertIn('if [[ "${CHECK_STATUS}" -ne 2 ]]', regression)
+        self.assertIn("report_path.is_file()", regression)
+        self.assertIn("json.loads(report_path.read_text", regression)
+        self.assertIn('report.get("status") != "fail"', regression)
+        self.assertIn('report.get("failures")', regression)
+        self.assertIn('report.get("revision") != {', regression)
+        self.assertIn('"git_head": expected_head', regression)
+        self.assertIn('"measured_api_commit": expected_head', regression)
+        self.assertIn('"policy_sha256": expected_policy_sha256', regression)
+        self.assertIn('2> "${VERIFY_STDERR}"', regression)
+        self.assertIn('if [[ "${VERIFY_STATUS}" -ne 2 ]]', regression)
+        self.assertIn("does not pass the performance gate: 'fail'", regression)
+        self.assertNotIn("continue-on-error", regression)
+        self.assertNotIn("|| true", regression)
+
+    def test_hidden_fixture_projections_are_explicitly_redacted(self) -> None:
+        projection = self.job[
+            self.job.index("INSERT INTO search_node_projections (") : self.job.index(
+                "UPDATE search_projection_jobs"
+            )
+        ]
+        normalized = " ".join(projection.split())
+        for public_value, hidden_value in (
+            (
+                "repeat('0', 64)",
+                "'e0f631f5602e764ef8a5f14e36d2d81663b20cd305a30af0dad6c0d759e5a955'",
+            ),
+            ("n.title", "'[nicht öffentlich]'"),
+            (
+                "ARRAY(SELECT jsonb_array_elements_text(n.payload -> 'tags'))",
+                "'{}'::TEXT[]",
+            ),
+            ("coalesce(n.payload ->> 'summary', n.title)", "'[nicht öffentlich]'"),
+            ("'de'", "'und'"),
+            ("n.kind", "'[nicht öffentlich]'"),
+            ("'active'", "'hidden'"),
+            ("ARRAY['public']::TEXT[]", "'{}'::TEXT[]"),
+            ("'ready'", "'unavailable'"),
+            (
+                "array_fill(0.0::DOUBLE PRECISION, ARRAY[g.dimension])",
+                "NULL",
+            ),
+        ):
+            self.assertIn(
+                "CASE WHEN n.search_visibility = 'public' "
+                f"THEN {public_value} ELSE {hidden_value} END",
+                normalized,
+            )
+        self.assertIn("v.source_version, v.source_revision", normalized)
+
+    def test_relevant_contract_changes_trigger_the_runtime_job(self) -> None:
+        trigger_prefix = self.source.split("jobs:", 1)[0]
+        for path in (
+            '"policies/performance.v1.json"',
+            '"scripts/performance/**"',
+            '"scripts/basemap/run-measured-container.py"',
+            '"scripts/ci/tests/test_api_runtime_workflow.py"',
+            '"apps/api/**"',
+            '"configs/app.defaults.yml"',
+            '"Cargo.toml"',
+            '"Cargo.lock"',
+        ):
+            self.assertGreaterEqual(trigger_prefix.count(path), 2, path)
+
+
+if __name__ == "__main__":
+    unittest.main()

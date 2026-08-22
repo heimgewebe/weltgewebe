@@ -177,7 +177,8 @@
         "virtual_users": 10,
         "duration_seconds": 30,
         "dataset_profile": "domain-scale-ci",
-        "concurrency_profile": "mixed-health-and-read"
+        "concurrency_profile": "mixed-health-and-read",
+        "search_query": "scale"
       },
       "metrics": {
         "http_request_duration_ms": {
