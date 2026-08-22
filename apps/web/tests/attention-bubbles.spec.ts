@@ -390,7 +390,7 @@ test.describe("top-left attention bubbles", () => {
     );
   });
 
-  test("a real deadline inside 24 hours outranks newer unread information and stays visible in the card", async ({
+  test("a real deadline stays visible without outranking newer unread information", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -440,13 +440,13 @@ test.describe("top-left attention bubbles", () => {
     await expect(bubbles).toHaveCount(2);
     await expect(bubbles.nth(0)).toHaveAttribute(
       "data-attention-id",
-      "proposal:deadline-vote",
+      "direct:fresh-message",
     );
     await expect(bubbles.nth(1)).toHaveAttribute(
       "data-attention-id",
-      "direct:fresh-message",
+      "proposal:deadline-vote",
     );
-    await bubbles.nth(0).click();
+    await bubbles.nth(1).click();
     const card = page.getByTestId("attention-card");
     await expect(card).toContainText("Mitwirkung möglich");
     await expect(card).toContainText("Endet in");
