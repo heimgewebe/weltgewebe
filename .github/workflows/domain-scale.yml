@@ -338,8 +338,19 @@ jobs:
             --manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
             --output "${EVIDENCE_DIR}/load.sql"
           psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${EVIDENCE_DIR}/load.sql"
-          test "$(psql "${DATABASE_URL}" -Atc 'SELECT count(*) FROM weltgewebe_perf.domain_nodes')" = "${{ steps.contract.outputs.node_count }}"
-          test "$(psql "${DATABASE_URL}" -Atc 'SELECT count(*) FROM weltgewebe_perf.domain_edges')" = "${{ steps.contract.outputs.edge_count }}"
+          assert_count() {
+            local query="$1"
+            local expected="$2"
+            local actual
+            actual="$(psql "${DATABASE_URL}" -Atc "${query}")"
+            test "${actual}" = "${expected}"
+          }
+          assert_count \
+            "SELECT count(*) FROM weltgewebe_perf.domain_nodes" \
+            "${{ steps.contract.outputs.node_count }}"
+          assert_count \
+            "SELECT count(*) FROM weltgewebe_perf.domain_edges" \
+            "${{ steps.contract.outputs.edge_count }}"
 
           psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<'SQL'
           BEGIN;
@@ -451,10 +462,18 @@ jobs:
           COMMIT;
           SQL
 
-          test "$(psql "${DATABASE_URL}" -Atc "SELECT count(*) FROM domain_nodes")" = "${{ steps.contract.outputs.node_count }}"
-          test "$(psql "${DATABASE_URL}" -Atc "SELECT count(*) FROM domain_edges")" = "${{ steps.contract.outputs.edge_count }}"
-          test "$(psql "${DATABASE_URL}" -Atc "SELECT count(*) FROM search_node_projections")" = "${{ steps.contract.outputs.node_count }}"
-          test "$(psql "${DATABASE_URL}" -Atc "SELECT count(*) FROM search_index_generations WHERE state = 'active'")" = "1"
+          assert_count \
+            "SELECT count(*) FROM domain_nodes" \
+            "${{ steps.contract.outputs.node_count }}"
+          assert_count \
+            "SELECT count(*) FROM domain_edges" \
+            "${{ steps.contract.outputs.edge_count }}"
+          assert_count \
+            "SELECT count(*) FROM search_node_projections" \
+            "${{ steps.contract.outputs.node_count }}"
+          assert_count \
+            "SELECT count(*) FROM search_index_generations WHERE state = 'active'" \
+            "1"
 
       - name: Start and warm the measured API container
         env:
