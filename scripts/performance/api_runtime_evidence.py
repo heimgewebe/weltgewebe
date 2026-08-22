@@ -57,6 +57,7 @@ REQUIRED_SCENARIO_FIELDS = (
     "duration_seconds",
     "dataset_profile",
     "concurrency_profile",
+    "search_query",
 )
 REQUIRED_METRIC_KEYS = (
     "http_request_duration_ms",
@@ -171,6 +172,7 @@ def _scalar_scenario(value: Mapping[str, Any], label: str) -> dict[str, Any]:
     duration = value["duration_seconds"]
     dataset_profile = value["dataset_profile"]
     concurrency_profile = value["concurrency_profile"]
+    search_query = value["search_query"]
     if not isinstance(vus, int) or isinstance(vus, bool) or vus < 1:
         raise ApiRuntimeEvidenceError(f"{label}.virtual_users must be a positive integer")
     if not isinstance(duration, int) or isinstance(duration, bool) or duration < 1:
@@ -179,11 +181,14 @@ def _scalar_scenario(value: Mapping[str, Any], label: str) -> dict[str, Any]:
         raise ApiRuntimeEvidenceError(f"{label}.dataset_profile must be a non-empty string")
     if not isinstance(concurrency_profile, str) or not concurrency_profile:
         raise ApiRuntimeEvidenceError(f"{label}.concurrency_profile must be a non-empty string")
+    if not isinstance(search_query, str) or not search_query:
+        raise ApiRuntimeEvidenceError(f"{label}.search_query must be a non-empty string")
     return {
         "virtual_users": vus,
         "duration_seconds": duration,
         "dataset_profile": dataset_profile,
         "concurrency_profile": concurrency_profile,
+        "search_query": search_query,
     }
 
 

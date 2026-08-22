@@ -105,6 +105,7 @@ function validContract(overrides = {}) {
           duration_seconds: 30,
           dataset_profile: "ci",
           concurrency_profile: "mixed-read",
+          search_query: "scale",
         },
         metrics: {
           http_request_duration_ms: { percentile: 95, max: 300 },
@@ -219,6 +220,13 @@ test("requires executable network and scenario definitions", () => {
   assert.throws(
     () => validatePerformanceContract(missingReadiness),
     /must define readiness/,
+  );
+
+  const emptySearchQuery = validContract();
+  emptySearchQuery.measurements.api_runtime.scenario.search_query = "";
+  assert.throws(
+    () => validatePerformanceContract(emptySearchQuery),
+    /api_runtime\.scenario\.search_query must be a non-empty string/,
   );
 
   const wrongMetric = validContract();

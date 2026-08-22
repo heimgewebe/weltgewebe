@@ -35,11 +35,13 @@ def _load_policy() -> dict:
 
 
 def _canonical_scenario() -> dict:
+    policy_scenario = _load_policy()["measurements"]["api_runtime"]["scenario"]
     return {
         "virtual_users": 10,
         "duration_seconds": 30,
         "dataset_profile": "domain-scale-ci",
         "concurrency_profile": "mixed-health-and-read",
+        "search_query": policy_scenario["search_query"],
     }
 
 
@@ -172,6 +174,15 @@ class PolicyBindingTests(unittest.TestCase):
         with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "scenario"):
             evidence.api_runtime_section(broken)
 
+    def test_search_query_must_be_a_non_empty_string(self) -> None:
+        policy = _load_policy()
+        for invalid in ("", None, 42):
+            with self.subTest(invalid=invalid):
+                broken = json.loads(json.dumps(policy))
+                broken["measurements"]["api_runtime"]["scenario"]["search_query"] = invalid
+                with self.assertRaisesRegex(evidence.ApiRuntimeEvidenceError, "search_query"):
+                    evidence.api_runtime_section(broken)
+
     def test_metrics_must_define_exactly_the_canonical_threshold_set(self) -> None:
         policy = _load_policy()
         broken = json.loads(json.dumps(policy))
@@ -292,9 +303,12 @@ class K6ScriptContractTests(unittest.TestCase):
         self.assertIn("'search 200': (r) => r.status === 200", source)
         self.assertNotIn("http.setResponseCallback(http.expectedStatuses(200, 503));", source)
         self.assertIn("API_RUNTIME_DATASET_PROFILE is required", source)
+        self.assertIn("API_RUNTIME_SEARCH_QUERY is required", source)
         self.assertIn("API_RUNTIME_DATASET_MANIFEST_SHA256", source)
         self.assertIn("weltgewebe_dataset_manifest_sha256", source)
+        self.assertIn("search_query: SEARCH_QUERY", source)
         self.assertNotIn("API_RUNTIME_DATASET_PROFILE || 'domain-scale-ci'", source)
+        self.assertNotRegex(source, r"API_RUNTIME_SEARCH_QUERY\s*\|\|")
 
 
 class AssembleReportTests(unittest.TestCase):

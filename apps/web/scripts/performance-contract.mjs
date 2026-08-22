@@ -290,6 +290,7 @@ function validateApiRuntime(value) {
       "duration_seconds",
       "dataset_profile",
       "concurrency_profile",
+      "search_query",
     ],
     `${label}.scenario`,
   );
@@ -297,6 +298,7 @@ function validateApiRuntime(value) {
   integer(scenario.duration_seconds, `${label}.scenario.duration_seconds`, 1);
   string(scenario.dataset_profile, `${label}.scenario.dataset_profile`);
   string(scenario.concurrency_profile, `${label}.scenario.concurrency_profile`);
+  string(scenario.search_query, `${label}.scenario.search_query`);
   metrics(record.metrics, `${label}.metrics`);
 }
 

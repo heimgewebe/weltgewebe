@@ -14,7 +14,10 @@ if (!BASE_URL) {
   throw new Error('BASE_URL is required, e.g. http://127.0.0.1:8080');
 }
 
-const SEARCH_QUERY = __ENV.API_RUNTIME_SEARCH_QUERY || 'werkstatt';
+const SEARCH_QUERY = __ENV.API_RUNTIME_SEARCH_QUERY;
+if (!SEARCH_QUERY) {
+  throw new Error('API_RUNTIME_SEARCH_QUERY is required');
+}
 const DATASET_PROFILE = __ENV.API_RUNTIME_DATASET_PROFILE;
 if (!DATASET_PROFILE) {
   throw new Error('API_RUNTIME_DATASET_PROFILE is required');
@@ -86,6 +89,7 @@ export function handleSummary(data) {
       duration_seconds: Number(String(options.duration).replace(/s$/, '')),
       dataset_profile: DATASET_PROFILE,
       concurrency_profile: CONCURRENCY_PROFILE,
+      search_query: SEARCH_QUERY,
     },
   });
   const outputPath =

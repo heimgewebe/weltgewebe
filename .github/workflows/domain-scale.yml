@@ -2,26 +2,7 @@
 name: domain-scale
 
 "on":
-  pull_request:
-    branches: [main]
-    paths:
-      - "configs/performance/domain-scale.v1.json"
-      - "scripts/performance/**"
-      - "scripts/tests/test_domain_scale.py"
-      - "apps/api/migrations/20260531000001_create_domain_nodes.up.sql"
-      - "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
-      - "docs/blueprints/domain-scale-foundation.md"
-      - ".github/workflows/domain-scale.yml"
-  push:
-    branches: [main]
-    paths:
-      - "configs/performance/domain-scale.v1.json"
-      - "scripts/performance/**"
-      - "scripts/tests/test_domain_scale.py"
-      - "apps/api/migrations/20260531000001_create_domain_nodes.up.sql"
-      - "apps/api/migrations/20260531000002_create_domain_edges.up.sql"
-      - "docs/blueprints/domain-scale-foundation.md"
-      - ".github/workflows/domain-scale.yml"
+  workflow_call: {}
   workflow_dispatch: {}
 
 env:
@@ -31,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: domain-scale-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -115,3 +96,488 @@ jobs:
             ${{ runner.temp }}/domain-scale-ci/plans/*.json
             ${{ runner.temp }}/domain-scale-ci/report.json
           if-no-files-found: warn
+
+  api-runtime-evidence:
+    name: API runtime exact-revision evidence
+    needs: foundation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    services:
+      postgres:
+        image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d postgres"
+          --health-interval 2s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
+      API_IMAGE: weltgewebe-api:api-runtime-evidence
+      API_CONTAINER: weltgewebe-api-runtime-evidence
+      K6_VERSION: v2.1.0
+      K6_LINUX_AMD64_SHA256: 295d961ebfca306f295f1133068dcd403a8171c87f387928f5f30b0fbcff858a
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - uses: actions/setup-python@8549b9f8f590ad24eab7482f36f6e1e24d34597b # tag: v7.0.0
+        with:
+          python-version-file: '.python-version'
+
+      - name: Install PostgreSQL client and pinned k6
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-client
+          K6_ARCHIVE="${RUNNER_TEMP:?RUNNER_TEMP is required}/k6-${K6_VERSION}-linux-amd64.tar.gz"
+          K6_DIR="${RUNNER_TEMP}/k6-bin"
+          mkdir -p "${K6_DIR}"
+          curl --fail --location --silent --show-error \
+            --output "${K6_ARCHIVE}" \
+            "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz"
+          printf '%s  %s\n' "${K6_LINUX_AMD64_SHA256}" "${K6_ARCHIVE}" | sha256sum --check --status
+          tar -xzf "${K6_ARCHIVE}" -C "${K6_DIR}" --strip-components=1
+          "${K6_DIR}/k6" version
+          printf '%s\n' "${K6_DIR}" >> "${GITHUB_PATH}"
+
+      - name: Read canonical API runtime contract
+        id: contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -B scripts/performance/api_runtime_evidence.py validate
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+
+          from scripts.performance.api_runtime_evidence import api_runtime_section, load_policy
+          from scripts.performance.domain_scale import load_config
+
+          contract = api_runtime_section(load_policy(Path("policies/performance.v1.json")))
+          scenario = contract["scenario"]
+          scale_config = load_config(Path(contract["dataset_proof"]["config"]))
+          scale_counts = scale_config["profiles"][contract["dataset_proof"]["profile"]]
+          values = {
+              "virtual_users": scenario["virtual_users"],
+              "duration_seconds": scenario["duration_seconds"],
+              "dataset_profile": scenario["dataset_profile"],
+              "concurrency_profile": scenario["concurrency_profile"],
+              "search_query": scenario["search_query"],
+              "database_profile": contract["dataset_proof"]["profile"],
+              "node_count": scale_counts["nodes"],
+              "edge_count": scale_counts["edges"],
+          }
+          with Path(os.environ["GITHUB_OUTPUT"]).open("a", encoding="utf-8") as output:
+              for key, value in values.items():
+                  output.write(f"{key}={value}\n")
+          PY
+
+      - name: Generate the validated canonical fixture
+        id: fixture
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${RUNNER_TEMP:?RUNNER_TEMP is required}/api-runtime-evidence"
+          test ! -e "${EVIDENCE_DIR}"
+          mkdir -p "${EVIDENCE_DIR}/fixture"
+          python3 -B scripts/performance/domain_scale.py generate \
+            --profile "${{ steps.contract.outputs.database_profile }}" \
+            --output-dir "${EVIDENCE_DIR}/fixture"
+          printf 'evidence_dir=%s\n' "${EVIDENCE_DIR}" >> "${GITHUB_OUTPUT}"
+
+      - name: Prove the API runtime gate fails closed
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
+          REGRESSION_DIR="${EVIDENCE_DIR}/regression"
+          python3 -B scripts/performance/api_runtime_evidence.py regression-fixture \
+            --output-dir "${REGRESSION_DIR}" \
+            --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json"
+
+          set +e
+          python3 -B scripts/performance/api_runtime_evidence.py check \
+            --k6-summary "${REGRESSION_DIR}/k6-summary.json" \
+            --metrics-before "${REGRESSION_DIR}/metrics-before.prom" \
+            --metrics-after "${REGRESSION_DIR}/metrics-after.prom" \
+            --resource-receipt "${REGRESSION_DIR}/resource-receipt.json" \
+            --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
+            --database-connections 1 \
+            --report "${REGRESSION_DIR}/report.json"
+          CHECK_STATUS=$?
+          set -e
+          if [[ "${CHECK_STATUS}" -ne 2 ]]; then
+            echo "regression fixture check returned ${CHECK_STATUS}; expected fail-closed status 2" >&2
+            exit 1
+          fi
+
+          python3 - "${REGRESSION_DIR}/report.json" <<'PY'
+          import json
+          import sys
+          from pathlib import Path
+
+          from scripts.performance.api_runtime_evidence import git_head, sha256_file
+
+          report_path = Path(sys.argv[1])
+          if not report_path.is_file():
+              raise SystemExit("regression check did not write its report file")
+          try:
+              report = json.loads(report_path.read_text(encoding="utf-8"))
+          except (OSError, json.JSONDecodeError) as exc:
+              raise SystemExit(f"regression check report is not valid JSON: {exc}") from exc
+          if report.get("status") != "fail":
+              raise SystemExit("regression check report status is not fail")
+          failures = report.get("failures")
+          if (
+              not isinstance(failures, list)
+              or not failures
+              or any(not isinstance(item, str) or not item for item in failures)
+          ):
+              raise SystemExit("regression check report has no concrete failures")
+          expected_head = git_head(Path.cwd())
+          expected_policy_sha256 = sha256_file(Path("policies/performance.v1.json"))
+          if report.get("revision") != {
+              "git_head": expected_head,
+              "measured_api_commit": expected_head,
+              "policy_sha256": expected_policy_sha256,
+          }:
+              raise SystemExit("regression check report has an invalid revision binding")
+          PY
+
+          VERIFY_STDERR="${REGRESSION_DIR}/verify.stderr"
+          set +e
+          python3 -B scripts/performance/api_runtime_evidence.py verify \
+            --report "${REGRESSION_DIR}/report.json" \
+            --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
+            2> "${VERIFY_STDERR}"
+          VERIFY_STATUS=$?
+          set -e
+          if [[ "${VERIFY_STATUS}" -ne 2 ]]; then
+            echo "regression fixture verification returned ${VERIFY_STATUS}; expected status 2" >&2
+            cat "${VERIFY_STDERR}" >&2
+            exit 1
+          fi
+          if ! grep -Fqx \
+            "api-runtime-evidence: report is revision-bound but does not pass the performance gate: 'fail'" \
+            "${VERIFY_STDERR}"; then
+            echo "regression fixture verification did not report the expected threshold failure" >&2
+            cat "${VERIFY_STDERR}" >&2
+            exit 1
+          fi
+
+      - name: Build the exact API revision
+        id: image
+        shell: bash
+        run: |
+          set -euo pipefail
+          COMMIT="$(git rev-parse HEAD)"
+          BUILD_TIMESTAMP="$(git show -s --format=%cI "${COMMIT}")"
+          [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
+          [[ "${BUILD_TIMESTAMP}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$ ]]
+          docker build \
+            --file apps/api/Dockerfile \
+            --tag "${API_IMAGE}" \
+            --build-arg "GIT_COMMIT_SHA=${COMMIT}" \
+            --build-arg "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}" \
+            --build-arg CARGO_BUILD_JOBS=2 \
+            .
+          printf 'commit=%s\n' "${COMMIT}" >> "${GITHUB_OUTPUT}"
+
+      - name: Apply embedded migrations from the measured image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host \
+            --env "DATABASE_URL=${DATABASE_URL}" \
+            --env WELTGEWEBE_API_STARTUP_MIGRATIONS=run \
+            --env WELTGEWEBE_API_MIGRATION_ONLY=1 \
+            "${API_IMAGE}"
+
+      - name: Load the canonical fixture into the migrated API database
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
+          mkdir -p "${EVIDENCE_DIR}/plans"
+          python3 -B scripts/performance/domain_scale.py render-load \
+            --manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
+            --output "${EVIDENCE_DIR}/load.sql"
+          psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -f "${EVIDENCE_DIR}/load.sql"
+          assert_count() {
+            local query="$1"
+            local expected="$2"
+            local actual
+            actual="$(psql "${DATABASE_URL}" -Atc "${query}")"
+            test "${actual}" = "${expected}"
+          }
+          assert_count \
+            "SELECT count(*) FROM weltgewebe_perf.domain_nodes" \
+            "${{ steps.contract.outputs.node_count }}"
+          assert_count \
+            "SELECT count(*) FROM weltgewebe_perf.domain_edges" \
+            "${{ steps.contract.outputs.edge_count }}"
+
+          psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 <<'SQL'
+          BEGIN;
+          INSERT INTO search_index_generations (
+              generation_id, provider, model_id, model_revision, runtime_identity,
+              dimension, document_revision, normalization_revision, ranking_revision,
+              state, expected_nodes
+          ) VALUES (
+              'search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c',
+              'local:ollama',
+              'qwen3-embedding:4b',
+              'sha256:df5bd2e3c74cd8d069d21dc038f1b359fcdc9458fce1c99bd43c9eb1518ff907',
+              'ollama:0.12.6@http://127.0.0.1:11434',
+              2560,
+              'node-document-v4-canonical-visibility',
+              'weltgewebe-search-normalization-v1',
+              'weltgewebe-hybrid-ranking-v2',
+              'building',
+              (SELECT count(*) FROM weltgewebe_perf.domain_nodes)
+          );
+
+          INSERT INTO domain_nodes (
+              id, kind, title, lat, lon, created_at, updated_at, payload, search_visibility
+          )
+          SELECT id, kind, title, lat, lon, created_at, updated_at, payload,
+                 CASE WHEN kind = 'Projekt' THEN 'public' ELSE 'hidden' END
+            FROM weltgewebe_perf.domain_nodes
+           ORDER BY id;
+
+          INSERT INTO domain_edges (id, source_id, target_id, edge_kind, created_at, payload)
+          SELECT id, source_id, target_id, edge_kind, created_at, payload
+            FROM weltgewebe_perf.domain_edges
+           ORDER BY id;
+
+          INSERT INTO search_node_projections (
+              generation_id, node_id, source_version, source_revision, content_sha256,
+              title, tags, searchable_text, language, kind, status, visibility_scopes,
+              semantic_state, embedding
+          )
+          SELECT
+              g.generation_id,
+              n.id,
+              v.source_version,
+              v.source_revision,
+              CASE
+                  WHEN n.search_visibility = 'public' THEN repeat('0', 64)
+                  ELSE 'e0f631f5602e764ef8a5f14e36d2d81663b20cd305a30af0dad6c0d759e5a955'
+              END,
+              CASE
+                  WHEN n.search_visibility = 'public' THEN n.title
+                  ELSE '[nicht öffentlich]'
+              END,
+              CASE
+                  WHEN n.search_visibility = 'public'
+                  THEN ARRAY(SELECT jsonb_array_elements_text(n.payload -> 'tags'))
+                  ELSE '{}'::TEXT[]
+              END,
+              CASE
+                  WHEN n.search_visibility = 'public'
+                  THEN coalesce(n.payload ->> 'summary', n.title)
+                  ELSE '[nicht öffentlich]'
+              END,
+              CASE WHEN n.search_visibility = 'public' THEN 'de' ELSE 'und' END,
+              CASE
+                  WHEN n.search_visibility = 'public' THEN n.kind
+                  ELSE '[nicht öffentlich]'
+              END,
+              CASE WHEN n.search_visibility = 'public' THEN 'active' ELSE 'hidden' END,
+              CASE
+                  WHEN n.search_visibility = 'public' THEN ARRAY['public']::TEXT[]
+                  ELSE '{}'::TEXT[]
+              END,
+              CASE
+                  WHEN n.search_visibility = 'public' THEN 'ready'
+                  ELSE 'unavailable'
+              END,
+              CASE
+                  WHEN n.search_visibility = 'public'
+                  THEN array_fill(0.0::DOUBLE PRECISION, ARRAY[g.dimension])
+                  ELSE NULL
+              END
+            FROM domain_nodes n
+            JOIN search_node_versions v ON v.node_id = n.id
+            CROSS JOIN search_index_generations g
+           WHERE g.state = 'building'
+           ORDER BY n.id;
+
+          UPDATE search_projection_jobs
+             SET state = 'done', completed_at = clock_timestamp()
+           WHERE generation_id = 'search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c';
+
+          UPDATE search_index_generations
+             SET expected_nodes = (SELECT count(*) FROM domain_nodes),
+                 completed_nodes = (SELECT count(*) FROM search_node_versions WHERE deleted_at IS NULL)
+           WHERE generation_id = 'search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c';
+
+          DO $$
+          BEGIN
+              IF NOT weltgewebe_search_generation_activation_ready(
+                  'search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c'
+              ) THEN
+                  RAISE EXCEPTION 'domain-scale-ci search generation is not activation-ready';
+              END IF;
+          END
+          $$;
+          SELECT weltgewebe_activate_search_generation(
+              'search-gen-2e8358273aa6d41e6a59025985a99738614aba725b8f369b3a54f390f8752e5c'
+          );
+          COMMIT;
+          SQL
+
+          assert_count \
+            "SELECT count(*) FROM domain_nodes" \
+            "${{ steps.contract.outputs.node_count }}"
+          assert_count \
+            "SELECT count(*) FROM domain_edges" \
+            "${{ steps.contract.outputs.edge_count }}"
+          assert_count \
+            "SELECT count(*) FROM search_node_projections" \
+            "${{ steps.contract.outputs.node_count }}"
+          assert_count \
+            "SELECT count(*) FROM search_index_generations WHERE state = 'active'" \
+            "1"
+
+      - name: Start and warm the measured API container
+        env:
+          API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --detach \
+            --name "${API_CONTAINER}" \
+            --network host \
+            --env API_BIND=127.0.0.1:8787 \
+            --env "DATABASE_URL=${DATABASE_URL}" \
+            --env WELTGEWEBE_DOMAIN_READ_SOURCE=postgres \
+            --env WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied \
+            --env WELTGEWEBE_SEARCH_OLLAMA_URL=http://127.0.0.1:9/ \
+            "${API_IMAGE}"
+
+          READY=0
+          for _ in {1..120}; do
+            if curl -fsS http://127.0.0.1:8787/health/live >/dev/null 2>&1; then
+              READY=1
+              break
+            fi
+            if ! docker container inspect "${API_CONTAINER}" --format '{{.State.Running}}' | grep -qx true; then
+              docker logs "${API_CONTAINER}"
+              exit 1
+            fi
+            sleep 1
+          done
+          if [[ "${READY}" -ne 1 ]]; then
+            docker logs "${API_CONTAINER}"
+            exit 1
+          fi
+          curl -fsS --get \
+            --data-urlencode "q=${API_RUNTIME_SEARCH_QUERY}" \
+            --data-urlencode "limit=5" \
+            http://127.0.0.1:8787/search >/dev/null
+          curl -fsS http://127.0.0.1:8787/metrics \
+            | grep -F "commit=\"${{ steps.image.outputs.commit }}\"" >/dev/null
+
+      - name: Measure the canonical mixed-health-and-read scenario
+        env:
+          API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
+          MANIFEST_SHA256="$(sha256sum "${EVIDENCE_DIR}/fixture/manifest.json" | awk '{print $1}')"
+          curl -fsS http://127.0.0.1:8787/metrics > "${EVIDENCE_DIR}/metrics-before.prom"
+
+          python3 -B scripts/performance/container_resource_sampler.py sample \
+            --container-name "${API_CONTAINER}" \
+            --duration-seconds "${{ steps.contract.outputs.duration_seconds }}" \
+            --sample-interval-seconds 1 \
+            --receipt "${EVIDENCE_DIR}/resource-receipt.json" &
+          SAMPLER_PID=$!
+
+          BASE_URL=http://127.0.0.1:8787 \
+          API_RUNTIME_VUS="${{ steps.contract.outputs.virtual_users }}" \
+          API_RUNTIME_DURATION_SECONDS="${{ steps.contract.outputs.duration_seconds }}" \
+          API_RUNTIME_DATASET_PROFILE="${{ steps.contract.outputs.dataset_profile }}" \
+          API_RUNTIME_CONCURRENCY_PROFILE="${{ steps.contract.outputs.concurrency_profile }}" \
+          API_RUNTIME_DATASET_MANIFEST_SHA256="${MANIFEST_SHA256}" \
+          API_RUNTIME_SUMMARY_PATH="${EVIDENCE_DIR}/k6-summary.json" \
+            k6 run scripts/performance/api_runtime_k6.js &
+          K6_PID=$!
+
+          SAMPLE_DELAY=$((${{ steps.contract.outputs.duration_seconds }} / 2))
+          if [[ "${SAMPLE_DELAY}" -lt 1 ]]; then
+            SAMPLE_DELAY=1
+          fi
+          sleep "${SAMPLE_DELAY}"
+          kill -0 "${K6_PID}"
+          psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -Atc \
+            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()" \
+            > "${EVIDENCE_DIR}/database-connections.txt"
+
+          wait "${K6_PID}"
+          wait "${SAMPLER_PID}"
+          curl -fsS http://127.0.0.1:8787/metrics > "${EVIDENCE_DIR}/metrics-after.prom"
+
+      - name: Assemble and independently verify exact-revision evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
+          DATABASE_CONNECTIONS="$(tr -d '[:space:]' < "${EVIDENCE_DIR}/database-connections.txt")"
+          python3 -B scripts/performance/api_runtime_evidence.py check \
+            --k6-summary "${EVIDENCE_DIR}/k6-summary.json" \
+            --metrics-before "${EVIDENCE_DIR}/metrics-before.prom" \
+            --metrics-after "${EVIDENCE_DIR}/metrics-after.prom" \
+            --resource-receipt "${EVIDENCE_DIR}/resource-receipt.json" \
+            --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
+            --database-connections "${DATABASE_CONNECTIONS}" \
+            --report "${EVIDENCE_DIR}/report.json"
+          python3 -B scripts/performance/api_runtime_evidence.py verify \
+            --report "${EVIDENCE_DIR}/report.json" \
+            --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json"
+
+      - name: Capture measured API log
+        if: ${{ always() && steps.fixture.outputs.evidence_dir != '' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
+          if docker container inspect "${API_CONTAINER}" >/dev/null 2>&1; then
+            docker logs "${API_CONTAINER}" > "${EVIDENCE_DIR}/api.log" 2>&1
+          fi
+
+      - name: Upload API runtime evidence
+        if: ${{ always() && steps.fixture.outputs.evidence_dir != '' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: api-runtime-evidence-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            ${{ steps.fixture.outputs.evidence_dir }}/report.json
+            ${{ steps.fixture.outputs.evidence_dir }}/k6-summary.json
+            ${{ steps.fixture.outputs.evidence_dir }}/metrics-before.prom
+            ${{ steps.fixture.outputs.evidence_dir }}/metrics-after.prom
+            ${{ steps.fixture.outputs.evidence_dir }}/resource-receipt.json
+            ${{ steps.fixture.outputs.evidence_dir }}/database-connections.txt
+            ${{ steps.fixture.outputs.evidence_dir }}/fixture/manifest.json
+            ${{ steps.fixture.outputs.evidence_dir }}/fixture/domain_nodes.csv
+            ${{ steps.fixture.outputs.evidence_dir }}/fixture/domain_edges.csv
+            ${{ steps.fixture.outputs.evidence_dir }}/regression/report.json
+            ${{ steps.fixture.outputs.evidence_dir }}/api.log
+          if-no-files-found: error
+
+      - name: Stop measured API container
+        if: ${{ always() }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker container inspect "${API_CONTAINER}" >/dev/null 2>&1; then
+            docker rm --force "${API_CONTAINER}"
+          fi
