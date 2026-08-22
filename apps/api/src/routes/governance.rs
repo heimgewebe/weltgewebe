@@ -177,6 +177,8 @@ pub struct ProposalView {
     pub voting_until: Option<DateTime<Utc>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub finalized_at: Option<DateTime<Utc>>,
+    /// Jüngste kanonische öffentliche Fachaktivität des Antrags.
+    pub last_activity_at: DateTime<Utc>,
     pub veto_count: i64,
     pub message_count: i64,
     pub yes_votes: i64,
@@ -215,6 +217,7 @@ fn proposal_view(proposal: ProposalWithCounts, now: DateTime<Utc>) -> ProposalVi
         consent_until: proposal.consent_until,
         voting_until: proposal.voting_until,
         finalized_at: proposal.finalized_at,
+        last_activity_at: proposal.last_activity_at,
         veto_count: proposal.veto_count,
         message_count: proposal.message_count,
         yes_votes: proposal.yes_votes,
@@ -1048,6 +1051,7 @@ mod tests {
                 consent_until: now + Duration::hours(1),
                 voting_until: Some(now + Duration::hours(1)),
                 finalized_at: None,
+                last_activity_at: now - Duration::minutes(15),
                 veto_count: 0,
                 message_count: 0,
                 yes_votes: 0,

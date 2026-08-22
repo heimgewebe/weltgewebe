@@ -34,6 +34,8 @@ export interface Proposal {
   consent_until: string;
   voting_until?: string;
   finalized_at?: string;
+  /** Kanonische letzte öffentliche Fachaktivität; vom Server abgeleitet. */
+  last_activity_at?: string;
   veto_count: number;
   message_count?: number;
   yes_votes: number;

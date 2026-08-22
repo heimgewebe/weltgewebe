@@ -60,6 +60,7 @@ function proposal(overrides: Partial<Proposal> = {}): Proposal {
     status: "consent",
     created_at: "2026-08-17T06:00:00Z",
     consent_until: "2026-08-19T12:00:00Z",
+    last_activity_at: "2026-08-17T06:00:00Z",
     veto_count: 0,
     yes_votes: 0,
     no_votes: 0,
@@ -270,6 +271,33 @@ describe("topBarAttentionState", () => {
     ]);
   });
 
+  it("keeps legacy proposals visible without inventing an activity timestamp", () => {
+    const legacy = proposal({
+      id: "legacy",
+      last_activity_at: undefined,
+      viewer_participation: viewer({ may_veto: true }),
+    });
+    const current = proposal({
+      id: "current",
+      last_activity_at: "2026-08-17T10:00:00Z",
+      viewer_participation: viewer({ may_veto: true }),
+    });
+
+    const items = projectTopBarAttention({
+      accountId: "weber-a",
+      role: "weber",
+      nowMs: NOW,
+      conversations: [],
+      proposals: [legacy, current],
+    });
+
+    expect(items.map((item) => item.id)).toEqual([
+      "proposal:current",
+      "proposal:legacy",
+    ]);
+    expect(items[1].occurredAt).toBeUndefined();
+  });
+
   it("orders optional participation by relevant activity rather than deadline", () => {
     const items = projectTopBarAttention({
       accountId: "weber-a",
@@ -279,14 +307,16 @@ describe("topBarAttentionState", () => {
       proposals: [
         proposal({
           id: "older-early-deadline",
-          created_at: "2026-08-17T05:00:00Z",
+          created_at: "2026-08-17T11:30:00Z",
           consent_until: "2026-08-17T13:00:00Z",
+          last_activity_at: "2026-08-17T09:00:00Z",
           viewer_participation: viewer({ may_veto: true }),
         }),
         proposal({
           id: "newer-late-deadline",
-          created_at: "2026-08-17T07:00:00Z",
+          created_at: "2026-08-17T05:00:00Z",
           consent_until: "2026-08-17T20:00:00Z",
+          last_activity_at: "2026-08-17T10:00:00Z",
           viewer_participation: viewer({ may_veto: true }),
         }),
       ],
