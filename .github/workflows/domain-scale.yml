@@ -2,40 +2,7 @@
 name: domain-scale
 
 "on":
-  pull_request:
-    branches: [main]
-    paths:
-      - "configs/performance/domain-scale.v1.json"
-      - "policies/limits.yaml"
-      - "policies/performance.v1.json"
-      - ".python-version"
-      - "scripts/performance/**"
-      - "scripts/basemap/run-measured-container.py"
-      - "scripts/tests/test_domain_scale.py"
-      - "scripts/ci/tests/test_api_runtime_workflow.py"
-      - "apps/api/**"
-      - "configs/app.defaults.yml"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "docs/blueprints/domain-scale-foundation.md"
-      - ".github/workflows/domain-scale.yml"
-  push:
-    branches: [main]
-    paths:
-      - "configs/performance/domain-scale.v1.json"
-      - "policies/limits.yaml"
-      - "policies/performance.v1.json"
-      - ".python-version"
-      - "scripts/performance/**"
-      - "scripts/basemap/run-measured-container.py"
-      - "scripts/tests/test_domain_scale.py"
-      - "scripts/ci/tests/test_api_runtime_workflow.py"
-      - "apps/api/**"
-      - "configs/app.defaults.yml"
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "docs/blueprints/domain-scale-foundation.md"
-      - ".github/workflows/domain-scale.yml"
+  workflow_call: {}
   workflow_dispatch: {}
 
 env:
@@ -45,7 +12,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: domain-scale-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:

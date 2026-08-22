@@ -32,6 +32,7 @@ jobs:
       docs: ${{ steps.filter.outputs.docs }}
       hygiene: ${{ steps.filter.outputs.hygiene }}
       heavy: ${{ steps.filter.outputs.heavy }}
+      api_runtime: ${{ steps.filter.outputs.api_runtime }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
         with:
@@ -56,6 +57,22 @@ jobs:
               - 'Justfile'
               - 'scripts/tools/list-shell-files.py'
               - 'scripts/**'
+            api_runtime:
+              - '.github/workflows/ci.yml'
+              - '.github/workflows/domain-scale.yml'
+              - 'configs/performance/domain-scale.v1.json'
+              - 'configs/app.defaults.yml'
+              - 'policies/limits.yaml'
+              - 'policies/performance.v1.json'
+              - '.python-version'
+              - 'scripts/performance/**'
+              - 'scripts/basemap/run-measured-container.py'
+              - 'scripts/tests/test_domain_scale.py'
+              - 'scripts/ci/tests/test_api_runtime_evidence.py'
+              - 'scripts/ci/tests/test_api_runtime_workflow.py'
+              - 'apps/api/**'
+              - 'Cargo.toml'
+              - 'Cargo.lock'
             heavy:
               - '.github/workflows/*.yml'
               - '.github/workflows/*.yaml'
@@ -78,6 +95,16 @@ jobs:
               - '.node-version'
               - '.nvmrc'
               - '.python-version'
+
+  api-runtime-proof:
+    name: API runtime exact-revision evidence
+    needs: docs-changes
+    if: >-
+      ${{
+        github.event_name == 'workflow_dispatch' ||
+        needs.docs-changes.outputs.api_runtime == 'true'
+      }}
+    uses: ./.github/workflows/domain-scale.yml
 
   guard-tests:
     name: Core Guard Tests
@@ -632,6 +659,8 @@ jobs:
     name: Required merge gate
     if: ${{ always() }}
     needs:
+      - docs-changes
+      - api-runtime-proof
       - guard-tests
       - ci
       - web-e2e
@@ -644,6 +673,7 @@ jobs:
         run: |
           set -euo pipefail
           results=(
+            "docs-changes=${{ needs.docs-changes.result }}"
             "guard-tests=${{ needs.guard-tests.result }}"
             "ci=${{ needs.ci.result }}"
             "web-e2e=${{ needs.web-e2e.result }}"
@@ -656,4 +686,18 @@ jobs:
             printf '%s\n' "$item"
             [[ "$item" == *=success ]] || failed=1
           done
+
+          api_runtime_required="${{
+            github.event_name == 'workflow_dispatch' ||
+            needs.docs-changes.outputs.api_runtime == 'true'
+          }}"
+          api_runtime_result="${{ needs.api-runtime-proof.result }}"
+          printf 'api-runtime-required=%s\n' "${api_runtime_required}"
+          printf 'api-runtime-proof=%s\n' "${api_runtime_result}"
+          if [[ "${api_runtime_required}" == "true" ]]; then
+            [[ "${api_runtime_result}" == "success" ]] || failed=1
+          else
+            [[ "${api_runtime_result}" == "skipped" ]] || failed=1
+          fi
+
           (( failed == 0 )) || exit 1

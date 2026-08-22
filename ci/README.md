@@ -23,7 +23,12 @@ Performance-Metriken, Szenarien, Profile, Grenzwerte und deren Geltungsstatus.
   JSON-Artefakt unabhängig zurück. Der Required-Merge-Gate-Job scheitert bei
   fehlender Commitbindung, falscher Laufzahl, manipulierten Perzentilen oder
   unvollständigen Geltungsgrenzen.
-- `.github/workflows/domain-scale.yml` baut die API mit der exakten
+- `.github/workflows/ci.yml` erkennt Änderungen an den tatsächlichen
+  API-/Performance-Eingaben und ruft `.github/workflows/domain-scale.yml` genau
+  einmal als wiederverwendbaren Beweis auf. Für solche Änderungen akzeptiert
+  der `Required merge gate` ausschließlich einen erfolgreichen Runtime-Beweis;
+  ein fehlgeschlagener oder fälschlich übersprungener Lastlauf blockiert den
+  Merge. Der wiederverwendbare Workflow baut die API mit der exakten
   Checkout-Revision, lädt das validierte `domain-scale-ci`-Fixture vollständig
   in eine migrierte PostgreSQL-Instanz und führt das in der kanonischen Policy
   deklarierte Szenario gegen den echten `/search`-Repositorypfad aus.

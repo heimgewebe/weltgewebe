@@ -8,12 +8,14 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github" / "workflows" / "domain-scale.yml"
+CI_WORKFLOW = ROOT / ".github" / "workflows" / "ci.yml"
 
 
 class ApiRuntimeWorkflowContractTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls) -> None:
         cls.source = WORKFLOW.read_text(encoding="utf-8")
+        cls.ci_source = CI_WORKFLOW.read_text(encoding="utf-8")
         marker = "  api-runtime-evidence:\n"
         if marker not in cls.source:
             raise AssertionError("api-runtime-evidence job is missing")
@@ -177,21 +179,71 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
             )
         self.assertIn("v.source_version, v.source_revision", normalized)
 
-    def test_relevant_contract_changes_trigger_the_runtime_job(self) -> None:
+    def test_runtime_proof_is_reusable_without_a_duplicate_pr_run(self) -> None:
         trigger_prefix = self.source.split("jobs:", 1)[0]
+        self.assertIn("workflow_call:", trigger_prefix)
+        self.assertIn("workflow_dispatch:", trigger_prefix)
+        self.assertNotIn("pull_request:", trigger_prefix)
+        self.assertNotIn("push:", trigger_prefix)
+        self.assertIn(
+            "group: domain-scale-${{ github.workflow }}-${{ github.ref }}",
+            trigger_prefix,
+        )
+
+    def test_required_merge_gate_owns_the_runtime_proof(self) -> None:
+        docs_changes = self.ci_source[
+            self.ci_source.index("  docs-changes:\n") : self.ci_source.index(
+                "  api-runtime-proof:\n"
+            )
+        ]
+        self.assertIn(
+            "api_runtime: ${{ steps.filter.outputs.api_runtime }}", docs_changes
+        )
         for path in (
-            '"policies/limits.yaml"',
-            '"policies/performance.v1.json"',
-            '".python-version"',
-            '"scripts/performance/**"',
-            '"scripts/basemap/run-measured-container.py"',
-            '"scripts/ci/tests/test_api_runtime_workflow.py"',
-            '"apps/api/**"',
-            '"configs/app.defaults.yml"',
-            '"Cargo.toml"',
-            '"Cargo.lock"',
+            ".github/workflows/ci.yml",
+            ".github/workflows/domain-scale.yml",
+            "configs/performance/domain-scale.v1.json",
+            "configs/app.defaults.yml",
+            "policies/limits.yaml",
+            "policies/performance.v1.json",
+            ".python-version",
+            "scripts/performance/**",
+            "scripts/basemap/run-measured-container.py",
+            "scripts/tests/test_domain_scale.py",
+            "scripts/ci/tests/test_api_runtime_evidence.py",
+            "scripts/ci/tests/test_api_runtime_workflow.py",
+            "apps/api/**",
+            "Cargo.toml",
+            "Cargo.lock",
         ):
-            self.assertGreaterEqual(trigger_prefix.count(path), 2, path)
+            self.assertIn(f"- '{path}'", docs_changes, path)
+
+        caller = self.ci_source[
+            self.ci_source.index("  api-runtime-proof:\n") : self.ci_source.index(
+                "  guard-tests:\n"
+            )
+        ]
+        self.assertIn("needs: docs-changes", caller)
+        self.assertIn("needs.docs-changes.outputs.api_runtime == 'true'", caller)
+        self.assertIn("github.event_name == 'workflow_dispatch'", caller)
+        self.assertIn("uses: ./.github/workflows/domain-scale.yml", caller)
+
+        required = self.ci_source[self.ci_source.index("  required-merge-gate:\n") :]
+        self.assertIn("- docs-changes", required)
+        self.assertIn("- api-runtime-proof", required)
+        self.assertIn('"docs-changes=${{ needs.docs-changes.result }}"', required)
+        self.assertIn(
+            'api_runtime_result="${{ needs.api-runtime-proof.result }}"', required
+        )
+        self.assertIn(
+            'if [[ "${api_runtime_required}" == "true" ]]', required
+        )
+        self.assertIn(
+            '[[ "${api_runtime_result}" == "success" ]] || failed=1', required
+        )
+        self.assertIn(
+            '[[ "${api_runtime_result}" == "skipped" ]] || failed=1', required
+        )
 
 
 if __name__ == "__main__":
