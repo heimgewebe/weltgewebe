@@ -20,7 +20,8 @@ export interface AttentionItem {
   label: string;
   detail: string;
   href: string;
-  occurredAt: string;
+  /** Kanonischer Ereigniszeitpunkt; bei gemischten Altständen vorübergehend unbekannt. */
+  occurredAt?: string;
   deadline?: string;
   deadlineLabel?: string;
   /** Ephemeral projection value; never domain truth or persisted state. */
@@ -60,13 +61,6 @@ function proposalLabel(proposal: Proposal): string {
     return proposal.title?.trim() || "Sachantrag ohne Titel";
   }
   return `Weberstatus für ${proposal.applicant_title}`;
-}
-
-function proposalRelevantTime(proposal: Proposal): string | undefined {
-  if (proposal.status === "voting" && proposal.consent_until) {
-    return proposal.consent_until;
-  }
-  return proposal.created_at;
 }
 
 function proposalDeadline(proposal: Proposal): string | undefined {
@@ -249,8 +243,7 @@ export function projectTopBarAttention({
   for (const proposal of proposals) {
     if (proposal.status !== "consent" && proposal.status !== "voting") continue;
 
-    const occurredAt = proposalRelevantTime(proposal);
-    if (!occurredAt) continue;
+    const occurredAt = proposal.last_activity_at;
 
     if (isOwnProposal(proposal, accountId)) {
       waitingProposals.push(proposal);
@@ -291,25 +284,23 @@ export function projectTopBarAttention({
 
   if (waitingProposals.length > 0) {
     const newestWaiting = waitingProposals
-      .map(proposalRelevantTime)
+      .map((proposal) => proposal.last_activity_at)
       .filter((value): value is string => Boolean(value))
       .sort((left, right) => sourceTime(right) - sourceTime(left))[0];
-    if (newestWaiting) {
-      const count = waitingProposals.length;
-      activeItems.push({
-        id: `waiting-summary:${accountId}`,
-        kind: "waiting_summary",
-        meaning: "waiting",
-        label:
-          count === 1
-            ? "1 eigener Vorgang läuft"
-            : `${count} eigene Vorgänge laufen`,
-        detail: "Du musst gerade nichts tun.",
-        href: "/antraege",
-        occurredAt: newestWaiting,
-        count,
-      });
-    }
+    const count = waitingProposals.length;
+    activeItems.push({
+      id: `waiting-summary:${accountId}`,
+      kind: "waiting_summary",
+      meaning: "waiting",
+      label:
+        count === 1
+          ? "1 eigener Vorgang läuft"
+          : `${count} eigene Vorgänge laufen`,
+      detail: "Du musst gerade nichts tun.",
+      href: "/antraege",
+      occurredAt: newestWaiting,
+      count,
+    });
   }
 
   activeItems.sort((left, right) => {
