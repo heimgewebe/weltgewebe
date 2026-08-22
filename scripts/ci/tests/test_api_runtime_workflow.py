@@ -180,7 +180,9 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
     def test_relevant_contract_changes_trigger_the_runtime_job(self) -> None:
         trigger_prefix = self.source.split("jobs:", 1)[0]
         for path in (
+            '"policies/limits.yaml"',
             '"policies/performance.v1.json"',
+            '".python-version"',
             '"scripts/performance/**"',
             '"scripts/basemap/run-measured-container.py"',
             '"scripts/ci/tests/test_api_runtime_workflow.py"',

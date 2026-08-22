@@ -6,7 +6,9 @@ name: domain-scale
     branches: [main]
     paths:
       - "configs/performance/domain-scale.v1.json"
+      - "policies/limits.yaml"
       - "policies/performance.v1.json"
+      - ".python-version"
       - "scripts/performance/**"
       - "scripts/basemap/run-measured-container.py"
       - "scripts/tests/test_domain_scale.py"
@@ -21,7 +23,9 @@ name: domain-scale
     branches: [main]
     paths:
       - "configs/performance/domain-scale.v1.json"
+      - "policies/limits.yaml"
       - "policies/performance.v1.json"
+      - ".python-version"
       - "scripts/performance/**"
       - "scripts/basemap/run-measured-container.py"
       - "scripts/tests/test_domain_scale.py"
