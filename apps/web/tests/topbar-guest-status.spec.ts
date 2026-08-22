@@ -68,7 +68,7 @@ test.describe("Topbar — guest role visibility", () => {
     ).toBeVisible();
   });
 
-  test("active unread attention suppresses the passive pending-application bubble", async ({
+  test("active unread attention keeps the pending application as lower-priority waiting attention", async ({
     page,
   }) => {
     await mockApiResponses(page, {
@@ -105,10 +105,14 @@ test.describe("Topbar — guest role visibility", () => {
     const attention = page.getByTestId("attention-bubbles");
     await expect(attention).toBeVisible();
     const bubbles = attention.locator(".attention-bubble");
-    await expect(bubbles).toHaveCount(1);
-    await expect(bubbles.first()).toHaveAttribute(
+    await expect(bubbles).toHaveCount(2);
+    await expect(bubbles.nth(0)).toHaveAttribute(
       "data-attention-id",
       "direct:dm-1",
+    );
+    await expect(bubbles.nth(1)).toHaveAttribute(
+      "data-attention-id",
+      "waiting-summary:guest-topbar",
     );
     await attention.locator('[data-attention-id="direct:dm-1"]').click();
     await expect(
@@ -119,8 +123,8 @@ test.describe("Topbar — guest role visibility", () => {
 
     await page.keyboard.press("Escape");
     await expect(
-      attention.locator('[data-attention-id="proposal:pending-weber"]'),
-    ).toHaveCount(0);
+      attention.locator('[data-attention-id="waiting-summary:guest-topbar"]'),
+    ).toBeVisible();
     await expect(badge).toHaveAttribute("href", "/antraege");
   });
 
