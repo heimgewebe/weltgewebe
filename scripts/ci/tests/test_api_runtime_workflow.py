@@ -55,10 +55,11 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
         self.assertNotRegex(self.job, r"API_RUNTIME_DURATION_SECONDS:\s*30")
         self.assertNotIn("thresholds:", self.job)
 
-    def test_k6_binary_and_api_revision_are_reproducibly_bound(self) -> None:
-        self.assertRegex(self.job, r"K6_VERSION: v\d+\.\d+\.\d+")
-        self.assertRegex(self.job, r"K6_LINUX_AMD64_SHA256: [0-9a-f]{64}")
-        self.assertIn("sha256sum --check --status", self.job)
+    def test_k6_and_api_images_are_digest_bound(self) -> None:
+        self.assertRegex(self.job, r"K6_IMAGE: grafana/k6@sha256:[0-9a-f]{64}")
+        self.assertRegex(self.job, r"image: registry:2\.8\.3@sha256:[0-9a-f]{64}")
+        self.assertIn('docker run --rm "${K6_IMAGE}" version', self.job)
+        self.assertNotIn("K6_LINUX_AMD64_SHA256", self.job)
         checkout = self.job[
             self.job.index("uses: actions/checkout@") : self.job.index(
                 "uses: actions/setup-python@"
@@ -70,34 +71,37 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
         self.assertIn('COMMIT="$(git rev-parse HEAD)"', self.job)
         self.assertIn('--build-arg "GIT_COMMIT_SHA=${COMMIT}"', self.job)
         self.assertIn('--build-arg "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}"', self.job)
-        self.assertIn('"${API_IMAGE}"', self.job)
+        self.assertIn('API_IMAGE_TAG="${API_IMAGE_REPOSITORY}:${COMMIT}"', self.job)
+        self.assertIn('docker push "${API_IMAGE_TAG}"', self.job)
+        self.assertIn('API_IMAGE_DIGEST="${API_IMAGE_REPOSITORY}@${API_DIGEST}"', self.job)
+        self.assertIn('"${{ steps.image.outputs.image }}"', self.job)
         self.assertIn('commit=\\"${{ steps.image.outputs.commit }}\\"', self.job)
 
     def test_live_measurement_collects_every_required_input_during_one_run(
         self,
     ) -> None:
-        measurement = self.job[
-            self.job.index(
-                "name: Measure the canonical mixed-health-and-read scenario"
-            ) : self.job.index(
-                "name: Assemble and independently verify exact-revision evidence"
-            )
+        binding = self.job[
+            self.job.index("name: Bind live API runtime to the exact fixture") :
+            self.job.index("name: Measure the canonical mixed-health-and-read scenario")
         ]
-        before = measurement.index("metrics-before.prom")
-        workload = measurement.index("k6 run scripts/performance/api_runtime_k6.js")
-        point_sample = measurement.index("SELECT count(*) FROM pg_stat_activity")
-        after = measurement.index("metrics-after.prom")
-        self.assertLess(before, workload)
-        self.assertLess(workload, point_sample)
-        self.assertLess(point_sample, after)
+        self.assertIn("api_runtime_live_binding.py", binding)
+        self.assertIn('POSTGRES_CONTAINER: ${{ job.services.postgres.id }}', binding)
+        self.assertIn('--k6-image "${K6_IMAGE}"', binding)
+        self.assertIn('--run-id "${RUN_ID}"', binding)
+        measurement = self.job[
+            self.job.index("name: Measure the canonical mixed-health-and-read scenario") :
+            self.job.index("name: Assemble and independently verify exact-revision evidence")
+        ]
         self.assertIn("container_resource_sampler.py sample", measurement)
-        self.assertIn('kill -0 "${K6_PID}"', measurement)
+        self.assertIn("postgres_connection_sampler.py sample", measurement)
+        self.assertGreaterEqual(measurement.count('--run-id "${RUN_ID}"'), 2)
+        self.assertIn('"${K6_IMAGE}" run scripts/performance/api_runtime_k6.js', measurement)
+        self.assertIn("API_RUNTIME_RUN_ID", measurement)
+        self.assertIn("API_RUNTIME_K6_IMAGE", measurement)
         self.assertIn("API_RUNTIME_DATASET_MANIFEST_SHA256", measurement)
         self.assertIn("API_RUNTIME_CONCURRENCY_PROFILE", measurement)
-        self.assertIn(
-            "API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}",
-            measurement,
-        )
+        self.assertIn("API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}", measurement)
+        self.assertNotIn("SELECT count(*) FROM pg_stat_activity", measurement)
         self.assertNotRegex(measurement, r"API_RUNTIME_SEARCH_QUERY=\w+")
 
     def test_evidence_is_assembled_verified_and_uploaded(self) -> None:
@@ -114,7 +118,8 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
             "metrics-before.prom",
             "metrics-after.prom",
             "resource-receipt.json",
-            "database-connections.txt",
+            "database-connections.json",
+            "runtime-binding.json",
             "fixture/manifest.json",
             "fixture/domain_nodes.csv",
             "fixture/domain_edges.csv",
@@ -129,6 +134,9 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
             ) : self.job.index("name: Build the exact API revision")
         ]
         self.assertIn("api_runtime_evidence.py regression-fixture", regression)
+        self.assertIn('--runtime-binding "${REGRESSION_DIR}/runtime-binding.json"', regression)
+        self.assertIn('--database-connections-receipt "${REGRESSION_DIR}/database-connections.json"', regression)
+        self.assertNotIn("--database-connections 1", regression)
         self.assertIn('if [[ "${CHECK_STATUS}" -ne 2 ]]', regression)
         self.assertIn("report_path.is_file()", regression)
         self.assertIn("json.loads(report_path.read_text", regression)
