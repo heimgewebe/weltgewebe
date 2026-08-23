@@ -1,49 +1,111 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-test("guest map keeps the Hammer Park fallback", async ({ page }) => {
+test("guest map fits the existing renderable content", async ({ page }) => {
   await mockApiResponses(page);
 
-  // 1. `/map` öffnen
   await page.goto("/map");
-
-  // 2. warten bis Map geladen ist
-  // We exposed window.__TEST_MAP__ on the window object
   await page.waitForFunction(
     () => (window as any).__TEST_MAP__ !== undefined,
     undefined,
     { timeout: 15000 },
   );
 
-  // The fallback is now selected before MapLibre draws its first frame.
   await page.waitForFunction(
     () => {
       const map = (window as any).__TEST_MAP__;
       if (!map) return false;
-
-      const center = map.getCenter();
-      const targetLat = 53.5585;
-      const targetLng = 10.058;
-      const epsilon = 0.0005;
-
+      const bounds = map.getBounds();
       return (
-        Math.abs(center.lat - targetLat) < epsilon &&
-        Math.abs(center.lng - targetLng) < epsilon
+        bounds.contains([10.060228407382967, 53.558894813662505]) &&
+        bounds.contains([10.0629844, 53.5604148]) &&
+        bounds.contains([10.063, 53.561]) &&
+        map.getZoom() <= 13.001
       );
     },
     undefined,
     { timeout: 15000 },
   );
 
-  // 3. Map-Zentrum prüfen
-  const center = await page.evaluate(() => {
+  const camera = await page.evaluate(() => {
     const map = (window as any).__TEST_MAP__;
-    return map.getCenter();
+    const center = map.getCenter();
+    return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
   });
 
-  // HAMMER_PARK_CENTER: lat: 53.5585, lon: 10.0580
-  expect(center.lng).toBeCloseTo(10.058, 2);
-  expect(center.lat).toBeCloseTo(53.5585, 2);
+  expect(camera.zoom).toBeCloseTo(13, 3);
+  expect(camera.lng).not.toBeCloseTo(10.058, 3);
+  expect(camera.lat).not.toBeCloseTo(53.5585, 3);
+});
+
+test("partial guest data uses the neutral basemap fallback", async ({
+  page,
+}) => {
+  await mockApiResponses(page);
+  await page.route("**/api/accounts*", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "text/plain",
+      body: "Service Unavailable",
+    });
+  });
+
+  await page.goto("/map");
+  await page.waitForFunction(
+    () => (window as any).__TEST_MAP__ !== undefined,
+    undefined,
+    { timeout: 15000 },
+  );
+  await expect(page.getByTestId("load-state-partial")).toBeVisible();
+
+  const camera = await page.evaluate(() => {
+    const map = (window as any).__TEST_MAP__;
+    const center = map.getCenter();
+    return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
+  });
+
+  expect(camera.lng).toBeCloseTo(10.4515, 3);
+  expect(camera.lat).toBeCloseTo(51.1657, 3);
+  expect(camera.zoom).toBeCloseTo(7, 3);
+});
+
+test("empty sovereign map starts on neutral nationwide Germany", async ({
+  page,
+}) => {
+  await mockApiResponses(page);
+  await page.route(
+    /\/api\/(?:nodes|accounts|edges|webgemeindezentren)(?:\?|$)/,
+    async (route) => {
+      const limit = Number(
+        new URL(route.request().url()).searchParams.get("limit") ?? 1000,
+      );
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          items: [],
+          page: { limit, next_cursor: null, has_more: false },
+        }),
+      });
+    },
+  );
+
+  await page.goto("/map");
+  await page.waitForFunction(
+    () => (window as any).__TEST_MAP__ !== undefined,
+    undefined,
+    { timeout: 15000 },
+  );
+
+  const camera = await page.evaluate(() => {
+    const map = (window as any).__TEST_MAP__;
+    const center = map.getCenter();
+    return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
+  });
+
+  expect(camera.lng).toBeCloseTo(10.4515, 3);
+  expect(camera.lat).toBeCloseTo(51.1657, 3);
+  expect(camera.zoom).toBeCloseTo(7, 3);
 });
 
 test("signed-in map starts on the own positioned Garnrolle", async ({
@@ -109,11 +171,21 @@ test("delayed authentication recenters once without blocking public map startup"
     undefined,
     { timeout: 15000 },
   );
-  const initialCenter = await page.evaluate(() => {
-    return (window as any).__TEST_MAP__.getCenter();
+  const initialCamera = await page.evaluate(() => {
+    const map = (window as any).__TEST_MAP__;
+    const center = map.getCenter();
+    const bounds = map.getBounds();
+    return {
+      lng: center.lng,
+      lat: center.lat,
+      zoom: map.getZoom(),
+      containsContent:
+        bounds.contains([10.060228407382967, 53.558894813662505]) &&
+        bounds.contains([10.063, 53.561]),
+    };
   });
-  expect(initialCenter.lng).toBeCloseTo(10.058, 2);
-  expect(initialCenter.lat).toBeCloseTo(53.5585, 2);
+  expect(initialCamera.containsContent).toBe(true);
+  expect(initialCamera.zoom).toBeCloseTo(13, 3);
   releaseAuth();
   await page.waitForFunction(
     () => {
@@ -158,16 +230,21 @@ test("camera movement remains sticky after returning to the initial view", async
     undefined,
     { timeout: 15000 },
   );
-  await page.evaluate(() => {
+  const initialCamera = await page.evaluate(() => {
+    const map = (window as any).__TEST_MAP__;
+    const center = map.getCenter();
+    return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
+  });
+  await page.evaluate((initial) => {
     const map = (window as any).__TEST_MAP__;
     map.jumpTo({ center: [10.071, 53.571], zoom: 13 });
     map.jumpTo({
-      center: [10.058, 53.5585],
-      zoom: 12,
+      center: [initial.lng, initial.lat],
+      zoom: initial.zoom,
       bearing: 15,
       pitch: 20,
     });
-  });
+  }, initialCamera);
   releaseAuth();
   await expect(
     page.getByRole("link", { name: "Einstellungen öffnen" }),
@@ -183,9 +260,9 @@ test("camera movement remains sticky after returning to the initial view", async
       pitch: map.getPitch(),
     };
   });
-  expect(finalCamera.lng).toBeCloseTo(10.058, 3);
-  expect(finalCamera.lat).toBeCloseTo(53.5585, 3);
-  expect(finalCamera.zoom).toBeCloseTo(12, 3);
+  expect(finalCamera.lng).toBeCloseTo(initialCamera.lng, 3);
+  expect(finalCamera.lat).toBeCloseTo(initialCamera.lat, 3);
+  expect(finalCamera.zoom).toBeCloseTo(initialCamera.zoom, 3);
   expect(finalCamera.bearing).toBeCloseTo(15, 3);
   expect(finalCamera.pitch).toBeCloseTo(20, 3);
 });

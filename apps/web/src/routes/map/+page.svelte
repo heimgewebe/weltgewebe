@@ -841,14 +841,27 @@
         initialUrlState.focus,
         [currentBasemap.center[0], currentBasemap.center[1]],
         currentBasemap.zoom,
+        { loadState },
       );
+      const initialCameraOptions =
+        initialCamera.kind === "bounds"
+          ? {
+              bounds: initialCamera.bounds,
+              fitBoundsOptions: {
+                padding: 64,
+                maxZoom: initialCamera.maxZoom,
+              },
+            }
+          : {
+              center: initialCamera.center,
+              zoom: initialCamera.zoom,
+            };
 
       activeBasemapScheme = readDocumentColorScheme();
       map = new maplibregl.Map({
         container,
         style: resolveBasemapStyle(currentBasemap, activeBasemapScheme),
-        center: initialCamera.center,
-        zoom: initialCamera.zoom,
+        ...initialCameraOptions,
         minZoom: currentBasemap.minZoom ?? 10,
         maxZoom: currentBasemap.maxZoom ?? 18,
         pitch: currentBasemap.pitch ?? 0,

@@ -1,16 +1,41 @@
 import type { AuthStatus } from "$lib/auth/store";
 import { hasRenderableMapPosition } from "$lib/map/coordinates";
-import type { MapEntityViewModel } from "$lib/map/types";
+import type { MapEntityViewModel, MapLoadState } from "$lib/map/types";
 import type { MapUrlFocus } from "$lib/map/urlState";
 
 type MapAuthIdentity = Pick<AuthStatus, "authenticated" | "account_id">;
 
-export type MapCameraTargetSource = "focus" | "own-garnrolle" | "fallback";
+export type MapCameraTargetSource =
+  | "focus"
+  | "own-garnrolle"
+  | "content"
+  | "fallback";
 
-export interface MapCameraTarget {
-  center: [number, number];
-  zoom: number;
-  source: MapCameraTargetSource;
+export type MapCameraBounds = [
+  southwest: [number, number],
+  northeast: [number, number],
+];
+
+export type MapCameraTarget =
+  | {
+      kind: "point";
+      center: [number, number];
+      zoom: number;
+      source: MapCameraTargetSource;
+    }
+  | {
+      kind: "bounds";
+      bounds: MapCameraBounds;
+      maxZoom: number;
+      source: "content";
+    };
+
+export const MAP_CONTENT_FIT_MAX_ZOOM = 13;
+
+export interface InitialMapCameraOptions {
+  loadState: MapLoadState;
+  focusedZoom?: number;
+  contentMaxZoom?: number;
 }
 
 export interface ViewportBounds {
@@ -55,10 +80,49 @@ function findOwnGarnrolle(
   );
 }
 
+function resolveContentTarget(
+  markers: MapEntityViewModel[],
+  maxZoom: number,
+): MapCameraTarget | null {
+  const renderable = markers.filter(hasRenderableMapPosition);
+  if (renderable.length === 0) return null;
+
+  let west = Number.POSITIVE_INFINITY;
+  let south = Number.POSITIVE_INFINITY;
+  let east = Number.NEGATIVE_INFINITY;
+  let north = Number.NEGATIVE_INFINITY;
+  for (const marker of renderable) {
+    west = Math.min(west, marker.lon);
+    south = Math.min(south, marker.lat);
+    east = Math.max(east, marker.lon);
+    north = Math.max(north, marker.lat);
+  }
+
+  if (west === east && south === north) {
+    return {
+      kind: "point",
+      center: [west, south],
+      zoom: maxZoom,
+      source: "content",
+    };
+  }
+
+  return {
+    kind: "bounds",
+    bounds: [
+      [west, south],
+      [east, north],
+    ],
+    maxZoom,
+    source: "content",
+  };
+}
+
 /**
  * Resolves the first camera position before MapLibre creates its first frame.
  * Explicit focus addressing wins, followed by the signed-in person's public
- * Garnrolle position. The established basemap fallback remains the last resort.
+ * Garnrolle position. A complete renderable scene is otherwise fitted; partial,
+ * failed, or empty scenes use the configured basemap fallback.
  */
 export function resolveInitialMapCamera(
   markers: MapEntityViewModel[],
@@ -66,11 +130,16 @@ export function resolveInitialMapCamera(
   focus: MapUrlFocus | null,
   fallbackCenter: [number, number],
   fallbackZoom: number,
-  focusedZoom = 14,
+  {
+    loadState,
+    focusedZoom = 14,
+    contentMaxZoom = MAP_CONTENT_FIT_MAX_ZOOM,
+  }: InitialMapCameraOptions,
 ): MapCameraTarget {
   const focusTarget = findFocusTarget(markers, focus);
   if (hasRenderableMapPosition(focusTarget)) {
     return {
+      kind: "point",
       center: [focusTarget!.lon, focusTarget!.lat],
       zoom: Math.max(fallbackZoom, focusedZoom),
       source: "focus",
@@ -80,13 +149,20 @@ export function resolveInitialMapCamera(
   const ownGarnrolle = findOwnGarnrolle(markers, auth);
   if (hasRenderableMapPosition(ownGarnrolle)) {
     return {
+      kind: "point",
       center: [ownGarnrolle!.lon, ownGarnrolle!.lat],
       zoom: Math.max(fallbackZoom, focusedZoom),
       source: "own-garnrolle",
     };
   }
 
+  if (loadState === "ok") {
+    const contentTarget = resolveContentTarget(markers, contentMaxZoom);
+    if (contentTarget) return contentTarget;
+  }
+
   return {
+    kind: "point",
     center: fallbackCenter,
     zoom: fallbackZoom,
     source: "fallback",
