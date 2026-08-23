@@ -57,6 +57,7 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
 
     def test_k6_and_api_images_are_digest_bound(self) -> None:
         self.assertRegex(self.job, r"K6_IMAGE: grafana/k6@sha256:[0-9a-f]{64}")
+        self.assertRegex(self.job, r"image: postgres:16@sha256:[0-9a-f]{64}")
         self.assertRegex(self.job, r"image: registry:2\.8\.3@sha256:[0-9a-f]{64}")
         self.assertIn('docker run --rm "${K6_IMAGE}" version', self.job)
         self.assertNotIn("K6_LINUX_AMD64_SHA256", self.job)
@@ -101,6 +102,8 @@ class ApiRuntimeWorkflowContractTests(unittest.TestCase):
         self.assertIn("API_RUNTIME_DATASET_MANIFEST_SHA256", measurement)
         self.assertIn("API_RUNTIME_CONCURRENCY_PROFILE", measurement)
         self.assertIn("API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}", measurement)
+        self.assertIn("SAMPLER_DURATION=$((${{ steps.contract.outputs.duration_seconds }} + 20))", measurement)
+        self.assertNotIn("SAMPLER_DURATION=$((${{ steps.contract.outputs.duration_seconds }} + 5))", measurement)
         self.assertNotIn("SELECT count(*) FROM pg_stat_activity", measurement)
         self.assertNotRegex(measurement, r"API_RUNTIME_SEARCH_QUERY=\w+")
 

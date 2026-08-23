@@ -283,6 +283,24 @@ class PolicyBindingTests(unittest.TestCase):
             ["peak_cpu_percent", "peak_memory_bytes", "database_connections"],
         )
 
+    def test_policy_defines_repository_duration_span(self) -> None:
+        policy = _load_policy()
+        limitations = policy["measurements"]["api_runtime"]["limitations"]
+        matching = [
+            item
+            for item in limitations
+            if item.startswith(
+                "search_repository_duration_seconds measures the API repository span"
+            )
+        ]
+        self.assertEqual(len(matching), 1)
+        self.assertIn(
+            "active-generation lookup plus authorized candidate retrieval and decoding",
+            matching[0],
+        )
+        self.assertIn("search_provider_duration_seconds", matching[0])
+        self.assertIn("not PostgreSQL-server-only execution time", matching[0])
+
     def test_load_policy_rejects_malformed_json(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "policy.json"

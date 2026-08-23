@@ -536,7 +536,7 @@ jobs:
           set -euo pipefail
           EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
           RUN_ID="${{ steps.runtime.outputs.run_id }}"
-          SAMPLER_DURATION=$((${{ steps.contract.outputs.duration_seconds }} + 5))
+          SAMPLER_DURATION=$((${{ steps.contract.outputs.duration_seconds }} + 20))
           MANIFEST_SHA256="$(sha256sum "${EVIDENCE_DIR}/fixture/manifest.json" | awk '{print $1}')"
           curl -fsS http://127.0.0.1:8787/metrics > "${EVIDENCE_DIR}/metrics-before.prom"
 
