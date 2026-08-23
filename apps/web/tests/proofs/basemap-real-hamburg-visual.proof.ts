@@ -382,6 +382,38 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         true,
       );
 
+      // This proof verifies the Hamburg artifact, not the product's default
+      // camera. Keep the proof geographically explicit so a neutral product
+      // fallback can evolve without silently changing what this test samples.
+      await page.evaluate(() => {
+        const map = (window as unknown as Record<string, unknown>)
+          .__TEST_MAP__ as
+          | {
+              jumpTo?: (options: {
+                center: [number, number];
+                zoom: number;
+              }) => void;
+            }
+          | undefined;
+        map?.jumpTo?.({ center: [10.058, 53.5585], zoom: 15 });
+      });
+      await expect
+        .poll(
+          async () => {
+            return await page.evaluate((sourceId) => {
+              const map = (window as unknown as Record<string, unknown>)
+                .__TEST_MAP__ as TestMap | undefined;
+              return map?.isSourceLoaded?.(sourceId) ?? false;
+            }, SOURCE_ID);
+          },
+          {
+            message:
+              "Hamburg source must finish loading after the proof camera moves to Hamburg",
+            timeout: 30_000,
+          },
+        )
+        .toBeTruthy();
+
       const readFeatureEvidence = () =>
         page.evaluate(
           ({ sourceId, layerIds, sourceLayerIds }) => {

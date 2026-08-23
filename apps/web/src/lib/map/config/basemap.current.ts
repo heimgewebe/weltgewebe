@@ -44,10 +44,42 @@ export type BasemapConfig =
   | RemoteStyleBasemapConfig
   | LocalSovereignBasemapConfig;
 
-export const HAMMER_PARK_CENTER = {
-  lat: 53.5585,
-  lon: 10.058,
+export interface BasemapInitialView {
+  center: [number, number];
+  zoom: number;
+  minZoom: number;
+}
+
+const WORLD_INITIAL_VIEW: BasemapInitialView = {
+  center: [0, 0],
+  zoom: 1,
+  minZoom: 1,
 };
+
+const GERMANY_INITIAL_VIEW: BasemapInitialView = {
+  center: [10.4515, 51.1657],
+  zoom: MAP_MIN_ZOOM,
+  minZoom: MAP_MIN_ZOOM,
+};
+
+const REGIONAL_INITIAL_VIEW: BasemapInitialView = {
+  center: [9.9, 54.2],
+  zoom: MAP_MIN_ZOOM,
+  minZoom: MAP_MIN_ZOOM,
+};
+
+/**
+ * Keeps the empty-scene viewport honest about the selected basemap coverage.
+ * Only the remote style is treated as worldwide; sovereign variants stay on
+ * their actual Germany or Hamburg + Schleswig-Holstein operating region.
+ */
+export function resolveBasemapInitialView(
+  mode: BasemapMode,
+  variant?: LocalBasemapVariant,
+): BasemapInitialView {
+  if (mode === "remote-style") return WORLD_INITIAL_VIEW;
+  return variant === "regional" ? REGIONAL_INITIAL_VIEW : GERMANY_INITIAL_VIEW;
+}
 
 export function resolveBasemapMode(
   envMode: string | undefined,
@@ -59,10 +91,15 @@ export function resolveBasemapMode(
   return isLocalContext ? "local-sovereign" : "remote-style";
 }
 
+const initialView = resolveBasemapInitialView(
+  BUILD_BASEMAP_CONFIG.mode,
+  BUILD_BASEMAP_CONFIG.mode === "local-sovereign"
+    ? BUILD_BASEMAP_CONFIG.variant
+    : undefined,
+);
+
 const baseConfig: BaseBasemapConfig = {
-  center: [HAMMER_PARK_CENTER.lon, HAMMER_PARK_CENTER.lat],
-  zoom: 15,
-  minZoom: MAP_MIN_ZOOM,
+  ...initialView,
   maxZoom: MAP_MAX_ZOOM,
 };
 
