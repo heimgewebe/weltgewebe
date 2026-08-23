@@ -536,6 +536,9 @@ test.describe("Knoten bearbeiten und löschen", () => {
     await expect(panel.locator("h3")).toHaveText(
       "Zwischenzeitlich aktualisierter Knoten",
     );
+    await expect(
+      panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }),
+    ).toBeFocused();
 
     await panel.getByRole("tab", { name: "Übersicht" }).click();
     await expect(panel.getByText(errorMessage)).toHaveCount(0);
