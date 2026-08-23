@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
+import { moveSearchTargetOffscreen } from "./fixtures/mapCamera";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
 function directConversation(id: string, unreadCount: number, at: string) {
@@ -212,6 +213,7 @@ test.describe("top-left attention bubbles", () => {
       undefined,
       { timeout: 15000 },
     );
+    await moveSearchTargetOffscreen(page);
     await activateToolFanAction(page, "find");
     await page.getByRole("searchbox", { name: "Suchbegriff" }).fill("Strick");
 

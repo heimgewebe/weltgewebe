@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { centerDemoNode } from "./fixtures/mapCamera";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
 type ManifestRecord = {
@@ -44,6 +45,7 @@ test("keeps interaction-only map chunks outside the startup request path", async
       timeout: 15_000,
     },
   );
+  await centerDemoNode(page);
   const marker = page
     .locator('.map-marker[data-marker-category="node"]')
     .first();
