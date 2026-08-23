@@ -1,40 +1,30 @@
 #!/usr/bin/env python3
-"""Sample docker stats peaks for an already-running API replica container.
+"""Sample PostgreSQL connection counts for one bounded api_runtime load window.
 
-This reuses the docker-stats parsing helpers from
-scripts/basemap/run-measured-container.py (loaded read-only via
-importlib, the same pattern scripts/ci/tests/test_germany_measured_container.py
-already uses) instead of duplicating unit-parsing logic. Unlike that script,
-this sampler never starts or stops a container: the API replica is already
-running under an external orchestrator (docker compose), and this tool only
-observes it for a bounded window that is expected to overlap the
-scripts/performance/api_runtime_k6.js load test.
-
-The resulting receipt feeds scripts/performance/api_runtime_evidence.py
-check --resource-receipt, covering the api_replica_resources peak_cpu_percent
-and peak_memory_bytes evidence declared in policies/performance.v1.json.
+The sampler observes ``pg_stat_activity`` through the already-running,
+digest-bound PostgreSQL container. It never starts, stops, or mutates the
+database. A caller-provided run id binds these samples to the k6, live-runtime,
+and API-container resource receipts consumed by api_runtime_evidence.py.
 """
 
 from __future__ import annotations
 
 import argparse
-import importlib.util
 import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Callable, Sequence
+from typing import Callable, Sequence
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-MEASURED_CONTAINER_SCRIPT = REPO_ROOT / "scripts" / "basemap" / "run-measured-container.py"
-
-SCHEMA_VERSION = 3
-CONTRACT = "api-replica-resource-sample-v3"
+SCHEMA_VERSION = 2
+CONTRACT = "postgres-connection-sample-v2"
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+CONTAINER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]*$")
 
 
 class SamplerError(RuntimeError):
@@ -47,59 +37,76 @@ def validate_run_id(value: str) -> str:
     return value
 
 
-def _load_measured_container_module() -> Any:
-    spec = importlib.util.spec_from_file_location(
-        "weltgewebe_run_measured_container", MEASURED_CONTAINER_SCRIPT
-    )
-    if spec is None or spec.loader is None:
-        raise SamplerError(f"cannot load {MEASURED_CONTAINER_SCRIPT}")
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def validate_container_name(value: str) -> str:
+    if not isinstance(value, str) or not CONTAINER_RE.fullmatch(value):
+        raise SamplerError("database-container has an invalid name")
+    return value
 
 
-def accumulate_peaks(samples: Sequence[dict[str, Any]]) -> dict[str, Any]:
-    if not samples:
-        raise SamplerError("at least one docker stats sample is required")
-    peak_cpu_percent = 0.0
-    peak_memory_bytes = 0
-    for sample in samples:
-        cpu_percent = sample.get("cpu_percent")
-        memory_bytes = sample.get("memory_bytes")
-        if (
-            not isinstance(cpu_percent, (int, float))
-            or isinstance(cpu_percent, bool)
-            or cpu_percent < 0
-        ):
-            raise SamplerError(f"sample has an invalid cpu_percent: {cpu_percent!r}")
-        if not isinstance(memory_bytes, int) or isinstance(memory_bytes, bool) or memory_bytes < 0:
-            raise SamplerError(f"sample has an invalid memory_bytes: {memory_bytes!r}")
-        peak_cpu_percent = max(peak_cpu_percent, float(cpu_percent))
-        peak_memory_bytes = max(peak_memory_bytes, memory_bytes)
-    return {
-        "cpu_percent": peak_cpu_percent,
-        "memory_bytes": peak_memory_bytes,
-        "sample_count": len(samples),
-    }
+def read_connection_count(
+    container_name: str,
+    *,
+    database_user: str,
+    database_name: str,
+) -> int:
+    validate_container_name(container_name)
+    if not database_user or not database_name:
+        raise SamplerError("database-user and database-name must be non-empty")
+    argv = [
+        "docker",
+        "exec",
+        container_name,
+        "psql",
+        "-U",
+        database_user,
+        "-d",
+        database_name,
+        "-At",
+        "-c",
+        "SELECT count(*) FROM pg_stat_activity;",
+    ]
+    try:
+        result = subprocess.run(
+            argv,
+            capture_output=True,
+            text=True,
+            timeout=15,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise SamplerError(f"cannot sample pg_stat_activity: {exc}") from exc
+    if result.returncode != 0:
+        detail = result.stderr.strip() or result.stdout.strip() or f"exit {result.returncode}"
+        raise SamplerError(f"pg_stat_activity query failed: {detail}")
+    raw = result.stdout.strip()
+    try:
+        value = int(raw)
+    except ValueError as exc:
+        raise SamplerError(f"pg_stat_activity count is not an integer: {raw!r}") from exc
+    if value < 0:
+        raise SamplerError("pg_stat_activity count cannot be negative")
+    return value
 
 
 def run_sampling_loop(
     *,
-    container_name: str,
     duration_seconds: float,
     interval_seconds: float,
-    read_stats: Callable[[str], dict[str, Any]],
+    read_count: Callable[[], int],
     sleep: Callable[[float], None],
     monotonic: Callable[[], float],
-) -> list[dict[str, Any]]:
+) -> list[int]:
     if duration_seconds <= 0:
         raise SamplerError("duration-seconds must be positive")
     if interval_seconds <= 0:
         raise SamplerError("sample-interval-seconds must be positive")
-    samples: list[dict[str, Any]] = []
+    samples: list[int] = []
     started = monotonic()
     while True:
-        samples.append(read_stats(container_name))
+        value = read_count()
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise SamplerError(f"connection sample is invalid: {value!r}")
+        samples.append(value)
         elapsed = monotonic() - started
         remaining = duration_seconds - elapsed
         if remaining <= 0:
@@ -111,12 +118,13 @@ def run_sampling_loop(
 def build_receipt(
     *,
     run_id: str,
-    container_name: str,
-    samples: Sequence[dict[str, Any]],
+    database_container: str,
+    samples: Sequence[int],
     started_at_unix_ms: int,
     finished_at_unix_ms: int,
-) -> dict[str, Any]:
-    run_id = validate_run_id(run_id)
+) -> dict:
+    validate_run_id(run_id)
+    validate_container_name(database_container)
     if (
         not isinstance(started_at_unix_ms, int)
         or isinstance(started_at_unix_ms, bool)
@@ -125,24 +133,28 @@ def build_receipt(
         or started_at_unix_ms < 0
         or finished_at_unix_ms <= started_at_unix_ms
     ):
-        raise SamplerError("resource sample wall-clock interval is invalid")
-    peaks = accumulate_peaks(samples)
+        raise SamplerError("PostgreSQL sample wall-clock interval is invalid")
+    if not samples:
+        raise SamplerError("at least one PostgreSQL connection sample is required")
+    normalized: list[int] = []
+    for value in samples:
+        if not isinstance(value, int) or isinstance(value, bool) or value < 0:
+            raise SamplerError(f"connection sample is invalid: {value!r}")
+        normalized.append(value)
     return {
         "schema_version": SCHEMA_VERSION,
         "contract": CONTRACT,
         "run_id": run_id,
-        "container_name": container_name,
+        "database_container": database_container,
         "started_at_unix_ms": started_at_unix_ms,
         "finished_at_unix_ms": finished_at_unix_ms,
-        "peaks": {
-            "cpu_percent": peaks["cpu_percent"],
-            "memory_bytes": peaks["memory_bytes"],
-        },
-        "sample_count": peaks["sample_count"],
+        "max_connections": max(normalized),
+        "sample_count": len(normalized),
+        "samples": normalized,
     }
 
 
-def write_atomic_json(path: Path, payload: dict[str, Any]) -> None:
+def write_atomic_json(path: Path, payload: dict) -> None:
     absolute = Path(os.path.abspath(path))
     absolute.parent.mkdir(parents=True, exist_ok=True)
     if absolute.is_symlink() or (absolute.exists() and not absolute.is_file()):
@@ -165,28 +177,28 @@ def write_atomic_json(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _cli_sample(args: argparse.Namespace) -> int:
-    module = _load_measured_container_module()
     run_id = validate_run_id(args.run_id)
+    container = validate_container_name(args.database_container)
 
-    def read_stats(name: str) -> dict[str, Any]:
-        try:
-            return module.read_stats(name)
-        except module.MeasurementError as exc:
-            raise SamplerError(str(exc)) from exc
+    def sample() -> int:
+        return read_connection_count(
+            container,
+            database_user=args.database_user,
+            database_name=args.database_name,
+        )
 
     started_at_unix_ms = time.time_ns() // 1_000_000
     samples = run_sampling_loop(
-        container_name=args.container_name,
         duration_seconds=args.duration_seconds,
         interval_seconds=args.sample_interval_seconds,
-        read_stats=read_stats,
+        read_count=sample,
         sleep=time.sleep,
         monotonic=time.monotonic,
     )
     finished_at_unix_ms = time.time_ns() // 1_000_000
     receipt = build_receipt(
         run_id=run_id,
-        container_name=args.container_name,
+        database_container=container,
         samples=samples,
         started_at_unix_ms=started_at_unix_ms,
         finished_at_unix_ms=finished_at_unix_ms,
@@ -199,11 +211,11 @@ def _cli_sample(args: argparse.Namespace) -> int:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
-    sample = subparsers.add_parser(
-        "sample", help="sample docker stats peaks for an already-running container"
-    )
+    sample = subparsers.add_parser("sample", help="sample pg_stat_activity over a bounded window")
     sample.add_argument("--run-id", required=True)
-    sample.add_argument("--container-name", required=True)
+    sample.add_argument("--database-container", required=True)
+    sample.add_argument("--database-user", default="welt")
+    sample.add_argument("--database-name", default="weltgewebe")
     sample.add_argument("--duration-seconds", type=float, required=True)
     sample.add_argument("--sample-interval-seconds", type=float, default=1.0)
     sample.add_argument("--receipt", type=Path, required=True)
@@ -219,7 +231,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         parser.error(f"unsupported command {args.command}")
         return 1
     except SamplerError as exc:
-        print(f"container-resource-sampler: {exc}", file=sys.stderr)
+        print(f"postgres-connection-sampler: {exc}", file=sys.stderr)
         return 1
 
 

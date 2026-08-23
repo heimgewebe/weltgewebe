@@ -2939,6 +2939,20 @@ time.sleep(60)
         )
         self.assertNotIn("RUN chmod +x /usr/local/bin/generate-demo-data", dockerfile)
 
+    def test_api_container_normalizes_policy_permissions_before_nonroot_user(self) -> None:
+        dockerfile = (ROOT / "apps/api/Dockerfile").read_text()
+        copy_policies = dockerfile.index("COPY policies /app/policies")
+        chmod_directories = dockerfile.index(
+            "find /app/policies -type d -exec chmod 0755 {} +"
+        )
+        chmod_files = dockerfile.index(
+            "find /app/policies -type f -exec chmod 0644 {} +"
+        )
+        user = dockerfile.index("USER 10001:10001")
+        self.assertLess(copy_policies, chmod_directories)
+        self.assertLess(chmod_directories, chmod_files)
+        self.assertLess(chmod_files, user)
+
     def test_ready_api_pods_exclude_terminating_and_unready_pods(self) -> None:
         document = {
             "items": [
