@@ -39,10 +39,13 @@
   let activeTab: NodeTab = $state("uebersicht");
   let overviewTab: HTMLButtonElement | null = $state(null);
   let editTab: HTMLButtonElement | null = $state(null);
+  let deleteTriggerButton: HTMLButtonElement | null = $state(null);
+  let deleteCancelButton: HTMLButtonElement | null = $state(null);
   let titleInput: HTMLInputElement | null = $state(null);
   let editing = $state(false);
   let saving = $state(false);
   let deleting = $state(false);
+  let deleteConfirmationOpen = $state(false);
   let mutationError = $state("");
   let archiveHref = $state("");
   let formTitle = $state("");
@@ -92,6 +95,7 @@
     editing = false;
     saving = false;
     deleting = false;
+    deleteConfirmationOpen = false;
     mutationError = "";
     archiveHref = "";
   }
@@ -127,6 +131,7 @@
   }
 
   function setTab(tab: NodeTab) {
+    if (tab !== "bearbeiten") deleteConfirmationOpen = false;
     // Mutation feedback survives ordinary tab changes so a conflict cannot be
     // dismissed accidentally. A new mutation, cancellation, selection change
     // or permission loss clears it explicitly.
@@ -255,13 +260,29 @@
     }
   }
 
+  function requestNodeRemoval() {
+    if (deleting) return;
+    mutationError = "";
+    deleteConfirmationOpen = true;
+    void focusAfterRender(() => deleteCancelButton);
+  }
+
+  function cancelNodeRemoval() {
+    if (deleting) return;
+    deleteConfirmationOpen = false;
+    void focusAfterRender(() => deleteTriggerButton);
+  }
+
+  function handleDeleteConfirmationKeydown(event: KeyboardEvent) {
+    if (event.key !== "Escape" || deleting) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancelNodeRemoval();
+  }
+
   async function removeNode() {
     const id = nodeDetails?.id || $selection?.id;
-    if (!id) return;
-    const confirmed = window.confirm(
-      "Aus dem Gewebe entfernen? Alle verbundenen Fäden werden entfernt. Bestehende Gesprächsbeiträge bleiben als schreibgeschütztes Archiv erhalten.",
-    );
-    if (!confirmed) return;
+    if (!id || deleting) return;
 
     deleting = true;
     mutationError = "";
@@ -291,6 +312,8 @@
       }
     } finally {
       deleting = false;
+      deleteConfirmationOpen = false;
+      void focusAfterRender(() => deleteTriggerButton);
     }
   }
   let nodeDetails = $derived.by(() => $nodeDetailsStore);
@@ -686,13 +709,42 @@
               <button type="button" class="secondary" onclick={beginEdit}
                 >Bearbeiten</button
               >
-              <button
-                type="button"
-                class="danger"
-                onclick={removeNode}
-                disabled={deleting}
-                >{deleting ? "Entfernt…" : "Aus dem Gewebe entfernen"}</button
-              >
+              {#if deleteConfirmationOpen}
+                <div class="delete-confirmation" aria-live="polite">
+                  <p><strong>Knoten wirklich entfernen?</strong></p>
+                  <p>
+                    Alle verbundenen Fäden werden entfernt. Bestehende
+                    Gesprächsbeiträge bleiben als schreibgeschütztes Archiv
+                    erhalten.
+                  </p>
+                  <div class="delete-confirmation-actions">
+                    <button
+                      type="button"
+                      class="secondary"
+                      bind:this={deleteCancelButton}
+                      onclick={cancelNodeRemoval}
+                      onkeydown={handleDeleteConfirmationKeydown}
+                      disabled={deleting}>Abbrechen</button
+                    >
+                    <button
+                      type="button"
+                      class="danger danger-solid"
+                      onclick={removeNode}
+                      onkeydown={handleDeleteConfirmationKeydown}
+                      disabled={deleting}
+                      >{deleting ? "Wird entfernt…" : "Jetzt entfernen"}</button
+                    >
+                  </div>
+                </div>
+              {:else}
+                <button
+                  type="button"
+                  class="danger"
+                  bind:this={deleteTriggerButton}
+                  onclick={requestNodeRemoval}
+                  disabled={deleting}>Aus dem Gewebe entfernen</button
+                >
+              {/if}
               <p class="collective-note">
                 Eigene Knoten kannst du selbst pflegen. Weber können zusätzlich
                 gemeinschaftliche Knoten weiterentwickeln.
@@ -879,6 +931,34 @@
     border: 1px solid #a33;
     background: transparent;
     color: #a33;
+  }
+  .delete-confirmation {
+    display: grid;
+    gap: 0.65rem;
+    padding: 0.8rem;
+    border: 1px solid color-mix(in srgb, #a33 45%, var(--panel-border));
+    border-radius: 8px;
+    background: color-mix(in srgb, #a33 6%, var(--panel-solid));
+  }
+  .delete-confirmation p {
+    margin: 0;
+  }
+  .delete-confirmation-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.65rem;
+  }
+  .delete-confirmation-actions button {
+    min-height: 44px;
+    border-radius: 8px;
+    padding: 0.65rem 0.85rem;
+    font: inherit;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .danger-solid {
+    background: #a33;
+    color: white;
   }
   button:disabled {
     cursor: wait;
