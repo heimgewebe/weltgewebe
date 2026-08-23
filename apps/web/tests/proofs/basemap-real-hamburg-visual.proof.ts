@@ -382,6 +382,23 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
         true,
       );
 
+      // This proof verifies the Hamburg artifact, not the product's default
+      // camera. Keep the proof geographically explicit so a neutral product
+      // fallback can evolve without silently changing what this test samples.
+      await page.evaluate(() => {
+        const map = (window as unknown as Record<string, unknown>)
+          .__TEST_MAP__ as
+          | {
+              jumpTo?: (options: {
+                center: [number, number];
+                zoom: number;
+              }) => void;
+            }
+          | undefined;
+        map?.jumpTo?.({ center: [10.058, 53.5585], zoom: 15 });
+      });
+      await page.waitForTimeout(250);
+
       const readFeatureEvidence = () =>
         page.evaluate(
           ({ sourceId, layerIds, sourceLayerIds }) => {

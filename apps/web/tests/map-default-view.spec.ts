@@ -1,28 +1,14 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
-test("guest map fits the existing renderable content", async ({ page }) => {
+test("guest map starts on neutral nationwide Germany even when content exists", async ({
+  page,
+}) => {
   await mockApiResponses(page);
 
   await page.goto("/map");
   await page.waitForFunction(
     () => (window as any).__TEST_MAP__ !== undefined,
-    undefined,
-    { timeout: 15000 },
-  );
-
-  await page.waitForFunction(
-    () => {
-      const map = (window as any).__TEST_MAP__;
-      if (!map) return false;
-      const bounds = map.getBounds();
-      return (
-        bounds.contains([10.060228407382967, 53.558894813662505]) &&
-        bounds.contains([10.0629844, 53.5604148]) &&
-        bounds.contains([10.063, 53.561]) &&
-        map.getZoom() <= 13.001
-      );
-    },
     undefined,
     { timeout: 15000 },
   );
@@ -33,9 +19,9 @@ test("guest map fits the existing renderable content", async ({ page }) => {
     return { lng: center.lng, lat: center.lat, zoom: map.getZoom() };
   });
 
-  expect(camera.zoom).toBeCloseTo(13, 3);
-  expect(camera.lng).not.toBeCloseTo(10.058, 3);
-  expect(camera.lat).not.toBeCloseTo(53.5585, 3);
+  expect(camera.lng).toBeCloseTo(10.4515, 3);
+  expect(camera.lat).toBeCloseTo(51.1657, 3);
+  expect(camera.zoom).toBeCloseTo(7, 3);
 });
 
 test("partial guest data uses the neutral basemap fallback", async ({
@@ -174,18 +160,15 @@ test("delayed authentication recenters once without blocking public map startup"
   const initialCamera = await page.evaluate(() => {
     const map = (window as any).__TEST_MAP__;
     const center = map.getCenter();
-    const bounds = map.getBounds();
     return {
       lng: center.lng,
       lat: center.lat,
       zoom: map.getZoom(),
-      containsContent:
-        bounds.contains([10.060228407382967, 53.558894813662505]) &&
-        bounds.contains([10.063, 53.561]),
     };
   });
-  expect(initialCamera.containsContent).toBe(true);
-  expect(initialCamera.zoom).toBeCloseTo(13, 3);
+  expect(initialCamera.lng).toBeCloseTo(10.4515, 3);
+  expect(initialCamera.lat).toBeCloseTo(51.1657, 3);
+  expect(initialCamera.zoom).toBeCloseTo(7, 3);
   releaseAuth();
   await page.waitForFunction(
     () => {

@@ -3,7 +3,6 @@ import type { AuthStatus } from "$lib/auth/store";
 import type { MapEntityViewModel } from "$lib/map/types";
 import {
   deriveSearchDirectionIndicators,
-  MAP_CONTENT_FIT_MAX_ZOOM,
   resolveInitialMapCamera,
 } from "./searchNavigation";
 
@@ -42,19 +41,10 @@ const guest: AuthStatus = {
   role: "gast",
 };
 
-const completeScene = { loadState: "ok" } as const;
-
 describe("resolveInitialMapCamera", () => {
   it("centers on the own positioned Garnrolle", () => {
     expect(
-      resolveInitialMapCamera(
-        markers,
-        authenticated,
-        null,
-        [10, 53],
-        12,
-        completeScene,
-      ),
+      resolveInitialMapCamera(markers, authenticated, null, [10, 53], 12),
     ).toEqual({
       kind: "point",
       center: [10.06, 53.56],
@@ -71,7 +61,6 @@ describe("resolveInitialMapCamera", () => {
         { type: "node", id: "focus-node" },
         [10, 53],
         12,
-        completeScene,
       ),
     ).toEqual({
       kind: "point",
@@ -81,31 +70,19 @@ describe("resolveInitialMapCamera", () => {
     });
   });
 
-  it("fits renderable content for guests instead of choosing a place fallback", () => {
-    expect(
-      resolveInitialMapCamera(
-        markers,
-        guest,
-        null,
-        [10, 53],
-        12,
-        completeScene,
-      ),
-    ).toEqual({
-      kind: "bounds",
-      bounds: [
-        [10.06, 53.56],
-        [11, 54],
-      ],
-      maxZoom: MAP_CONTENT_FIT_MAX_ZOOM,
-      source: "content",
-    });
+  it("uses the configured basemap fallback for guests even when public content exists", () => {
+    expect(resolveInitialMapCamera(markers, guest, null, [10, 53], 12)).toEqual(
+      {
+        kind: "point",
+        center: [10, 53],
+        zoom: 12,
+        source: "fallback",
+      },
+    );
   });
 
-  it("uses the configured basemap fallback only for an empty scene", () => {
-    expect(
-      resolveInitialMapCamera([], guest, null, [10, 53], 7, completeScene),
-    ).toEqual({
+  it("uses the same configured basemap fallback for an empty scene", () => {
+    expect(resolveInitialMapCamera([], guest, null, [10, 53], 7)).toEqual({
       kind: "point",
       center: [10, 53],
       zoom: 7,
@@ -113,41 +90,7 @@ describe("resolveInitialMapCamera", () => {
     });
   });
 
-  it("uses a bounded content zoom for a scene with one renderable point", () => {
-    expect(
-      resolveInitialMapCamera(
-        [markers[0]],
-        guest,
-        null,
-        [10, 53],
-        7,
-        completeScene,
-      ),
-    ).toEqual({
-      kind: "point",
-      center: [10.06, 53.56],
-      zoom: MAP_CONTENT_FIT_MAX_ZOOM,
-      source: "content",
-    });
-  });
-
-  it.each(["partial", "failed"] as const)(
-    "uses the configured fallback instead of fragmentary content when loading is %s",
-    (loadState) => {
-      expect(
-        resolveInitialMapCamera(markers, guest, null, [10, 53], 7, {
-          loadState,
-        }),
-      ).toEqual({
-        kind: "point",
-        center: [10, 53],
-        zoom: 7,
-        source: "fallback",
-      });
-    },
-  );
-
-  it("preserves explicit focus and own-Garnrolle precedence for degraded data", () => {
+  it("preserves explicit focus and own-Garnrolle precedence", () => {
     expect(
       resolveInitialMapCamera(
         markers,
@@ -155,7 +98,6 @@ describe("resolveInitialMapCamera", () => {
         { type: "node", id: "focus-node" },
         [10, 53],
         7,
-        { loadState: "partial" },
       ),
     ).toEqual({
       kind: "point",
@@ -164,9 +106,7 @@ describe("resolveInitialMapCamera", () => {
       source: "focus",
     });
     expect(
-      resolveInitialMapCamera(markers, authenticated, null, [10, 53], 7, {
-        loadState: "failed",
-      }),
+      resolveInitialMapCamera(markers, authenticated, null, [10, 53], 7),
     ).toEqual({
       kind: "point",
       center: [10.06, 53.56],
@@ -195,7 +135,6 @@ describe("resolveInitialMapCamera", () => {
         { type: "node", id: "focus-node" },
         [10, 53],
         12,
-        completeScene,
       ),
     ).toEqual({
       kind: "point",

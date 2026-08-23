@@ -475,6 +475,15 @@ test.describe("iPad Pro 11 landscape Garnrolle interaction", () => {
   }) => {
     await mockApiResponses(page);
     await page.goto("/map");
+    await page.waitForFunction(
+      () => (window as any).__TEST_MAP__ !== undefined,
+      undefined,
+      { timeout: 15000 },
+    );
+    await page.evaluate(() => {
+      const map = (window as any).__TEST_MAP__;
+      map.jumpTo({ center: [10.0629844, 53.5604148], zoom: 14 });
+    });
 
     const marker = page.getByTestId(`marker-garnrolle-${GARNROLLE_ID}`);
     await expect(marker).toBeVisible();
