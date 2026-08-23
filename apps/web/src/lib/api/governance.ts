@@ -210,17 +210,19 @@ export function listProposalMessages(id: string): Promise<ProposalMessage[]> {
   );
 }
 
-export function postProposalMessage(
+export async function postProposalMessage(
   id: string,
   body: string,
 ): Promise<ProposalMessage> {
-  return request<ProposalMessage>(
+  const message = await request<ProposalMessage>(
     `/api/proposals/${encodeURIComponent(id)}/messages`,
     {
       method: "POST",
       body: JSON.stringify({ body: body.trim() }),
     },
   );
+  invalidateAccountAttention();
+  return message;
 }
 
 export function exitGuestAccount(): Promise<{ status: "exited" }> {

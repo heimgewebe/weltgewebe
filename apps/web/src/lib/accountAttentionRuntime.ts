@@ -35,10 +35,26 @@ export interface AccountAttentionControllerDependencies {
 export interface AccountAttentionController extends Readable<AccountAttentionState> {
   refresh: (status?: AuthStatus) => Promise<void>;
   refreshMessages: (status?: AuthStatus) => Promise<void>;
+  refreshProposals: (status?: AuthStatus) => Promise<void>;
   reproject: () => void;
 }
 
 const MESSAGE_POLL_MS = 30_000;
+const PROPOSAL_POLL_MS = 60_000;
+
+export function createNonOverlappingBackgroundRefresh(
+  refresh: () => Promise<void>,
+): () => void {
+  let inFlight = false;
+  const release = () => {
+    inFlight = false;
+  };
+  return () => {
+    if (inFlight) return;
+    inFlight = true;
+    void refresh().then(release, release);
+  };
+}
 
 function initialState(): AccountAttentionState {
   return {
@@ -212,6 +228,7 @@ export function createAccountAttentionController(
     subscribe: store.subscribe,
     refresh,
     refreshMessages,
+    refreshProposals,
     reproject,
   };
 }
@@ -272,6 +289,18 @@ function installRuntime(): () => void {
       void controller.refreshMessages(get(authStore));
     }
   }, MESSAGE_POLL_MS);
+  // Governance can change because another account acts or the server advances a
+  // phase. Re-read the canonical proposal list at a modest cadence while the
+  // surface is visible; this remains one list request, not client-owned truth.
+  // Keep timer-driven reads non-overlapping so sustained latency cannot create a
+  // request pile-up or continually supersede the last response. Event-driven
+  // refreshes stay independent and may still supersede this background read.
+  const refreshProposalsFromPoll = createNonOverlappingBackgroundRefresh(() =>
+    controller.refreshProposals(get(authStore)),
+  );
+  const proposalPoll = window.setInterval(() => {
+    if (document.visibilityState === "visible") refreshProposalsFromPoll();
+  }, PROPOSAL_POLL_MS);
   // Deadlines can cross an attention boundary without a network event. Reproject
   // the already confirmed facts locally; this does not invent or refresh domain truth.
   const deadlineProjectionClock = window.setInterval(() => {
@@ -285,6 +314,7 @@ function installRuntime(): () => void {
     unsubscribeAuth();
     unsubscribeAttention();
     window.clearInterval(messagePoll);
+    window.clearInterval(proposalPoll);
     window.clearInterval(deadlineProjectionClock);
     document.removeEventListener("visibilitychange", refreshWhenVisible);
     window.removeEventListener("focus", refreshOnFocus);
