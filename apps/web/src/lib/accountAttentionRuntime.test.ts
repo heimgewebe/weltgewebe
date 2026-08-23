@@ -7,6 +7,7 @@ import type { AuthStatus } from "$lib/auth/store";
 import {
   createAccountAttentionController,
   createBoundedBackgroundRefresh,
+  createCoalescedForegroundRefresh,
   maskAccountAttentionForAuth,
   type AccountAttentionState,
 } from "$lib/accountAttentionRuntime";
@@ -55,6 +56,42 @@ describe("accountAttentionRuntime", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
+  it("coalesces one foreground refresh burst while preserving the next refresh", async () => {
+    const first = deferred<void>();
+    const refresh = vi
+      .fn<() => Promise<void>>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValue(undefined);
+    const refreshFromForeground = createCoalescedForegroundRefresh(refresh);
+
+    refreshFromForeground();
+    refreshFromForeground();
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    first.resolve();
+    await first.promise;
+    await Promise.resolve();
+    refreshFromForeground();
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("releases foreground coalescing after a failed refresh", async () => {
+    const refresh = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValueOnce(new Error("temporary outage"))
+      .mockResolvedValue(undefined);
+    const refreshFromForeground = createCoalescedForegroundRefresh(refresh);
+
+    refreshFromForeground();
+    refreshFromForeground();
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    await Promise.resolve();
+    await Promise.resolve();
+    refreshFromForeground();
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
   it("does not overlap bounded background refreshes while one is in flight", async () => {
     const first = deferred<void>();
     const refresh = vi
