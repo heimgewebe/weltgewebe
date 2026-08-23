@@ -7,10 +7,15 @@ type MapAuthIdentity = Pick<AuthStatus, "authenticated" | "account_id">;
 
 export type MapCameraTargetSource = "focus" | "own-garnrolle" | "fallback";
 
-export interface MapCameraTarget {
+export type MapCameraTarget = {
+  kind: "point";
   center: [number, number];
   zoom: number;
   source: MapCameraTargetSource;
+};
+
+export interface InitialMapCameraOptions {
+  focusedZoom?: number;
 }
 
 export interface ViewportBounds {
@@ -58,7 +63,9 @@ function findOwnGarnrolle(
 /**
  * Resolves the first camera position before MapLibre creates its first frame.
  * Explicit focus addressing wins, followed by the signed-in person's public
- * Garnrolle position. The established basemap fallback remains the last resort.
+ * Garnrolle position. Everyone else starts from the configured basemap fallback.
+ * This keeps the product contract deterministic and independent of whatever
+ * subset of public markers happens to be returned during startup.
  */
 export function resolveInitialMapCamera(
   markers: MapEntityViewModel[],
@@ -66,11 +73,12 @@ export function resolveInitialMapCamera(
   focus: MapUrlFocus | null,
   fallbackCenter: [number, number],
   fallbackZoom: number,
-  focusedZoom = 14,
+  { focusedZoom = 14 }: InitialMapCameraOptions = {},
 ): MapCameraTarget {
   const focusTarget = findFocusTarget(markers, focus);
   if (hasRenderableMapPosition(focusTarget)) {
     return {
+      kind: "point",
       center: [focusTarget!.lon, focusTarget!.lat],
       zoom: Math.max(fallbackZoom, focusedZoom),
       source: "focus",
@@ -80,6 +88,7 @@ export function resolveInitialMapCamera(
   const ownGarnrolle = findOwnGarnrolle(markers, auth);
   if (hasRenderableMapPosition(ownGarnrolle)) {
     return {
+      kind: "point",
       center: [ownGarnrolle!.lon, ownGarnrolle!.lat],
       zoom: Math.max(fallbackZoom, focusedZoom),
       source: "own-garnrolle",
@@ -87,6 +96,7 @@ export function resolveInitialMapCamera(
   }
 
   return {
+    kind: "point",
     center: fallbackCenter,
     zoom: fallbackZoom,
     source: "fallback",

@@ -1,6 +1,18 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
+
+async function centerDemoMarkers(page: Page) {
+  await page.waitForFunction(
+    () => (window as any).__TEST_MAP__ !== undefined,
+    undefined,
+    { timeout: 15000 },
+  );
+  await page.evaluate(() => {
+    const map = (window as any).__TEST_MAP__;
+    map.jumpTo({ center: [10.060228407382967, 53.558894813662505], zoom: 14 });
+  });
+}
 
 test.describe("ContextPanel mobile compact and full states", () => {
   test.beforeEach(async ({ page }) => {
@@ -9,6 +21,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
     });
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/map");
+    await centerDemoMarkers(page);
     await page.waitForSelector(".map-marker", { timeout: 10000 });
   });
 
@@ -316,6 +329,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
       auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
     });
     await landscapePage.goto("/map");
+    await centerDemoMarkers(landscapePage);
     await landscapePage.waitForSelector(".map-marker", { timeout: 10000 });
     expect(
       await landscapePage.evaluate(
@@ -368,6 +382,7 @@ test.describe("ContextPanel desktop layout stays unchanged", () => {
     });
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/map");
+    await centerDemoMarkers(page);
     await page.waitForSelector(".map-marker", { timeout: 10000 });
   });
 
@@ -397,6 +412,7 @@ test.describe("ContextPanel touch input", () => {
       auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
     });
     await page.goto("/map");
+    await centerDemoMarkers(page);
     await page.waitForSelector(".map-marker", { timeout: 10000 });
   });
 

@@ -1,5 +1,6 @@
 import { test, expect, type Locator } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { centerDemoNode } from "./fixtures/mapCamera";
 
 function overlap(
   a: NonNullable<Awaited<ReturnType<Locator["boundingBox"]>>>,
@@ -20,6 +21,7 @@ test.describe("MapLibre control placement", () => {
     });
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/map");
+    await centerDemoNode(page);
     await page.waitForSelector(".map-marker", { timeout: 10000 });
   });
 

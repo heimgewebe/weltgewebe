@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
+import { moveSearchTargetOffscreen } from "./fixtures/mapCamera";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
 test.describe("Search mode", () => {
@@ -87,6 +88,7 @@ test.describe("Search mode", () => {
       undefined,
       { timeout: 15000 },
     );
+    await moveSearchTargetOffscreen(page);
     await page.waitForSelector(".map-marker");
 
     // Open Finden via the tool fan
@@ -343,6 +345,7 @@ test.describe("Search mode", () => {
   test("offscreen direction marker opens and centers its search result", async ({
     page,
   }) => {
+    await page.emulateMedia({ reducedMotion: "reduce" });
     await page.goto("/map");
     await page.waitForFunction(
       () => (window as any).__TEST_MAP__ !== undefined,
@@ -350,6 +353,7 @@ test.describe("Search mode", () => {
       { timeout: 15000 },
     );
 
+    await moveSearchTargetOffscreen(page);
     await activateToolFanAction(page, "find");
     await page.getByRole("searchbox", { name: "Suchbegriff" }).fill("Strick");
 
