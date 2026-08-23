@@ -320,18 +320,53 @@ def _projection_rows(
 ) -> list[dict[str, Any]]:
     sql = f'''
 SELECT json_build_object(
-  'id', node_id,
-  'kind', kind,
-  'title', title
+  'id', p.node_id,
+  'kind', p.kind,
+  'title', p.title,
+  'search_visibility', n.search_visibility,
+  'owner_account_id', weltgewebe_search_node_owner_account_id(n.payload)
 )::text
-FROM search_node_projections
-WHERE generation_id = {_sql_literal(generation_id)}
-ORDER BY node_id;
+FROM search_node_projections p
+JOIN domain_nodes n ON n.id = p.node_id
+WHERE p.generation_id = {_sql_literal(generation_id)}
+ORDER BY p.node_id;
 '''
     return _json_lines(
         _psql(container, sql, database_user=database_user, database_name=database_name),
         "active search projection query",
     )
+
+
+def _expected_projection_identity(
+    projection: Mapping[str, Any], fixture: Mapping[str, Any]
+) -> dict[str, str]:
+    node_id = projection.get("id")
+    if not isinstance(node_id, str) or node_id != fixture.get("id"):
+        raise LiveBindingError("active search projection identity does not match fixture")
+    visibility = projection.get("search_visibility")
+    if visibility not in {"public", "private", "hidden", "revoked"}:
+        raise LiveBindingError(
+            f"active search projection has invalid search_visibility: {visibility!r}"
+        )
+    owner_account_id = projection.get("owner_account_id")
+    if owner_account_id is not None and (
+        not isinstance(owner_account_id, str) or not owner_account_id
+    ):
+        raise LiveBindingError("active search projection owner_account_id is invalid")
+    is_redacted = visibility in {"hidden", "revoked"} or (
+        visibility == "private" and owner_account_id is None
+    )
+    redacted = "[nicht öffentlich]"
+    kind = redacted if is_redacted else fixture.get("kind")
+    title = redacted if is_redacted else fixture.get("title")
+    if not isinstance(kind, str) or not kind or not isinstance(title, str) or not title:
+        raise LiveBindingError("fixture projection identity is invalid")
+    return {
+        "id": node_id,
+        "kind": kind,
+        "title": title,
+        "search_visibility": visibility,
+    }
 
 
 def _container_identity(container: str) -> dict[str, str]:
@@ -426,15 +461,22 @@ def capture(
         raise LiveBindingError("active search generation is incomplete")
 
     expected_projection_rows: list[dict[str, Any]] = []
+    actual_projection_rows: list[dict[str, Any]] = []
     for projection in projection_rows:
         node_id = projection.get("id")
         fixture = fixture_by_id.get(node_id)
         if fixture is None:
             raise LiveBindingError(f"active search projection {node_id!r} is absent from fixture")
-        expected_projection_rows.append(
-            {"id": fixture["id"], "kind": fixture["kind"], "title": fixture["title"]}
+        expected_projection_rows.append(_expected_projection_identity(projection, fixture))
+        actual_projection_rows.append(
+            {
+                "id": projection.get("id"),
+                "kind": projection.get("kind"),
+                "title": projection.get("title"),
+                "search_visibility": projection.get("search_visibility"),
+            }
         )
-    projection_sha = _rows_sha256(projection_rows)
+    projection_sha = _rows_sha256(actual_projection_rows)
     expected_projection_sha = _rows_sha256(expected_projection_rows)
     if projection_sha != expected_projection_sha:
         raise LiveBindingError("active search projection content does not match fixture nodes")

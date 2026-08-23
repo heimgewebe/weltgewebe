@@ -931,6 +931,44 @@ class AssembleReportTests(unittest.TestCase):
         with self.assertRaisesRegex(evidence.live_binding.LiveBindingError, "incomplete"):
             evidence.live_binding.validate_receipt(receipt)
 
+    def test_projection_identity_redacts_hidden_fixture_values(self) -> None:
+        fixture = {"id": "node-hidden", "kind": "Angebot", "title": "Geheimer Titel"}
+        projection = {
+            "id": "node-hidden",
+            "kind": "[nicht öffentlich]",
+            "title": "[nicht öffentlich]",
+            "search_visibility": "hidden",
+            "owner_account_id": None,
+        }
+        self.assertEqual(
+            evidence.live_binding._expected_projection_identity(projection, fixture),
+            {
+                "id": "node-hidden",
+                "kind": "[nicht öffentlich]",
+                "title": "[nicht öffentlich]",
+                "search_visibility": "hidden",
+            },
+        )
+
+    def test_projection_identity_preserves_public_fixture_values(self) -> None:
+        fixture = {"id": "node-public", "kind": "Projekt", "title": "Öffentlicher Titel"}
+        projection = {
+            "id": "node-public",
+            "kind": "Projekt",
+            "title": "Öffentlicher Titel",
+            "search_visibility": "public",
+            "owner_account_id": None,
+        }
+        self.assertEqual(
+            evidence.live_binding._expected_projection_identity(projection, fixture),
+            {
+                "id": "node-public",
+                "kind": "Projekt",
+                "title": "Öffentlicher Titel",
+                "search_visibility": "public",
+            },
+        )
+
 
 class MissingAndInvalidInputTests(unittest.TestCase):
     def test_missing_k6_summary_file_fails_closed(self) -> None:
