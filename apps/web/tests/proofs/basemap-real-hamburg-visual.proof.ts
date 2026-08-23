@@ -397,7 +397,22 @@ test.describe("Basemap Real Hamburg Visual Runtime Proof", () => {
           | undefined;
         map?.jumpTo?.({ center: [10.058, 53.5585], zoom: 15 });
       });
-      await page.waitForTimeout(250);
+      await expect
+        .poll(
+          async () => {
+            return await page.evaluate((sourceId) => {
+              const map = (window as unknown as Record<string, unknown>)
+                .__TEST_MAP__ as TestMap | undefined;
+              return map?.isSourceLoaded?.(sourceId) ?? false;
+            }, SOURCE_ID);
+          },
+          {
+            message:
+              "Hamburg source must finish loading after the proof camera moves to Hamburg",
+            timeout: 30_000,
+          },
+        )
+        .toBeTruthy();
 
       const readFeatureEvidence = () =>
         page.evaluate(
