@@ -92,9 +92,22 @@ test.describe("Knoten bearbeiten und löschen", () => {
       await panel.getByRole("button", { name: "Abbrechen" }).click();
       await expect(
         panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }),
-      ).toBeVisible();
+      ).toBeFocused();
     }
     expect(nativeDialogCount).toBe(0);
+
+    await panel
+      .getByRole("button", { name: "Aus dem Gewebe entfernen" })
+      .click();
+    await expect(
+      panel.getByRole("button", { name: "Abbrechen" }),
+    ).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(
+      panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }),
+    ).toBeFocused();
+    await expect(panel.getByText("Knoten wirklich entfernen?")).toHaveCount(0);
+    await expect(panel).toBeVisible();
   });
 
   test("Weber kann einen gemeinsamen Knoten bearbeiten und samt Fadenprojektionen löschen", async ({

@@ -39,6 +39,7 @@
   let activeTab: NodeTab = $state("uebersicht");
   let overviewTab: HTMLButtonElement | null = $state(null);
   let editTab: HTMLButtonElement | null = $state(null);
+  let deleteTriggerButton: HTMLButtonElement | null = $state(null);
   let deleteCancelButton: HTMLButtonElement | null = $state(null);
   let titleInput: HTMLInputElement | null = $state(null);
   let editing = $state(false);
@@ -269,6 +270,14 @@
   function cancelNodeRemoval() {
     if (deleting) return;
     deleteConfirmationOpen = false;
+    void focusAfterRender(() => deleteTriggerButton);
+  }
+
+  function handleDeleteConfirmationKeydown(event: KeyboardEvent) {
+    if (event.key !== "Escape" || deleting) return;
+    event.preventDefault();
+    event.stopPropagation();
+    cancelNodeRemoval();
   }
 
   async function removeNode() {
@@ -304,6 +313,7 @@
     } finally {
       deleting = false;
       deleteConfirmationOpen = false;
+      void focusAfterRender(() => deleteTriggerButton);
     }
   }
   let nodeDetails = $derived.by(() => $nodeDetailsStore);
@@ -713,12 +723,14 @@
                       class="secondary"
                       bind:this={deleteCancelButton}
                       onclick={cancelNodeRemoval}
+                      onkeydown={handleDeleteConfirmationKeydown}
                       disabled={deleting}>Abbrechen</button
                     >
                     <button
                       type="button"
                       class="danger danger-solid"
                       onclick={removeNode}
+                      onkeydown={handleDeleteConfirmationKeydown}
                       disabled={deleting}
                       >{deleting ? "Wird entfernt…" : "Jetzt entfernen"}</button
                     >
@@ -728,6 +740,7 @@
                 <button
                   type="button"
                   class="danger"
+                  bind:this={deleteTriggerButton}
                   onclick={requestNodeRemoval}
                   disabled={deleting}>Aus dem Gewebe entfernen</button
                 >
