@@ -294,7 +294,15 @@ jobs:
             --build-arg CARGO_BUILD_JOBS=2 \
             .
           docker push "${API_IMAGE_TAG}"
-          API_DIGEST="$(curl -fsSI -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' "http://127.0.0.1:5000/v2/weltgewebe-api/manifests/${COMMIT}" | tr -d '\r' | awk -F': ' 'tolower($1) == "docker-content-digest" {print $2}')"
+          MANIFEST_ACCEPT='application/vnd.oci.image.manifest.v1+json, '
+          MANIFEST_ACCEPT="${MANIFEST_ACCEPT}application/vnd.docker.distribution.manifest.v2+json"
+          API_DIGEST="$(
+            curl -fsSI \
+              -H "Accept: ${MANIFEST_ACCEPT}" \
+              "http://127.0.0.1:5000/v2/weltgewebe-api/manifests/${COMMIT}" \
+              | tr -d '\r' \
+              | awk -F': ' 'tolower($1) == "docker-content-digest" {print $2}'
+          )"
           [[ "${API_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
           API_IMAGE_DIGEST="${API_IMAGE_REPOSITORY}@${API_DIGEST}"
           docker pull "${API_IMAGE_DIGEST}"

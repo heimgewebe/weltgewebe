@@ -412,17 +412,18 @@ def capture(
         database_name=database_name,
     )
     active_count = len(projection_rows)
+    # MAX_AUTHORIZED_CANDIDATES caps rows materialized by one repository query;
+    # it does not cap the active projection index. Activation requires a
+    # projection for every live search_node_version, so large fixtures may
+    # legitimately have active_count > candidate_limit.
     expected_nodes = generation.get("expected_nodes")
     completed_nodes = generation.get("completed_nodes")
     if (
         active_count < 1
-        or active_count > candidate_limit
         or expected_nodes != active_count
         or completed_nodes != active_count
     ):
-        raise LiveBindingError(
-            "active search generation is not complete or exceeds MAX_AUTHORIZED_CANDIDATES"
-        )
+        raise LiveBindingError("active search generation is incomplete")
 
     expected_projection_rows: list[dict[str, Any]] = []
     for projection in projection_rows:
@@ -568,8 +569,8 @@ def validate_receipt(value: Mapping[str, Any]) -> dict[str, Any]:
     active = search["active_projection_count"]
     if not isinstance(limit, int) or isinstance(limit, bool) or limit < 1:
         raise LiveBindingError("live binding candidate limit must be positive")
-    if not isinstance(active, int) or isinstance(active, bool) or active < 1 or active > limit:
-        raise LiveBindingError("live binding active projection count exceeds candidate limit")
+    if not isinstance(active, int) or isinstance(active, bool) or active < 1:
+        raise LiveBindingError("live binding active projection count must be positive")
     if search["expected_nodes"] != active or search["completed_nodes"] != active:
         raise LiveBindingError("live binding active generation is incomplete")
     if search["candidate_limit_source"] != str(CANDIDATE_LIMIT_SOURCE):

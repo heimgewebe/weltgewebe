@@ -122,7 +122,7 @@ def _runtime_binding(
     run_id: str = FAKE_RUN_ID,
 ) -> dict:
     candidate_limit, candidate_source_sha256 = evidence.live_binding.candidate_limit_binding(ROOT)
-    active = min(candidate_limit, node_count)
+    active = node_count
     content_sha256 = "2" * 64
     image_id = "sha256:" + ("3" * 64)
     return evidence.live_binding.validate_receipt(
@@ -913,13 +913,22 @@ class AssembleReportTests(unittest.TestCase):
                 policy_sha256=FAKE_POLICY_SHA256,
             )
 
-    def test_live_binding_rejects_candidate_count_above_product_limit(self) -> None:
+    def test_live_binding_allows_complete_index_larger_than_query_candidate_limit(self) -> None:
         receipt = _runtime_binding()
-        limit = receipt["search"]["candidate_limit_contract"]
-        receipt["search"]["active_projection_count"] = limit + 1
-        receipt["search"]["expected_nodes"] = limit + 1
-        receipt["search"]["completed_nodes"] = limit + 1
-        with self.assertRaisesRegex(evidence.live_binding.LiveBindingError, "exceeds candidate limit"):
+        self.assertGreater(
+            receipt["search"]["active_projection_count"],
+            receipt["search"]["candidate_limit_contract"],
+        )
+        normalized = evidence.live_binding.validate_receipt(receipt)
+        self.assertEqual(
+            normalized["search"]["active_projection_count"],
+            receipt["search"]["active_projection_count"],
+        )
+
+    def test_live_binding_rejects_incomplete_active_generation(self) -> None:
+        receipt = _runtime_binding()
+        receipt["search"]["completed_nodes"] -= 1
+        with self.assertRaisesRegex(evidence.live_binding.LiveBindingError, "incomplete"):
             evidence.live_binding.validate_receipt(receipt)
 
 
