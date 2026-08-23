@@ -6,6 +6,7 @@ import { postProposalMessage, type Proposal } from "$lib/api/governance";
 import type { AuthStatus } from "$lib/auth/store";
 import {
   createAccountAttentionController,
+  createNonOverlappingBackgroundRefresh,
   maskAccountAttentionForAuth,
   type AccountAttentionState,
 } from "$lib/accountAttentionRuntime";
@@ -54,6 +55,24 @@ describe("accountAttentionRuntime", () => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
+  it("does not overlap background refreshes while one is still in flight", async () => {
+    const first = deferred<void>();
+    const refresh = vi
+      .fn<() => Promise<void>>()
+      .mockReturnValueOnce(first.promise)
+      .mockResolvedValue(undefined);
+    const trigger = createNonOverlappingBackgroundRefresh(refresh);
+
+    trigger();
+    trigger();
+    expect(refresh).toHaveBeenCalledTimes(1);
+
+    first.resolve();
+    await first.promise;
+    trigger();
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
   it("drops a late message result after the authenticated account changes", async () => {
     let current = authenticated("account-a");
     const first = deferred<DirectConversation[]>();
