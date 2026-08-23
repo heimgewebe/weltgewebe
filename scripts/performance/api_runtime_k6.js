@@ -14,6 +14,8 @@ if (!BASE_URL) {
   throw new Error('BASE_URL is required, e.g. http://127.0.0.1:8080');
 }
 
+// The query is evidence, not a convenience default: a run must explicitly
+// name the search workload whose live database binding was captured.
 const SEARCH_QUERY = __ENV.API_RUNTIME_SEARCH_QUERY;
 if (!SEARCH_QUERY) {
   throw new Error('API_RUNTIME_SEARCH_QUERY is required');
@@ -28,6 +30,14 @@ if (
   !/^[0-9a-f]{64}$/.test(DATASET_MANIFEST_SHA256)
 ) {
   throw new Error('API_RUNTIME_DATASET_MANIFEST_SHA256 must be a 64-hex sha256');
+}
+const RUN_ID = __ENV.API_RUNTIME_RUN_ID;
+if (!RUN_ID || !/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/.test(RUN_ID)) {
+  throw new Error('API_RUNTIME_RUN_ID has an invalid format');
+}
+const K6_IMAGE = __ENV.API_RUNTIME_K6_IMAGE;
+if (!K6_IMAGE || !/^.+@sha256:[0-9a-f]{64}$/.test(K6_IMAGE)) {
+  throw new Error('API_RUNTIME_K6_IMAGE must be an exact @sha256 image reference');
 }
 const CONCURRENCY_PROFILE =
   __ENV.API_RUNTIME_CONCURRENCY_PROFILE || 'mixed-health-and-read';
@@ -77,13 +87,27 @@ export default function () {
   });
 }
 
-// Binds this run's k6 summary to the exact scenario it exercised so
-// scripts/performance/api_runtime_evidence.py can refuse contradictory
-// evidence (a summary recorded under different VUs/duration/profiles than
-// the canonical policy declares).
+// Binds this run's k6 summary to the exact scenario, dataset/query workload,
+// run identity, and digest-pinned k6 image declared by the invoking
+// experiment. The live binding and resource receipts independently record
+// the same run identity; the assembler rejects disagreement.
 export function handleSummary(data) {
+  const loadFinishedAtUnixMs = Date.now();
+  const testRunDurationMs = data?.state?.testRunDurationMs;
+  if (!Number.isFinite(testRunDurationMs) || testRunDurationMs <= 0) {
+    throw new Error('k6 summary testRunDurationMs is invalid');
+  }
+  const loadStartedAtUnixMs = Math.floor(loadFinishedAtUnixMs - testRunDurationMs);
+  if (loadStartedAtUnixMs < 0 || loadStartedAtUnixMs >= loadFinishedAtUnixMs) {
+    throw new Error('k6 load wall-clock interval is invalid');
+  }
   const enriched = Object.assign({}, data, {
     weltgewebe_dataset_manifest_sha256: DATASET_MANIFEST_SHA256,
+    weltgewebe_search_query: SEARCH_QUERY,
+    weltgewebe_run_id: RUN_ID,
+    weltgewebe_load_started_at_unix_ms: loadStartedAtUnixMs,
+    weltgewebe_load_finished_at_unix_ms: loadFinishedAtUnixMs,
+    weltgewebe_k6_image: K6_IMAGE,
     weltgewebe_scenario: {
       virtual_users: options.vus,
       duration_seconds: Number(String(options.duration).replace(/s$/, '')),

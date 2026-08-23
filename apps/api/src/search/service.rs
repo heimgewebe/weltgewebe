@@ -17,7 +17,8 @@ use crate::{
             DEFAULT_SEMANTIC_MINIMUM_MARGIN,
         },
         repository::{
-            fetch_postgres_candidates, ActiveSearchGeneration, SearchFilters, SearchRepositoryError,
+            fetch_active_search_generation, fetch_postgres_candidates_for_generation,
+            ActiveSearchGeneration, SearchFilters, SearchRepositoryError,
         },
         worker::{
             EmbeddingProvider, EmbeddingProviderError, GenerationSpec, OllamaEmbeddingProvider,
@@ -228,14 +229,71 @@ async fn execute_search_inner(
         languages: parse_list(&params.language, &params.languages),
     };
 
-    let repository_started = Instant::now();
-    let candidate_result = fetch_postgres_candidates(pool, &query.raw, &filters, auth).await;
+    // Resolve and validate the tiny generation contract before asking the local
+    // provider whether semantic vectors are needed. This keeps lexical fallback
+    // from transferring megabytes of embeddings that it never reads.
+    let generation_started = Instant::now();
+    let generation_result = fetch_active_search_generation(pool).await;
+    let generation_elapsed = generation_started.elapsed();
+    let generation = match generation_result {
+        Ok(Some(generation)) => generation,
+        Ok(None) => {
+            state
+                .metrics
+                .observe_search_repository_duration(generation_elapsed);
+            return Err(SearchError::Unavailable);
+        }
+        Err(_) => {
+            state
+                .metrics
+                .observe_search_repository_duration(generation_elapsed);
+            return Err(SearchError::Internal);
+        }
+    };
+    if let Err(error) = validate_generation(&generation) {
+        state
+            .metrics
+            .observe_search_repository_duration(generation_elapsed);
+        return Err(error);
+    }
+
+    let provider = match provider_override {
+        Some(provider) => provider,
+        None => match runtime_provider(&generation) {
+            Ok(provider) => provider,
+            Err(error) => {
+                state
+                    .metrics
+                    .observe_search_repository_duration(generation_elapsed);
+                return Err(error);
+            }
+        },
+    };
+
+    let query_embedding_text = query.embedding_text();
+    let provider_started = Instant::now();
+    let provider_result = provider
+        .embed(&query_embedding_text, generation.dimension as usize)
+        .await;
     state
         .metrics
-        .observe_search_repository_duration(repository_started.elapsed());
+        .observe_search_provider_duration(provider_started.elapsed());
+
+    let candidate_started = Instant::now();
+    let candidate_result = fetch_postgres_candidates_for_generation(
+        pool,
+        &generation,
+        &query.raw,
+        &filters,
+        auth,
+        provider_result.is_ok(),
+    )
+    .await;
+    state
+        .metrics
+        .observe_search_repository_duration(generation_elapsed + candidate_started.elapsed());
     let candidate_set = match candidate_result {
-        Ok(Some(candidate_set)) => candidate_set,
-        Ok(None) => return Err(SearchError::Unavailable),
+        Ok(candidate_set) => candidate_set,
         Err(SearchRepositoryError::CandidateSetTooLarge) => {
             state.metrics.search_candidate_set_overflow();
             return Err(SearchError::Unavailable);
@@ -246,7 +304,6 @@ async fn execute_search_inner(
             return Err(SearchError::Internal);
         }
     };
-    validate_generation(&candidate_set.generation)?;
 
     let lexical_ranked = candidate_set
         .candidates
@@ -259,22 +316,6 @@ async fn execute_search_inner(
         .metrics
         .observe_search_candidate_counts(candidate_set.candidates.len(), lexical_ranked.len());
 
-    let provider = match provider_override {
-        Some(provider) => provider,
-        None => runtime_provider(&candidate_set.generation)?,
-    };
-
-    let query_embedding_text = query.embedding_text();
-    let provider_started = Instant::now();
-    let provider_result = provider
-        .embed(
-            &query_embedding_text,
-            candidate_set.generation.dimension as usize,
-        )
-        .await;
-    state
-        .metrics
-        .observe_search_provider_duration(provider_started.elapsed());
     let (ranked, mode, fallback_reason) = match provider_result {
         Ok(query_vector) => (
             rank_hybrid(

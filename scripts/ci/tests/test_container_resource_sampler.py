@@ -78,9 +78,6 @@ class RunSamplingLoopTests(unittest.TestCase):
         self.assertTrue(all(s <= 1.0 for s in sleeps))
 
     def test_brackets_a_short_duration_with_a_start_and_end_sample(self) -> None:
-        # duration_seconds shorter than interval_seconds still yields two
-        # samples: one immediately, one after sleeping out the remainder, so
-        # very short windows are not silently reduced to a single reading.
         state = {"t": 0.0}
 
         def monotonic() -> float:
@@ -123,14 +120,40 @@ class RunSamplingLoopTests(unittest.TestCase):
 class BuildReceiptAndWriteTests(unittest.TestCase):
     def test_build_receipt_matches_the_contract_shape(self) -> None:
         receipt = sampler.build_receipt(
+            run_id="api-runtime-test-run",
             container_name="weltgewebe-api",
             samples=[_sample(30.0, 1000), _sample(10.0, 2000)],
+            started_at_unix_ms=1000,
+            finished_at_unix_ms=2000,
         )
-        self.assertEqual(receipt["schema_version"], 1)
-        self.assertEqual(receipt["contract"], "api-replica-resource-sample-v1")
+        self.assertEqual(receipt["schema_version"], 3)
+        self.assertEqual(receipt["contract"], "api-replica-resource-sample-v3")
+        self.assertEqual(receipt["run_id"], "api-runtime-test-run")
         self.assertEqual(receipt["container_name"], "weltgewebe-api")
+        self.assertEqual(receipt["started_at_unix_ms"], 1000)
+        self.assertEqual(receipt["finished_at_unix_ms"], 2000)
         self.assertEqual(receipt["peaks"], {"cpu_percent": 30.0, "memory_bytes": 2000})
         self.assertEqual(receipt["sample_count"], 2)
+
+    def test_rejects_invalid_run_id(self) -> None:
+        with self.assertRaisesRegex(sampler.SamplerError, "run-id"):
+            sampler.build_receipt(
+                run_id="contains spaces",
+                container_name="weltgewebe-api",
+                samples=[_sample(1.0, 1)],
+                started_at_unix_ms=1000,
+                finished_at_unix_ms=2000,
+            )
+
+    def test_rejects_invalid_wall_clock_window(self) -> None:
+        with self.assertRaisesRegex(sampler.SamplerError, "wall-clock interval"):
+            sampler.build_receipt(
+                run_id="api-runtime-test-run",
+                container_name="weltgewebe-api",
+                samples=[_sample(1.0, 1)],
+                started_at_unix_ms=2000,
+                finished_at_unix_ms=2000,
+            )
 
     def test_write_atomic_json_round_trips_and_refuses_symlink_targets(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -153,7 +176,6 @@ class MeasuredContainerModuleReuseTests(unittest.TestCase):
         module = sampler._load_measured_container_module()
         self.assertTrue(callable(module.read_stats))
         self.assertTrue(issubclass(module.MeasurementError, RuntimeError))
-        # parse_size/parse_pair are reused (not duplicated) from that script.
         self.assertEqual(module.parse_size("1KiB"), 1024)
 
 

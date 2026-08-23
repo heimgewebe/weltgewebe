@@ -56,15 +56,11 @@ pub struct SearchCandidateSet {
     pub candidates: Vec<ScoredNode>,
 }
 
-/// Fetches exactly one active generation and candidates authorized by the current
-/// canonical domain state. Unknown or legacy visibility values fail closed.
-/// Stale projections are excluded by exact source version/revision equality.
-pub async fn fetch_postgres_candidates(
+/// Fetches exactly one active search generation. Candidate retrieval is kept
+/// separate so callers can decide whether semantic vector payloads are needed.
+pub async fn fetch_active_search_generation(
     pool: &PgPool,
-    query: &str,
-    filters: &SearchFilters,
-    auth: &AuthContext,
-) -> Result<Option<SearchCandidateSet>, SearchRepositoryError> {
+) -> Result<Option<ActiveSearchGeneration>, SearchRepositoryError> {
     let generation_row = sqlx::query(
         "SELECT generation_id, provider, model_id, model_revision, runtime_identity, dimension, \
                 document_revision, normalization_revision, ranking_revision \
@@ -89,6 +85,39 @@ pub async fn fetch_postgres_candidates(
         ranking_revision: generation_row.try_get("ranking_revision")?,
     };
 
+    Ok(Some(generation))
+}
+
+/// Backwards-compatible repository entry point used by integration tests and
+/// callers that require the complete semantic candidate set.
+pub async fn fetch_postgres_candidates(
+    pool: &PgPool,
+    query: &str,
+    filters: &SearchFilters,
+    auth: &AuthContext,
+) -> Result<Option<SearchCandidateSet>, SearchRepositoryError> {
+    let Some(generation) = fetch_active_search_generation(pool).await? else {
+        return Ok(None);
+    };
+    Ok(Some(
+        fetch_postgres_candidates_for_generation(pool, &generation, query, filters, auth, true)
+            .await?,
+    ))
+}
+
+/// Fetches candidates authorized by the current canonical domain state for the
+/// exact active generation already selected by the caller. Unknown or legacy
+/// visibility values fail closed. Stale projections are excluded by exact source
+/// version/revision equality. When semantic ranking is unavailable, embeddings
+/// stay server-side instead of transferring up to 1,000 unused 2,560-d vectors.
+pub async fn fetch_postgres_candidates_for_generation(
+    pool: &PgPool,
+    generation: &ActiveSearchGeneration,
+    query: &str,
+    filters: &SearchFilters,
+    auth: &AuthContext,
+    include_embeddings: bool,
+) -> Result<SearchCandidateSet, SearchRepositoryError> {
     let account_id = auth
         .account_id
         .as_deref()
@@ -110,7 +139,8 @@ pub async fn fetch_postgres_candidates(
             SELECT count(*)::INTEGER AS term_count FROM query_terms
         ), authorized AS (
             SELECT p.node_id, p.title, p.tags, p.searchable_text, p.language, p.kind,
-                   p.embedding, p.search_vector, p.search_vector_simple,
+                   CASE WHEN $10::boolean THEN p.embedding ELSE NULL::DOUBLE PRECISION[] END AS embedding,
+                   p.search_vector, p.search_vector_simple,
                    n.created_at, n.updated_at, n.lat, n.lon, n.payload::text AS payload,
                    n.search_visibility
               FROM search_node_projections p
@@ -225,6 +255,7 @@ pub async fn fetch_postgres_candidates(
     .bind(&filters.languages)
     .bind(generation.dimension)
     .bind((MAX_AUTHORIZED_CANDIDATES + 1) as i64)
+    .bind(include_embeddings)
     .fetch_all(pool)
     .await?;
 
@@ -291,8 +322,8 @@ pub async fn fetch_postgres_candidates(
         });
     }
 
-    Ok(Some(SearchCandidateSet {
-        generation,
+    Ok(SearchCandidateSet {
+        generation: generation.clone(),
         candidates,
-    }))
+    })
 }

@@ -114,12 +114,15 @@ jobs:
           --health-interval 2s
           --health-timeout 5s
           --health-retries 20
+      registry:
+        image: registry:2.8.3@sha256:a3d8aaa63ed8681a604f1dea0aa03f100d5895b6a58ace528858a7b332415373
+        ports:
+          - 5000:5000
     env:
       DATABASE_URL: postgres://postgres:postgres@127.0.0.1:5432/postgres
-      API_IMAGE: weltgewebe-api:api-runtime-evidence
+      API_IMAGE_REPOSITORY: 127.0.0.1:5000/weltgewebe-api
       API_CONTAINER: weltgewebe-api-runtime-evidence
-      K6_VERSION: v2.1.0
-      K6_LINUX_AMD64_SHA256: 295d961ebfca306f295f1133068dcd403a8171c87f387928f5f30b0fbcff858a
+      K6_IMAGE: grafana/k6@sha256:65c920dc067d5e2e00befbf982af6ad6ad0117034e8b1c65817c7975c52d4669
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
         with:
@@ -129,22 +132,14 @@ jobs:
         with:
           python-version-file: '.python-version'
 
-      - name: Install PostgreSQL client and pinned k6
+      - name: Install PostgreSQL client and verify pinned k6
         shell: bash
         run: |
           set -euo pipefail
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends postgresql-client
-          K6_ARCHIVE="${RUNNER_TEMP:?RUNNER_TEMP is required}/k6-${K6_VERSION}-linux-amd64.tar.gz"
-          K6_DIR="${RUNNER_TEMP}/k6-bin"
-          mkdir -p "${K6_DIR}"
-          curl --fail --location --silent --show-error \
-            --output "${K6_ARCHIVE}" \
-            "https://github.com/grafana/k6/releases/download/${K6_VERSION}/k6-${K6_VERSION}-linux-amd64.tar.gz"
-          printf '%s  %s\n' "${K6_LINUX_AMD64_SHA256}" "${K6_ARCHIVE}" | sha256sum --check --status
-          tar -xzf "${K6_ARCHIVE}" -C "${K6_DIR}" --strip-components=1
-          "${K6_DIR}/k6" version
-          printf '%s\n' "${K6_DIR}" >> "${GITHUB_PATH}"
+          docker pull "${K6_IMAGE}"
+          docker run --rm "${K6_IMAGE}" version
 
       - name: Read canonical API runtime contract
         id: contract
@@ -208,7 +203,8 @@ jobs:
             --metrics-after "${REGRESSION_DIR}/metrics-after.prom" \
             --resource-receipt "${REGRESSION_DIR}/resource-receipt.json" \
             --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
-            --database-connections 1 \
+            --runtime-binding "${REGRESSION_DIR}/runtime-binding.json" \
+            --database-connections-receipt "${REGRESSION_DIR}/database-connections.json" \
             --report "${REGRESSION_DIR}/report.json"
           CHECK_STATUS=$?
           set -e
@@ -280,14 +276,38 @@ jobs:
           BUILD_TIMESTAMP="$(git show -s --format=%cI "${COMMIT}")"
           [[ "${COMMIT}" =~ ^[0-9a-f]{40}$ ]]
           [[ "${BUILD_TIMESTAMP}" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(Z|[+-][0-9]{2}:[0-9]{2})$ ]]
+          API_IMAGE_TAG="${API_IMAGE_REPOSITORY}:${COMMIT}"
+          REGISTRY_READY=0
+          for _ in {1..30}; do
+            if curl -fsS http://127.0.0.1:5000/v2/ >/dev/null; then
+              REGISTRY_READY=1
+              break
+            fi
+            sleep 1
+          done
+          [[ "${REGISTRY_READY}" -eq 1 ]]
           docker build \
             --file apps/api/Dockerfile \
-            --tag "${API_IMAGE}" \
+            --tag "${API_IMAGE_TAG}" \
             --build-arg "GIT_COMMIT_SHA=${COMMIT}" \
             --build-arg "BUILD_TIMESTAMP=${BUILD_TIMESTAMP}" \
             --build-arg CARGO_BUILD_JOBS=2 \
             .
+          docker push "${API_IMAGE_TAG}"
+          MANIFEST_ACCEPT='application/vnd.oci.image.manifest.v1+json, '
+          MANIFEST_ACCEPT="${MANIFEST_ACCEPT}application/vnd.docker.distribution.manifest.v2+json"
+          API_DIGEST="$(
+            curl -fsSI \
+              -H "Accept: ${MANIFEST_ACCEPT}" \
+              "http://127.0.0.1:5000/v2/weltgewebe-api/manifests/${COMMIT}" \
+              | tr -d '\r' \
+              | awk -F': ' 'tolower($1) == "docker-content-digest" {print $2}'
+          )"
+          [[ "${API_DIGEST}" =~ ^sha256:[0-9a-f]{64}$ ]]
+          API_IMAGE_DIGEST="${API_IMAGE_REPOSITORY}@${API_DIGEST}"
+          docker pull "${API_IMAGE_DIGEST}"
           printf 'commit=%s\n' "${COMMIT}" >> "${GITHUB_OUTPUT}"
+          printf 'image=%s\n' "${API_IMAGE_DIGEST}" >> "${GITHUB_OUTPUT}"
 
       - name: Apply embedded migrations from the measured image
         shell: bash
@@ -297,7 +317,7 @@ jobs:
             --env "DATABASE_URL=${DATABASE_URL}" \
             --env WELTGEWEBE_API_STARTUP_MIGRATIONS=run \
             --env WELTGEWEBE_API_MIGRATION_ONLY=1 \
-            "${API_IMAGE}"
+            "${{ steps.image.outputs.image }}"
 
       - name: Load the canonical fixture into the migrated API database
         shell: bash
@@ -460,7 +480,7 @@ jobs:
             --env WELTGEWEBE_DOMAIN_READ_SOURCE=postgres \
             --env WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied \
             --env WELTGEWEBE_SEARCH_OLLAMA_URL=http://127.0.0.1:9/ \
-            "${API_IMAGE}"
+            "${{ steps.image.outputs.image }}"
 
           READY=0
           for _ in {1..120}; do
@@ -485,45 +505,80 @@ jobs:
           curl -fsS http://127.0.0.1:8787/metrics \
             | grep -F "commit=\"${{ steps.image.outputs.commit }}\"" >/dev/null
 
-      - name: Measure the canonical mixed-health-and-read scenario
+      - name: Bind live API runtime to the exact fixture
+        id: runtime
         env:
           API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
         shell: bash
         run: |
           set -euo pipefail
           EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
+          RUN_ID="api-runtime-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          [[ "${POSTGRES_CONTAINER}" =~ ^[0-9a-f]{64}$ ]]
+          python3 -B scripts/performance/api_runtime_live_binding.py \
+            --api-base-url http://127.0.0.1:8787 \
+            --api-container "${API_CONTAINER}" \
+            --database-container "${POSTGRES_CONTAINER}" \
+            --database-user postgres --database-name postgres \
+            --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
+            --search-query "${API_RUNTIME_SEARCH_QUERY}" \
+            --k6-image "${K6_IMAGE}" --run-id "${RUN_ID}" \
+            --output "${EVIDENCE_DIR}/runtime-binding.json"
+          printf 'run_id=%s\n' "${RUN_ID}" >> "${GITHUB_OUTPUT}"
+
+      - name: Measure the canonical mixed-health-and-read scenario
+        env:
+          API_RUNTIME_SEARCH_QUERY: ${{ steps.contract.outputs.search_query }}
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
+          RUN_ID="${{ steps.runtime.outputs.run_id }}"
+          SAMPLER_DURATION=$((${{ steps.contract.outputs.duration_seconds }} + 20))
           MANIFEST_SHA256="$(sha256sum "${EVIDENCE_DIR}/fixture/manifest.json" | awk '{print $1}')"
           curl -fsS http://127.0.0.1:8787/metrics > "${EVIDENCE_DIR}/metrics-before.prom"
 
           python3 -B scripts/performance/container_resource_sampler.py sample \
+            --run-id "${RUN_ID}" \
             --container-name "${API_CONTAINER}" \
-            --duration-seconds "${{ steps.contract.outputs.duration_seconds }}" \
+            --duration-seconds "${SAMPLER_DURATION}" \
             --sample-interval-seconds 1 \
             --receipt "${EVIDENCE_DIR}/resource-receipt.json" &
-          SAMPLER_PID=$!
+          API_SAMPLER_PID=$!
 
-          BASE_URL=http://127.0.0.1:8787 \
-          API_RUNTIME_VUS="${{ steps.contract.outputs.virtual_users }}" \
-          API_RUNTIME_DURATION_SECONDS="${{ steps.contract.outputs.duration_seconds }}" \
-          API_RUNTIME_DATASET_PROFILE="${{ steps.contract.outputs.dataset_profile }}" \
-          API_RUNTIME_CONCURRENCY_PROFILE="${{ steps.contract.outputs.concurrency_profile }}" \
-          API_RUNTIME_DATASET_MANIFEST_SHA256="${MANIFEST_SHA256}" \
-          API_RUNTIME_SUMMARY_PATH="${EVIDENCE_DIR}/k6-summary.json" \
-            k6 run scripts/performance/api_runtime_k6.js &
+          python3 -B scripts/performance/postgres_connection_sampler.py sample \
+            --run-id "${RUN_ID}" \
+            --database-container "${POSTGRES_CONTAINER}" \
+            --database-user postgres --database-name postgres \
+            --duration-seconds "${SAMPLER_DURATION}" \
+            --sample-interval-seconds 1 \
+            --receipt "${EVIDENCE_DIR}/database-connections.json" &
+          DB_SAMPLER_PID=$!
+
+          sleep 1
+          docker run --rm --network host \
+            --user "$(id -u):$(id -g)" \
+            --volume "${PWD}:/workspace:ro" \
+            --volume "${EVIDENCE_DIR}:/evidence" \
+            --workdir /workspace \
+            --env BASE_URL=http://127.0.0.1:8787 \
+            --env "API_RUNTIME_VUS=${{ steps.contract.outputs.virtual_users }}" \
+            --env "API_RUNTIME_DURATION_SECONDS=${{ steps.contract.outputs.duration_seconds }}" \
+            --env "API_RUNTIME_DATASET_PROFILE=${{ steps.contract.outputs.dataset_profile }}" \
+            --env "API_RUNTIME_CONCURRENCY_PROFILE=${{ steps.contract.outputs.concurrency_profile }}" \
+            --env "API_RUNTIME_DATASET_MANIFEST_SHA256=${MANIFEST_SHA256}" \
+            --env "API_RUNTIME_SEARCH_QUERY=${API_RUNTIME_SEARCH_QUERY}" \
+            --env "API_RUNTIME_RUN_ID=${RUN_ID}" \
+            --env "API_RUNTIME_K6_IMAGE=${K6_IMAGE}" \
+            --env API_RUNTIME_SUMMARY_PATH=/evidence/k6-summary.json \
+            "${K6_IMAGE}" run scripts/performance/api_runtime_k6.js &
           K6_PID=$!
 
-          SAMPLE_DELAY=$((${{ steps.contract.outputs.duration_seconds }} / 2))
-          if [[ "${SAMPLE_DELAY}" -lt 1 ]]; then
-            SAMPLE_DELAY=1
-          fi
-          sleep "${SAMPLE_DELAY}"
-          kill -0 "${K6_PID}"
-          psql "${DATABASE_URL}" -v ON_ERROR_STOP=1 -Atc \
-            "SELECT count(*) FROM pg_stat_activity WHERE datname = current_database()" \
-            > "${EVIDENCE_DIR}/database-connections.txt"
-
           wait "${K6_PID}"
-          wait "${SAMPLER_PID}"
+          wait "${API_SAMPLER_PID}"
+          wait "${DB_SAMPLER_PID}"
           curl -fsS http://127.0.0.1:8787/metrics > "${EVIDENCE_DIR}/metrics-after.prom"
 
       - name: Assemble and independently verify exact-revision evidence
@@ -531,14 +586,14 @@ jobs:
         run: |
           set -euo pipefail
           EVIDENCE_DIR="${{ steps.fixture.outputs.evidence_dir }}"
-          DATABASE_CONNECTIONS="$(tr -d '[:space:]' < "${EVIDENCE_DIR}/database-connections.txt")"
           python3 -B scripts/performance/api_runtime_evidence.py check \
             --k6-summary "${EVIDENCE_DIR}/k6-summary.json" \
             --metrics-before "${EVIDENCE_DIR}/metrics-before.prom" \
             --metrics-after "${EVIDENCE_DIR}/metrics-after.prom" \
             --resource-receipt "${EVIDENCE_DIR}/resource-receipt.json" \
             --dataset-manifest "${EVIDENCE_DIR}/fixture/manifest.json" \
-            --database-connections "${DATABASE_CONNECTIONS}" \
+            --runtime-binding "${EVIDENCE_DIR}/runtime-binding.json" \
+            --database-connections-receipt "${EVIDENCE_DIR}/database-connections.json" \
             --report "${EVIDENCE_DIR}/report.json"
           python3 -B scripts/performance/api_runtime_evidence.py verify \
             --report "${EVIDENCE_DIR}/report.json" \
@@ -565,11 +620,14 @@ jobs:
             ${{ steps.fixture.outputs.evidence_dir }}/metrics-before.prom
             ${{ steps.fixture.outputs.evidence_dir }}/metrics-after.prom
             ${{ steps.fixture.outputs.evidence_dir }}/resource-receipt.json
-            ${{ steps.fixture.outputs.evidence_dir }}/database-connections.txt
+            ${{ steps.fixture.outputs.evidence_dir }}/database-connections.json
+            ${{ steps.fixture.outputs.evidence_dir }}/runtime-binding.json
             ${{ steps.fixture.outputs.evidence_dir }}/fixture/manifest.json
             ${{ steps.fixture.outputs.evidence_dir }}/fixture/domain_nodes.csv
             ${{ steps.fixture.outputs.evidence_dir }}/fixture/domain_edges.csv
             ${{ steps.fixture.outputs.evidence_dir }}/regression/report.json
+            ${{ steps.fixture.outputs.evidence_dir }}/regression/runtime-binding.json
+            ${{ steps.fixture.outputs.evidence_dir }}/regression/database-connections.json
             ${{ steps.fixture.outputs.evidence_dir }}/api.log
           if-no-files-found: error
 
