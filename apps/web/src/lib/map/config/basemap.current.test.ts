@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { resolveBasemapMode, currentBasemap } from "./basemap.current";
+import {
+  resolveBasemapInitialView,
+  resolveBasemapMode,
+  currentBasemap,
+} from "./basemap.current";
 import { resolveBasemapStyle } from "../basemap";
 
 const CARTO_HOST = "basemaps.cartocdn.com";
@@ -31,6 +35,35 @@ describe("resolveBasemapMode", () => {
     expect(resolveBasemapMode(undefined, false)).toBe("remote-style");
     expect(resolveBasemapMode("garbage", false)).toBe("remote-style");
     expect(resolveBasemapMode("", false)).toBe("remote-style");
+  });
+});
+
+describe("resolveBasemapInitialView", () => {
+  it("uses a neutral Germany view for the nationwide sovereign basemap", () => {
+    expect(resolveBasemapInitialView("local-sovereign", "germany")).toEqual({
+      center: [10.4515, 51.1657],
+      zoom: 7,
+      minZoom: 7,
+    });
+    expect(
+      resolveBasemapInitialView("local-sovereign", "germany").center,
+    ).not.toEqual([10.058, 53.5585]);
+  });
+
+  it("keeps the explicit regional rollback within its real operating region", () => {
+    expect(resolveBasemapInitialView("local-sovereign", "regional")).toEqual({
+      center: [9.9, 54.2],
+      zoom: 7,
+      minZoom: 7,
+    });
+  });
+
+  it("uses a world view only for the worldwide remote style", () => {
+    expect(resolveBasemapInitialView("remote-style")).toEqual({
+      center: [0, 0],
+      zoom: 1,
+      minZoom: 1,
+    });
   });
 });
 

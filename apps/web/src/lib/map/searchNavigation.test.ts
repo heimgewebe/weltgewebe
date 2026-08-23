@@ -46,6 +46,7 @@ describe("resolveInitialMapCamera", () => {
     expect(
       resolveInitialMapCamera(markers, authenticated, null, [10, 53], 12),
     ).toEqual({
+      kind: "point",
       center: [10.06, 53.56],
       zoom: 14,
       source: "own-garnrolle",
@@ -62,20 +63,56 @@ describe("resolveInitialMapCamera", () => {
         12,
       ),
     ).toEqual({
+      kind: "point",
       center: [11, 54],
       zoom: 14,
       source: "focus",
     });
   });
 
-  it("keeps the established fallback for guests or unplaced Garnrollen", () => {
+  it("uses the configured basemap fallback for guests even when public content exists", () => {
     expect(resolveInitialMapCamera(markers, guest, null, [10, 53], 12)).toEqual(
       {
+        kind: "point",
         center: [10, 53],
         zoom: 12,
         source: "fallback",
       },
     );
+  });
+
+  it("uses the same configured basemap fallback for an empty scene", () => {
+    expect(resolveInitialMapCamera([], guest, null, [10, 53], 7)).toEqual({
+      kind: "point",
+      center: [10, 53],
+      zoom: 7,
+      source: "fallback",
+    });
+  });
+
+  it("preserves explicit focus and own-Garnrolle precedence", () => {
+    expect(
+      resolveInitialMapCamera(
+        markers,
+        guest,
+        { type: "node", id: "focus-node" },
+        [10, 53],
+        7,
+      ),
+    ).toEqual({
+      kind: "point",
+      center: [11, 54],
+      zoom: 14,
+      source: "focus",
+    });
+    expect(
+      resolveInitialMapCamera(markers, authenticated, null, [10, 53], 7),
+    ).toEqual({
+      kind: "point",
+      center: [10.06, 53.56],
+      zoom: 14,
+      source: "own-garnrolle",
+    });
   });
 
   it("ignores focus targets with invalid coordinates", () => {
@@ -100,6 +137,7 @@ describe("resolveInitialMapCamera", () => {
         12,
       ),
     ).toEqual({
+      kind: "point",
       center: [10, 53],
       zoom: 12,
       source: "fallback",

@@ -7,6 +7,7 @@ import {
 } from "../src/lib/map/weaveVisualTokens";
 import { demoAccounts, demoNodes } from "../src/lib/demo/demoData";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
+import { centerDemoNode } from "./fixtures/mapCamera";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
 const NODE_ID = demoNodes[0].id;
@@ -564,6 +565,7 @@ test.describe("Gewachsene Knoten und antragsgebundene Stimmkränze", () => {
 
     await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/map");
+    await centerDemoNode(page);
     const marker = page.getByTestId(`marker-node-${NODE_ID}`);
     const woven = marker.locator(".woven-node");
     await expect(marker).toBeVisible({ timeout: 15_000 });
