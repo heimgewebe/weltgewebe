@@ -97,8 +97,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function listProposals(): Promise<Proposal[]> {
-  return request<Proposal[]>("/api/proposals");
+export function listProposals(signal?: AbortSignal): Promise<Proposal[]> {
+  return request<Proposal[]>("/api/proposals", { signal });
 }
 
 export function getProposal(id: string): Promise<ProposalDetail> {
