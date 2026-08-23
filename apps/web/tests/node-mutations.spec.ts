@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 
 async function openFirstNode(page: Page) {
@@ -17,6 +17,12 @@ async function openFirstNode(page: Page) {
   await expect(panel).toBeVisible();
   await expect(panel.getByRole("tab", { name: "Übersicht" })).toBeVisible();
   return panel;
+}
+
+async function confirmNodeRemoval(panel: Locator) {
+  await panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }).click();
+  await expect(panel.getByText("Knoten wirklich entfernen?")).toBeVisible();
+  await panel.getByRole("button", { name: "Jetzt entfernen" }).click();
 }
 
 test.describe("Knoten bearbeiten und löschen", () => {
@@ -54,6 +60,41 @@ test.describe("Knoten bearbeiten und löschen", () => {
     expect(layout.textRects).toBe(1);
     expect(layout.scrollWidth).toBeLessThanOrEqual(layout.clientWidth + 1);
     await expect(tabList).toHaveCSS("overflow-x", "auto");
+  });
+
+  test("Löschbestätigung bleibt auch nach vielen Wiederholungen reaktionsfähig", async ({
+    page,
+  }) => {
+    await mockApiResponses(page, {
+      auth: {
+        authenticated: true,
+        account_id: "e2e-weber",
+        role: "weber",
+      },
+    });
+    let nativeDialogCount = 0;
+    page.on("dialog", async (dialog) => {
+      nativeDialogCount += 1;
+      await dialog.dismiss();
+    });
+    await page.goto("/map");
+
+    const panel = await openFirstNode(page);
+    await panel.getByRole("tab", { name: "Bearbeiten" }).click();
+    for (let attempt = 0; attempt < 8; attempt += 1) {
+      await panel
+        .getByRole("button", { name: "Aus dem Gewebe entfernen" })
+        .click();
+      await expect(panel.getByText("Knoten wirklich entfernen?")).toBeVisible();
+      await expect(
+        panel.getByRole("button", { name: "Abbrechen" }),
+      ).toBeFocused();
+      await panel.getByRole("button", { name: "Abbrechen" }).click();
+      await expect(
+        panel.getByRole("button", { name: "Aus dem Gewebe entfernen" }),
+      ).toBeVisible();
+    }
+    expect(nativeDialogCount).toBe(0);
   });
 
   test("Weber kann einen gemeinsamen Knoten bearbeiten und samt Fadenprojektionen löschen", async ({
@@ -120,19 +161,12 @@ test.describe("Knoten bearbeiten und löschen", () => {
     );
     await expect(panel.getByRole("tab", { name: "Übersicht" })).toBeFocused();
     await panel.getByRole("tab", { name: "Bearbeiten" }).click();
-    page.once("dialog", async (dialog) => {
-      expect(dialog.type()).toBe("confirm");
-      expect(dialog.message()).toContain("Aus dem Gewebe entfernen");
-      await dialog.accept();
-    });
     const deleteRequestPromise = page.waitForRequest(
       (request) =>
         request.method() === "DELETE" &&
         /\/api\/nodes\/[^/]+$/.test(new URL(request.url()).pathname),
     );
-    await panel
-      .getByRole("button", { name: "Aus dem Gewebe entfernen" })
-      .click();
+    await confirmNodeRemoval(panel);
     const deleteRequest = await deleteRequestPromise;
     expect(deleteRequest.headers()["if-match"]).toMatch(/^".+"$/);
 
@@ -209,13 +243,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
     const panel = await openFirstNode(page);
     const markerCountBeforeDelete = await page.locator(".map-marker").count();
     await panel.getByRole("tab", { name: "Bearbeiten" }).click();
-    page.once("dialog", async (dialog) => {
-      expect(dialog.message()).toContain("Aus dem Gewebe entfernen");
-      await dialog.accept();
-    });
-    await panel
-      .getByRole("button", { name: "Aus dem Gewebe entfernen" })
-      .click();
+    await confirmNodeRemoval(panel);
 
     const receipt = panel.getByRole("link", { name: "Archiv öffnen" });
     await expect(receipt).toBeVisible();
@@ -483,12 +511,7 @@ test.describe("Knoten bearbeiten und löschen", () => {
     const markerCountBeforeDelete = await page.locator(".map-marker").count();
     const editTab = panel.getByRole("tab", { name: "Bearbeiten" });
     await editTab.click();
-    page.once("dialog", async (dialog) => {
-      await dialog.accept();
-    });
-    await panel
-      .getByRole("button", { name: "Aus dem Gewebe entfernen" })
-      .click();
+    await confirmNodeRemoval(panel);
 
     const errorMessage =
       "Der Knoten wurde in der Zwischenzeit geändert und konnte nicht gelöscht werden. Die Ansicht zeigt nun den aktuellen Stand.";
