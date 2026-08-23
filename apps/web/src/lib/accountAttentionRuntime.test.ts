@@ -320,7 +320,9 @@ describe("accountAttentionRuntime", () => {
           },
         },
       ]);
-    const listDirectConversations = vi.fn(async () => [] as DirectConversation[]);
+    const listDirectConversations = vi.fn(
+      async () => [] as DirectConversation[],
+    );
     const controller = createAccountAttentionController({
       getAuthStatus: () => current,
       checkAuth: vi.fn(async () => current),
@@ -346,17 +348,18 @@ describe("accountAttentionRuntime", () => {
     );
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () =>
-        new Response(
-          JSON.stringify({
-            id: "message-1",
-            author_account_id: "account-a",
-            author_title: "Anna",
-            body: "Neu",
-            created_at: "2026-08-23T08:00:00Z",
-          }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
-        ),
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify({
+              id: "message-1",
+              author_account_id: "account-a",
+              author_title: "Anna",
+              body: "Neu",
+              created_at: "2026-08-23T08:00:00Z",
+            }),
+            { status: 200, headers: { "Content-Type": "application/json" } },
+          ),
       ),
     );
 
