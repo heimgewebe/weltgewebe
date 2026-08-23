@@ -28,17 +28,74 @@ export interface AccountAttentionState {
 export interface AccountAttentionControllerDependencies {
   getAuthStatus: () => AuthStatus;
   checkAuth: (options?: { force?: boolean }) => Promise<AuthStatus>;
-  listDirectConversations: () => Promise<DirectConversation[]>;
-  listProposals: () => Promise<Proposal[]>;
+  listDirectConversations: (
+    signal?: AbortSignal,
+  ) => Promise<DirectConversation[]>;
+  listProposals: (signal?: AbortSignal) => Promise<Proposal[]>;
 }
 
 export interface AccountAttentionController extends Readable<AccountAttentionState> {
   refresh: (status?: AuthStatus) => Promise<void>;
-  refreshMessages: (status?: AuthStatus) => Promise<void>;
+  refreshMessages: (status?: AuthStatus, signal?: AbortSignal) => Promise<void>;
+  refreshProposals: (
+    status?: AuthStatus,
+    signal?: AbortSignal,
+  ) => Promise<void>;
   reproject: () => void;
 }
 
 const MESSAGE_POLL_MS = 30_000;
+const PROPOSAL_POLL_MS = 60_000;
+const BACKGROUND_REFRESH_TIMEOUT_MS = 10_000;
+
+export interface BoundedBackgroundRefresh {
+  trigger: () => void;
+  cancel: () => void;
+}
+
+export function createBoundedBackgroundRefresh(
+  refresh: (signal: AbortSignal) => Promise<void>,
+  timeoutMs = BACKGROUND_REFRESH_TIMEOUT_MS,
+): BoundedBackgroundRefresh {
+  let activeController: AbortController | null = null;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+
+  const release = (controller: AbortController) => {
+    if (activeController !== controller) return;
+    activeController = null;
+    if (timeout !== null) {
+      clearTimeout(timeout);
+      timeout = null;
+    }
+  };
+
+  const cancel = () => {
+    const controller = activeController;
+    if (!controller) return;
+    controller.abort();
+    release(controller);
+  };
+
+  const trigger = () => {
+    if (activeController) return;
+    const controller = new AbortController();
+    activeController = controller;
+    timeout = setTimeout(() => {
+      controller.abort();
+      release(controller);
+    }, timeoutMs);
+    try {
+      void refresh(controller.signal).then(
+        () => release(controller),
+        () => release(controller),
+      );
+    } catch {
+      release(controller);
+    }
+  };
+
+  return { trigger, cancel };
+}
 
 function initialState(): AccountAttentionState {
   return {
@@ -141,14 +198,17 @@ export function createAccountAttentionController(
     return true;
   }
 
-  async function refreshMessages(status = dependencies.getAuthStatus()) {
+  async function refreshMessages(
+    status = dependencies.getAuthStatus(),
+    signal?: AbortSignal,
+  ) {
     if (!prepare(status)) return;
     const accountId = status.account_id;
     if (!accountId) return;
 
     const revision = ++messageRequestRevision;
     try {
-      const conversations = await dependencies.listDirectConversations();
+      const conversations = await dependencies.listDirectConversations(signal);
       if (revision !== messageRequestRevision || !ownsResult(accountId)) return;
       store.update((state) => project({ ...state, conversations }));
     } catch {
@@ -157,20 +217,29 @@ export function createAccountAttentionController(
     }
   }
 
-  async function refreshProposals(status = dependencies.getAuthStatus()) {
+  async function refreshProposals(
+    status = dependencies.getAuthStatus(),
+    signal?: AbortSignal,
+  ) {
     if (!prepare(status)) return;
     const accountId = status.account_id;
     if (!accountId) return;
 
     const revision = ++proposalRequestRevision;
     try {
-      const proposals = await dependencies.listProposals();
+      const proposals = await dependencies.listProposals(signal);
+      if (revision !== proposalRequestRevision || !ownsResult(accountId))
+        return;
+
+      const currentStatus = dependencies.getAuthStatus();
+      if (!prepare(currentStatus) || currentStatus.account_id !== accountId)
+        return;
       if (revision !== proposalRequestRevision || !ownsResult(accountId))
         return;
 
       let weberApplicationState: WeberApplicationState = "unknown";
       let acceptedApplicationNeedsAuthRefresh = false;
-      if (status.role === "gast") {
+      if (currentStatus.role === "gast") {
         const pending = hasPendingWeberApplication(proposals, accountId);
         const accepted = hasAcceptedWeberApplication(proposals, accountId);
         weberApplicationState = pending || accepted ? "pending" : "available";
@@ -212,6 +281,7 @@ export function createAccountAttentionController(
     subscribe: store.subscribe,
     refresh,
     refreshMessages,
+    refreshProposals,
     reproject,
   };
 }
@@ -219,8 +289,8 @@ export function createAccountAttentionController(
 const controller = createAccountAttentionController({
   getAuthStatus: () => get(authStore),
   checkAuth: (options) => authStore.checkAuth(options),
-  listDirectConversations: () => listDirectConversations(),
-  listProposals: () => listProposals(),
+  listDirectConversations: (signal) => listDirectConversations(signal),
+  listProposals: (signal) => listProposals(signal),
 });
 
 export const accountAttentionRuntime: Readable<AccountAttentionState> = derived(
@@ -267,11 +337,27 @@ function installRuntime(): () => void {
     if (document.visibilityState === "visible") void refreshAccountAttention();
   };
   const refreshOnFocus = () => void refreshAccountAttention();
+  const refreshMessagesFromPoll = createBoundedBackgroundRefresh((signal) =>
+    controller.refreshMessages(get(authStore), signal),
+  );
   const messagePoll = window.setInterval(() => {
     if (document.visibilityState === "visible") {
-      void controller.refreshMessages(get(authStore));
+      refreshMessagesFromPoll.trigger();
     }
   }, MESSAGE_POLL_MS);
+  // Governance can change because another account acts or the server advances a
+  // phase. Re-read the canonical proposal list at a modest cadence while the
+  // surface is visible; this remains one list request, not client-owned truth.
+  // Timer-driven reads share a bounded lifecycle: one request at a time and a
+  // real AbortSignal after 10 seconds. Event-driven refreshes stay independent
+  // and may still supersede this background read through the revision contract.
+  const refreshProposalsFromPoll = createBoundedBackgroundRefresh((signal) =>
+    controller.refreshProposals(get(authStore), signal),
+  );
+  const proposalPoll = window.setInterval(() => {
+    if (document.visibilityState === "visible")
+      refreshProposalsFromPoll.trigger();
+  }, PROPOSAL_POLL_MS);
   // Deadlines can cross an attention boundary without a network event. Reproject
   // the already confirmed facts locally; this does not invent or refresh domain truth.
   const deadlineProjectionClock = window.setInterval(() => {
@@ -285,7 +371,10 @@ function installRuntime(): () => void {
     unsubscribeAuth();
     unsubscribeAttention();
     window.clearInterval(messagePoll);
+    window.clearInterval(proposalPoll);
     window.clearInterval(deadlineProjectionClock);
+    refreshMessagesFromPoll.cancel();
+    refreshProposalsFromPoll.cancel();
     document.removeEventListener("visibilitychange", refreshWhenVisible);
     window.removeEventListener("focus", refreshOnFocus);
   };

@@ -97,8 +97,8 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function listProposals(): Promise<Proposal[]> {
-  return request<Proposal[]>("/api/proposals");
+export function listProposals(signal?: AbortSignal): Promise<Proposal[]> {
+  return request<Proposal[]>("/api/proposals", { signal });
 }
 
 export function getProposal(id: string): Promise<ProposalDetail> {
@@ -210,17 +210,19 @@ export function listProposalMessages(id: string): Promise<ProposalMessage[]> {
   );
 }
 
-export function postProposalMessage(
+export async function postProposalMessage(
   id: string,
   body: string,
 ): Promise<ProposalMessage> {
-  return request<ProposalMessage>(
+  const message = await request<ProposalMessage>(
     `/api/proposals/${encodeURIComponent(id)}/messages`,
     {
       method: "POST",
       body: JSON.stringify({ body: body.trim() }),
     },
   );
+  invalidateAccountAttention();
+  return message;
 }
 
 export function exitGuestAccount(): Promise<{ status: "exited" }> {
