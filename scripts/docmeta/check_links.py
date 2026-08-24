@@ -32,15 +32,14 @@ HISTORICAL_DOC_TYPES = {"changelog"}
 
 
 def _tracked_markdown_files(root: str) -> list[str]:
-    try:
-        completed = subprocess.run(
-            ["git", "ls-files", "-z", "--", "*.md"],
-            cwd=root,
-            capture_output=True,
-            check=True,
-        )
-    except (OSError, subprocess.CalledProcessError):
-        return []
+    # Mandatory discovery is fail-closed: a broken/missing Git checkout must
+    # never be converted into an apparently successful empty scan.
+    completed = subprocess.run(
+        ["git", "ls-files", "-z", "--", "*.md"],
+        cwd=root,
+        capture_output=True,
+        check=True,
+    )
     return sorted(
         item.decode("utf-8")
         for item in completed.stdout.split(b"\0")
@@ -89,20 +88,12 @@ def _normalize_inline_path(value: str) -> str | None:
         return None
     if "/" not in token:
         return None
+    # Treat path-shaped relative inline code independently of whether its first
+    # component already exists. Otherwise a typo such as `apss/api/x.rs` or a
+    # package-relative claim such as `src/lib.rs` would evade the truth gate.
     if not (token.endswith("/") or PATH_FILE_RE.search(token)):
         return None
     return token.split("#", 1)[0]
-
-
-def _repo_top_levels(root: str) -> set[str]:
-    try:
-        return {
-            entry.name
-            for entry in os.scandir(root)
-            if not entry.name.startswith(".") and (entry.is_dir() or entry.is_file())
-        }
-    except OSError:
-        return set()
 
 
 def _inline_path_findings(root: str, rel_file_path: str, content: str) -> tuple[int, list[str]]:
@@ -110,7 +101,6 @@ def _inline_path_findings(root: str, rel_file_path: str, content: str) -> tuple[
     if not _is_current_document(frontmatter):
         return 0, []
 
-    top_levels = _repo_top_levels(root)
     total = 0
     broken: list[str] = []
     doc_dir = os.path.dirname(os.path.join(root, rel_file_path))
@@ -118,9 +108,6 @@ def _inline_path_findings(root: str, rel_file_path: str, content: str) -> tuple[
     for match in INLINE_CODE_RE.finditer(content):
         candidate = _normalize_inline_path(match.group(1))
         if not candidate:
-            continue
-        first_part = Path(candidate).parts[0] if Path(candidate).parts else ""
-        if first_part not in top_levels and first_part not in {".", ".."}:
             continue
         paragraph = _paragraph_for_offset(content, match.start())
         if _explicitly_nonlive_context(paragraph):
