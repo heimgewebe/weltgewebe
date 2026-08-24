@@ -53,6 +53,32 @@ export interface BoundedBackgroundRefresh {
   cancel: () => void;
 }
 
+export function createCoalescedForegroundRefresh(
+  refresh: () => Promise<void>,
+): () => void {
+  let active: Promise<void> | null = null;
+
+  return () => {
+    if (active) return;
+
+    let request: Promise<void>;
+    try {
+      request = refresh();
+    } catch {
+      return;
+    }
+    active = request;
+    void request.then(
+      () => {
+        if (active === request) active = null;
+      },
+      () => {
+        if (active === request) active = null;
+      },
+    );
+  };
+}
+
 export function createBoundedBackgroundRefresh(
   refresh: (signal: AbortSignal) => Promise<void>,
   timeoutMs = BACKGROUND_REFRESH_TIMEOUT_MS,
@@ -333,10 +359,17 @@ function installRuntime(): () => void {
     void refreshAccountAttention();
   });
 
+  // A foreground transition commonly emits visibilitychange and focus in quick
+  // succession. One full refresh is enough: coalesce only while that first
+  // foreground refresh is still in flight. Auth and explicit invalidation
+  // refreshes intentionally bypass this coalescer and remain independent.
+  const refreshFromForeground = createCoalescedForegroundRefresh(() =>
+    refreshAccountAttention(),
+  );
   const refreshWhenVisible = () => {
-    if (document.visibilityState === "visible") void refreshAccountAttention();
+    if (document.visibilityState === "visible") refreshFromForeground();
   };
-  const refreshOnFocus = () => void refreshAccountAttention();
+  const refreshOnFocus = refreshFromForeground;
   const refreshMessagesFromPoll = createBoundedBackgroundRefresh((signal) =>
     controller.refreshMessages(get(authStore), signal),
   );
