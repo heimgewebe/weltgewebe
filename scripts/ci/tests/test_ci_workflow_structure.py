@@ -52,8 +52,11 @@ def _wrap_verification_in_false_branch(text: str, verification: str) -> str:
 def _assert_installer_contract_rejected(texts: dict[str, str], step_name: str) -> None:
     errors = validate_workflow_texts(texts)
     assert any(
-        f"ci.yml {step_name} must match the exact reviewed download-integrity script"
-        in error
+        step_name in error
+        and (
+            "must match the exact reviewed download-integrity step and script" in error
+            or "must retain exactly one" in error
+        )
         for error in errors
     )
 
@@ -170,4 +173,34 @@ def test_guard_rejects_checksum_hidden_in_false_branch() -> None:
         texts["ci.yml"] = _wrap_verification_in_false_branch(
             texts["ci.yml"], verification
         )
+        _assert_installer_contract_rejected(texts, step_name)
+
+def test_guard_rejects_step_level_shell_override() -> None:
+    for step_name in ("Install yq", "Install cargo-deny"):
+        texts = _texts()
+        marker = f"      - name: {step_name}\n        run: |\n"
+        replacement = (
+            f"      - name: {step_name}\n"
+            "        shell: bash -c 'sha256sum() { cat >/dev/null; return 0; }; source \"{0}\"'\n"
+            "        run: |\n"
+        )
+        assert marker in texts["ci.yml"]
+        texts["ci.yml"] = texts["ci.yml"].replace(marker, replacement, 1)
+        _assert_installer_contract_rejected(texts, step_name)
+
+
+def test_guard_rejects_duplicate_installer_step_name() -> None:
+    cases = (
+        ("Install yq", "Verify yq"),
+        ("Install cargo-deny", "Setup Just"),
+    )
+    for step_name, next_step in cases:
+        texts = _texts()
+        marker = f"      - name: {next_step}\n"
+        duplicate = (
+            f"      - name: {step_name}\n"
+            "        run: echo malicious-second-installer\n\n"
+        )
+        assert marker in texts["ci.yml"]
+        texts["ci.yml"] = texts["ci.yml"].replace(marker, duplicate + marker, 1)
         _assert_installer_contract_rejected(texts, step_name)

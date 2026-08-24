@@ -83,35 +83,50 @@ def _has_run_line(text: str, command: str) -> bool:
     return False
 
 
-def _named_step(text: str, name: str) -> str | None:
-    marker = f"      - name: {name}\n"
-    start = text.find(marker)
-    if start < 0:
-        return None
-    end = text.find("\n      - name: ", start + len(marker))
-    return text[start:] if end < 0 else text[start:end]
+def _named_steps(text: str, name: str) -> list[str]:
+    lines = text.splitlines()
+    starts = [
+        index
+        for index, line in enumerate(lines)
+        if line == f"      - name: {name}"
+    ]
+    blocks: list[str] = []
+    for start in starts:
+        end = next(
+            (
+                index
+                for index in range(start + 1, len(lines))
+                if lines[index].startswith("      - name: ")
+            ),
+            len(lines),
+        )
+        blocks.append("\n".join(lines[start:end]))
+    return blocks
 
 
-def _named_run_script(block: str) -> str | None:
+def _named_run_script(block: str, name: str) -> str | None:
     lines = block.splitlines()
-    run_indexes = [index for index, line in enumerate(lines) if line.strip() == "run: |"]
-    if len(run_indexes) != 1:
+    if len(lines) < 3:
         return None
-    script = "\n".join(lines[run_indexes[0] + 1 :])
+    if lines[0] != f"      - name: {name}" or lines[1] != "        run: |":
+        return None
+    script = "\n".join(lines[2:])
     return dedent(script).strip()
 
 
 def _validate_tool_download_integrity(ci: str, errors: list[str]) -> None:
     for step_name, expected_script in CI_TOOL_DOWNLOAD_SCRIPTS.items():
-        block = _named_step(ci, step_name)
-        if block is None:
-            errors.append(f"ci.yml must retain the {step_name} step")
+        blocks = _named_steps(ci, step_name)
+        if len(blocks) != 1:
+            errors.append(
+                f"ci.yml must retain exactly one {step_name} step, found {len(blocks)}"
+            )
             continue
 
-        observed_script = _named_run_script(block)
+        observed_script = _named_run_script(blocks[0], step_name)
         if observed_script != expected_script:
             errors.append(
-                f"ci.yml {step_name} must match the exact reviewed download-integrity script"
+                f"ci.yml {step_name} must match the exact reviewed download-integrity step and script"
             )
 
 
