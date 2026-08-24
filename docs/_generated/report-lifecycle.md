@@ -27,10 +27,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | lifecycle_state | Count |
 | --- | ---: |
-| active | 33 |
+| active | 26 |
 | deferred | 0 |
 | superseded | 6 |
-| archived | 6 |
+| archived | 13 |
 | missing | 0 |
 
 ## Finding Summary
@@ -43,7 +43,6 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | active | audit | OPT-API-002 | 2026-08-22 |  |
 | docs/reports/auth-pg-002-controlled-preflight.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
 | docs/reports/auth-pg-002-cutover-plan.md | active | planning | AUTH-PG-002 | 2026-09-30 |  |
 | docs/reports/auth-pg-002-passkey-db-store.md | active | proof | AUTH-PG-002 | 2026-09-30 |  |
@@ -57,16 +56,10 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 | docs/reports/auth-pg-003-runtime-audit-heimserver-2026-07-01.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
 | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md | active | proof | AUTH-PG-003 | 2026-09-30 |  |
 | docs/reports/cost-report.md | active | generated | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | active | audit | OPT-ARC-001 | 2026-07-13 |  |
-| docs/reports/domain-account-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
-| docs/reports/domain-backfill-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-edge-cache-limit-design.md | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  |
 | docs/reports/domain-edge-faden-lifecycle-proof.md | active | proof | OPT-ARC-001 | 2026-10-17 |  |
-| docs/reports/domain-edge-reference-audit.md | active | audit | OPT-ARC-001 | 2026-07-16 |  |
-| docs/reports/domain-node-write-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  |
 | docs/reports/domain-provider-role-finding.md | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  |
-| docs/reports/domain-read-path-proof.md | active | proof | OPT-ARC-001 | 2026-07-16 |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | active | audit | DB-PROOF-001 | 2026-07-18 |  |
 | docs/reports/garnrolle-identity-cutover-proof.md | active | proof | OPT-ARC-001 | 2026-10-24 |  |
 | docs/reports/github-action-ref-pinning-audit.md | active | audit | OPT-INF-002 | 2026-09-30 |  |
@@ -98,6 +91,13 @@ This overview is descriptive only. It surfaces lifecycle metadata and validator 
 
 | Report | status | lifecycle | owner_task | review_after | findings |
 | --- | --- | --- | --- | --- | --- |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | deprecated | audit | OPT-API-002 |  |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | deprecated | audit | OPT-ARC-001 |  |  |
+| docs/reports/domain-account-write-path-proof.md | deprecated | proof | OPT-ARC-001 |  |  |
+| docs/reports/domain-backfill-proof.md | deprecated | proof | OPT-ARC-001 |  |  |
+| docs/reports/domain-edge-reference-audit.md | deprecated | audit | OPT-ARC-001 |  |  |
+| docs/reports/domain-node-write-path-proof.md | deprecated | proof | OPT-ARC-001 |  |  |
+| docs/reports/domain-read-path-proof.md | deprecated | proof | OPT-ARC-001 |  |  |
 | docs/reports/inwx-zone-reconciliation-plan.md | deprecated | planning | DEPLOY-DNS-001 |  |  |
 | docs/reports/map-architekturkritik.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
 | docs/reports/map-basemap-proof-gap-reconciliation.md | deprecated | audit | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  |
@@ -154,12 +154,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "Runtime health, deployment health, or the correctness of claims inside individual reports."
   ],
-  "generated_at": "2026-08-13T20:00:25+02:00",
+  "generated_at": "2026-08-24T17:04:00Z",
   "limitations": [
     "The report reflects repository files only and does not execute product runtime checks."
   ],
   "schema_version": 1,
-  "source_revision": "6ea2270b2468ae2a996249a451543877033a3941",
+  "source_revision": "e82d4242c24939f21dd915daaebd20a80207389a",
   "sources": [
     {
       "path": "docs/reports/agent-readiness-audit.md",
@@ -183,7 +183,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/auth-persistence-runtime-target-reconciliation.md",
-      "sha256": "56073d3c8fe587b537b9da5cff005ea548b68f4c2acd10109e85924d03bc0c11"
+      "sha256": "7c23556b3d2a94c838314706090aaf8bf34b5b8dfd90c9f3f3d2770d1f41c338"
     },
     {
       "path": "docs/reports/auth-pg-002-controlled-preflight.md",
@@ -195,7 +195,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/auth-pg-002-passkey-db-store.md",
-      "sha256": "4b5a538008bc715a1bfffc89e088dc054458f652662a6ce482e58a30edd9b00b"
+      "sha256": "7ae19e8461d418be4d2a3286bee6ad0090266714a735ac0d0a936e62204f8fde"
     },
     {
       "path": "docs/reports/auth-pg-002-passkey-fk-readiness-audit.md",
@@ -235,7 +235,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/auth-status-matrix.md",
-      "sha256": "d00a6f65591ec9a04c659de9a12278a60b47118a2c9c5ff97a801d0ae1ab97cc"
+      "sha256": "bdc4356c835ad30599ff07cc5a7224ac3e5951cb12d9c09a14c7606bd8b06b32"
     },
     {
       "path": "docs/reports/cost-report.md",
@@ -243,15 +243,15 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/domain-account-email-uniqueness-audit.md",
-      "sha256": "66dc31a01c4e3ff4e2192eb52bdcdb4053bb91d07bfb07ca221fd881577b3218"
+      "sha256": "5c0fdc3f0a8c6d84cd1f1c15d54026c9ed31c5a238a40c0d9bd6b17db90d857f"
     },
     {
       "path": "docs/reports/domain-account-write-path-proof.md",
-      "sha256": "2928b587a4dd1dc8bb7c1f13913af6a8a2ea4634243203d9ebdbfc49de0ce1f2"
+      "sha256": "58d9cdaca2c7f29bdd91b2fc7d7241a21fe4997eb3cd65827cee3232e8531598"
     },
     {
       "path": "docs/reports/domain-backfill-proof.md",
-      "sha256": "b8c17f05995a541d3332729bb0bc6f83ab429e791f28dd1bf6dfa724ad6221d1"
+      "sha256": "72eb5ea1fee6178392f839a635f342c965809acc53ea4b6192192b51081db759"
     },
     {
       "path": "docs/reports/domain-edge-cache-limit-design.md",
@@ -267,7 +267,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/domain-edge-reference-audit.md",
-      "sha256": "bc59930e3029b97bcef0191480df4bdc5a8a89de6fc0423e587b0146a5dc4875"
+      "sha256": "dbc8ce7112f7dee29def077858481e4d5338815aac2c835162a5ffa2bd70cae1"
     },
     {
       "path": "docs/reports/domain-edge-write-path-proof.md",
@@ -275,7 +275,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/domain-node-write-path-proof.md",
-      "sha256": "46acc9672c4a5fc38354c450e969f48a5853c61446d44ca736e035adba27b274"
+      "sha256": "c8bfaa8fbcd6bf1593c06c577624409e1543f348f82d33033666f55e6646fad3"
     },
     {
       "path": "docs/reports/domain-postgres-instance-coherence-decision.md",
@@ -287,7 +287,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/domain-read-path-proof.md",
-      "sha256": "0d1f77fc8824cce5d8d31ca22e0168d99d7e903afefabfc97a5725bc9bc4e2fc"
+      "sha256": "e251d03d97b54f77ad62cefcfa5113c49b403b5dc661e49180f212ca1911b96d"
     },
     {
       "path": "docs/reports/domain-runtime-data-source-reconciliation.md",
