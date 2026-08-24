@@ -74,7 +74,7 @@ def _explicitly_nonlive_context(paragraph: str) -> bool:
 
 
 def _normalize_inline_path(value: str) -> str | None:
-    token = value.strip().strip(".,;:()[]{}<>'\"")
+    token = value.strip().strip(",;:()[]{}<>'\"")
     if not token or any(ch.isspace() for ch in token):
         return None
     if token.startswith(("http://", "https://", "mailto:", "tel:", "doc:")):
@@ -94,6 +94,16 @@ def _normalize_inline_path(value: str) -> str | None:
     if not (token.endswith("/") or PATH_FILE_RE.search(token)):
         return None
     return token.split("#", 1)[0]
+
+
+def _path_exists_within_repository(root: str, path: str) -> bool:
+    root_abs = os.path.abspath(root)
+    path_abs = os.path.abspath(path)
+    try:
+        within_repository = os.path.commonpath((root_abs, path_abs)) == root_abs
+    except ValueError:
+        return False
+    return within_repository and os.path.exists(path_abs)
 
 
 def _inline_path_findings(root: str, rel_file_path: str, content: str) -> tuple[int, list[str]]:
@@ -116,7 +126,10 @@ def _inline_path_findings(root: str, rel_file_path: str, content: str) -> tuple[
         total += 1
         doc_relative = os.path.abspath(os.path.join(doc_dir, candidate))
         repo_relative = os.path.abspath(os.path.join(root, candidate))
-        if not (os.path.exists(doc_relative) or os.path.exists(repo_relative)):
+        if not (
+            _path_exists_within_repository(root, doc_relative)
+            or _path_exists_within_repository(root, repo_relative)
+        ):
             broken.append(candidate)
 
     return total, sorted(set(broken))

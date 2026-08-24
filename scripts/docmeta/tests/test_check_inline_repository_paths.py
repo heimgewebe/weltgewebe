@@ -68,6 +68,21 @@ class InlineRepositoryPathTests(unittest.TestCase):
         self.assertEqual(total, 1)
         self.assertEqual(broken, ["src/lib.rs"])
 
+    def test_existing_path_outside_repository_is_rejected(self):
+        outside = self.root.parent / f"{self.root.name}-escape.md"
+        candidate = f"../../{outside.name}"
+        outside.write_text("outside repository", encoding="utf-8")
+        try:
+            rel, content = self._write_doc(
+                "escape",
+                f"Aktueller Repositorypfad: `{candidate}`.",
+            )
+            total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        finally:
+            outside.unlink(missing_ok=True)
+        self.assertEqual(total, 1)
+        self.assertEqual(broken, [candidate])
+
     def test_tracked_document_discovery_fails_closed(self):
         failure = subprocess.CalledProcessError(128, ["git", "ls-files"])
         with patch("scripts.docmeta.check_links.subprocess.run", side_effect=failure):
