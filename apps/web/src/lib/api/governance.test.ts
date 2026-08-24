@@ -3,6 +3,7 @@ import {
   createSachProposal,
   createWeberProposal,
   formatRemaining,
+  listProposals,
   proposalStatusLabel,
   requestProposalRepeal,
   statusLabel,
@@ -15,6 +16,27 @@ afterEach(() => {
 });
 
 describe("governance API", () => {
+  it("forwards the exact abort signal on proposal list reads while keeping session credentials", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify([]), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const signal = new AbortController().signal;
+
+    await listProposals(signal);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/proposals",
+      expect.objectContaining({
+        credentials: "include",
+        signal,
+      }),
+    );
+  });
+
   it("creates only a Weberantrag and trims the summary", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(JSON.stringify({ id: "p1", kind: "weberantrag" }), {
