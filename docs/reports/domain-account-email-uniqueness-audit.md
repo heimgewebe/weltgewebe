@@ -2,11 +2,10 @@
 id: reports.domain-account-email-uniqueness-audit
 title: Domain Account E-Mail Uniqueness Audit
 doc_type: report
-status: active
-lifecycle_state: active
+status: deprecated
+lifecycle_state: archived
 lifecycle: audit
 owner_task: OPT-ARC-001
-review_after: 2026-07-13
 lang: de
 canonicality: supporting
 relations:
@@ -25,6 +24,11 @@ summary: >
 ---
 
 # Domain Account E-Mail Uniqueness Audit
+
+> **Lifecycle-Hinweis (2026-08-24):** Archivierter Point-in-Time-Beleg.
+> Die historischen Aussagen bleiben unverändert; aktuelle Statuswahrheit ist aus
+> den kanonischen Status-, Architektur- und Runtimequellen abzuleiten.
+
 
 ## Ziel
 

@@ -86,7 +86,7 @@ Status- oder Reihenfolgequelle für die Master-Roadmap dient.
 |---|---|---|
 | Weltgewebe OS | [weltgewebe-os-masterplan.md](blueprints/weltgewebe-os-masterplan.md), [kanonische Zielarchitektur](../architecture/weltgewebe-os.md) | [weltgewebe-os-foundation-status.md](reports/weltgewebe-os-foundation-status.md) |
 | Auth | [auth-roadmap.md](blueprints/auth-roadmap.md) | [auth-status-matrix.md](reports/auth-status-matrix.md) |
-| Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md), [optimierungsstatus.md](reports/optimierungsstatus.md) |
+| Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [ADR-0007](adr/ADR-0007__auth-persistence-production-db-path.md), [optimierungsstatus.md](reports/optimierungsstatus.md) |
 | UI | [UI-Interaktionsvertrag](specs/ui-interaction.md), [Zustandsmaschine](specs/ui-state-machine.md) | [Kartenstatus](reports/map-status.md) |
 | Karte und Basemap | [Kartenerlebnis](specs/map-experience.md), [Basemap-Blaupause](blueprints/map-blaupause.md) | [Kartenstatus](reports/map-status.md) |
 | Agent-Operability | [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) | [agent-readiness-audit.md](reports/agent-readiness-audit.md) |
@@ -126,7 +126,7 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
     [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md),
     [aktueller Status](reports/optimierungsstatus.md),
     [Direct-SQLx-Proof](proofs/sqlx-postgres-direct-session-crud-proof.md),
-    [Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
+    [archivierter Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
 - [x] Phase 5 — `DbSessionStore`-Verdrahtung über vorhandene `SessionBackend`/`SessionOps`-Abstraktion · direkter SQLx/PostgreSQL-Persistenzpfad implementiert (PR #1072)
 - [x] Phase 5b — CI-Gate für `db_session_store_persistence`-Test · PROVEN · Run [`26394569642`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642), Job [`77692063785`](https://github.com/heimgewebe/weltgewebe/actions/runs/26394569642/job/77692063785), Commit `00a43a009c53c546355a14c08086131bd84cf8ad` (Branch `main`); direkter PostgreSQL-Port `5432` (nicht PgBouncer `6432`); `test db_session_store_persistence ... ok`, `6 passed; 0 failed`
 - [ ] Phase 6 — nachgelagerter Teilstand: Cookie/session proof CI PROVEN (begrenzt) · Run [`26455010837`](https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837), Job [`77886363989`](https://github.com/heimgewebe/weltgewebe/actions/runs/26455010837/job/77886363989), headSha `20c7e30136fc5872e286ab17738a64b0d03aec56`; `session_cookie_has_secure_attributes_on_magic_link_consume ... ok`, `session_cookie_insecure_when_auth_cookie_secure_disabled ... ok`, `2 passed; 0 failed`, `PROVEN: cookie/session proof tests passed (phase 6)`; verbleibende Auth-/Browser-/Passkey-Proofs weiterhin offen · [auth-status-matrix.md](reports/auth-status-matrix.md)
