@@ -86,7 +86,7 @@ Status- oder Reihenfolgequelle für die Master-Roadmap dient.
 |---|---|---|
 | Weltgewebe OS | [weltgewebe-os-masterplan.md](blueprints/weltgewebe-os-masterplan.md), [kanonische Zielarchitektur](../architecture/weltgewebe-os.md) | [weltgewebe-os-foundation-status.md](reports/weltgewebe-os-foundation-status.md) |
 | Auth | [auth-roadmap.md](blueprints/auth-roadmap.md) | [auth-status-matrix.md](reports/auth-status-matrix.md) |
-| Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [auth-persistence-readiness.md](reports/auth-persistence-readiness.md), [auth-persistence-next-step.md](reports/auth-persistence-next-step.md) |
+| Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md), [optimierungsstatus.md](reports/optimierungsstatus.md) |
 | UI | [UI-Interaktionsvertrag](specs/ui-interaction.md), [Zustandsmaschine](specs/ui-state-machine.md) | [Kartenstatus](reports/map-status.md) |
 | Karte und Basemap | [Kartenerlebnis](specs/map-experience.md), [Basemap-Blaupause](blueprints/map-blaupause.md) | [Kartenstatus](reports/map-status.md) |
 | Agent-Operability | [agent-operability-blaupause.md](blueprints/agent-operability-blaupause.md) | [agent-readiness-audit.md](reports/agent-readiness-audit.md) |
@@ -124,7 +124,7 @@ Reihenfolge: Kanonisierung → Step-up → Persistenz-Runtime-Proof → DbSessio
   - Zielarchitekturentscheidung geschlossen: Produktion nutzt direkten PostgreSQL-Zugriff via `DATABASE_URL`; PgBouncer ist kein Produktions-Gate
   - Belege: [ADR-0007](adr/ADR-0007__auth-persistence-production-db-path.md),
     [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md),
-    [Report](reports/auth-persistence-runtime-proof.md),
+    [aktueller Status](reports/optimierungsstatus.md),
     [Direct-SQLx-Proof](proofs/sqlx-postgres-direct-session-crud-proof.md),
     [Zielarchitektur-Abgleich](reports/auth-persistence-runtime-target-reconciliation.md)
 - [x] Phase 5 — `DbSessionStore`-Verdrahtung über vorhandene `SessionBackend`/`SessionOps`-Abstraktion · direkter SQLx/PostgreSQL-Persistenzpfad implementiert (PR #1072)
@@ -163,7 +163,7 @@ Dauerhafte UX-Regeln stehen in [Kartenerlebnis](specs/map-experience.md); die Ba
 - [?] Agent-Readiness vollständig grün · [agent-readiness-audit.md](reports/agent-readiness-audit.md)
 - [~] Agent Safety Control Layer · Blueprint gemergt; Safety-Preflight, Readiness Hard Fail, Claim-Spine, Agent-Contracts, Non-Ideal-Guard, Handoff-Validierung und read-only Dry-Run sind ueber `AGENT-SAFE-001` bis `AGENT-SAFE-006` belegt; `AGENT-SAFE-007` ist als PR #1265 auf `main`; `AGENT-SAFE-008` implementiert den minimalen Generated-Artifact-Kontrollvertrag. Universelle Failure-Evidence, externe Attestierung und Write Mode bleiben offen · [blueprint-agent-safety-control-layer.md](blueprints/blueprint-agent-safety-control-layer.md)
 - [x] Blueprint-/Roadmap-Registration-Guard · Guard-Mechanismus umgesetzt in `TASK-CTL-004` · [board.md](tasks/board.md)
-- [x] Planning-Registration-Findings triagiert und Strict-Ratchet aktiv · `TASK-CTL-005`: 8 bestehende Findings triagiert (6 via Frontmatter-Relation registriert, 2 als `deprecated` terminal), Guard läuft blockierend in `--mode strict` · [board.md](tasks/board.md), [planning-registration-findings.md](reports/planning-registration-findings.md)
+- [x] Planning-Registration-Findings triagiert und Strict-Ratchet aktiv · `TASK-CTL-005`: 8 bestehende Findings triagiert (6 via Frontmatter-Relation registriert, 2 als `deprecated` terminal), Guard läuft blockierend in `--mode strict` · [board.md](tasks/board.md); archivierter Ausgangsbefund: [planning-registration-findings.md](reports/planning-registration-findings.md)
 
 ## Strang Versionierung
 
