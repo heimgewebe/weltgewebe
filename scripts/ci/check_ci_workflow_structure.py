@@ -13,8 +13,8 @@ CI_TOOL_DOWNLOAD_CONTRACTS = (
         "Install yq",
         (
             'YQ_SHA256="a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7"',
-            'wget -qO "$YQ_DOWNLOAD"',
-            '"$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
+            'wget -qO "$YQ_DOWNLOAD" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"',
+            'printf \'%s  %s\\n\' "$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
             'install -m 0755 "$YQ_DOWNLOAD" "$YQ_BIN"',
         ),
     ),
@@ -23,8 +23,8 @@ CI_TOOL_DOWNLOAD_CONTRACTS = (
         (
             'DENY_SHA256="663f655b23c58e7d8eaf1c6b6bd8e197742757b5314bd292fd8dcbc0a16581c6"',
             'curl -sLf "$TARBALL_URL" -o "$TARBALL_PATH"',
-            '"$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
-            'tar xzf "$TARBALL_PATH"',
+            'printf \'%s  %s\\n\' "$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
+            'tar xzf "$TARBALL_PATH" -C "$EXTRACT_DIR" --strip-components=1',
             'install -m 0755 "$EXTRACT_DIR/cargo-deny" "$DENY_BIN"',
         ),
     ),
@@ -49,8 +49,17 @@ def _named_step(text: str, name: str) -> str | None:
     return text[start:] if end < 0 else text[start:end]
 
 
+def _active_line_index(block: str, command: str) -> int | None:
+    matches = [
+        index
+        for index, line in enumerate(block.splitlines())
+        if line.strip() == command
+    ]
+    return matches[0] if len(matches) == 1 else None
+
+
 def _validate_tool_download_integrity(ci: str, errors: list[str]) -> None:
-    for step_name, markers in CI_TOOL_DOWNLOAD_CONTRACTS:
+    for step_name, commands in CI_TOOL_DOWNLOAD_CONTRACTS:
         block = _named_step(ci, step_name)
         if block is None:
             errors.append(f"ci.yml must retain the {step_name} step")
@@ -58,11 +67,11 @@ def _validate_tool_download_integrity(ci: str, errors: list[str]) -> None:
 
         positions: list[int] = []
         missing = False
-        for marker in markers:
-            position = block.find(marker)
-            if position < 0:
+        for command in commands:
+            position = _active_line_index(block, command)
+            if position is None:
                 errors.append(
-                    f"ci.yml {step_name} download integrity contract lost marker: {marker}"
+                    f"ci.yml {step_name} download integrity contract lost exact active line: {command}"
                 )
                 missing = True
             else:

@@ -22,6 +22,21 @@ def _move_line_after(text: str, marker: str, after_marker: str) -> str:
     return "".join(lines)
 
 
+def _comment_verification_and_add_active_copy_after_use(
+    text: str, verification: str, use: str
+) -> str:
+    lines = text.splitlines(keepends=True)
+    verification_index = next(
+        index for index, line in enumerate(lines) if line.strip() == verification
+    )
+    original = lines[verification_index]
+    indent = original[: len(original) - len(original.lstrip())]
+    lines[verification_index] = f"{indent}# {verification}\n"
+    use_index = next(index for index, line in enumerate(lines) if line.strip() == use)
+    lines.insert(use_index + 1, f"{indent}{verification}\n")
+    return "".join(lines)
+
+
 def test_repository_workflows_use_the_reusable_web_check_without_direct_playwright_duplication() -> None:
     assert validate() == []
 
@@ -77,7 +92,7 @@ def test_guard_rejects_missing_release_download_digest() -> None:
         texts["ci.yml"] = texts["ci.yml"].replace(marker, "", 1)
         errors = validate_workflow_texts(texts)
         assert any(
-            f"ci.yml {step_name} download integrity contract lost marker" in error
+            f"ci.yml {step_name} download integrity contract lost exact active line" in error
             for error in errors
         )
 
@@ -85,19 +100,45 @@ def test_guard_rejects_missing_release_download_digest() -> None:
 def test_guard_rejects_checksum_verification_after_download_use() -> None:
     cases = (
         (
-            '"$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
+            'printf \'%s  %s\\n\' "$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
             'install -m 0755 "$YQ_DOWNLOAD" "$YQ_BIN"',
             "Install yq",
         ),
         (
-            '"$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
-            'tar xzf "$TARBALL_PATH"',
+            'printf \'%s  %s\\n\' "$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
+            'tar xzf "$TARBALL_PATH" -C "$EXTRACT_DIR" --strip-components=1',
             "Install cargo-deny",
         ),
     )
     for verification, use, step_name in cases:
         texts = _texts()
         texts["ci.yml"] = _move_line_after(texts["ci.yml"], verification, use)
+        errors = validate_workflow_texts(texts)
+        assert any(
+            f"ci.yml {step_name} must verify the pinned SHA-256 before using the download"
+            in error
+            for error in errors
+        )
+
+
+def test_guard_rejects_commented_early_verification_with_active_late_copy() -> None:
+    cases = (
+        (
+            'printf \'%s  %s\\n\' "$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
+            'install -m 0755 "$YQ_DOWNLOAD" "$YQ_BIN"',
+            "Install yq",
+        ),
+        (
+            'printf \'%s  %s\\n\' "$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
+            'tar xzf "$TARBALL_PATH" -C "$EXTRACT_DIR" --strip-components=1',
+            "Install cargo-deny",
+        ),
+    )
+    for verification, use, step_name in cases:
+        texts = _texts()
+        texts["ci.yml"] = _comment_verification_and_add_active_copy_after_use(
+            texts["ci.yml"], verification, use
+        )
         errors = validate_workflow_texts(texts)
         assert any(
             f"ci.yml {step_name} must verify the pinned SHA-256 before using the download"
