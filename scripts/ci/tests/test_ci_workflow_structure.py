@@ -13,6 +13,15 @@ def _texts() -> dict[str, str]:
     return {name: (WORKFLOW_DIR / name).read_text(encoding="utf-8") for name in names}
 
 
+def _move_line_after(text: str, marker: str, after_marker: str) -> str:
+    lines = text.splitlines(keepends=True)
+    marker_index = next(index for index, line in enumerate(lines) if marker in line)
+    line = lines.pop(marker_index)
+    after_index = next(index for index, current in enumerate(lines) if after_marker in current)
+    lines.insert(after_index + 1, line)
+    return "".join(lines)
+
+
 def test_repository_workflows_use_the_reusable_web_check_without_direct_playwright_duplication() -> None:
     assert validate() == []
 
@@ -49,3 +58,49 @@ def test_guard_rejects_reusable_workflow_that_overrides_caller_permissions() -> 
     assert any(
         "must inherit token permissions from each caller" in error for error in errors
     )
+
+
+def test_guard_rejects_missing_release_download_digest() -> None:
+    cases = (
+        (
+            'YQ_SHA256="a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7"',
+            "Install yq",
+        ),
+        (
+            'DENY_SHA256="663f655b23c58e7d8eaf1c6b6bd8e197742757b5314bd292fd8dcbc0a16581c6"',
+            "Install cargo-deny",
+        ),
+    )
+    for marker, step_name in cases:
+        texts = _texts()
+        assert marker in texts["ci.yml"]
+        texts["ci.yml"] = texts["ci.yml"].replace(marker, "", 1)
+        errors = validate_workflow_texts(texts)
+        assert any(
+            f"ci.yml {step_name} download integrity contract lost marker" in error
+            for error in errors
+        )
+
+
+def test_guard_rejects_checksum_verification_after_download_use() -> None:
+    cases = (
+        (
+            '"$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
+            'install -m 0755 "$YQ_DOWNLOAD" "$YQ_BIN"',
+            "Install yq",
+        ),
+        (
+            '"$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
+            'tar xzf "$TARBALL_PATH"',
+            "Install cargo-deny",
+        ),
+    )
+    for verification, use, step_name in cases:
+        texts = _texts()
+        texts["ci.yml"] = _move_line_after(texts["ci.yml"], verification, use)
+        errors = validate_workflow_texts(texts)
+        assert any(
+            f"ci.yml {step_name} must verify the pinned SHA-256 before using the download"
+            in error
+            for error in errors
+        )

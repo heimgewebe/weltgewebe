@@ -8,6 +8,28 @@ WORKFLOW_DIR = ROOT / ".github" / "workflows"
 REUSABLE = "./.github/workflows/reusable-web-check.yml"
 CALLERS = ("ci.yml", "web.yml", "heavy.yml")
 
+CI_TOOL_DOWNLOAD_CONTRACTS = (
+    (
+        "Install yq",
+        (
+            'YQ_SHA256="a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7"',
+            'wget -qO "$YQ_DOWNLOAD"',
+            '"$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
+            'install -m 0755 "$YQ_DOWNLOAD" "$YQ_BIN"',
+        ),
+    ),
+    (
+        "Install cargo-deny",
+        (
+            'DENY_SHA256="663f655b23c58e7d8eaf1c6b6bd8e197742757b5314bd292fd8dcbc0a16581c6"',
+            'curl -sLf "$TARBALL_URL" -o "$TARBALL_PATH"',
+            '"$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
+            'tar xzf "$TARBALL_PATH"',
+            'install -m 0755 "$EXTRACT_DIR/cargo-deny" "$DENY_BIN"',
+        ),
+    ),
+)
+
 
 def _has_run_line(text: str, command: str) -> bool:
     expected = f"run: {command}"
@@ -16,6 +38,40 @@ def _has_run_line(text: str, command: str) -> bool:
         if stripped == expected or stripped == f"- {expected}":
             return True
     return False
+
+
+def _named_step(text: str, name: str) -> str | None:
+    marker = f"      - name: {name}\n"
+    start = text.find(marker)
+    if start < 0:
+        return None
+    end = text.find("\n      - name: ", start + len(marker))
+    return text[start:] if end < 0 else text[start:end]
+
+
+def _validate_tool_download_integrity(ci: str, errors: list[str]) -> None:
+    for step_name, markers in CI_TOOL_DOWNLOAD_CONTRACTS:
+        block = _named_step(ci, step_name)
+        if block is None:
+            errors.append(f"ci.yml must retain the {step_name} step")
+            continue
+
+        positions: list[int] = []
+        missing = False
+        for marker in markers:
+            position = block.find(marker)
+            if position < 0:
+                errors.append(
+                    f"ci.yml {step_name} download integrity contract lost marker: {marker}"
+                )
+                missing = True
+            else:
+                positions.append(position)
+
+        if not missing and positions != sorted(positions):
+            errors.append(
+                f"ci.yml {step_name} must verify the pinned SHA-256 before using the download"
+            )
 
 
 def validate_workflow_texts(texts: dict[str, str]) -> list[str]:
@@ -46,6 +102,7 @@ def validate_workflow_texts(texts: dict[str, str]) -> list[str]:
         errors.append("ci.yml web-e2e must preserve the demo API plus ci-suite contract")
     if "- web-e2e" not in ci:
         errors.append("ci.yml required merge gate must continue to depend on web-e2e")
+    _validate_tool_download_integrity(ci, errors)
 
     web = texts["web.yml"]
     for marker in (
