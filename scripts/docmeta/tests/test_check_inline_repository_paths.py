@@ -1,6 +1,8 @@
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from scripts.docmeta import check_links
 
@@ -47,6 +49,30 @@ class InlineRepositoryPathTests(unittest.TestCase):
         total, broken = check_links._inline_path_findings(str(self.root), rel, content)
         self.assertEqual(total, 1)
         self.assertEqual(broken, [])
+
+    def test_unknown_first_component_typo_is_not_silently_skipped(self):
+        rel, content = self._write_doc(
+            "typo",
+            "Aktueller Repositorypfad: `apss/api/src/lib.rs`.",
+        )
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual(total, 1)
+        self.assertEqual(broken, ["apss/api/src/lib.rs"])
+
+    def test_package_relative_src_path_is_not_silently_skipped(self):
+        rel, content = self._write_doc(
+            "package-relative",
+            "Aktueller Repositorypfad: `src/lib.rs`.",
+        )
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual(total, 1)
+        self.assertEqual(broken, ["src/lib.rs"])
+
+    def test_tracked_document_discovery_fails_closed(self):
+        failure = subprocess.CalledProcessError(128, ["git", "ls-files"])
+        with patch("scripts.docmeta.check_links.subprocess.run", side_effect=failure):
+            with self.assertRaises(subprocess.CalledProcessError):
+                check_links._tracked_markdown_files(str(self.root))
 
     def test_retired_document_is_not_reactivated_as_path_truth(self):
         rel, content = self._write_doc(
