@@ -2,33 +2,76 @@
 from __future__ import annotations
 
 from pathlib import Path
+from textwrap import dedent
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW_DIR = ROOT / ".github" / "workflows"
 REUSABLE = "./.github/workflows/reusable-web-check.yml"
 CALLERS = ("ci.yml", "web.yml", "heavy.yml")
 
-CI_TOOL_DOWNLOAD_CONTRACTS = (
-    (
-        "Install yq",
-        (
-            'YQ_SHA256="a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7"',
-            'wget -qO "$YQ_DOWNLOAD" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"',
-            'printf \'%s  %s\\n\' "$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
-            'install -m 0755 "$YQ_DOWNLOAD" "$YQ_BIN"',
-        ),
-    ),
-    (
-        "Install cargo-deny",
-        (
-            'DENY_SHA256="663f655b23c58e7d8eaf1c6b6bd8e197742757b5314bd292fd8dcbc0a16581c6"',
-            'curl -sLf "$TARBALL_URL" -o "$TARBALL_PATH"',
-            'printf \'%s  %s\\n\' "$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
-            'tar xzf "$TARBALL_PATH" -C "$EXTRACT_DIR" --strip-components=1',
-            'install -m 0755 "$EXTRACT_DIR/cargo-deny" "$DENY_BIN"',
-        ),
-    ),
-)
+CI_TOOL_DOWNLOAD_SCRIPTS = {
+    "Install yq": dedent(
+        r'''
+        set -e
+        YQ_VERSION="4.44.3"
+        YQ_SHA256="a2c097180dd884a8d50c956ee16a9cec070f30a7947cf4ebf87d5f36213e9ed7"
+        YQ_DIR="$HOME/.local/bin"
+        YQ_BIN="$YQ_DIR/yq"
+        mkdir -p "$YQ_DIR"
+
+        if [[ ! -f "$YQ_BIN" ]] || ! "$YQ_BIN" --version 2>/dev/null | grep -q "$YQ_VERSION"; then
+          echo "Installing yq v${YQ_VERSION}..."
+          INSTALL_TMPDIR=$(mktemp -d)
+          trap 'rm -rf "$INSTALL_TMPDIR"' EXIT
+          YQ_DOWNLOAD="$INSTALL_TMPDIR/yq_linux_amd64"
+          wget -qO "$YQ_DOWNLOAD" "https://github.com/mikefarah/yq/releases/download/v${YQ_VERSION}/yq_linux_amd64"
+          printf '%s  %s\n' "$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -
+          install -m 0755 "$YQ_DOWNLOAD" "$YQ_BIN"
+          rm -rf "$INSTALL_TMPDIR"
+          trap - EXIT
+        else
+          echo "yq v${YQ_VERSION} already installed"
+        fi
+
+        echo "$YQ_DIR" >> "$GITHUB_PATH"
+        '''
+    ).strip(),
+    "Install cargo-deny": dedent(
+        r'''
+        set -euo pipefail
+        # DENY_VERSION kommt aus toolchain.versions.yml (Step "Read toolchain versions").
+        if [ -z "${DENY_VERSION:-}" ]; then
+          echo "DENY_VERSION is not set (expected from toolchain.versions.yml)" >&2
+          exit 1
+        fi
+        DENY_SHA256="663f655b23c58e7d8eaf1c6b6bd8e197742757b5314bd292fd8dcbc0a16581c6"
+        DENY_DIR="$HOME/.local/bin"
+        DENY_BIN="$DENY_DIR/cargo-deny"
+        mkdir -p "$DENY_DIR"
+
+        if [[ ! -f "$DENY_BIN" ]] || ! "$DENY_BIN" --version 2>/dev/null | grep -q "${DENY_VERSION}"; then
+          echo "Installing cargo-deny v${DENY_VERSION}..."
+          INSTALL_TMPDIR=$(mktemp -d)
+          trap 'rm -rf "$INSTALL_TMPDIR"' EXIT
+          TARBALL_URL="https://github.com/EmbarkStudios/cargo-deny/releases/download"
+          TARBALL_URL="${TARBALL_URL}/${DENY_VERSION}/cargo-deny-${DENY_VERSION}-x86_64-unknown-linux-musl.tar.gz"
+          TARBALL_PATH="$INSTALL_TMPDIR/cargo-deny.tar.gz"
+          EXTRACT_DIR="$INSTALL_TMPDIR/extract"
+          mkdir -p "$EXTRACT_DIR"
+          curl -sLf "$TARBALL_URL" -o "$TARBALL_PATH"
+          printf '%s  %s\n' "$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -
+          tar xzf "$TARBALL_PATH" -C "$EXTRACT_DIR" --strip-components=1
+          install -m 0755 "$EXTRACT_DIR/cargo-deny" "$DENY_BIN"
+          rm -rf "$INSTALL_TMPDIR"
+          trap - EXIT
+        else
+          echo "cargo-deny v${DENY_VERSION} already installed"
+        fi
+
+        echo "$DENY_DIR" >> "$GITHUB_PATH"
+        '''
+    ).strip(),
+}
 
 
 def _has_run_line(text: str, command: str) -> bool:
@@ -49,37 +92,26 @@ def _named_step(text: str, name: str) -> str | None:
     return text[start:] if end < 0 else text[start:end]
 
 
-def _active_line_index(block: str, command: str) -> int | None:
-    matches = [
-        index
-        for index, line in enumerate(block.splitlines())
-        if line.strip() == command
-    ]
-    return matches[0] if len(matches) == 1 else None
+def _named_run_script(block: str) -> str | None:
+    lines = block.splitlines()
+    run_indexes = [index for index, line in enumerate(lines) if line.strip() == "run: |"]
+    if len(run_indexes) != 1:
+        return None
+    script = "\n".join(lines[run_indexes[0] + 1 :])
+    return dedent(script).strip()
 
 
 def _validate_tool_download_integrity(ci: str, errors: list[str]) -> None:
-    for step_name, commands in CI_TOOL_DOWNLOAD_CONTRACTS:
+    for step_name, expected_script in CI_TOOL_DOWNLOAD_SCRIPTS.items():
         block = _named_step(ci, step_name)
         if block is None:
             errors.append(f"ci.yml must retain the {step_name} step")
             continue
 
-        positions: list[int] = []
-        missing = False
-        for command in commands:
-            position = _active_line_index(block, command)
-            if position is None:
-                errors.append(
-                    f"ci.yml {step_name} download integrity contract lost exact active line: {command}"
-                )
-                missing = True
-            else:
-                positions.append(position)
-
-        if not missing and positions != sorted(positions):
+        observed_script = _named_run_script(block)
+        if observed_script != expected_script:
             errors.append(
-                f"ci.yml {step_name} must verify the pinned SHA-256 before using the download"
+                f"ci.yml {step_name} must match the exact reviewed download-integrity script"
             )
 
 

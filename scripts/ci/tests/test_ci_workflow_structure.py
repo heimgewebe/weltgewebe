@@ -37,6 +37,27 @@ def _comment_verification_and_add_active_copy_after_use(
     return "".join(lines)
 
 
+def _wrap_verification_in_false_branch(text: str, verification: str) -> str:
+    lines = text.splitlines(keepends=True)
+    verification_index = next(
+        index for index, line in enumerate(lines) if line.strip() == verification
+    )
+    original = lines[verification_index]
+    indent = original[: len(original) - len(original.lstrip())]
+    lines.insert(verification_index, f"{indent}if false; then\n")
+    lines.insert(verification_index + 2, f"{indent}fi\n")
+    return "".join(lines)
+
+
+def _assert_installer_contract_rejected(texts: dict[str, str], step_name: str) -> None:
+    errors = validate_workflow_texts(texts)
+    assert any(
+        f"ci.yml {step_name} must match the exact reviewed download-integrity script"
+        in error
+        for error in errors
+    )
+
+
 def test_repository_workflows_use_the_reusable_web_check_without_direct_playwright_duplication() -> None:
     assert validate() == []
 
@@ -90,11 +111,7 @@ def test_guard_rejects_missing_release_download_digest() -> None:
         texts = _texts()
         assert marker in texts["ci.yml"]
         texts["ci.yml"] = texts["ci.yml"].replace(marker, "", 1)
-        errors = validate_workflow_texts(texts)
-        assert any(
-            f"ci.yml {step_name} download integrity contract lost exact active line" in error
-            for error in errors
-        )
+        _assert_installer_contract_rejected(texts, step_name)
 
 
 def test_guard_rejects_checksum_verification_after_download_use() -> None:
@@ -113,12 +130,7 @@ def test_guard_rejects_checksum_verification_after_download_use() -> None:
     for verification, use, step_name in cases:
         texts = _texts()
         texts["ci.yml"] = _move_line_after(texts["ci.yml"], verification, use)
-        errors = validate_workflow_texts(texts)
-        assert any(
-            f"ci.yml {step_name} must verify the pinned SHA-256 before using the download"
-            in error
-            for error in errors
-        )
+        _assert_installer_contract_rejected(texts, step_name)
 
 
 def test_guard_rejects_commented_early_verification_with_active_late_copy() -> None:
@@ -139,9 +151,23 @@ def test_guard_rejects_commented_early_verification_with_active_late_copy() -> N
         texts["ci.yml"] = _comment_verification_and_add_active_copy_after_use(
             texts["ci.yml"], verification, use
         )
-        errors = validate_workflow_texts(texts)
-        assert any(
-            f"ci.yml {step_name} must verify the pinned SHA-256 before using the download"
-            in error
-            for error in errors
+        _assert_installer_contract_rejected(texts, step_name)
+
+
+def test_guard_rejects_checksum_hidden_in_false_branch() -> None:
+    cases = (
+        (
+            'printf \'%s  %s\\n\' "$YQ_SHA256" "$YQ_DOWNLOAD" | sha256sum -c -',
+            "Install yq",
+        ),
+        (
+            'printf \'%s  %s\\n\' "$DENY_SHA256" "$TARBALL_PATH" | sha256sum -c -',
+            "Install cargo-deny",
+        ),
+    )
+    for verification, step_name in cases:
+        texts = _texts()
+        texts["ci.yml"] = _wrap_verification_in_false_branch(
+            texts["ci.yml"], verification
         )
+        _assert_installer_contract_rejected(texts, step_name)
