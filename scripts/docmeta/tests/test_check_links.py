@@ -43,7 +43,11 @@ class TestCheckLinks(unittest.TestCase):
 
         with patch('scripts.docmeta.check_links.parse_repo_index', side_effect=mock_parse_repo_index), \
              patch('scripts.docmeta.check_links.parse_review_policy', side_effect=mock_parse_review_policy), \
-             patch('scripts.docmeta.check_links.REPO_ROOT', self.repo_root):
+             patch('scripts.docmeta.check_links.REPO_ROOT', self.repo_root), \
+             patch(
+                 'scripts.docmeta.check_links._tracked_markdown_files',
+                 return_value=['architecture/test_doc.md'],
+             ):
 
              # Capture stdout and stderr
              import io
