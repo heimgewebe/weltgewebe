@@ -2,6 +2,9 @@ import { test, expect } from "@playwright/test";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 import { moveSearchTargetOffscreen } from "./fixtures/mapCamera";
 import { activateToolFanAction } from "./fixtures/toolFan";
+const ACTIVE_CONSENT_UNTIL = new Date(
+  Date.now() + 24 * 60 * 60 * 1000,
+).toISOString();
 
 function directConversation(id: string, unreadCount: number, at: string) {
   return {
@@ -32,7 +35,7 @@ function proposal(
     applicant_title: `Autor ${id}`,
     status: "consent",
     created_at: createdAt,
-    consent_until: "2026-08-24T08:00:00Z",
+    consent_until: ACTIVE_CONSENT_UNTIL,
     veto_count: 0,
     yes_votes: 0,
     no_votes: 0,
