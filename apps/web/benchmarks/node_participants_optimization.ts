@@ -45,11 +45,13 @@ function generateData(count: number) {
 }
 
 function originalApproach(accounts: Account[], relatedEdges: Edge[]) {
+  const accountMap = new Map(accounts.map((a) => [a.id, a]));
   return relatedEdges
     .map((edge) => {
-      const account = accounts.find(
-        (a) => a.id === edge.source_id && edge.source_type === "account",
-      );
+      const account =
+        edge.source_type === "account"
+          ? accountMap.get(edge.source_id)
+          : undefined;
       return {
         edge_id: edge.id,
         edge_kind: edge.edge_kind,
