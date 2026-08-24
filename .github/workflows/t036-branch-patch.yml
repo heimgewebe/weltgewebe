@@ -1,0 +1,91 @@
+---
+name: T036 branch-bound documentation patch
+
+"on":
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  patch-exact-t036-docs:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.head_ref == 'docs/t036-truth-lifecycle-20260824'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: t036-branch-patch-${{ github.event.pull_request.number }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Apply exact truth-drift replacements and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          replacements = {
+              "docs/reports/auth-status-matrix.md": [
+                  (
+                      "[reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) (Vorbereitungsbericht Register-Verify)",
+                      "[reports/auth-pg-002-cutover-plan.md](auth-pg-002-cutover-plan.md) (aktueller Cutover-Plan); [reports/passkey-register-verify-prep.md](passkey-register-verify-prep.md) bleibt der archivierte Vorbereitungsbericht",
+                  ),
+                  (
+                      "gegen denselben Middleware-Stack wie in `src/lib.rs`.",
+                      "gegen denselben Middleware-Stack wie in `apps/api/src/lib.rs`.",
+                  ),
+              ],
+              "docs/roadmap.md": [
+                  (
+                      "| Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [auth-persistence-readiness.md](reports/auth-persistence-readiness.md), [auth-persistence-next-step.md](reports/auth-persistence-next-step.md) |",
+                      "| Auth-Persistenz (Runtime-Proof) | [auth-persistence-runtime-proof.md](blueprints/auth-persistence-runtime-proof.md) | [auth-persistence-runtime-target-reconciliation.md](reports/auth-persistence-runtime-target-reconciliation.md), [optimierungsstatus.md](reports/optimierungsstatus.md) |",
+                  ),
+                  (
+                      "    [Report](reports/auth-persistence-runtime-proof.md),",
+                      "    [aktueller Status](reports/optimierungsstatus.md),",
+                  ),
+                  (
+                      "- [x] Planning-Registration-Findings triagiert und Strict-Ratchet aktiv · `TASK-CTL-005`: 8 bestehende Findings triagiert (6 via Frontmatter-Relation registriert, 2 als `deprecated` terminal), Guard läuft blockierend in `--mode strict` · [board.md](tasks/board.md), [planning-registration-findings.md](reports/planning-registration-findings.md)",
+                      "- [x] Planning-Registration-Findings triagiert und Strict-Ratchet aktiv · `TASK-CTL-005`: 8 bestehende Findings triagiert (6 via Frontmatter-Relation registriert, 2 als `deprecated` terminal), Guard läuft blockierend in `--mode strict` · [board.md](tasks/board.md); archivierter Ausgangsbefund: [planning-registration-findings.md](reports/planning-registration-findings.md)",
+                  ),
+              ],
+          }
+
+          for rel, pairs in replacements.items():
+              path = Path(rel)
+              text = path.read_text(encoding="utf-8")
+              for old, new in pairs:
+                  count = text.count(old)
+                  if count != 1:
+                      raise SystemExit(
+                          f"fail-closed: {rel}: expected exactly one match, found {count}: {old!r}"
+                      )
+                  text = text.replace(old, new)
+              path.write_text(text, encoding="utf-8")
+
+          workflow = Path(".github/workflows/t036-branch-patch.yml")
+          if not workflow.is_file():
+              raise SystemExit("fail-closed: temporary workflow cannot self-remove")
+          workflow.unlink()
+          PY
+          git diff --check
+
+      - name: Commit exact branch patch
+        shell: bash
+        env:
+          HEAD_REF: ${{ github.event.pull_request.head.ref }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -- docs/reports/auth-status-matrix.md docs/roadmap.md .github/workflows/t036-branch-patch.yml
+          git diff --cached --check
+          test -n "$(git diff --cached --name-only)"
+          git commit -m "docs: reconcile active auth and roadmap truth"
+          git push origin "HEAD:${HEAD_REF}"
