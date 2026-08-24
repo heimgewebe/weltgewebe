@@ -3,6 +3,12 @@ import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
 import { moveSearchTargetOffscreen } from "./fixtures/mapCamera";
 import { activateToolFanAction } from "./fixtures/toolFan";
 
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+function oneHourFromNowIso() {
+  return new Date(Date.now() + ONE_HOUR_MS).toISOString();
+}
+
 function directConversation(id: string, unreadCount: number, at: string) {
   return {
     id,
@@ -32,7 +38,7 @@ function proposal(
     applicant_title: `Autor ${id}`,
     status: "consent",
     created_at: createdAt,
-    consent_until: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
+    consent_until: oneHourFromNowIso(),
     veto_count: 0,
     yes_votes: 0,
     no_votes: 0,
@@ -402,7 +408,7 @@ test.describe("top-left attention bubbles", () => {
         role: "weber",
       },
     });
-    const deadline = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+    const deadline = oneHourFromNowIso();
     await page.route("**/api/direct-conversations", async (route) => {
       await route.fulfill({
         status: 200,
@@ -479,7 +485,7 @@ test.describe("top-left attention bubbles", () => {
         body: JSON.stringify([
           proposal("handled", "2026-08-17T07:00:00Z", {
             status: "voting",
-            voting_until: "2026-08-24T07:00:00Z",
+            voting_until: oneHourFromNowIso(),
             viewer_participation: {
               vote_choice: "ja",
               has_veto: false,
