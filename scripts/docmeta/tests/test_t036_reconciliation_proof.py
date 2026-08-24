@@ -5,6 +5,7 @@ import unittest
 
 
 PROOF = Path("docs/proofs/weltgewebe-os-v1-t036-documentation-drift-reconciliation.md")
+LIFECYCLE = Path("docs/_generated/report-lifecycle.md")
 ROW_RE = re.compile(
     r"^\| DRIFT-(\d{3}) \| P[12] \| "
     r"(weiterhin gültig|bereits behoben|superseded|falsch-positiv) \|"
@@ -15,6 +16,15 @@ EXPECTED = {
     "superseded": 8,
     "falsch-positiv": 23,
 }
+ARCHIVED_BY_T036 = (
+    "auth-persistence-runtime-target-reconciliation.md",
+    "domain-account-email-uniqueness-audit.md",
+    "domain-account-write-path-proof.md",
+    "domain-backfill-proof.md",
+    "domain-edge-reference-audit.md",
+    "domain-node-write-path-proof.md",
+    "domain-read-path-proof.md",
+)
 
 
 class T036ReconciliationProofTests(unittest.TestCase):
@@ -32,6 +42,16 @@ class T036ReconciliationProofTests(unittest.TestCase):
 
         matrix_row = "| 52 | 16 | 5 | 8 | 23 |"
         self.assertEqual(text.count(matrix_row), 1)
+
+    def test_generated_lifecycle_projection_contains_t036_archivals(self):
+        text = LIFECYCLE.read_text(encoding="utf-8")
+        active, archived_and_after = text.split("## Archived Reports", 1)
+        for filename in ARCHIVED_BY_T036:
+            self.assertNotIn(filename, active.split("## Active Reports", 1)[1])
+            self.assertIn(filename, archived_and_after)
+        self.assertIn("| active | 26 |", text)
+        self.assertIn("| archived | 13 |", text)
+        self.assertIn("| findings_total | 0 |", text)
 
 
 if __name__ == "__main__":
