@@ -32,7 +32,7 @@ function proposal(
     applicant_title: `Autor ${id}`,
     status: "consent",
     created_at: createdAt,
-    consent_until: "2026-08-24T08:00:00Z",
+    consent_until: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
     veto_count: 0,
     yes_votes: 0,
     no_votes: 0,
