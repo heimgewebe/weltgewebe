@@ -4,13 +4,20 @@ from __future__ import annotations
 import argparse
 import base64
 import hashlib
+import hmac
 import json
 import os
 import secrets
 import subprocess
 import sys
+import threading
 import time
+import urllib.error
+import urllib.parse
+import urllib.request
+import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -33,11 +40,17 @@ POSTGRES_IMAGE = "ghcr.io/cloudnative-pg/postgresql:16.14@sha256:05eae7037dc6a70
 NATS_BOX_IMAGE = "natsio/nats-box@sha256:9d5f35d286c3dcfca18bb2339b51345f9f89b580b237ab16ddfe609bdca9c72d"
 SEAWEEDFS_IMAGE = "chrislusf/seaweedfs@sha256:f898c91e42d7da5f4bb13f1efd424ff03ba85b420312eb929708a384e8a8b03d"
 APP_USER = "welt"
-S3_ACCESS_KEY = "weltgewebe-ha-proof"
+S3_ACCESS_KEY_PREFIX = "wg-ha-"
 S3_BUCKET = "weltgewebe-postgres"
 BASELINE_API_IMAGE = "weltgewebe-api:local"
 UPGRADE_API_IMAGE = "weltgewebe-api:ha-upgrade-candidate"
 REFERENCE_AVAILABILITY_OBJECTIVE = 0.999
+CONTINUOUS_AVAILABILITY_INTERVAL_SECONDS = 2.0
+PROOF_WAL_RESERVE_BYTES = 1 << 30
+PROOF_PITR_RESERVE_BYTES = 2 << 30
+PROOF_KIND_NODE_RESERVE_BYTES = 1 << 30
+PROOF_IMAGE_BUILD_RESERVE_BYTES = 4 << 30
+PROOF_MIN_FREE_INODES = 100_000
 
 
 class ClusterLifecycle:
@@ -108,7 +121,12 @@ def require_active_cluster_context(kind: str, kubectl: str, cluster: str) -> str
     return kubectl
 
 
-def apply_secret_contracts(kubectl: str, app_password: str, s3_secret_key: str) -> None:
+def apply_secret_contracts(
+    kubectl: str,
+    app_password: str,
+    s3_access_key: str,
+    s3_secret_key: str,
+) -> None:
     ref.apply_yaml(
         kubectl,
         [
@@ -117,7 +135,10 @@ def apply_secret_contracts(kubectl: str, app_password: str, s3_secret_key: str) 
                 "kind": "Secret",
                 "metadata": {"name": "weltgewebe-ha-s3", "namespace": "weltgewebe-data"},
                 "type": "Opaque",
-                "stringData": {"ACCESS_KEY_ID": S3_ACCESS_KEY, "ACCESS_SECRET_KEY": s3_secret_key},
+                "stringData": {
+                    "ACCESS_KEY_ID": s3_access_key,
+                    "ACCESS_SECRET_KEY": s3_secret_key,
+                },
             },
             {
                 "apiVersion": "v1",
@@ -130,7 +151,29 @@ def apply_secret_contracts(kubectl: str, app_password: str, s3_secret_key: str) 
     )
 
 
-def apply_runtime_secret(kubectl: str, app_password: str, *, postgres_service: str = "postgres-ha-rw") -> None:
+def postgres_runtime_contract() -> dict[str, str]:
+    path = ROOT / "platform/infrastructure/ha-data/postgres.yaml"
+    clusters = [
+        document
+        for document in yaml.safe_load_all(path.read_text(encoding="utf-8"))
+        if isinstance(document, dict) and document.get("kind") == "Cluster"
+    ]
+    if len(clusters) != 1:
+        raise ref.ProofError(
+            f"expected exactly one PostgreSQL Cluster contract in {path}, got {len(clusters)}"
+        )
+    name = str(clusters[0].get("metadata", {}).get("name", "")).strip()
+    if not name:
+        raise ref.ProofError("PostgreSQL Cluster contract has no metadata.name")
+    return {"cluster": name, "primary_service": f"{name}-rw"}
+
+
+def apply_runtime_secret(
+    kubectl: str,
+    app_password: str,
+    *,
+    postgres_service: str,
+) -> None:
     database_url = (
         f"postgres://{APP_USER}:{app_password}@{postgres_service}.weltgewebe-data.svc.cluster.local:5432/weltgewebe"
     )
@@ -144,6 +187,178 @@ def apply_runtime_secret(kubectl: str, app_password: str, *, postgres_service: s
             "stringData": {"database-url": database_url},
         },
     )
+
+
+def parse_kubernetes_bytes(value: str) -> int:
+    raw = value.strip()
+    units = {"Ki": 1 << 10, "Mi": 1 << 20, "Gi": 1 << 30}
+    for suffix, multiplier in units.items():
+        if raw.endswith(suffix):
+            number = raw[: -len(suffix)]
+            if not number.isdigit():
+                break
+            return int(number) * multiplier
+    if raw.isdigit():
+        return int(raw)
+    raise ref.ProofError(f"unsupported Kubernetes byte quantity: {value!r}")
+
+
+def declared_ha_capacity_budget(*, keep_primary: bool) -> dict[str, Any]:
+    postgres = next(
+        document
+        for document in yaml.safe_load_all(
+            (ROOT / "platform/infrastructure/ha-data/postgres.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        if isinstance(document, dict) and document.get("kind") == "Cluster"
+    )
+    nats = next(
+        document
+        for document in yaml.safe_load_all(
+            (ROOT / "platform/infrastructure/ha-data/nats.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        if isinstance(document, dict) and document.get("kind") == "StatefulSet"
+    )
+    postgres_bytes = int(postgres["spec"]["instances"]) * parse_kubernetes_bytes(
+        str(postgres["spec"]["storage"]["size"])
+    )
+    nats_bytes = int(nats["spec"]["replicas"]) * parse_kubernetes_bytes(
+        str(
+            nats["spec"]["volumeClaimTemplates"][0]["spec"]["resources"][
+                "requests"
+            ]["storage"]
+        )
+    )
+    restore = restore_cluster_document("2000-01-01T00:00:00Z")
+    restore_bytes = int(restore["spec"]["instances"]) * parse_kubernetes_bytes(
+        str(restore["spec"]["storage"]["size"])
+    )
+    primary_kind = yaml.safe_load(
+        (ROOT / "platform/clusters/ha/kind.yaml").read_text(encoding="utf-8")
+    )
+    restore_kind = yaml.safe_load(
+        (ROOT / "platform/clusters/ha/restore-kind.yaml").read_text(
+            encoding="utf-8"
+        )
+    )
+    primary_nodes = len(primary_kind.get("nodes", []))
+    restore_nodes = len(restore_kind.get("nodes", []))
+    concurrent_pvc_bytes = (
+        postgres_bytes + nats_bytes + restore_bytes
+        if keep_primary
+        else max(postgres_bytes + nats_bytes, restore_bytes)
+    )
+    concurrent_kind_nodes = (
+        primary_nodes + restore_nodes if keep_primary else max(primary_nodes, restore_nodes)
+    )
+    kind_container_bytes = concurrent_kind_nodes * PROOF_KIND_NODE_RESERVE_BYTES
+    required_free_bytes = (
+        concurrent_pvc_bytes
+        + PROOF_WAL_RESERVE_BYTES
+        + PROOF_PITR_RESERVE_BYTES
+        + kind_container_bytes
+        + PROOF_IMAGE_BUILD_RESERVE_BYTES
+    )
+    return {
+        "postgres_primary_pvc_bytes": postgres_bytes,
+        "nats_pvc_bytes": nats_bytes,
+        "pitr_restore_pvc_bytes": restore_bytes,
+        "wal_object_store_reserve_bytes": PROOF_WAL_RESERVE_BYTES,
+        "pitr_object_store_reserve_bytes": PROOF_PITR_RESERVE_BYTES,
+        "kind_container_reserve_bytes": kind_container_bytes,
+        "image_build_reserve_bytes": PROOF_IMAGE_BUILD_RESERVE_BYTES,
+        "primary_kind_nodes": primary_nodes,
+        "restore_kind_nodes": restore_nodes,
+        "concurrent_pvc_bytes": concurrent_pvc_bytes,
+        "required_free_bytes": required_free_bytes,
+        "keep_primary": keep_primary,
+    }
+
+
+def _filesystem_capacity(path: Path) -> dict[str, int]:
+    try:
+        resolved = path.resolve(strict=True)
+        fs = os.statvfs(resolved)
+        device = os.stat(resolved).st_dev
+    except OSError as error:
+        raise ref.ProofError(
+            f"cannot inspect HA proof filesystem capacity: {type(error).__name__}"
+        ) from error
+    return {
+        "free_bytes": fs.f_frsize * fs.f_bavail,
+        "free_inodes": fs.f_favail,
+        "device": int(device),
+    }
+
+
+def capacity_preflight(*, keep_primary: bool) -> dict[str, Any]:
+    budget = declared_ha_capacity_budget(keep_primary=keep_primary)
+    docker_root_raw = ref.output(["docker", "info", "--format", "{{.DockerRootDir}}"])
+    docker_root = Path(docker_root_raw)
+    if not docker_root.is_absolute():
+        raise ref.ProofError("DockerRootDir is not an absolute path")
+    repository_fs = _filesystem_capacity(ROOT)
+    docker_fs = _filesystem_capacity(docker_root)
+    for label, observed in (("repository", repository_fs), ("docker", docker_fs)):
+        if observed["free_bytes"] < budget["required_free_bytes"]:
+            raise ref.ProofError(
+                f"insufficient {label} filesystem space for HA proof: "
+                f"required={budget['required_free_bytes']} observed={observed['free_bytes']}"
+            )
+        if observed["free_inodes"] < PROOF_MIN_FREE_INODES:
+            raise ref.ProofError(
+                f"insufficient {label} filesystem inodes for HA proof: "
+                f"required={PROOF_MIN_FREE_INODES} observed={observed['free_inodes']}"
+            )
+    shared_filesystem = repository_fs["device"] == docker_fs["device"]
+    return {
+        **budget,
+        "repository_filesystem": {
+            "free_bytes": repository_fs["free_bytes"],
+            "free_inodes": repository_fs["free_inodes"],
+        },
+        "docker_filesystem": {
+            "free_bytes": docker_fs["free_bytes"],
+            "free_inodes": docker_fs["free_inodes"],
+        },
+        "repository_and_docker_share_filesystem": shared_filesystem,
+        "minimum_free_inodes": PROOF_MIN_FREE_INODES,
+        "budget_model": (
+            "declared PVC plus WAL/PITR, concurrent kind-container and image-build reserves; "
+            "the full conservative budget must fit every backing filesystem"
+        ),
+        "status": "pass",
+    }
+
+
+def credential_preflight(
+    s3_access_key: str, s3_secret_key: str, owner_id: str
+) -> dict[str, Any]:
+    expected_access_length = len(S3_ACCESS_KEY_PREFIX) + 16
+    if (
+        len(s3_access_key) != expected_access_length
+        or not s3_access_key.startswith(S3_ACCESS_KEY_PREFIX)
+        or any(character not in "0123456789abcdef" for character in s3_access_key[len(S3_ACCESS_KEY_PREFIX):])
+    ):
+        raise ref.ProofError("HA proof access key is not run-scoped")
+    if len(s3_secret_key) < 32:
+        raise ref.ProofError("HA proof object-store secret is unexpectedly short")
+    return {
+        "status": "pass",
+        "credential_lifetime": "single-proof-run",
+        "permission_scope": (
+            "dedicated ephemeral proof object-store/bucket only; Barman receives read/write "
+            "archive/restore access and the verifier uses signed read-only object listing"
+        ),
+        "external_account_credentials_used": False,
+        "repository_secret_used": False,
+        "access_key_sha256": sha256_text(s3_access_key),
+        "secret_material_recorded": False,
+        "owner_id_sha256": sha256_text(owner_id),
+    }
 
 
 def external_object_store_names(cluster: str) -> tuple[str, str]:
@@ -256,7 +471,11 @@ def external_object_store_runtime_image() -> str:
 
 
 def start_external_object_store(
-    cluster: str, commit: str, owner_id: str, s3_secret_key: str
+    cluster: str,
+    commit: str,
+    owner_id: str,
+    s3_access_key: str,
+    s3_secret_key: str,
 ) -> tuple[str, str, str]:
     container, volume = external_object_store_names(cluster)
     binding = external_object_store_binding(cluster, commit, owner_id)
@@ -292,7 +511,7 @@ def start_external_object_store(
                 "-ip=0.0.0.0",
             ],
             {
-                "AWS_ACCESS_KEY_ID": S3_ACCESS_KEY,
+                "AWS_ACCESS_KEY_ID": s3_access_key,
                 "AWS_SECRET_ACCESS_KEY": s3_secret_key,
                 "S3_BUCKET": S3_BUCKET,
             },
@@ -1411,12 +1630,498 @@ def wal_archived_at_or_after(observed: str, required: str) -> bool:
     return wal_segment_position(observed) >= wal_segment_position(required)
 
 
+def _aws_sigv4_signing_key(secret: str, date_stamp: str) -> bytes:
+    date_key = hmac.new(
+        ("AWS4" + secret).encode("utf-8"), date_stamp.encode("utf-8"), hashlib.sha256
+    ).digest()
+    region_key = hmac.new(date_key, b"us-east-1", hashlib.sha256).digest()
+    service_key = hmac.new(region_key, b"s3", hashlib.sha256).digest()
+    return hmac.new(service_key, b"aws4_request", hashlib.sha256).digest()
+
+
+def _aws_canonical_query(parameters: dict[str, str]) -> str:
+    quote = lambda value: urllib.parse.quote(str(value), safe="-_.~")
+    return "&".join(
+        f"{quote(key)}={quote(value)}" for key, value in sorted(parameters.items())
+    )
+
+
+def s3_list_object_keys(
+    address: str,
+    s3_access_key: str,
+    s3_secret_key: str,
+    *,
+    prefix: str = "",
+) -> list[str]:
+    host = f"{address}:8333"
+    continuation: str | None = None
+    keys: list[str] = []
+    for _page in range(20):
+        parameters = {"list-type": "2", "prefix": prefix}
+        if continuation:
+            parameters["continuation-token"] = continuation
+        query = _aws_canonical_query(parameters)
+        now = datetime.now(timezone.utc)
+        amz_date = now.strftime("%Y%m%dT%H%M%SZ")
+        date_stamp = now.strftime("%Y%m%d")
+        payload_hash = hashlib.sha256(b"").hexdigest()
+        canonical_uri = "/" + urllib.parse.quote(S3_BUCKET, safe="-_.~")
+        canonical_headers = (
+            f"host:{host}\n"
+            f"x-amz-content-sha256:{payload_hash}\n"
+            f"x-amz-date:{amz_date}\n"
+        )
+        signed_headers = "host;x-amz-content-sha256;x-amz-date"
+        canonical_request = "\n".join(
+            [
+                "GET",
+                canonical_uri,
+                query,
+                canonical_headers,
+                signed_headers,
+                payload_hash,
+            ]
+        )
+        scope = f"{date_stamp}/us-east-1/s3/aws4_request"
+        string_to_sign = "\n".join(
+            [
+                "AWS4-HMAC-SHA256",
+                amz_date,
+                scope,
+                hashlib.sha256(canonical_request.encode("utf-8")).hexdigest(),
+            ]
+        )
+        signature = hmac.new(
+            _aws_sigv4_signing_key(s3_secret_key, date_stamp),
+            string_to_sign.encode("utf-8"),
+            hashlib.sha256,
+        ).hexdigest()
+        authorization = (
+            "AWS4-HMAC-SHA256 "
+            f"Credential={s3_access_key}/{scope}, "
+            f"SignedHeaders={signed_headers}, Signature={signature}"
+        )
+        request = urllib.request.Request(
+            f"http://{host}{canonical_uri}?{query}",
+            headers={
+                "Authorization": authorization,
+                "x-amz-content-sha256": payload_hash,
+                "x-amz-date": amz_date,
+            },
+            method="GET",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=10) as response:
+                payload = response.read()
+        except (OSError, urllib.error.URLError) as error:
+            raise ref.ProofError(
+                f"read-only S3 object listing failed for proof store {host}"
+            ) from error
+        try:
+            root = ET.fromstring(payload)
+        except ET.ParseError as error:
+            raise ref.ProofError("proof object-store S3 listing returned invalid XML") from error
+        keys.extend(
+            element.text
+            for element in root.findall(".//{*}Key")
+            if isinstance(element.text, str) and element.text
+        )
+        truncated = root.find(".//{*}IsTruncated")
+        if truncated is None or str(truncated.text).lower() != "true":
+            return keys
+        token = root.find(".//{*}NextContinuationToken")
+        if token is None or not token.text:
+            raise ref.ProofError("truncated S3 listing has no continuation token")
+        continuation = token.text
+    raise ref.ProofError("proof object-store S3 listing exceeded 20 pages")
+
+
+def wal_object_key_matches(key: str, server_name: str, wal_segment: str) -> bool:
+    wal_segment_position(wal_segment)
+    parts = [part for part in key.split("/") if part]
+    if len(parts) < 3 or parts[0] != server_name or parts[1] != "wals":
+        return False
+    basename = parts[-1]
+    return basename in {wal_segment, f"{wal_segment}.gz"}
+
+
+def require_wal_object_identity(
+    keys: list[str], server_name: str, wal_segment: str
+) -> dict[str, Any]:
+    matches = sorted(
+        key
+        for key in set(keys)
+        if wal_object_key_matches(key, server_name, wal_segment)
+    )
+    if len(matches) != 1:
+        raise ref.ProofError(
+            "forced WAL segment is not uniquely present in proof object store: "
+            f"server={server_name} wal={wal_segment} matches={len(matches)}"
+        )
+    key = matches[0]
+    return {
+        "server_name": server_name,
+        "wal_segment": wal_segment,
+        "object_key": key,
+        "object_key_sha256": sha256_text(key),
+    }
+
+
+def object_store_wal_evidence(
+    address: str,
+    s3_access_key: str,
+    s3_secret_key: str,
+    *,
+    server_name: str,
+    wal_segment: str,
+) -> dict[str, Any]:
+    keys = s3_list_object_keys(
+        address, s3_access_key, s3_secret_key, prefix=f"{server_name}/"
+    )
+    identity = require_wal_object_identity(keys, server_name, wal_segment)
+    return {
+        **identity,
+        "bucket": S3_BUCKET,
+        "listed_key_count": len(keys),
+        "probe": "signed-s3-list-objects-v2-read-only",
+        "read_only": True,
+        "archive_command_reused_as_probe": False,
+    }
+
+
 def psql(kubectl: str, sql: str, *, cluster: str = "postgres-ha") -> str:
     primary = current_primary(kubectl, cluster)
     if not primary:
         raise ref.ProofError(f"PostgreSQL cluster {cluster} has no current primary")
     return ref.output([kubectl, "-n", "weltgewebe-data", "exec", primary, "--", "psql", "-d", "weltgewebe", "-Atqc", sql])
 
+
+def migration_history_digest(kubectl: str, *, cluster: str) -> str:
+    history = psql(
+        kubectl,
+        "SELECT COALESCE(string_agg(version::text || ':' || success::text || ':' || encode(checksum,'hex'), ',' ORDER BY version), '') FROM _sqlx_migrations",
+        cluster=cluster,
+    )
+    return sha256_text(history)
+
+
+def migration_failed_attempts(kubectl: str) -> int:
+    document = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "job/weltgewebe-migration",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    return int(document.get("status", {}).get("failed", 0) or 0)
+
+
+def migration_job_document(
+    kustomize: str, *, node_selector: dict[str, str] | None = None
+) -> dict[str, Any]:
+    rendered = ref.output(
+        [kustomize, "build", "platform/apps/weltgewebe/migration/ha"]
+    )
+    jobs = [
+        document
+        for document in _load_yaml_documents(rendered, "HA migration kustomization")
+        if isinstance(document, dict) and document.get("kind") == "Job"
+    ]
+    if len(jobs) != 1:
+        raise ref.ProofError(
+            f"HA migration kustomization rendered {len(jobs)} Jobs, expected one"
+        )
+    job = jobs[0]
+    if job.get("metadata", {}).get("namespace") != "weltgewebe":
+        raise ref.ProofError("HA migration Job is not bound to the weltgewebe namespace")
+    if node_selector:
+        pod_spec = job.setdefault("spec", {}).setdefault("template", {}).setdefault(
+            "spec", {}
+        )
+        existing = pod_spec.get("nodeSelector")
+        if existing not in (None, {}):
+            raise ref.ProofError(
+                f"HA migration Job already has an unexpected nodeSelector: {existing}"
+            )
+        pod_spec["nodeSelector"] = dict(node_selector)
+    return job
+
+
+def rerun_migration_job(
+    kubectl: str,
+    kustomize: str,
+    *,
+    node_selector: dict[str, str] | None = None,
+) -> None:
+    ref.run(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "delete",
+            "job/weltgewebe-migration",
+            "--ignore-not-found=true",
+            "--wait=true",
+        ],
+        timeout=120,
+    )
+    ref.apply_yaml(
+        kubectl,
+        migration_job_document(kustomize, node_selector=node_selector),
+    )
+
+
+def migration_network_partition_document() -> dict[str, Any]:
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {
+            "name": "t016-migration-egress-partition",
+            "namespace": "weltgewebe",
+        },
+        "spec": {
+            "podSelector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "weltgewebe-migration",
+                    "app.kubernetes.io/component": "database-migration",
+                }
+            },
+            "policyTypes": ["Egress"],
+            "egress": [],
+        },
+    }
+
+
+def remove_migration_network_partition(kubectl: str) -> dict[str, Any]:
+    result = subprocess.run(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "delete",
+            "networkpolicy/t016-migration-egress-partition",
+            "--ignore-not-found=true",
+            "--wait=true",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    return {
+        "returncode": result.returncode,
+        "stderr": (result.stderr or "").strip()[:500],
+    }
+
+
+def prove_migration_retry_and_idempotency(
+    kubectl: str,
+    kustomize: str,
+    *,
+    postgres_cluster: str,
+) -> dict[str, Any]:
+    baseline = migration_history_digest(kubectl, cluster=postgres_cluster)
+    try:
+        ref.apply_yaml(kubectl, migration_network_partition_document())
+        rerun_migration_job(kubectl, kustomize)
+        failed_attempts = int(
+            wait_until(
+                "migration failure under transient network interruption",
+                lambda: migration_failed_attempts(kubectl) or False,
+                timeout_seconds=180,
+                interval=1,
+            )
+        )
+    except Exception:
+        cleanup = remove_migration_network_partition(kubectl)
+        if cleanup["returncode"] != 0:
+            print(
+                "migration network-partition cleanup failed while preserving original failure: "
+                + json.dumps(cleanup, sort_keys=True),
+                file=sys.stderr,
+            )
+        raise
+    cleanup = remove_migration_network_partition(kubectl)
+    if cleanup["returncode"] != 0:
+        raise ref.ProofError(
+            "migration network-partition cleanup failed: "
+            + json.dumps(cleanup, sort_keys=True)
+        )
+    ref.wait_condition(
+        kubectl, "weltgewebe", "job/weltgewebe-migration", "Complete", "10m"
+    )
+    after_retry = migration_history_digest(kubectl, cluster=postgres_cluster)
+    if after_retry != baseline:
+        raise ref.ProofError(
+            "migration history changed across transient-network retry"
+        )
+
+    rerun_migration_job(kubectl, kustomize)
+    ref.wait_condition(
+        kubectl, "weltgewebe", "job/weltgewebe-migration", "Complete", "10m"
+    )
+    after_repeat = migration_history_digest(kubectl, cluster=postgres_cluster)
+    if after_repeat != baseline:
+        raise ref.ProofError("migration history changed across repeated execution")
+    return {
+        "status": "pass",
+        "transient_network_interruption": "temporary pod egress deny NetworkPolicy",
+        "failed_attempts_before_network_recovery": failed_attempts,
+        "job_retry_observed": failed_attempts >= 1,
+        "retry_completed": True,
+        "repeated_execution_completed": True,
+        "duplicate_migration_history_prevented": True,
+        "network_partition_cleanup": cleanup,
+        "baseline_history_sha256": baseline,
+        "post_retry_history_sha256": after_retry,
+        "post_repeat_history_sha256": after_repeat,
+    }
+
+
+def migration_data_egress_document() -> dict[str, Any]:
+    return {
+        "apiVersion": "networking.k8s.io/v1",
+        "kind": "NetworkPolicy",
+        "metadata": {
+            "name": "t016-migration-postgres-egress",
+            "namespace": "weltgewebe",
+        },
+        "spec": {
+            "podSelector": {
+                "matchLabels": {
+                    "app.kubernetes.io/name": "weltgewebe-migration",
+                    "app.kubernetes.io/component": "database-migration",
+                }
+            },
+            "policyTypes": ["Egress"],
+            "egress": [
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {
+                                "matchLabels": {
+                                    "kubernetes.io/metadata.name": "weltgewebe-data"
+                                }
+                            }
+                        }
+                    ],
+                    "ports": [{"port": 5432, "protocol": "TCP"}],
+                }
+            ],
+        },
+    }
+
+
+def remove_migration_data_egress(kubectl: str) -> dict[str, Any]:
+    result = subprocess.run(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "delete",
+            "networkpolicy/t016-migration-postgres-egress",
+            "--ignore-not-found=true",
+            "--wait=true",
+        ],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        timeout=60,
+        check=False,
+    )
+    return {
+        "returncode": result.returncode,
+        "stderr": (result.stderr or "").strip()[:500],
+    }
+
+
+def start_migration_election_probe(
+    kubectl: str,
+    kustomize: str,
+    *,
+    postgres_cluster: str,
+    healthy_zone: str,
+) -> str:
+    baseline = migration_history_digest(kubectl, cluster=postgres_cluster)
+    # The normal HA app overlay is already active here and default-denies egress.
+    # Give only the proof migration pods the same narrow PostgreSQL port/namespace
+    # reachability they need, while DNS remains covered by the normal allow-dns policy.
+    ref.apply_yaml(kubectl, migration_data_egress_document())
+    try:
+        rerun_migration_job(
+            kubectl,
+            kustomize,
+            node_selector={"topology.kubernetes.io/zone": healthy_zone},
+        )
+    except Exception:
+        cleanup = remove_migration_data_egress(kubectl)
+        if cleanup["returncode"] != 0:
+            print(
+                "migration election egress cleanup failed while preserving original failure: "
+                + json.dumps(cleanup, sort_keys=True),
+                file=sys.stderr,
+            )
+        raise
+    return baseline
+
+
+def finish_migration_election_probe(
+    kubectl: str,
+    *,
+    postgres_cluster: str,
+    baseline_history_sha256: str,
+    healthy_zone: str,
+) -> dict[str, Any]:
+    try:
+        ref.wait_condition(
+            kubectl, "weltgewebe", "job/weltgewebe-migration", "Complete", "10m"
+        )
+        failed_attempts = migration_failed_attempts(kubectl)
+        if failed_attempts < 1:
+            raise ref.ProofError(
+                "migration Job did not observe a failed attempt during PostgreSQL election"
+            )
+        after = migration_history_digest(kubectl, cluster=postgres_cluster)
+        if after != baseline_history_sha256:
+            raise ref.ProofError("migration history changed across PostgreSQL election retry")
+    except Exception:
+        cleanup = remove_migration_data_egress(kubectl)
+        if cleanup["returncode"] != 0:
+            print(
+                "migration election egress cleanup failed while preserving original failure: "
+                + json.dumps(cleanup, sort_keys=True),
+                file=sys.stderr,
+            )
+        raise
+    cleanup = remove_migration_data_egress(kubectl)
+    if cleanup["returncode"] != 0:
+        raise ref.ProofError(
+            "migration election egress cleanup failed: "
+            + json.dumps(cleanup, sort_keys=True)
+        )
+    return {
+        "status": "pass",
+        "interruption": "real zone failure during PostgreSQL primary election",
+        "scheduled_healthy_zone": healthy_zone,
+        "failed_attempts_before_election_recovery": failed_attempts,
+        "job_retry_observed": True,
+        "retry_completed": True,
+        "duplicate_migration_history_prevented": True,
+        "proof_postgres_egress": {
+            "namespace": "weltgewebe-data",
+            "port": 5432,
+            "cleanup": cleanup,
+        },
+        "baseline_history_sha256": baseline_history_sha256,
+        "post_election_history_sha256": after,
+    }
 
 def wait_for_pitr_boundary(kubectl: str, target_time: str) -> None:
     psql(kubectl, "SELECT pg_sleep(2)")
@@ -1777,6 +2482,313 @@ def gateway_owner_sample(
         "path_failures": failed_paths,
     }
 
+
+def direct_api_probe_target(kubectl: str) -> tuple[str, int]:
+    service = json.loads(
+        ref.output(
+            [
+                kubectl,
+                "-n",
+                "weltgewebe",
+                "get",
+                "service/weltgewebe-api",
+                "-o",
+                "json",
+            ]
+        )
+    )
+    address = str(service.get("spec", {}).get("clusterIP", ""))
+    if not address or address == "None":
+        raise ref.ProofError("direct API service has no stable clusterIP")
+    ports = service.get("spec", {}).get("ports", [])
+    port = next(
+        (int(item["port"]) for item in ports if item.get("name") == "http"),
+        8080,
+    )
+    return address, port
+
+
+def summarize_continuous_availability(
+    samples: list[dict[str, Any]],
+    *,
+    window_seconds: float,
+    interval_seconds: float,
+) -> dict[str, Any]:
+    if not samples:
+        raise ref.ProofError("continuous availability monitor produced no samples")
+    failed = [sample for sample in samples if sample.get("available") is not True]
+    spacings = [
+        float(samples[index]["elapsed_seconds"])
+        - float(samples[index - 1]["elapsed_seconds"])
+        for index in range(1, len(samples))
+    ]
+    measurement_gap_seconds = sum(
+        max(0.0, spacing - interval_seconds) for spacing in spacings
+    )
+    outage_seconds = 0.0
+    outage_started: float | None = None
+    longest_outage = 0.0
+    for sample in samples:
+        elapsed = float(sample["elapsed_seconds"])
+        if sample.get("available") is True:
+            if outage_started is not None:
+                duration = max(0.0, elapsed - outage_started)
+                outage_seconds += duration
+                longest_outage = max(longest_outage, duration)
+                outage_started = None
+        elif outage_started is None:
+            outage_started = elapsed
+    if outage_started is not None:
+        duration = max(0.0, window_seconds - outage_started)
+        outage_seconds += duration
+        longest_outage = max(longest_outage, duration)
+    return {
+        "sample_count": len(samples),
+        "failed_samples": len(failed),
+        "measurement_gap_seconds": round(measurement_gap_seconds, 3),
+        "max_sample_spacing_seconds": round(max(spacings, default=0.0), 3),
+        "measured_outage_seconds": round(outage_seconds, 3),
+        "longest_measured_outage_seconds": round(longest_outage, 3),
+        "measurement_interval_seconds": interval_seconds,
+        "window_seconds": round(window_seconds, 3),
+        "failure_samples": failed[:10],
+    }
+
+
+def summarize_failover_recovery(
+    samples: list[dict[str, Any]],
+    *,
+    failure_elapsed_seconds: float,
+    interval_seconds: float,
+) -> dict[str, Any]:
+    post_failure = [
+        sample
+        for sample in samples
+        if float(sample["elapsed_seconds"]) >= failure_elapsed_seconds
+    ]
+    if not post_failure:
+        raise ref.ProofError("continuous availability has no post-failure samples")
+    first_failed_index = next(
+        (
+            index
+            for index, sample in enumerate(post_failure)
+            if sample.get("available") is not True
+        ),
+        None,
+    )
+    if first_failed_index is None:
+        return {
+            "outage_observed": False,
+            "observed_rto_seconds": 0.0,
+            "failed_samples_before_recovery": 0,
+            "sampling_resolution_seconds": interval_seconds,
+            "first_post_failure_sample_seconds": round(
+                max(
+                    0.0,
+                    float(post_failure[0]["elapsed_seconds"])
+                    - failure_elapsed_seconds,
+                ),
+                3,
+            ),
+            "interpretation": (
+                "no outage was sampled; a shorter interruption below the sampling resolution "
+                "is not excluded"
+            ),
+        }
+    recovery = next(
+        (
+            sample
+            for sample in post_failure[first_failed_index + 1 :]
+            if sample.get("available") is True
+        ),
+        None,
+    )
+    if recovery is None:
+        raise ref.ProofError("continuous availability did not observe recovery after failure")
+    failed_before_recovery = sum(
+        1
+        for sample in post_failure[: post_failure.index(recovery)]
+        if sample.get("available") is not True
+    )
+    return {
+        "outage_observed": True,
+        "observed_rto_seconds": round(
+            max(
+                0.0,
+                float(recovery["elapsed_seconds"]) - failure_elapsed_seconds,
+            ),
+            3,
+        ),
+        "failed_samples_before_recovery": failed_before_recovery,
+        "sampling_resolution_seconds": interval_seconds,
+        "first_failed_sample_seconds": round(
+            max(
+                0.0,
+                float(post_failure[first_failed_index]["elapsed_seconds"])
+                - failure_elapsed_seconds,
+            ),
+            3,
+        ),
+        "recovery_observation": "first-success-after-first-failed-sample",
+    }
+
+
+class ContinuousAvailabilityMonitor:
+    def __init__(
+        self,
+        kubectl: str,
+        kind: str,
+        cluster: str,
+        marker: str,
+        gateway_port: int,
+        *,
+        interval_seconds: float = CONTINUOUS_AVAILABILITY_INTERVAL_SECONDS,
+    ) -> None:
+        self.kubectl = kubectl
+        self.kind = kind
+        self.cluster = cluster
+        self.marker = marker
+        self.gateway_port = gateway_port
+        self.interval_seconds = interval_seconds
+        self.gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
+        nodes = sorted(set(ref.kind_nodes(kind, cluster)))
+        self.probe_node = next(
+            (node for node in nodes if "control-plane" in node),
+            nodes[0] if nodes else "",
+        )
+        if not self.probe_node:
+            raise ref.ProofError("continuous availability monitor has no kind probe node")
+        direct_address, direct_port = direct_api_probe_target(kubectl)
+        self.direct_url = f"http://{direct_address}:{direct_port}/nodes"
+        self._stop = threading.Event()
+        self._thread: threading.Thread | None = None
+        self._started = 0.0
+        self._failure_elapsed_seconds: float | None = None
+        self._failure_label: str | None = None
+        self._gateway_samples: list[dict[str, Any]] = []
+        self._direct_samples: list[dict[str, Any]] = []
+
+    def start(self) -> None:
+        if self._thread is not None:
+            raise ref.ProofError("continuous availability monitor already started")
+        self._started = time.monotonic()
+        self._thread = threading.Thread(
+            target=self._run,
+            name="weltgewebe-ha-continuous-availability",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def mark_failure(self, label: str) -> None:
+        if self._thread is None or self._started <= 0:
+            raise ref.ProofError("continuous availability monitor is not running")
+        if self._failure_elapsed_seconds is not None:
+            raise ref.ProofError("continuous availability failure was already marked")
+        self._failure_elapsed_seconds = time.monotonic() - self._started
+        self._failure_label = label
+
+    def _sample(self, channel: str) -> dict[str, Any]:
+        try:
+            if channel == "gateway":
+                result = gateway_owner_sample(
+                    self.kind,
+                    self.cluster,
+                    self.gateway_addresses,
+                    self.gateway_port,
+                    self.marker,
+                )
+                return {
+                    "available": bool(result.get("available")),
+                    "failed_paths": int(result.get("failed_paths", 0)),
+                }
+            result = projection_sample_url(
+                self.probe_node, self.direct_url, self.marker
+            )
+            return {
+                "available": bool(result.get("available")),
+                "returncode": result.get("returncode"),
+                "duration_seconds": result.get("duration_seconds"),
+                "stderr": result.get("stderr", "")[:200],
+            }
+        except (
+            OSError,
+            subprocess.SubprocessError,
+            json.JSONDecodeError,
+            ref.ProofError,
+        ) as error:
+            return {
+                "available": False,
+                "probe_error": f"{type(error).__name__}: {error}"[:300],
+            }
+
+    def _run(self) -> None:
+        next_due = self._started
+        while not self._stop.is_set():
+            sampled_at = time.monotonic()
+            elapsed = sampled_at - self._started
+            # Probe the two user-visible paths at the same sampling instant.
+            # Sequential probing would make a slow Gateway sample delay direct API evidence.
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                gateway_future = executor.submit(self._sample, "gateway")
+                direct_future = executor.submit(self._sample, "direct")
+                gateway = gateway_future.result()
+                direct = direct_future.result()
+            gateway["elapsed_seconds"] = round(elapsed, 3)
+            direct["elapsed_seconds"] = round(elapsed, 3)
+            self._gateway_samples.append(gateway)
+            self._direct_samples.append(direct)
+            next_due += self.interval_seconds
+            self._stop.wait(max(0.0, next_due - time.monotonic()))
+
+    def stop(self, end_reason: str) -> dict[str, Any]:
+        if self._thread is None:
+            raise ref.ProofError("continuous availability monitor was not started")
+        self._stop.set()
+        self._thread.join(timeout=15)
+        if self._thread.is_alive():
+            raise ref.ProofError("continuous availability monitor did not stop")
+        finished = time.monotonic()
+        window = finished - self._started
+        gateway = summarize_continuous_availability(
+            self._gateway_samples,
+            window_seconds=window,
+            interval_seconds=self.interval_seconds,
+        )
+        direct_api = summarize_continuous_availability(
+            self._direct_samples,
+            window_seconds=window,
+            interval_seconds=self.interval_seconds,
+        )
+        failure: dict[str, Any] | None = None
+        if self._failure_elapsed_seconds is not None:
+            gateway["failover_recovery"] = summarize_failover_recovery(
+                self._gateway_samples,
+                failure_elapsed_seconds=self._failure_elapsed_seconds,
+                interval_seconds=self.interval_seconds,
+            )
+            direct_api["failover_recovery"] = summarize_failover_recovery(
+                self._direct_samples,
+                failure_elapsed_seconds=self._failure_elapsed_seconds,
+                interval_seconds=self.interval_seconds,
+            )
+            failure = {
+                "label": self._failure_label,
+                "elapsed_seconds": round(self._failure_elapsed_seconds, 3),
+            }
+        return {
+            "window": {
+                "start": "first-acknowledged-domain-projection-before-change-management",
+                "end": end_reason,
+                "seconds": round(window, 3),
+                "excludes": [
+                    "initial-platform-bootstrap-before-service-readiness",
+                    "intentional-primary-cluster-retirement-and-blank-PITR-restore",
+                ],
+            },
+            "failure_marker": failure,
+            "gateway": gateway,
+            "direct_api": direct_api,
+        }
 
 def projection_path_diagnostic(
     kubectl: str,
@@ -2261,7 +3273,12 @@ def prove_api_upgrade_and_rollback(
 
 
 def measure_wal_archive(
-    kubectl: str, *, cluster: str
+    kubectl: str,
+    *,
+    cluster: str,
+    object_store_address: str,
+    s3_access_key: str,
+    s3_secret_key: str,
 ) -> dict[str, Any]:
     started = time.monotonic()
     required = psql(
@@ -2288,12 +3305,34 @@ def measure_wal_archive(
             timeout_seconds=300,
         )
     )
+    archiver_latency = time.monotonic() - started
+    object_store = dict(
+        wait_until(
+            f"{cluster} exact WAL object {required}",
+            lambda: object_store_wal_evidence(
+                object_store_address,
+                s3_access_key,
+                s3_secret_key,
+                server_name=cluster,
+                wal_segment=required,
+            ),
+            timeout_seconds=300,
+            interval=1,
+        )
+    )
+    object_store_visibility_latency = time.monotonic() - started
     return {
         "required_wal": required,
         "observed_wal": observed,
-        "latency_seconds": round(time.monotonic() - started, 3),
+        # Preserve T004's historical metric semantics: this stops at pg_stat_archiver.
+        "latency_seconds": round(archiver_latency, 3),
+        "archiver_latency_seconds": round(archiver_latency, 3),
+        "object_store_visibility_latency_seconds": round(
+            object_store_visibility_latency, 3
+        ),
+        "archiver_state_verified": True,
+        "object_store": object_store,
     }
-
 
 def insert_domain_node(kubectl: str, node_id: str, title: str, *, cluster: str = "postgres-ha") -> None:
     payload = json.dumps({"summary": "HA recovery proof", "tags": ["ha-proof"]}, separators=(",", ":"))
@@ -2442,8 +3481,15 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     object_store_created = False
     stopped_node = ""
     object_store_address = ""
+    availability_monitor: ContinuousAvailabilityMonitor | None = None
+    continuous_availability: dict[str, Any] | None = None
     app_password = secrets.token_urlsafe(24)
+    s3_access_key = f"{S3_ACCESS_KEY_PREFIX}{secrets.token_hex(8)}"
     s3_secret_key = secrets.token_urlsafe(32)
+    postgres_contract = postgres_runtime_contract()
+    capacity = capacity_preflight(keep_primary=args.keep)
+    credentials = credential_preflight(s3_access_key, s3_secret_key, owner_id)
+    proof_started = time.monotonic()
     try:
         create_kind_cluster(
             kind, args.cluster, node_image,
@@ -2463,11 +3509,11 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
         primary_dns_topology = configure_cluster_dns_ha(kubectl)
         _, _, object_store_address = start_external_object_store(
-            args.cluster, commit, owner_id, s3_secret_key
+            args.cluster, commit, owner_id, s3_access_key, s3_secret_key
         )
         object_store_created = True
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
-        apply_secret_contracts(kubectl, app_password, s3_secret_key)
+        apply_secret_contracts(kubectl, app_password, s3_access_key, s3_secret_key)
         ref.apply_file(kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
         apply_object_store_endpoint(kubectl, object_store_address)
         install_cert_manager(kubectl, receipt["artifacts"]["cert_manager"])
@@ -2485,9 +3531,18 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl, "postgres-ha"
         )
         ref.apply_file(kubectl, ROOT / "platform/apps/weltgewebe/migration/ha/namespace.yaml")
-        apply_runtime_secret(kubectl, app_password)
+        apply_runtime_secret(
+            kubectl,
+            app_password,
+            postgres_service=postgres_contract["primary_service"],
+        )
         ref.apply_direct(kubectl, kustomize, "platform/apps/weltgewebe/migration/ha")
         ref.wait_condition(kubectl, "weltgewebe", "job/weltgewebe-migration", "Complete", "10m")
+        migration_recovery = prove_migration_retry_and_idempotency(
+            kubectl,
+            kustomize,
+            postgres_cluster=postgres_contract["cluster"],
+        )
         ref.apply_direct(kubectl, kustomize, "platform/apps/weltgewebe/overlays/ha")
         ref.apply_direct(kubectl, kustomize, "platform/infrastructure/gateway")
         wait_api_replicas(kubectl)
@@ -2504,6 +3559,14 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         marker = "00000000-0000-4000-8000-00000000a004"
         insert_domain_node(kubectl, marker, "T004 acknowledged domain mutation")
         wait_until("domain mutation in API projection", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
+        availability_monitor = ContinuousAvailabilityMonitor(
+            kubectl,
+            kind,
+            args.cluster,
+            marker,
+            int(gateway_before["listener_port"]),
+        )
+        availability_monitor.start()
         change_management = prove_api_upgrade_and_rollback(
             kubectl, kind, args.cluster, marker, gateway_before
         )
@@ -2534,32 +3597,86 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             raise ref.ProofError("JetStream did not acknowledge the baseline message")
 
         failure_started = time.monotonic()
+        if availability_monitor is None:
+            raise ref.ProofError("continuous availability monitor disappeared before zone failure")
+        availability_monitor.mark_failure("single-zone-node-stop")
         ref.run(["docker", "stop", "--timeout", "10", stopped_node], timeout=60)
-        barman_leader_after_failure = wait_barman_plugin_leader_after_node_loss(
-            kubectl, stopped_node
+        migration_election_baseline = start_migration_election_probe(
+            kubectl,
+            kustomize,
+            postgres_cluster=postgres_contract["cluster"],
+            healthy_zone=alternate_zone,
         )
-        barman_leader_rto = time.monotonic() - failure_started
         def new_primary_probe():
             candidate = current_primary(kubectl)
             return candidate if candidate and candidate != primary_before else False
         primary_after = str(wait_until("PostgreSQL primary failover", new_primary_probe, timeout_seconds=180))
         postgres_rto = time.monotonic() - failure_started
+        wait_until("acknowledged domain mutation after failover", lambda: node_exists(kubectl, marker), timeout_seconds=60)
+        gateway_addresses_after_failure = sorted(set(ref.gateway_addresses(kubectl)))
+        gateway_recovery = wait_until(
+            "Gateway API projection after zone failure",
+            lambda: (
+                sample
+                if (
+                    sample := gateway_owner_sample(
+                        kind,
+                        args.cluster,
+                        gateway_addresses_after_failure,
+                        int(gateway_before["listener_port"]),
+                        marker,
+                    )
+                ).get("available")
+                else False
+            ),
+            timeout_seconds=180,
+            interval=1,
+        )
+        api_validation_upper_bound = time.monotonic() - failure_started
+        direct_address, direct_port = direct_api_probe_target(kubectl)
+        direct_probe_node = next(
+            node
+            for node in sorted(set(ref.kind_nodes(kind, args.cluster)))
+            if "control-plane" in node
+        )
+        wait_until(
+            "direct API projection after zone failure",
+            lambda: projection_sample_url(
+                direct_probe_node,
+                f"http://{direct_address}:{direct_port}/nodes",
+                marker,
+            ).get("available"),
+            timeout_seconds=180,
+            interval=1,
+        )
+        direct_api_validation_upper_bound = time.monotonic() - failure_started
+        def nats_publish_probe():
+            result = nats(kubectl, ["pub", "wg.proof", "after-zone-failure"], check=False)
+            return result.returncode == 0
+        wait_until("JetStream publish after zone failure", nats_publish_probe, timeout_seconds=120, interval=1)
+        nats_rto = time.monotonic() - failure_started
+        component_recovery_rto = nats_rto
+        if nats_message_count(kubectl) != 2:
+            raise ref.ProofError("JetStream lost an acknowledged message during zone failure")
+
+        # The migration proof was started during the election but is intentionally
+        # awaited only after the core PG/API/NATS recovery clock has stopped.
+        migration_recovery["election_interruption"] = finish_migration_election_probe(
+            kubectl,
+            postgres_cluster=postgres_contract["cluster"],
+            baseline_history_sha256=migration_election_baseline,
+            healthy_zone=alternate_zone,
+        )
+        barman_leader_after_failure = wait_barman_plugin_leader_after_node_loss(
+            kubectl, stopped_node
+        )
+        barman_leader_rto = time.monotonic() - failure_started
         barman_communication_after_failure = prove_barman_plugin_backup(
             kubectl,
             "postgres-ha",
             f"t004-failover-{commit[:8]}",
         )
         barman_rto = time.monotonic() - failure_started
-        wait_until("acknowledged domain mutation after failover", lambda: node_exists(kubectl, marker), timeout_seconds=60)
-        wait_until("API projection after zone failure", lambda: gateway_contains_node(kubectl, kind, args.cluster, marker), timeout_seconds=180)
-        api_rto = time.monotonic() - failure_started
-        def nats_publish_probe():
-            result = nats(kubectl, ["pub", "wg.proof", "after-zone-failure"], check=False)
-            return result.returncode == 0
-        wait_until("JetStream publish after zone failure", nats_publish_probe, timeout_seconds=120, interval=1)
-        nats_rto = time.monotonic() - failure_started
-        if nats_message_count(kubectl) != 2:
-            raise ref.ProofError("JetStream lost an acknowledged message during zone failure")
 
         ref.run(["docker", "start", stopped_node], timeout=60)
         stopped_node = ""
@@ -2570,6 +3687,14 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_api_replicas(kubectl)
+        recovered_topology = {
+            "postgres": pod_topology(kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-ha"),
+            "nats": pod_topology(kubectl, "weltgewebe-data", "app.kubernetes.io/name=nats"),
+            "api": pod_topology(kubectl, "weltgewebe", "app.kubernetes.io/name=weltgewebe-api"),
+        }
+        for component, observed in recovered_topology.items():
+            require_zones(observed, 3, f"recovered {component}")
+        full_redundancy_rto = time.monotonic() - failure_started
 
         before_id = "00000000-0000-4000-8000-00000000b004"
         after_id = "00000000-0000-4000-8000-00000000c004"
@@ -2596,8 +3721,24 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         wait_for_pitr_boundary(kubectl, target_time)
         insert_domain_node(kubectl, after_id, "T004 after PITR target")
         primary_wal_archive = measure_wal_archive(
-            kubectl, cluster="postgres-ha"
+            kubectl,
+            cluster="postgres-ha",
+            object_store_address=object_store_address,
+            s3_access_key=s3_access_key,
+            s3_secret_key=s3_secret_key,
         )
+        if availability_monitor is None:
+            raise ref.ProofError("continuous availability monitor disappeared before closeout")
+        continuous_availability = availability_monitor.stop(
+            "application-service-window-complete-before-blank-PITR-restore"
+            if args.keep
+            else "intentional-primary-cluster-retirement-before-blank-PITR-restore"
+        )
+        availability_monitor = None
+        gateway_failover = continuous_availability["gateway"]["failover_recovery"]
+        direct_api_failover = continuous_availability["direct_api"]["failover_recovery"]
+        service_rto = float(gateway_failover["observed_rto_seconds"])
+        direct_api_observed_rto = float(direct_api_failover["observed_rto_seconds"])
 
         primary_cluster_retirement = create_blank_restore_cluster(
             kind,
@@ -2619,7 +3760,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         ref.run([restore_kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=8m"])
         restore_dns_topology = configure_cluster_dns_ha(restore_kubectl)
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/namespace.yaml")
-        apply_secret_contracts(restore_kubectl, app_password, s3_secret_key)
+        apply_secret_contracts(restore_kubectl, app_password, s3_access_key, s3_secret_key)
         ref.apply_file(restore_kubectl, ROOT / "platform/infrastructure/ha-data/object-store.yaml")
         apply_object_store_endpoint(restore_kubectl, object_store_address)
         install_cert_manager(
@@ -2651,7 +3792,11 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             restore_kubectl, "postgres-restore"
         )
         restore_wal_archive = measure_wal_archive(
-            restore_kubectl, cluster="postgres-restore"
+            restore_kubectl,
+            cluster="postgres-restore",
+            object_store_address=object_store_address,
+            s3_access_key=s3_access_key,
+            s3_secret_key=s3_secret_key,
         )
         continuity_validation_seconds = time.monotonic() - continuity_started
         restored_topology = pod_topology(restore_kubectl, "weltgewebe-data", "cnpg.io/cluster=postgres-restore")
@@ -2698,14 +3843,46 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "primary": primary_barman_sidecars,
                 "restore": restore_barman_sidecars,
             },
-            "topology": topology, "restored_topology": restored_topology,
+            "topology": topology,
+            "recovered_topology": recovered_topology,
+            "restored_topology": restored_topology,
+            "preflight": {
+                "capacity": capacity,
+                "credentials": credentials,
+            },
+            "migration_recovery": migration_recovery,
+            "continuous_availability": continuous_availability,
             "zone_failure": {
                 "zone": failure_zone, "node": primary_topology["node"],
                 "postgres_primary_before": primary_before, "postgres_primary_after": primary_after,
                 "barman_leader_rto_seconds": round(barman_leader_rto, 3),
                 "barman_plugin_rto_seconds": round(barman_rto, 3),
                 "postgres_rto_seconds": round(postgres_rto, 3),
-                "api_rto_seconds": round(api_rto, 3), "nats_rto_seconds": round(nats_rto, 3),
+                # Backward-compatible validation upper bounds; continuous samples below
+                # carry the service-level observation without sequential-probe inflation.
+                "api_rto_seconds": round(api_validation_upper_bound, 3),
+                "direct_api_rto_seconds": round(direct_api_validation_upper_bound, 3),
+                "nats_rto_seconds": round(nats_rto, 3),
+                "service_rto_seconds": round(service_rto, 3),
+                "direct_api_observed_rto_seconds": round(direct_api_observed_rto, 3),
+                "component_recovery_rto_seconds": round(component_recovery_rto, 3),
+                "full_redundancy_rto_seconds": round(full_redundancy_rto, 3),
+                "rto_semantics": {
+                    "service": (
+                        "continuous Gateway observation from injected zone failure to the first "
+                        "sampled recovery; zero means no outage was sampled and does not exclude "
+                        "a sub-resolution interruption"
+                    ),
+                    "components": (
+                        "conservative elapsed time until PostgreSQL promotion, Gateway/direct API "
+                        "readbacks and JetStream publish have all been validated"
+                    ),
+                    "full_redundancy": (
+                        "stopped node rejoined and PostgreSQL, NATS, API and Barman returned to "
+                        "three-zone readiness"
+                    ),
+                },
+                "gateway_recovery_sample": gateway_recovery,
                 "acknowledged_domain_mutation_preserved": True,
                 "acknowledged_jetstream_messages": 2,
             },
@@ -2716,6 +3893,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "required_archived_wal": primary_wal_archive["required_wal"],
                 "observed_archived_wal": primary_wal_archive["observed_wal"],
                 "wal_archive_latency_seconds": primary_wal_archive["latency_seconds"],
+                "wal_archive": primary_wal_archive,
             },
             "restore": {
                 "rto_seconds": round(restore_rto, 3),
@@ -2734,18 +3912,38 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                     restore_wal_archive["latency_seconds"],
                 ),
                 "measurement_model": (
-                    "maximum observed forced-WAL archive latency under the "
-                    "reference-cell workload"
+                    "maximum observed forced-WAL pg_stat_archiver latency under the "
+                    "reference-cell workload; preserved for backward compatibility"
+                ),
+                "measured_object_store_visibility_rpo_upper_bound_seconds": max(
+                    primary_wal_archive["object_store_visibility_latency_seconds"],
+                    restore_wal_archive["object_store_visibility_latency_seconds"],
+                ),
+                "object_store_measurement_model": (
+                    "maximum observed forced-WAL latency until the exact segment identity is "
+                    "read-only visible in the external proof object store"
                 ),
                 "primary_wal_archive_latency_seconds": primary_wal_archive["latency_seconds"],
                 "restore_wal_archive_latency_seconds": restore_wal_archive["latency_seconds"],
+                "primary_wal_object_visibility_latency_seconds": primary_wal_archive[
+                    "object_store_visibility_latency_seconds"
+                ],
+                "restore_wal_object_visibility_latency_seconds": restore_wal_archive[
+                    "object_store_visibility_latency_seconds"
+                ],
             },
             "change_management": change_management,
             "gateway_before": gateway_before,
+            "proof_duration_seconds": round(time.monotonic() - proof_started, 3),
+            "maintainability": {
+                "runtime_optimizations_applied": [],
+                "reason": "T016 applies no unmeasured runtime optimization",
+            },
             "proof_owner_id": owner_id,
             "production_changed": False,
             "does_not_establish": [
                 "production rollout", "managed multi-region object-store durability",
+                "multi-region production HA", "multi-cloud production HA", "production HA cutover",
                 "RTO or RPO under production load", "survival of two simultaneous failure domains",
                 "semantic compatibility of a distinct application release",
                 "production error-budget consumption under representative traffic",
@@ -2763,6 +3961,20 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         result["receipt_sha256"] = hashlib.sha256(path.read_bytes()).hexdigest()
         return result
     except Exception:
+        if availability_monitor is not None:
+            try:
+                availability = availability_monitor.stop("proof-failure-before-service-window-close")
+                print(
+                    "continuous availability at proof failure: "
+                    + json.dumps(availability, sort_keys=True),
+                    file=sys.stderr,
+                )
+            except Exception as monitor_error:
+                print(
+                    f"continuous availability monitor cleanup failed: {monitor_error}",
+                    file=sys.stderr,
+                )
+            availability_monitor = None
         if lifecycle.primary_created:
             ref.configure_cluster_access(kind, args.cluster)
             ha_diagnostic_snapshot(kubectl, args.cluster)

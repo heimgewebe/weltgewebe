@@ -113,6 +113,50 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
         self.assertNotIn("configMapKeyRef", database["valueFrom"])
 
+    def test_ha_migration_job_retries_and_service_identity_is_contract_derived(self) -> None:
+        job = next(
+            self.validator._documents(
+                ROOT / "platform/apps/weltgewebe/migration/ha/job.yaml"
+            )
+        )
+        self.assertEqual(job["spec"]["backoffLimit"], 4)
+        partition = self.ha.migration_network_partition_document()
+        self.assertEqual(partition["spec"]["egress"], [])
+        self.assertEqual(
+            partition["spec"]["podSelector"]["matchLabels"]["app.kubernetes.io/name"],
+            "weltgewebe-migration",
+        )
+        election_egress = self.ha.migration_data_egress_document()
+        self.assertEqual(
+            election_egress["spec"]["egress"],
+            [
+                {
+                    "to": [
+                        {
+                            "namespaceSelector": {
+                                "matchLabels": {
+                                    "kubernetes.io/metadata.name": "weltgewebe-data"
+                                }
+                            }
+                        }
+                    ],
+                    "ports": [{"port": 5432, "protocol": "TCP"}],
+                }
+            ],
+        )
+        contract = self.ha.postgres_runtime_contract()
+        self.assertEqual(contract, {"cluster": "postgres-ha", "primary_service": "postgres-ha-rw"})
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertNotIn('postgres_service: str = "postgres-ha-rw"', source)
+        self.assertIn('postgres_service=postgres_contract["primary_service"]', source)
+        self.assertIn("prove_migration_retry_and_idempotency(", source)
+        self.assertIn("temporary pod egress deny NetworkPolicy", source)
+        self.assertIn("start_migration_election_probe(", source)
+        self.assertIn("migration_data_egress_document()", source)
+        self.assertIn('"election_interruption"', source)
+        self.assertIn('"job_retry_observed"', source)
+        self.assertIn('"duplicate_migration_history_prevented"', source)
+
     def test_restore_document_uses_pitr_and_three_instances(self) -> None:
         target = "2026-07-17T15:00:00.000000Z"
         document = self.ha.restore_cluster_document(target)
@@ -470,7 +514,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         ) as cleanup:
             with self.assertRaisesRegex(self.ha.ref.ProofError, "container start failed"):
                 self.ha.start_external_object_store(
-                    "proof", "a" * 40, "owner-proof", "secret"
+                    "proof", "a" * 40, "owner-proof", "access", "secret"
                 )
         cleanup.assert_called_once_with("proof", "a" * 40, "owner-proof")
 
@@ -1616,7 +1660,7 @@ spec:
             "restore_barman_sidecars = verify_barman_sidecar_images(", rto
         )
         archive = source.index(
-            'restore_kubectl, cluster="postgres-restore"', sidecars
+            'cluster="postgres-restore"', sidecars
         )
         self.assertLess(ready, rto)
         self.assertLess(rto, sidecars)
@@ -1655,6 +1699,99 @@ spec:
         self.assertIn('"continued_wal_archiving": restore_wal_archive', source)
         self.assertIn("FROM pg_stat_archiver", source)
         self.assertNotIn("status.lastArchivedWAL", source)
+
+    def test_wal_object_identity_requires_exact_server_and_segment(self) -> None:
+        segment = "000000020000000A000000FE"
+        good = f"postgres-ha/wals/000000020000000A/{segment}.gz"
+        identity = self.ha.require_wal_object_identity(
+            [good], "postgres-ha", segment
+        )
+        self.assertEqual(identity["object_key"], good)
+        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
+            self.ha.require_wal_object_identity([], "postgres-ha", segment)
+        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
+            self.ha.require_wal_object_identity(
+                [f"postgres-ha/wals/000000020000000A/000000020000000A000000FF.gz"],
+                "postgres-ha",
+                segment,
+            )
+        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
+            self.ha.require_wal_object_identity(
+                [f"wrong-server/wals/000000020000000A/{segment}.gz"],
+                "postgres-ha",
+                segment,
+            )
+        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
+            self.ha.require_wal_object_identity(
+                [f"prefix/postgres-ha/wals/000000020000000A/{segment}.gz"],
+                "postgres-ha",
+                segment,
+            )
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertIn("signed-s3-list-objects-v2-read-only", source)
+        self.assertIn('"archive_command_reused_as_probe": False', source)
+        self.assertIn('"archiver_latency_seconds"', source)
+        self.assertIn('"object_store_visibility_latency_seconds"', source)
+
+    def test_continuous_availability_summary_separates_samples_gaps_and_outage(self) -> None:
+        summary = self.ha.summarize_continuous_availability(
+            [
+                {"elapsed_seconds": 0.0, "available": True},
+                {"elapsed_seconds": 2.0, "available": False},
+                {"elapsed_seconds": 5.0, "available": True},
+            ],
+            window_seconds=6.0,
+            interval_seconds=2.0,
+        )
+        self.assertEqual(summary["sample_count"], 3)
+        self.assertEqual(summary["failed_samples"], 1)
+        self.assertEqual(summary["measurement_gap_seconds"], 1.0)
+        self.assertEqual(summary["measured_outage_seconds"], 3.0)
+        recovery = self.ha.summarize_failover_recovery(
+            [
+                {"elapsed_seconds": 0.0, "available": True},
+                {"elapsed_seconds": 2.0, "available": False},
+                {"elapsed_seconds": 4.0, "available": True},
+            ],
+            failure_elapsed_seconds=1.0,
+            interval_seconds=2.0,
+        )
+        self.assertTrue(recovery["outage_observed"])
+        self.assertEqual(recovery["observed_rto_seconds"], 3.0)
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertIn('"continuous_availability": continuous_availability', source)
+        self.assertIn("direct_api = summarize_continuous_availability(", source)
+        self.assertIn("gateway = summarize_continuous_availability(", source)
+
+    def test_t016_receipt_separates_rto_semantics_and_capacity_credentials(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        for field in (
+            '"service_rto_seconds"',
+            '"component_recovery_rto_seconds"',
+            '"full_redundancy_rto_seconds"',
+            '"rto_semantics"',
+            '"capacity": capacity',
+            '"credentials": credentials',
+            '"proof_duration_seconds"',
+        ):
+            self.assertIn(field, source)
+        budget = self.ha.declared_ha_capacity_budget(keep_primary=False)
+        self.assertEqual(budget["postgres_primary_pvc_bytes"], 3 << 30)
+        self.assertEqual(budget["nats_pvc_bytes"], 3 << 30)
+        self.assertEqual(budget["pitr_restore_pvc_bytes"], 3 << 30)
+        self.assertGreater(budget["required_free_bytes"], 6 << 30)
+        access = f"{self.ha.S3_ACCESS_KEY_PREFIX}{'a' * 16}"
+        credentials = self.ha.credential_preflight(access, "x" * 40, "owner")
+        self.assertEqual(credentials["credential_lifetime"], "single-proof-run")
+        self.assertFalse(credentials["repository_secret_used"])
+        self.assertFalse(credentials["secret_material_recorded"])
+        self.assertNotIn("x" * 40, json.dumps(credentials))
+        for non_claim in (
+            "multi-region production HA",
+            "multi-cloud production HA",
+            "production HA cutover",
+        ):
+            self.assertIn(non_claim, source)
 
     def test_ha_diagnostics_are_bounded_and_do_not_raise_on_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(
