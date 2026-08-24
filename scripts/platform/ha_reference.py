@@ -2410,7 +2410,7 @@ def gateway_projection_available(
     )
 
 
-def gateway_owner_sample(
+def gateway_observer_sample(
     kind: str,
     cluster: str,
     addresses: list[str],
@@ -2419,10 +2419,12 @@ def gateway_owner_sample(
 ) -> dict[str, Any]:
     gateway_addresses = sorted(set(addresses))
     if not gateway_addresses:
-        raise ref.ProofError("gateway owner probe has no advertised addresses")
+        raise ref.ProofError("gateway observer probe has no advertised addresses")
 
+    nodes = sorted(set(ref.kind_nodes(kind, cluster)))
+    node_addresses: dict[str, str] = {}
     owners_by_address: dict[str, list[str]] = {}
-    for node in sorted(set(ref.kind_nodes(kind, cluster))):
+    for node in nodes:
         address = ref.output(
             [
                 "docker",
@@ -2432,8 +2434,10 @@ def gateway_owner_sample(
                 node,
             ]
         )
-        if address:
-            owners_by_address.setdefault(address, []).append(node)
+        if not address:
+            continue
+        node_addresses[node] = address
+        owners_by_address.setdefault(address, []).append(node)
 
     invalid_owners = {
         address: owners_by_address.get(address, [])
@@ -2446,25 +2450,32 @@ def gateway_owner_sample(
             f"{invalid_owners}"
         )
 
-    targets = [
-        (owners_by_address[address][0], address)
-        for address in gateway_addresses
+    observers = [
+        node
+        for node in nodes
+        if "control-plane" in node
+        and node_addresses.get(node) not in gateway_addresses
     ]
+    if len(observers) != 1:
+        raise ref.ProofError(
+            "gateway availability requires exactly one non-owner control-plane observer: "
+            f"{observers}"
+        )
+    observer = observers[0]
 
-    def run_target(target: tuple[str, str]) -> dict[str, Any]:
-        node, address = target
+    def run_address(address: str) -> dict[str, Any]:
         try:
-            sample = gateway_projection_sample(node, address, port, marker)
+            sample = gateway_projection_sample(observer, address, port, marker)
         except (subprocess.SubprocessError, OSError) as error:
             sample = {
                 "available": False,
                 "probe_error": f"{type(error).__name__}: {error}",
                 "url": f"http://{address}:{port}/api/nodes",
             }
-        return {"node": node, "address": address, **sample}
+        return {"node": observer, "address": address, **sample}
 
-    with ThreadPoolExecutor(max_workers=min(8, len(targets))) as executor:
-        probes = list(executor.map(run_target, targets))
+    with ThreadPoolExecutor(max_workers=min(8, len(gateway_addresses))) as executor:
+        probes = list(executor.map(run_address, gateway_addresses))
 
     failed_paths = [probe for probe in probes if probe.get("available") is not True]
     successful_addresses = [
@@ -2474,15 +2485,15 @@ def gateway_owner_sample(
     ]
     return {
         "available": bool(successful_addresses),
-        "probe_mode": "owner-node-any-advertised-address",
+        "probe_mode": "non-owner-control-plane-any-advertised-address",
+        "observer_node": observer,
+        "observer_address": node_addresses[observer],
         "gateway_address_count": len(gateway_addresses),
-        "owner_node_count": len(targets),
         "successful_paths": len(probes) - len(failed_paths),
         "failed_paths": len(failed_paths),
         "successful_addresses": successful_addresses,
         "path_failures": failed_paths,
     }
-
 
 def direct_api_probe_target(kubectl: str) -> tuple[str, int]:
     service = json.loads(
@@ -2800,7 +2811,7 @@ class ContinuousAvailabilityMonitor:
     def _sample(self, channel: str) -> dict[str, Any]:
         try:
             if channel == "gateway":
-                result = gateway_owner_sample(
+                result = gateway_observer_sample(
                     self.kind,
                     self.cluster,
                     self.gateway_addresses,
@@ -2909,7 +2920,6 @@ def projection_path_diagnostic(
     probe_address: str,
     port: int,
     marker: str,
-    endpoint_state: list[dict[str, Any]],
     direct_probe_pods: list[str],
 ) -> dict[str, Any]:
     service = json.loads(
@@ -3097,7 +3107,6 @@ def api_transition_diagnostic(
         probe_address=probe_address,
         port=port,
         marker=marker,
-        endpoint_state=endpoint_state,
         direct_probe_pods=direct_probe_pods,
     )
     return {
@@ -3141,17 +3150,60 @@ def measure_api_transition(
     longest_unavailable_seconds = 0.0
     outage_started: float | None = None
     outage_diagnostics: list[dict[str, Any]] = []
+    pending_diagnostic: dict[str, Any] | None = None
     degraded_path_samples = 0
     failed_gateway_paths = 0
     max_failed_gateway_paths = 0
     gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
+
+    def capture_diagnostic(
+        pending: dict[str, Any],
+        *,
+        recovery_elapsed_seconds: float | None,
+    ) -> dict[str, Any]:
+        diagnostic_started = time.monotonic()
+        try:
+            diagnostic = api_transition_diagnostic(
+                kubectl,
+                pending["gateway_sample"],
+                kind=kind,
+                cluster=cluster,
+                probe_node=probe_node,
+                probe_address=probe_address,
+                port=port,
+                marker=marker,
+                direct_probe_pods=direct_probe_pods,
+            )
+        except (
+            subprocess.CalledProcessError,
+            subprocess.TimeoutExpired,
+            json.JSONDecodeError,
+            ref.ProofError,
+        ) as error:
+            diagnostic = {
+                "gateway_sample": pending["gateway_sample"],
+                "diagnostic_error": f"{type(error).__name__}: {error}",
+            }
+        diagnostic["sample"] = pending["sample"]
+        diagnostic["elapsed_seconds"] = pending["elapsed_seconds"]
+        diagnostic["capture"] = "post-recovery-after-measurement"
+        diagnostic["recovery_elapsed_seconds"] = (
+            round(recovery_elapsed_seconds, 3)
+            if recovery_elapsed_seconds is not None
+            else None
+        )
+        diagnostic["diagnostic_duration_seconds"] = round(
+            time.monotonic() - diagnostic_started, 3
+        )
+        return diagnostic
+
     while time.monotonic() < deadline:
         sampled_at = time.monotonic()
         available = False
         rollout_complete = False
         gateway_sample: dict[str, Any] = {"available": False}
         try:
-            gateway_sample = gateway_owner_sample(
+            gateway_sample = gateway_observer_sample(
                 kind, cluster, gateway_addresses, port, marker
             )
             available = bool(gateway_sample["available"])
@@ -3187,41 +3239,35 @@ def measure_api_transition(
                     longest_unavailable_seconds, outage
                 )
                 outage_started = None
+                if pending_diagnostic is not None:
+                    outage_diagnostics.append(
+                        capture_diagnostic(
+                            pending_diagnostic,
+                            recovery_elapsed_seconds=sampled_at - started,
+                        )
+                    )
+                    pending_diagnostic = None
         else:
             failed_samples += 1
             if outage_started is None:
                 outage_started = sampled_at
-                try:
-                    diagnostic = api_transition_diagnostic(
-                        kubectl,
-                        gateway_sample,
-                        kind=kind,
-                        cluster=cluster,
-                        probe_node=probe_node,
-                        probe_address=probe_address,
-                        port=port,
-                        marker=marker,
-                        direct_probe_pods=direct_probe_pods,
-                    )
-                except (
-                    subprocess.CalledProcessError,
-                    subprocess.TimeoutExpired,
-                    json.JSONDecodeError,
-                    ref.ProofError,
-                ) as error:
-                    diagnostic = {
-                        "gateway_sample": gateway_sample,
-                        "diagnostic_error": f"{type(error).__name__}: {error}",
-                    }
-                diagnostic["sample"] = samples
-                diagnostic["elapsed_seconds"] = round(
-                    sampled_at - started, 3
-                )
-                outage_diagnostics.append(diagnostic)
+                pending_diagnostic = {
+                    "gateway_sample": gateway_sample,
+                    "sample": samples,
+                    "elapsed_seconds": round(sampled_at - started, 3),
+                }
         if available and rollout_complete:
             break
         time.sleep(1)
     else:
+        if pending_diagnostic is not None:
+            outage_diagnostics.append(
+                capture_diagnostic(
+                    pending_diagnostic,
+                    recovery_elapsed_seconds=None,
+                )
+            )
+            pending_diagnostic = None
         raise ref.ProofError(
             f"timed out waiting for API {phase} rollout to {expected_image}"
         )
@@ -3254,7 +3300,9 @@ def measure_api_transition(
         "longest_unavailable_seconds": round(longest_unavailable_seconds, 3),
         "probe_node": probe_node,
         "probe_address": probe_address,
-        "gateway_probe_mode": "owner-node-any-advertised-address",
+        "gateway_probe_mode": "non-owner-control-plane-any-advertised-address",
+        "gateway_observer_node": gateway_sample.get("observer_node"),
+        "gateway_observer_address": gateway_sample.get("observer_address"),
         "gateway_addresses": gateway_addresses,
         "before_pods_sha256": sha256_text("\n".join(sorted(before_uids))),
         "after_pods_sha256": sha256_text("\n".join(sorted(after_uids))),
@@ -3726,7 +3774,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             lambda: (
                 sample
                 if (
-                    sample := gateway_owner_sample(
+                    sample := gateway_observer_sample(
                         kind,
                         args.cluster,
                         gateway_addresses_after_failure,

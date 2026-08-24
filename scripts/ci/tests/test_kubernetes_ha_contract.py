@@ -157,7 +157,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertIn('"job_retry_observed"', source)
         self.assertIn('"duplicate_migration_history_prevented"', source)
 
-    def test_ha_api_rollout_stabilizes_and_direct_probe_respects_network_policy(self) -> None:
+    def test_ha_direct_probe_respects_network_policy_without_rollout_delay(self) -> None:
         documents = list(
             self.validator._documents(
                 ROOT / "platform/apps/weltgewebe/overlays/ha/deployment-patch.yaml"
@@ -169,7 +169,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             if document.get("kind") == "Deployment"
             and document.get("metadata", {}).get("name") == "weltgewebe-api"
         )
-        self.assertEqual(api["spec"]["minReadySeconds"], 10)
+        self.assertNotIn("minReadySeconds", api["spec"])
         self.assertEqual(api["spec"]["strategy"]["rollingUpdate"]["maxUnavailable"], 0)
 
         probe = self.ha.direct_api_probe_document("probe-zone-a", "zone-a")
@@ -1559,8 +1559,9 @@ spec:
         self.assertEqual(run.call_args.kwargs["timeout"], 5)
         self.assertFalse(run.call_args.kwargs["check"])
 
-    def test_gateway_owner_sample_tolerates_one_failed_advertised_listener(self) -> None:
+    def test_gateway_observer_sample_tolerates_one_failed_advertised_listener(self) -> None:
         node_addresses = {
+            "proof-control-plane": "10.0.0.9",
             "node-a": "10.0.0.1",
             "node-b": "10.0.0.2",
         }
@@ -1571,6 +1572,7 @@ spec:
         def sample(
             node: str, address: str, port: int, marker: str
         ) -> dict[str, object]:
+            self.assertEqual(node, "proof-control-plane")
             available = address == "10.0.0.2"
             return {
                 "available": available,
@@ -1579,31 +1581,37 @@ spec:
             }
 
         with mock.patch.object(
-            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
+            self.ha.ref,
+            "kind_nodes",
+            return_value=["proof-control-plane", "node-a", "node-b"],
         ), mock.patch.object(
             self.ha.ref, "output", side_effect=output
         ), mock.patch.object(
             self.ha, "gateway_projection_sample", side_effect=sample
         ):
-            observed = self.ha.gateway_owner_sample(
+            observed = self.ha.gateway_observer_sample(
                 "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
             )
 
         self.assertTrue(observed["available"])
         self.assertEqual(observed["failed_paths"], 1)
         self.assertEqual(observed["successful_addresses"], ["10.0.0.2"])
+        self.assertEqual(observed["observer_node"], "proof-control-plane")
         self.assertEqual(
-            observed["probe_mode"], "owner-node-any-advertised-address"
+            observed["probe_mode"],
+            "non-owner-control-plane-any-advertised-address",
         )
 
-    def test_gateway_owner_sample_fails_when_all_advertised_listeners_fail(self) -> None:
+    def test_gateway_observer_sample_fails_when_all_advertised_listeners_fail(self) -> None:
         node_addresses = {
+            "proof-control-plane": "10.0.0.9",
             "node-a": "10.0.0.1",
             "node-b": "10.0.0.2",
         }
-
         with mock.patch.object(
-            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
+            self.ha.ref,
+            "kind_nodes",
+            return_value=["proof-control-plane", "node-a", "node-b"],
         ), mock.patch.object(
             self.ha.ref,
             "output",
@@ -1613,25 +1621,53 @@ spec:
             "gateway_projection_sample",
             return_value={"available": False, "returncode": 28},
         ):
-            observed = self.ha.gateway_owner_sample(
+            observed = self.ha.gateway_observer_sample(
                 "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
             )
-
         self.assertFalse(observed["available"])
         self.assertEqual(observed["successful_addresses"], [])
         self.assertEqual(observed["failed_paths"], 2)
 
-    def test_gateway_owner_sample_rejects_unowned_advertised_address(self) -> None:
+    def test_gateway_observer_sample_rejects_unowned_advertised_address(self) -> None:
+        node_addresses = {
+            "proof-control-plane": "10.0.0.9",
+            "node-a": "10.0.0.1",
+        }
         with mock.patch.object(
-            self.ha.ref, "kind_nodes", return_value=["node-a"]
+            self.ha.ref,
+            "kind_nodes",
+            return_value=["proof-control-plane", "node-a"],
         ), mock.patch.object(
-            self.ha.ref, "output", return_value="10.0.0.1"
+            self.ha.ref,
+            "output",
+            side_effect=lambda argv: node_addresses[argv[-1]],
         ):
             with self.assertRaisesRegex(
                 self.ha.ref.ProofError, "exactly one kind node owner"
             ):
-                self.ha.gateway_owner_sample(
+                self.ha.gateway_observer_sample(
                     "kind", "proof", ["10.0.0.2"], 80, "marker"
+                )
+
+    def test_gateway_observer_sample_requires_non_owner_control_plane(self) -> None:
+        node_addresses = {
+            "proof-control-plane": "10.0.0.1",
+            "node-a": "10.0.0.2",
+        }
+        with mock.patch.object(
+            self.ha.ref,
+            "kind_nodes",
+            return_value=["proof-control-plane", "node-a"],
+        ), mock.patch.object(
+            self.ha.ref,
+            "output",
+            side_effect=lambda argv: node_addresses[argv[-1]],
+        ):
+            with self.assertRaisesRegex(
+                self.ha.ref.ProofError, "non-owner control-plane observer"
+            ):
+                self.ha.gateway_observer_sample(
+                    "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
                 )
 
     def test_gateway_availability_sample_preserves_failure_diagnostics(self) -> None:
@@ -1696,9 +1732,11 @@ spec:
         )
         self.assertIn('probe_node = gateway_probe["probe_node"]', source)
         self.assertIn('probe_address = gateway_probe["address"]', source)
-        self.assertIn("gateway_owner_sample(", source)
-        self.assertIn("owner-node-any-advertised-address", source)
+        self.assertIn("gateway_observer_sample(", source)
+        self.assertIn("non-owner-control-plane-any-advertised-address", source)
         self.assertIn('"degraded_gateway_path_samples"', source)
+        self.assertIn('"post-recovery-after-measurement"', source)
+        self.assertIn('"diagnostic_duration_seconds"', source)
         self.assertIn('"failed_gateway_paths_observed"', source)
         self.assertIn('probe_port = int(gateway_probe["listener_port"])', source)
         self.assertNotIn("def gateway_probe_target(", source)
