@@ -46,6 +46,7 @@ BASELINE_API_IMAGE = "weltgewebe-api:local"
 UPGRADE_API_IMAGE = "weltgewebe-api:ha-upgrade-candidate"
 REFERENCE_AVAILABILITY_OBJECTIVE = 0.999
 CONTINUOUS_AVAILABILITY_INTERVAL_SECONDS = 2.0
+DIRECT_API_PROBE_LABEL = "weltgewebe-ha-direct-probe"
 PROOF_WAL_RESERVE_BYTES = 1 << 30
 PROOF_PITR_RESERVE_BYTES = 2 << 30
 PROOF_KIND_NODE_RESERVE_BYTES = 1 << 30
@@ -2508,6 +2509,119 @@ def direct_api_probe_target(kubectl: str) -> tuple[str, int]:
     return address, port
 
 
+def direct_api_probe_document(name: str, zone: str) -> dict[str, Any]:
+    return {
+        "apiVersion": "v1",
+        "kind": "Pod",
+        "metadata": {
+            "name": name,
+            "namespace": "weltgewebe",
+            "labels": {
+                "app.kubernetes.io/name": DIRECT_API_PROBE_LABEL,
+                "app.kubernetes.io/component": "proof",
+            },
+        },
+        "spec": {
+            "automountServiceAccountToken": False,
+            "restartPolicy": "Never",
+            "nodeSelector": {
+                "weltgewebe.net/data-node": "true",
+                "topology.kubernetes.io/zone": zone,
+            },
+            "securityContext": {
+                "runAsNonRoot": True,
+                "runAsUser": 10001,
+                "runAsGroup": 10001,
+                "seccompProfile": {"type": "RuntimeDefault"},
+            },
+            "containers": [{
+                "name": "probe",
+                "image": BASELINE_API_IMAGE,
+                "imagePullPolicy": "Never",
+                "command": ["/bin/sh", "-c", "sleep 7200"],
+                "resources": {
+                    "requests": {"cpu": "5m", "memory": "16Mi"},
+                    "limits": {"cpu": "50m", "memory": "64Mi"},
+                },
+                "securityContext": {
+                    "allowPrivilegeEscalation": False,
+                    "capabilities": {"drop": ["ALL"]},
+                    "readOnlyRootFilesystem": True,
+                },
+            }],
+        },
+    }
+
+
+def create_direct_api_probes(kubectl: str, zones: list[str]) -> list[str]:
+    normalized = sorted({str(zone).strip() for zone in zones if str(zone).strip()})
+    if len(normalized) != 3:
+        raise ref.ProofError(f"direct API proof requires exactly three zones, got {normalized}")
+    names: list[str] = []
+    for zone in normalized:
+        name = f"ha-direct-api-probe-{zone}"
+        ref.apply_yaml(kubectl, direct_api_probe_document(name, zone))
+        names.append(name)
+    for name in names:
+        ref.wait_condition(kubectl, "weltgewebe", f"pod/{name}", "Ready", "3m")
+    return names
+
+
+def direct_api_projection_sample(kubectl: str, pod: str, url: str, marker: str) -> dict[str, Any]:
+    started = time.monotonic()
+    try:
+        result = subprocess.run(
+            [kubectl, "--request-timeout=3s", "-n", "weltgewebe", "exec", pod, "--", "wget", "-qO-", "-T", "2", url],
+            cwd=ROOT, text=True, capture_output=True, timeout=5, check=False,
+        )
+    except subprocess.TimeoutExpired:
+        return {"available": False, "pod": pod, "duration_seconds": round(time.monotonic()-started,3), "probe_error": "kubectl exec timed out", "url": url}
+    sample: dict[str, Any] = {
+        "available": False, "pod": pod, "returncode": result.returncode,
+        "duration_seconds": round(time.monotonic()-started,3),
+        "stderr": (result.stderr or "").strip()[:300], "url": url,
+    }
+    if result.returncode != 0:
+        return sample
+    try:
+        payload = json.loads(result.stdout)
+    except json.JSONDecodeError as error:
+        sample["json_error"] = str(error); return sample
+    if not isinstance(payload, list):
+        sample["response_shape"] = type(payload).__name__; return sample
+    sample["available"] = any(isinstance(item, dict) and item.get("id") == marker for item in payload)
+    sample["response_items"] = len(payload)
+    return sample
+
+
+def direct_api_probe_sample(kubectl: str, probe_pods: list[str], address: str, port: int, marker: str) -> dict[str, Any]:
+    pods = sorted(set(probe_pods))
+    if not pods:
+        raise ref.ProofError("direct API probe has no same-namespace probe pods")
+    url = f"http://{address}:{port}/nodes"
+    with ThreadPoolExecutor(max_workers=min(8, len(pods))) as executor:
+        probes = list(executor.map(lambda pod: direct_api_projection_sample(kubectl, pod, url, marker), pods))
+    failed = [probe for probe in probes if probe.get("available") is not True]
+    successful = [str(probe["pod"]) for probe in probes if probe.get("available") is True]
+    return {
+        "available": bool(successful), "probe_mode": "same-namespace-zone-probes-any",
+        "probe_count": len(probes), "successful_probes": successful,
+        "failed_paths": len(failed), "path_failures": failed,
+        "service_address": address, "service_port": port,
+    }
+
+
+def delete_direct_api_probes(kubectl: str, probe_pods: list[str]) -> dict[str, Any]:
+    pods = sorted(set(probe_pods))
+    if not pods:
+        return {"returncode": 0, "deleted": 0}
+    result = subprocess.run(
+        [kubectl, "-n", "weltgewebe", "delete", "pod", *pods, "--ignore-not-found=true", "--wait=true"],
+        cwd=ROOT, text=True, capture_output=True, timeout=90, check=False,
+    )
+    return {"returncode": result.returncode, "deleted": len(pods), "stderr": (result.stderr or "").strip()[:500]}
+
+
 def summarize_continuous_availability(
     samples: list[dict[str, Any]],
     *,
@@ -2641,6 +2755,7 @@ class ContinuousAvailabilityMonitor:
         cluster: str,
         marker: str,
         gateway_port: int,
+        direct_probe_pods: list[str],
         *,
         interval_seconds: float = CONTINUOUS_AVAILABILITY_INTERVAL_SECONDS,
     ) -> None:
@@ -2651,15 +2766,10 @@ class ContinuousAvailabilityMonitor:
         self.gateway_port = gateway_port
         self.interval_seconds = interval_seconds
         self.gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
-        nodes = sorted(set(ref.kind_nodes(kind, cluster)))
-        self.probe_node = next(
-            (node for node in nodes if "control-plane" in node),
-            nodes[0] if nodes else "",
-        )
-        if not self.probe_node:
-            raise ref.ProofError("continuous availability monitor has no kind probe node")
-        direct_address, direct_port = direct_api_probe_target(kubectl)
-        self.direct_url = f"http://{direct_address}:{direct_port}/nodes"
+        self.direct_probe_pods = sorted(set(direct_probe_pods))
+        if len(self.direct_probe_pods) != 3:
+            raise ref.ProofError("continuous availability monitor requires three direct API probe pods")
+        self.direct_address, self.direct_port = direct_api_probe_target(kubectl)
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
         self._started = 0.0
@@ -2701,14 +2811,14 @@ class ContinuousAvailabilityMonitor:
                     "available": bool(result.get("available")),
                     "failed_paths": int(result.get("failed_paths", 0)),
                 }
-            result = projection_sample_url(
-                self.probe_node, self.direct_url, self.marker
+            result = direct_api_probe_sample(
+                self.kubectl, self.direct_probe_pods, self.direct_address, self.direct_port, self.marker
             )
             return {
                 "available": bool(result.get("available")),
-                "returncode": result.get("returncode"),
-                "duration_seconds": result.get("duration_seconds"),
-                "stderr": result.get("stderr", "")[:200],
+                "failed_paths": int(result.get("failed_paths", 0)),
+                "successful_probes": result.get("successful_probes", []),
+                "path_failures": result.get("path_failures", [])[:3],
             }
         except (
             OSError,
@@ -2800,6 +2910,7 @@ def projection_path_diagnostic(
     port: int,
     marker: str,
     endpoint_state: list[dict[str, Any]],
+    direct_probe_pods: list[str],
 ) -> dict[str, Any]:
     service = json.loads(
         ref.output(
@@ -2820,30 +2931,12 @@ def projection_path_diagnostic(
         (item.get("port") for item in service_ports if item.get("name") == "http"),
         8080,
     )
-    ready_pod_ips = sorted(
-        {
-            address
-            for endpoint in endpoint_state
-            if endpoint.get("ready") is True
-            and endpoint.get("terminating") is not True
-            for address in endpoint.get("addresses", [])
-            if isinstance(address, str) and address
-        }
+    if not isinstance(service_ip, str) or not service_ip or service_ip == "None":
+        raise ref.ProofError("API transition diagnostic has no direct service address")
+    direct_api = direct_api_probe_sample(
+        kubectl, direct_probe_pods, service_ip, int(service_port), marker
     )
     targets: list[tuple[str, str, str, str]] = []
-    if isinstance(service_ip, str) and service_ip and service_ip != "None":
-        targets.append(
-            (
-                "service",
-                probe_node,
-                service_ip,
-                f"http://{service_ip}:{service_port}/nodes",
-            )
-        )
-    for pod_ip in ready_pod_ips:
-        targets.append(
-            ("pod", probe_node, pod_ip, f"http://{pod_ip}:8080/nodes")
-        )
     gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
     gateway_nodes = sorted(set(ref.kind_nodes(kind, cluster)))
     for node in gateway_nodes:
@@ -2891,6 +2984,7 @@ def projection_path_diagnostic(
             "address": probe_address,
             "port": port,
         },
+        "direct_api": direct_api,
         "probes": probes,
     }
 
@@ -2905,6 +2999,7 @@ def api_transition_diagnostic(
     probe_address: str,
     port: int,
     marker: str,
+    direct_probe_pods: list[str],
 ) -> dict[str, Any]:
     deployment = json.loads(
         ref.output(
@@ -3003,6 +3098,7 @@ def api_transition_diagnostic(
         port=port,
         marker=marker,
         endpoint_state=endpoint_state,
+        direct_probe_pods=direct_probe_pods,
     )
     return {
         "gateway_sample": gateway_sample,
@@ -3033,6 +3129,7 @@ def measure_api_transition(
     probe_node: str,
     probe_address: str,
     port: int,
+    direct_probe_pods: list[str],
 ) -> dict[str, Any]:
     before_uids = ready_api_pod_uids(kubectl)
     started = time.monotonic()
@@ -3104,6 +3201,7 @@ def measure_api_transition(
                         probe_address=probe_address,
                         port=port,
                         marker=marker,
+                        direct_probe_pods=direct_probe_pods,
                     )
                 except (
                     subprocess.CalledProcessError,
@@ -3202,6 +3300,7 @@ def prove_api_upgrade_and_rollback(
     cluster: str,
     marker: str,
     gateway_probe: dict[str, str],
+    direct_probe_pods: list[str],
 ) -> dict[str, Any]:
     baseline = api_deployment_image(kubectl)
     if baseline != BASELINE_API_IMAGE:
@@ -3236,6 +3335,7 @@ def prove_api_upgrade_and_rollback(
         probe_node=probe_node,
         probe_address=probe_address,
         port=probe_port,
+        direct_probe_pods=direct_probe_pods,
     )
     rollback = measure_api_transition(
         kubectl,
@@ -3255,6 +3355,7 @@ def prove_api_upgrade_and_rollback(
         probe_node=probe_node,
         probe_address=probe_address,
         port=probe_port,
+        direct_probe_pods=direct_probe_pods,
     )
     budget = compute_error_budget(upgrade, rollback)
     if not gateway_contains_node(kubectl, kind, cluster, marker):
@@ -3483,6 +3584,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
     object_store_address = ""
     availability_monitor: ContinuousAvailabilityMonitor | None = None
     continuous_availability: dict[str, Any] | None = None
+    direct_probe_pods: list[str] = []
     app_password = secrets.token_urlsafe(24)
     s3_access_key = f"{S3_ACCESS_KEY_PREFIX}{secrets.token_hex(8)}"
     s3_secret_key = secrets.token_urlsafe(32)
@@ -3555,6 +3657,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         }
         for component, observed in topology.items():
             require_zones(observed, 3, component)
+        direct_probe_pods = create_direct_api_probes(
+            kubectl,
+            [str(details["zone"]) for details in topology["api"].values() if isinstance(details, dict) and details.get("zone")],
+        )
 
         marker = "00000000-0000-4000-8000-00000000a004"
         insert_domain_node(kubectl, marker, "T004 acknowledged domain mutation")
@@ -3565,10 +3671,11 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             args.cluster,
             marker,
             int(gateway_before["listener_port"]),
+            direct_probe_pods,
         )
         availability_monitor.start()
         change_management = prove_api_upgrade_and_rollback(
-            kubectl, kind, args.cluster, marker, gateway_before
+            kubectl, kind, args.cluster, marker, gateway_before, direct_probe_pods
         )
 
         barman_leader_alignment = align_postgres_primary_with_barman_leader(
@@ -3634,17 +3741,10 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         )
         api_validation_upper_bound = time.monotonic() - failure_started
         direct_address, direct_port = direct_api_probe_target(kubectl)
-        direct_probe_node = next(
-            node
-            for node in sorted(set(ref.kind_nodes(kind, args.cluster)))
-            if "control-plane" in node
-        )
         wait_until(
             "direct API projection after zone failure",
-            lambda: projection_sample_url(
-                direct_probe_node,
-                f"http://{direct_address}:{direct_port}/nodes",
-                marker,
+            lambda: direct_api_probe_sample(
+                kubectl, direct_probe_pods, direct_address, direct_port, marker
             ).get("available"),
             timeout_seconds=180,
             interval=1,
@@ -3735,6 +3835,13 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             else "intentional-primary-cluster-retirement-before-blank-PITR-restore"
         )
         availability_monitor = None
+        direct_probe_contract = {"mode": "same-namespace-zone-probes-any", "pods": list(direct_probe_pods)}
+        direct_probe_cleanup = delete_direct_api_probes(kubectl, direct_probe_pods)
+        if direct_probe_cleanup["returncode"] != 0:
+            raise ref.ProofError("direct API proof-pod cleanup failed: " + json.dumps(direct_probe_cleanup, sort_keys=True))
+        direct_probe_pods = []
+        continuous_availability["direct_api"]["probe_contract"] = direct_probe_contract
+        continuous_availability["direct_api"]["probe_cleanup"] = direct_probe_cleanup
         gateway_failover = continuous_availability["gateway"]["failover_recovery"]
         direct_api_failover = continuous_availability["direct_api"]["failover_recovery"]
         service_rto = float(gateway_failover["observed_rto_seconds"])

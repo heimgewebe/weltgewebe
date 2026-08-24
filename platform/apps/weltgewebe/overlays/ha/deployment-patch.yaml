@@ -5,6 +5,9 @@ metadata:
   name: weltgewebe-api
 spec:
   replicas: 3
+  # Keep a new API replica stably Ready before it may displace an old one.
+  # The HA proof observed a readiness-to-dataplane convergence gap during rollback.
+  minReadySeconds: 10
   strategy:
     type: RollingUpdate
     rollingUpdate:

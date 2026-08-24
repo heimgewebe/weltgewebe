@@ -157,6 +157,68 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertIn('"job_retry_observed"', source)
         self.assertIn('"duplicate_migration_history_prevented"', source)
 
+    def test_ha_api_rollout_stabilizes_and_direct_probe_respects_network_policy(self) -> None:
+        documents = list(
+            self.validator._documents(
+                ROOT / "platform/apps/weltgewebe/overlays/ha/deployment-patch.yaml"
+            )
+        )
+        api = next(
+            document
+            for document in documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "weltgewebe-api"
+        )
+        self.assertEqual(api["spec"]["minReadySeconds"], 10)
+        self.assertEqual(api["spec"]["strategy"]["rollingUpdate"]["maxUnavailable"], 0)
+
+        probe = self.ha.direct_api_probe_document("probe-zone-a", "zone-a")
+        labels = probe["metadata"]["labels"]
+        self.assertEqual(labels["app.kubernetes.io/name"], self.ha.DIRECT_API_PROBE_LABEL)
+        self.assertNotEqual(labels["app.kubernetes.io/name"], "weltgewebe-api")
+        self.assertEqual(
+            probe["spec"]["nodeSelector"],
+            {
+                "weltgewebe.net/data-node": "true",
+                "topology.kubernetes.io/zone": "zone-a",
+            },
+        )
+        container = probe["spec"]["containers"][0]
+        self.assertEqual(container["image"], self.ha.BASELINE_API_IMAGE)
+        self.assertEqual(container["imagePullPolicy"], "Never")
+        self.assertIn("sleep 7200", " ".join(container["command"]))
+
+        marker = "00000000-0000-4000-8000-00000000a004"
+
+        def probe_sample(_kubectl: str, pod: str, _url: str, _marker: str):
+            return {
+                "available": pod == "probe-zone-b",
+                "pod": pod,
+                "returncode": 0 if pod == "probe-zone-b" else 1,
+            }
+
+        with mock.patch.object(
+            self.ha,
+            "direct_api_projection_sample",
+            side_effect=probe_sample,
+        ):
+            sample = self.ha.direct_api_probe_sample(
+                "kubectl",
+                ["probe-zone-a", "probe-zone-b", "probe-zone-c"],
+                "10.96.0.20",
+                8080,
+                marker,
+            )
+        self.assertTrue(sample["available"])
+        self.assertEqual(sample["probe_mode"], "same-namespace-zone-probes-any")
+        self.assertEqual(sample["successful_probes"], ["probe-zone-b"])
+        self.assertEqual(sample["failed_paths"], 2)
+
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        self.assertIn('"same-namespace-zone-probes-any"', source)
+        self.assertIn('"--request-timeout=3s"', source)
+        self.assertNotIn("self.probe_node, self.direct_url", source)
+
     def test_restore_document_uses_pitr_and_three_instances(self) -> None:
         target = "2026-07-17T15:00:00.000000Z"
         document = self.ha.restore_cluster_document(target)
