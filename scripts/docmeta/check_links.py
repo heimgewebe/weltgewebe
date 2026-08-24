@@ -180,7 +180,6 @@ def main() -> None:
         )
 
     doc_links_found = False
-    scanned_markdown: set[str] = set()
 
     # Preserve the established canonical Markdown-link contract and its
     # document-relative resolution semantics.
@@ -192,7 +191,6 @@ def main() -> None:
             file_path = os.path.join(zone_path, doc_file)
             if not os.path.exists(file_path):
                 continue
-            scanned_markdown.add(rel_file_path)
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read()
 
