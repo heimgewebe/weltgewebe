@@ -79,7 +79,7 @@ Each historical row remains individually addressable by a stable finding ID. A d
 
 ## Current tracked Makefile snapshot
 
-- Makefile SHA-256: `6cb3afed2b09a10c78b96d5d017e0b7a15883870c1c147040bb4c4beb1b09b4d`
+- Makefile SHA-256: `5c08b74edf583b6da459e1ec7a699e86101f143653e76f226c201c4e321ab71f`
 - Current tracked execution edges decided: **60 / 60**
 - Classification counts: `accepted-coupling`=6, `explicit`=54, `not-relevant`=0, `remove`=0
 - New tracked Python-module, Python-script, or Bash-script edges without a resolvable decision make generation and `--check` fail closed.
@@ -91,7 +91,7 @@ Each historical row remains individually addressable by a stable finding ID. A d
 | `e4470aae94fd` | validate-tests | 35 | `unittest` | `$(UV_RUN) python -m unittest discover scripts/docmeta/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
 | `66a9b64ea625` | validate-tests | 36 | `unittest` | `$(UV_RUN) python -m unittest discover scripts/agent/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
 | `03aef30b84af` | validate-tests | 38 | `unittest` | `$(CI_TEST_GIT_ENV) $(UV_RUN) python -m unittest discover scripts/ci/tests/` | accepted-coupling | Python standard-library test runner, invoked explicitly by the Makefile |
-| `9ae51b1590fb` | validate-tests | 39 | `pytest` | `$(UV_RUN) python -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py` | accepted-coupling | repository tooling dependency locked by `tools/py/uv.lock` |
+| `597089f133cb` | validate-tests | 39 | `pytest` | `$(UV_RUN) python -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py scripts/ci/tests/test_schauwerk_editor_release_preflight.py` | accepted-coupling | repository tooling dependency locked by `tools/py/uv.lock` |
 | `7005818926ab` | validate-tests | 40 | `scripts/docmeta/validate_claim_registry.py` | `$(UV_RUN) python scripts/docmeta/validate_claim_registry.py` | explicit | current repository file `scripts/docmeta/validate_claim_registry.py` exists and is invoked directly |
 | `4d007b1251ce` | validate-tests | 41 | `scripts/docmeta/validate_doc_freshness_registry.py` | `$(UV_RUN) python scripts/docmeta/validate_doc_freshness_registry.py` | explicit | current repository file `scripts/docmeta/validate_doc_freshness_registry.py` exists and is invoked directly |
 | `af4f8be2b990` | validate-tests | 42 | `scripts.docmeta.generate_claim_evidence_map` | `$(UV_RUN) python -m scripts.docmeta.generate_claim_evidence_map --check` | explicit | current repository module resolves to `scripts/docmeta/generate_claim_evidence_map.py` and is invoked directly |

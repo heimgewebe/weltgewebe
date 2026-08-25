@@ -79,7 +79,14 @@ shortcut. Public delivery belongs at this explicit HTTPS edge boundary.
 
 ## Post-deploy readback
 
-After the normal exact-commit Weltgewebe deployment, read back the public edge:
+The normal full VPS deployment must not record its source state until it has read
+`/schaubild/` and `manifest.json` back through the freshly deployed Caddy listener.
+That bounded local-direct readback bypasses proxy environment variables, resolves
+`weltgewebe.net` to the selected `CADDY_BIND`, requires `200` plus `no-store` for
+the editor index, and requires the served manifest SHA-256 to equal the preflight
+digest. This proves that the admitted host release is actually visible inside Caddy.
+
+After that exact-commit deployment succeeds, read back the public edge as well:
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' \

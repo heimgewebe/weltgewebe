@@ -7,6 +7,9 @@ import subprocess
 import unittest
 
 REPO = Path(__file__).resolve().parents[3]
+CADDY_BINARY = shutil.which("caddy")
+DOCKER_BINARY = shutil.which("docker")
+CADDY_DOCKER_IMAGE = "caddy:2.8.4"
 MAGIC_LINK_CONFIRM_PATH = "/api/auth/magic-link/consume"
 MAGIC_POLICY = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
 STRICT_POLICY = "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
@@ -24,8 +27,31 @@ CASES = (
 
 
 def adapt(relative: str) -> dict:
+    if CADDY_BINARY:
+        command = [CADDY_BINARY, "adapt", "--config", relative, "--adapter", "caddyfile"]
+    elif DOCKER_BINARY:
+        command = [
+            DOCKER_BINARY,
+            "run",
+            "--rm",
+            "--network",
+            "none",
+            "-v",
+            f"{REPO}:/repo:ro",
+            "-w",
+            "/repo",
+            CADDY_DOCKER_IMAGE,
+            "caddy",
+            "adapt",
+            "--config",
+            relative,
+            "--adapter",
+            "caddyfile",
+        ]
+    else:
+        raise AssertionError("caddy binary or docker is required for semantic adaptation tests")
     result = subprocess.run(
-        ["caddy", "adapt", "--config", relative, "--adapter", "caddyfile"],
+        command,
         cwd=REPO,
         text=True,
         capture_output=True,
@@ -82,7 +108,10 @@ def directive_map(policy: str) -> dict[str, tuple[str, ...]]:
     return directives
 
 
-@unittest.skipUnless(shutil.which("caddy"), "caddy binary required")
+@unittest.skipUnless(
+    CADDY_BINARY or DOCKER_BINARY,
+    "caddy binary or docker required for semantic adaptation tests",
+)
 class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
     def test_legacy_map_html_redirect_adapts_on_vps_and_container_edges(self) -> None:
         for relative in ("infra/caddy/Caddyfile.vps", "apps/web/Caddyfile.container"):
