@@ -1,6 +1,10 @@
 import { NotificationsApiError } from "../api/notifications";
 
-export type NotificationErrorContext = "load" | "preference" | "device";
+export type NotificationErrorContext =
+  | "load"
+  | "preference"
+  | "device-enable"
+  | "device-disable";
 
 export const PUSH_PERMISSION_BLOCKED =
   "Benachrichtigungen sind für Weltgewebe blockiert. Erlaube sie in den Browser- oder Systemeinstellungen und kehre danach zu dieser Seite zurück.";
@@ -9,8 +13,10 @@ const fallbackMessages: Record<NotificationErrorContext, string> = {
   load: "Die Benachrichtigungseinstellungen konnten nicht geladen werden. Versuche es erneut.",
   preference:
     "Die Push-Einstellung konnte nicht gespeichert werden. Versuche es erneut.",
-  device:
+  "device-enable":
     "Dieses Gerät konnte nicht für Push eingerichtet werden. Versuche es erneut.",
+  "device-disable":
+    "Push konnte auf diesem Gerät nicht deaktiviert werden. Versuche es erneut.",
 };
 
 export function describeNotificationError(
