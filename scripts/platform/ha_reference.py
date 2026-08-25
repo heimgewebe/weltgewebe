@@ -2474,6 +2474,39 @@ def nats_message_count(kubectl: str) -> int:
     return int(document.get("state", {}).get("messages", -1))
 
 
+def domain_jetstream_contract(kubectl: str) -> dict[str, Any]:
+    stream_name = "WELTGEWEBE_DOMAIN"
+    consumer_name = "weltgewebe-api-domain-receipts-v1"
+    stream = json.loads(
+        nats(kubectl, ["stream", "info", stream_name, "--json"]).stdout
+    )
+    consumer = json.loads(
+        nats(
+            kubectl,
+            ["consumer", "info", stream_name, consumer_name, "--json"],
+        ).stdout
+    )
+
+    def replicas(document: dict[str, Any], label: str) -> int:
+        config = document.get("config")
+        if not isinstance(config, dict):
+            raise ref.ProofError(f"{label} has no JetStream config")
+        observed = config.get("num_replicas")
+        if not isinstance(observed, int):
+            raise ref.ProofError(f"{label} has no integer num_replicas")
+        if observed != 3:
+            raise ref.ProofError(f"{label} has {observed} replicas, expected 3")
+        return observed
+
+    return {
+        "stream": stream_name,
+        "stream_replicas": replicas(stream, "domain JetStream"),
+        "consumer": consumer_name,
+        "consumer_replicas": replicas(consumer, "domain receipt consumer"),
+        "status": "pass",
+    }
+
+
 def wait_backup_complete(kubectl: str, name: str) -> dict[str, Any]:
     def probe():
         document = json.loads(ref.output([kubectl, "-n", "weltgewebe-data", "get", f"backup/{name}", "-o", "json"]))
@@ -2702,6 +2735,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             image=nats_box_image,
             image_pull_policy=nats_box_pull_policy,
         )
+        domain_jetstream_before = domain_jetstream_contract(kubectl)
         nats(kubectl, ["stream", "add", "WG_PROOF", "--subjects", "wg.proof", "--storage", "file", "--replicas", "3", "--retention", "limits", "--max-msgs", "100", "--defaults"])
         nats(kubectl, ["pub", "wg.proof", "before-zone-failure"])
         if nats_message_count(kubectl) != 1:
@@ -2730,6 +2764,13 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         primary_after = str(wait_until("PostgreSQL primary failover", new_primary_probe, timeout_seconds=180))
         postgres_rto = time.monotonic() - failure_started
         wait_until("acknowledged domain mutation after failover", lambda: node_exists(kubectl, marker), timeout_seconds=60)
+        domain_jetstream_after = wait_until(
+            "three-replica domain JetStream after zone failure",
+            lambda: domain_jetstream_contract(kubectl),
+            timeout_seconds=120,
+            interval=1,
+        )
+        domain_jetstream_rto = time.monotonic() - failure_started
         gateway_addresses_after_failure = sorted(set(ref.gateway_addresses(kubectl)))
         try:
             gateway_recovery = wait_until(
@@ -3000,6 +3041,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "api_rto_seconds": round(api_validation_upper_bound, 3),
                 "direct_api_rto_seconds": round(direct_api_validation_upper_bound, 3),
                 "nats_rto_seconds": round(nats_rto, 3),
+                "domain_jetstream_rto_seconds": round(domain_jetstream_rto, 3),
+                "domain_jetstream_before": domain_jetstream_before,
+                "domain_jetstream_after": domain_jetstream_after,
                 "service_rto_seconds": round(service_rto, 3),
                 "direct_api_observed_rto_seconds": round(direct_api_observed_rto, 3),
                 "component_recovery_rto_seconds": round(component_recovery_rto, 3),

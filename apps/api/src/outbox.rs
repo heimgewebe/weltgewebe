@@ -4,7 +4,7 @@ use anyhow::Context;
 use async_nats::{
     jetstream::{
         self,
-        consumer::{self, PullConsumer},
+        consumer::{self, FromConsumer, PullConsumer},
         stream,
     },
     Client, HeaderMap,
@@ -27,6 +27,8 @@ pub(crate) const STREAM_NAME: &str = "WELTGEWEBE_DOMAIN";
 pub(crate) const STREAM_SUBJECT: &str = "weltgewebe.domain.>";
 pub(crate) const CONSUMER_NAME: &str = "weltgewebe-api-domain-receipts-v1";
 pub(crate) const CONSUMER_LEDGER_NAME: &str = "weltgewebe-api-domain-receipts-v1";
+const DOMAIN_EVENT_REPLICAS_ENV: &str = "WELTGEWEBE_DOMAIN_JETSTREAM_REPLICAS";
+const DEFAULT_DOMAIN_EVENT_REPLICAS: usize = 1;
 const CLAIM_BATCH_SIZE: i64 = 32;
 const CLAIM_LEASE_SECONDS: i32 = 30;
 const MAX_ATTEMPTS: i32 = 10;
@@ -62,7 +64,7 @@ struct PublishedDomainEvent {
     created_at: DateTime<Utc>,
 }
 
-fn expected_stream_config() -> stream::Config {
+fn expected_stream_config(replicas: usize) -> stream::Config {
     stream::Config {
         name: STREAM_NAME.to_string(),
         description: Some(
@@ -71,20 +73,43 @@ fn expected_stream_config() -> stream::Config {
         subjects: vec![STREAM_SUBJECT.to_string()],
         max_age: Duration::from_secs(30 * 24 * 60 * 60),
         duplicate_window: Duration::from_secs(2 * 60),
+        num_replicas: replicas,
         ..Default::default()
     }
 }
 
-fn expected_consumer_config() -> consumer::pull::Config {
+fn expected_consumer_config(replicas: usize) -> consumer::pull::Config {
     consumer::pull::Config {
         durable_name: Some(CONSUMER_NAME.to_string()),
         filter_subject: STREAM_SUBJECT.to_string(),
         ack_policy: consumer::AckPolicy::Explicit,
+        num_replicas: replicas,
         ..Default::default()
     }
 }
 
-pub(crate) fn validate_stream_contract(config: &stream::Config) -> anyhow::Result<()> {
+fn parse_domain_event_replicas(raw: Option<&str>) -> anyhow::Result<usize> {
+    match raw {
+        None => Ok(DEFAULT_DOMAIN_EVENT_REPLICAS),
+        Some("1") => Ok(1),
+        Some("3") => Ok(3),
+        Some(observed) => {
+            anyhow::bail!("{DOMAIN_EVENT_REPLICAS_ENV} must be exactly 1 or 3, got {observed:?}")
+        }
+    }
+}
+
+fn domain_event_replicas() -> anyhow::Result<usize> {
+    match std::env::var(DOMAIN_EVENT_REPLICAS_ENV) {
+        Ok(value) => parse_domain_event_replicas(Some(&value)),
+        Err(std::env::VarError::NotPresent) => parse_domain_event_replicas(None),
+        Err(std::env::VarError::NotUnicode(_)) => {
+            anyhow::bail!("{DOMAIN_EVENT_REPLICAS_ENV} is not valid Unicode")
+        }
+    }
+}
+
+fn validate_stream_shape_contract(config: &stream::Config) -> anyhow::Result<()> {
     anyhow::ensure!(
         config.name == STREAM_NAME,
         "domain JetStream has name {:?}, expected {STREAM_NAME:?}",
@@ -108,7 +133,35 @@ pub(crate) fn validate_stream_contract(config: &stream::Config) -> anyhow::Resul
     Ok(())
 }
 
-fn validate_consumer_config(
+fn stream_replica_upgrade_needed(
+    config: &stream::Config,
+    expected_replicas: usize,
+) -> anyhow::Result<bool> {
+    validate_stream_shape_contract(config)?;
+    match (expected_replicas, config.num_replicas) {
+        (1, 1) | (3, 3) => Ok(false),
+        (3, 1) => Ok(true),
+        (1 | 3, observed) => anyhow::bail!(
+            "domain JetStream has {observed} replicas, expected {expected_replicas}; refusing implicit downgrade or unsupported replica drift"
+        ),
+        _ => anyhow::bail!("unsupported expected domain JetStream replica count: {expected_replicas}"),
+    }
+}
+
+pub(crate) fn validate_stream_contract(
+    config: &stream::Config,
+    expected_replicas: usize,
+) -> anyhow::Result<()> {
+    validate_stream_shape_contract(config)?;
+    anyhow::ensure!(
+        config.num_replicas == expected_replicas,
+        "domain JetStream has {} replicas, expected {expected_replicas}",
+        config.num_replicas
+    );
+    Ok(())
+}
+
+fn validate_consumer_shape_config(
     stream_name: &str,
     consumer_name: &str,
     config: &consumer::Config,
@@ -143,8 +196,55 @@ fn validate_consumer_config(
     Ok(())
 }
 
-pub(crate) fn validate_consumer_contract(info: &consumer::Info) -> anyhow::Result<()> {
-    validate_consumer_config(&info.stream_name, &info.name, &info.config)
+fn consumer_replica_upgrade_needed(
+    stream_name: &str,
+    consumer_name: &str,
+    config: &consumer::Config,
+    expected_replicas: usize,
+) -> anyhow::Result<bool> {
+    validate_consumer_shape_config(stream_name, consumer_name, config)?;
+    match (expected_replicas, config.num_replicas) {
+        (1, 0 | 1) | (3, 3) => Ok(false),
+        (3, 0 | 1) => Ok(true),
+        (1 | 3, observed) => anyhow::bail!(
+            "domain receipt consumer has {observed} replicas, expected {expected_replicas}; refusing implicit downgrade or unsupported replica drift"
+        ),
+        _ => anyhow::bail!(
+            "unsupported expected domain receipt consumer replica count: {expected_replicas}"
+        ),
+    }
+}
+
+fn validate_consumer_config(
+    stream_name: &str,
+    consumer_name: &str,
+    config: &consumer::Config,
+    expected_replicas: usize,
+) -> anyhow::Result<()> {
+    validate_consumer_shape_config(stream_name, consumer_name, config)?;
+    let matches_replica_contract = match expected_replicas {
+        1 => matches!(config.num_replicas, 0 | 1),
+        3 => config.num_replicas == 3,
+        _ => false,
+    };
+    anyhow::ensure!(
+        matches_replica_contract,
+        "domain receipt consumer has {} replicas, expected {expected_replicas}",
+        config.num_replicas
+    );
+    Ok(())
+}
+
+pub(crate) fn validate_consumer_contract(
+    info: &consumer::Info,
+    expected_replicas: usize,
+) -> anyhow::Result<()> {
+    validate_consumer_config(
+        &info.stream_name,
+        &info.name,
+        &info.config,
+        expected_replicas,
+    )
 }
 
 pub fn event_chain_required(config: &AppConfig) -> bool {
@@ -154,21 +254,46 @@ pub fn event_chain_required(config: &AppConfig) -> bool {
         || config.domain_edge_write_source == DomainEdgeWriteSource::Postgres
 }
 
-pub async fn ensure_stream(client: Client) -> anyhow::Result<(jetstream::Context, stream::Stream)> {
+async fn ensure_stream_with_replicas(
+    client: Client,
+    expected_replicas: usize,
+) -> anyhow::Result<(jetstream::Context, stream::Stream)> {
     let context = jetstream::new(client);
     let mut stream = context
-        .get_or_create_stream(expected_stream_config())
+        .get_or_create_stream(expected_stream_config(expected_replicas))
         .await
         .context("failed to get or create Weltgewebe domain JetStream")?;
     let info = stream
         .info()
         .await
         .context("failed to inspect Weltgewebe domain JetStream")?;
-    validate_stream_contract(&info.config)?;
+    if stream_replica_upgrade_needed(&info.config, expected_replicas)? {
+        let mut upgraded = info.config.clone();
+        upgraded.num_replicas = expected_replicas;
+        context
+            .update_stream(&upgraded)
+            .await
+            .context("failed to upgrade Weltgewebe domain JetStream replication")?;
+        stream = context
+            .get_stream(STREAM_NAME)
+            .await
+            .context("failed to re-open upgraded Weltgewebe domain JetStream")?;
+    }
+    let info = stream
+        .info()
+        .await
+        .context("failed to verify Weltgewebe domain JetStream replication")?;
+    validate_stream_contract(&info.config, expected_replicas)?;
     Ok((context, stream))
 }
 
+pub async fn ensure_stream(client: Client) -> anyhow::Result<(jetstream::Context, stream::Stream)> {
+    let expected_replicas = domain_event_replicas()?;
+    ensure_stream_with_replicas(client, expected_replicas).await
+}
+
 pub async fn verify_jetstream_contract(client: &Client) -> anyhow::Result<()> {
+    let expected_replicas = domain_event_replicas()?;
     let context = jetstream::new(client.clone());
     let mut stream = context
         .get_stream(STREAM_NAME)
@@ -178,12 +303,12 @@ pub async fn verify_jetstream_contract(client: &Client) -> anyhow::Result<()> {
         .info()
         .await
         .context("failed to inspect Weltgewebe domain JetStream")?;
-    validate_stream_contract(&stream_info.config)?;
+    validate_stream_contract(&stream_info.config, expected_replicas)?;
     let consumer_info = stream
         .consumer_info(CONSUMER_NAME)
         .await
         .context("expected durable domain receipt consumer is missing")?;
-    validate_consumer_contract(&consumer_info)
+    validate_consumer_contract(&consumer_info, expected_replicas)
 }
 
 pub async fn load_event_chain_db_snapshot(
@@ -514,16 +639,40 @@ where
 }
 
 pub async fn start(pool: PgPool, client: Client, metrics: Metrics) -> anyhow::Result<()> {
-    let (context, stream) = ensure_stream(client).await?;
-    let consumer: PullConsumer = stream
-        .get_or_create_consumer(CONSUMER_NAME, expected_consumer_config())
+    let expected_replicas = domain_event_replicas()?;
+    let (context, stream) = ensure_stream_with_replicas(client, expected_replicas).await?;
+    let mut consumer: PullConsumer = stream
+        .get_or_create_consumer(CONSUMER_NAME, expected_consumer_config(expected_replicas))
         .await
         .context("failed to get or create domain receipt consumer")?;
     let consumer_info = stream
         .consumer_info(CONSUMER_NAME)
         .await
         .context("failed to inspect domain receipt consumer")?;
-    validate_consumer_contract(&consumer_info)?;
+    if consumer_replica_upgrade_needed(
+        &consumer_info.stream_name,
+        &consumer_info.name,
+        &consumer_info.config,
+        expected_replicas,
+    )? {
+        let mut upgraded =
+            consumer::pull::Config::try_from_consumer_config(consumer_info.config.clone())
+                .map_err(|error| {
+                    anyhow::anyhow!(
+                        "existing domain receipt consumer is not pull-compatible: {error}"
+                    )
+                })?;
+        upgraded.num_replicas = expected_replicas;
+        consumer = stream
+            .update_consumer(upgraded)
+            .await
+            .context("failed to upgrade domain receipt consumer replication")?;
+    }
+    let consumer_info = stream
+        .consumer_info(CONSUMER_NAME)
+        .await
+        .context("failed to verify domain receipt consumer replication")?;
+    validate_consumer_contract(&consumer_info, expected_replicas)?;
 
     let relay_pool = pool.clone();
     let relay_context = context.clone();
@@ -564,32 +713,90 @@ mod tests {
 
     #[test]
     fn jetstream_contract_rejects_subject_and_durable_consumer_drift() {
-        let stream = expected_stream_config();
-        validate_stream_contract(&stream).expect("expected stream contract");
-        let mut wrong_stream = stream.clone();
-        wrong_stream.subjects = vec!["unrelated.>".to_string()];
-        assert!(validate_stream_contract(&wrong_stream).is_err());
-        let mut extra_subject = stream.clone();
-        extra_subject.subjects.push("unrelated.>".to_string());
-        assert!(validate_stream_contract(&extra_subject).is_err());
-        let mut wrong_retention = stream.clone();
-        wrong_retention.max_age = Duration::from_secs(60);
-        assert!(validate_stream_contract(&wrong_retention).is_err());
-        let mut wrong_deduplication = stream;
-        wrong_deduplication.duplicate_window = Duration::from_secs(30);
-        assert!(validate_stream_contract(&wrong_deduplication).is_err());
+        assert_eq!(
+            parse_domain_event_replicas(None).expect("default replicas"),
+            1
+        );
+        assert_eq!(
+            parse_domain_event_replicas(Some("1")).expect("local replicas"),
+            1
+        );
+        assert_eq!(
+            parse_domain_event_replicas(Some("3")).expect("HA replicas"),
+            3
+        );
+        for invalid in ["", "0", "2", "4", " 3 "] {
+            assert!(parse_domain_event_replicas(Some(invalid)).is_err());
+        }
 
-        let consumer = consumer::Config {
+        let local_stream = expected_stream_config(1);
+        validate_stream_contract(&local_stream, 1).expect("local stream contract");
+        assert!(!stream_replica_upgrade_needed(&local_stream, 1).expect("local stream"));
+        assert!(stream_replica_upgrade_needed(&local_stream, 3).expect("legacy HA stream"));
+
+        let ha_stream = expected_stream_config(3);
+        validate_stream_contract(&ha_stream, 3).expect("HA stream contract");
+        assert!(!stream_replica_upgrade_needed(&ha_stream, 3).expect("current HA stream"));
+        assert!(stream_replica_upgrade_needed(&ha_stream, 1).is_err());
+
+        let mut invalid_replica_stream = ha_stream.clone();
+        invalid_replica_stream.num_replicas = 2;
+        assert!(stream_replica_upgrade_needed(&invalid_replica_stream, 3).is_err());
+        let mut wrong_stream = ha_stream.clone();
+        wrong_stream.subjects = vec!["unrelated.>".to_string()];
+        assert!(validate_stream_contract(&wrong_stream, 3).is_err());
+        let mut extra_subject = ha_stream.clone();
+        extra_subject.subjects.push("unrelated.>".to_string());
+        assert!(validate_stream_contract(&extra_subject, 3).is_err());
+        let mut wrong_retention = ha_stream.clone();
+        wrong_retention.max_age = Duration::from_secs(60);
+        assert!(validate_stream_contract(&wrong_retention, 3).is_err());
+        let mut wrong_deduplication = ha_stream.clone();
+        wrong_deduplication.duplicate_window = Duration::from_secs(30);
+        assert!(validate_stream_contract(&wrong_deduplication, 3).is_err());
+
+        let consumer = |num_replicas| consumer::Config {
             durable_name: Some(CONSUMER_NAME.to_string()),
             filter_subject: STREAM_SUBJECT.to_string(),
             ack_policy: consumer::AckPolicy::Explicit,
+            num_replicas,
             ..Default::default()
         };
-        validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &consumer)
-            .expect("expected durable receipt consumer contract");
-        let mut ephemeral = consumer;
+        for local_replicas in [0, 1] {
+            let local = consumer(local_replicas);
+            validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &local, 1)
+                .expect("local durable consumer contract");
+            assert!(
+                !consumer_replica_upgrade_needed(STREAM_NAME, CONSUMER_NAME, &local, 1,)
+                    .expect("local consumer")
+            );
+            assert!(
+                consumer_replica_upgrade_needed(STREAM_NAME, CONSUMER_NAME, &local, 3,)
+                    .expect("legacy HA consumer")
+            );
+        }
+        let ha_consumer = consumer(3);
+        validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &ha_consumer, 3)
+            .expect("HA durable consumer contract");
+        assert!(
+            !consumer_replica_upgrade_needed(STREAM_NAME, CONSUMER_NAME, &ha_consumer, 3,)
+                .expect("HA consumer")
+        );
+        assert!(
+            consumer_replica_upgrade_needed(STREAM_NAME, CONSUMER_NAME, &ha_consumer, 1,).is_err()
+        );
+
+        let invalid_replica_consumer = consumer(2);
+        assert!(consumer_replica_upgrade_needed(
+            STREAM_NAME,
+            CONSUMER_NAME,
+            &invalid_replica_consumer,
+            3,
+        )
+        .is_err());
+        let mut ephemeral = ha_consumer;
         ephemeral.durable_name = None;
-        assert!(validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &ephemeral).is_err());
+        assert!(validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &ephemeral, 3).is_err());
     }
 
     #[tokio::test]

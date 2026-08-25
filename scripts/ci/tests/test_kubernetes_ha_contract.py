@@ -317,6 +317,88 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(container["image"], runtime_image)
         self.assertEqual(container["imagePullPolicy"], "Never")
 
+    def test_real_domain_jetstream_requires_three_replicas(self) -> None:
+        def completed(payload: dict[str, object]):
+            return mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
+
+        with mock.patch.object(
+            self.ha,
+            "nats",
+            side_effect=[
+                completed({"config": {"num_replicas": 3}}),
+                completed({"config": {"num_replicas": 3}}),
+            ],
+        ) as nats:
+            observed = self.ha.domain_jetstream_contract("kubectl")
+        self.assertEqual(observed["stream_replicas"], 3)
+        self.assertEqual(observed["consumer_replicas"], 3)
+        self.assertEqual(
+            nats.call_args_list[0].args[1][:3],
+            ["stream", "info", "WELTGEWEBE_DOMAIN"],
+        )
+        self.assertEqual(
+            nats.call_args_list[1].args[1][:4],
+            [
+                "consumer",
+                "info",
+                "WELTGEWEBE_DOMAIN",
+                "weltgewebe-api-domain-receipts-v1",
+            ],
+        )
+
+        for stream_replicas, consumer_replicas in ((1, 3), (3, 1)):
+            with mock.patch.object(
+                self.ha,
+                "nats",
+                side_effect=[
+                    completed({"config": {"num_replicas": stream_replicas}}),
+                    completed({"config": {"num_replicas": consumer_replicas}}),
+                ],
+            ):
+                with self.assertRaisesRegex(
+                    self.ha.ref.ProofError, "replicas, expected 3"
+                ):
+                    self.ha.domain_jetstream_contract("kubectl")
+
+    def test_real_domain_jetstream_is_bound_before_and_after_zone_failure(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        before = source.index(
+            "        domain_jetstream_before = domain_jetstream_contract(kubectl)"
+        )
+        failure = source.index("        failure_started = time.monotonic()", before)
+        node_stop = source.index('        ref.run(["docker", "stop"', failure)
+        after = source.index(
+            '            "three-replica domain JetStream after zone failure",',
+            node_stop,
+        )
+        gateway = source.index(
+            '                "Gateway API projection after zone failure",', after
+        )
+        self.assertLess(before, failure)
+        self.assertLess(failure, node_stop)
+        self.assertLess(node_stop, after)
+        self.assertLess(after, gateway)
+        self.assertIn('"domain_jetstream_rto_seconds"', source)
+        self.assertIn('"domain_jetstream_before": domain_jetstream_before', source)
+        self.assertIn('"domain_jetstream_after": domain_jetstream_after', source)
+        self.assertIn('"--replicas", "3"', source)
+
+    def test_domain_jetstream_replication_is_deployment_scoped(self) -> None:
+        base = yaml.safe_load(
+            (ROOT / "platform/apps/weltgewebe/base/config-map.yaml").read_text()
+        )
+        ha_patch = yaml.safe_load(
+            (ROOT / "platform/apps/weltgewebe/overlays/ha/config-map-patch.yaml").read_text()
+        )
+        key = "WELTGEWEBE_DOMAIN_JETSTREAM_REPLICAS"
+        self.assertEqual(base["data"][key], "1")
+        self.assertEqual(ha_patch["data"][key], "3")
+        outbox = (ROOT / "apps/api/src/outbox.rs").read_text()
+        self.assertIn(f'const DOMAIN_EVENT_REPLICAS_ENV: &str = "{key}";', outbox)
+        self.assertIn("const DEFAULT_DOMAIN_EVENT_REPLICAS: usize = 1;", outbox)
+        self.assertIn("(3, 1) => Ok(true)", outbox)
+        self.assertIn("refusing implicit downgrade", outbox)
+
     def test_nats_preload_happens_before_ha_data_apply(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()
         preload = source.index(
