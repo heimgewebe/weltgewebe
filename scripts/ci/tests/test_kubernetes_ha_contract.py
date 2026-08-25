@@ -165,6 +165,30 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertIn('"job_retry_observed"', source)
         self.assertIn('"duplicate_migration_history_prevented"', source)
 
+    def test_migration_election_completion_does_not_require_failed_attempt(self) -> None:
+        baseline = "a" * 64
+        with mock.patch.object(self.ha.ref, "wait_condition"), mock.patch.object(
+            self.ha, "migration_failed_attempts", return_value=0
+        ), mock.patch.object(
+            self.ha, "migration_history_digest", return_value=baseline
+        ), mock.patch.object(
+            self.ha, "remove_migration_data_egress",
+            return_value={"returncode": 0, "stderr": ""},
+        ):
+            result = self.ha.finish_migration_election_probe(
+                "kubectl",
+                postgres_cluster="postgres-ha",
+                baseline_history_sha256=baseline,
+                healthy_zone="zone-b",
+            )
+        self.assertEqual(result["failed_attempts_before_election_recovery"], 0)
+        self.assertFalse(result["job_retry_observed"])
+        self.assertFalse(result["retry_required_for_election_safety"])
+        self.assertTrue(result["election_completion_observed"])
+        self.assertTrue(result["job_completed"])
+        self.assertFalse(result["retry_completed"])
+        self.assertTrue(result["duplicate_migration_history_prevented"])
+
     def test_ha_direct_probe_respects_network_policy_without_rollout_delay(self) -> None:
         documents = list(
             self.validator._documents(
@@ -1610,6 +1634,62 @@ spec:
             "non-owner-control-plane-any-advertised-address",
         )
 
+    def test_gateway_observer_sample_reuses_pre_failure_binding_after_owner_stops(self) -> None:
+        binding = {
+            "gateway_addresses": ["10.0.0.1", "10.0.0.2"],
+            "observer_node": "proof-control-plane",
+            "observer_address": "10.0.0.9",
+            "owner_by_address": {
+                "10.0.0.1": "node-a",
+                "10.0.0.2": "node-b",
+            },
+            "captured_before_failure": True,
+        }
+        with mock.patch.object(self.ha.ref, "kind_nodes") as kind_nodes, mock.patch.object(
+            self.ha.ref, "output"
+        ) as output, mock.patch.object(
+            self.ha,
+            "gateway_projection_sample",
+            side_effect=lambda node, address, port, marker: {
+                "available": address == "10.0.0.2",
+                "returncode": 0 if address == "10.0.0.2" else 28,
+            },
+        ):
+            observed = self.ha.gateway_observer_sample(
+                "kind",
+                "proof",
+                ["10.0.0.1", "10.0.0.2"],
+                80,
+                "marker",
+                observer_binding=binding,
+            )
+        kind_nodes.assert_not_called()
+        output.assert_not_called()
+        self.assertTrue(observed["available"])
+        self.assertEqual(observed["observer_binding"], "pre-failure-snapshot")
+        self.assertEqual(observed["failed_paths"], 1)
+        self.assertEqual(observed["address_owners"]["10.0.0.1"], "node-a")
+
+    def test_gateway_observer_sample_rejects_unknown_address_after_binding(self) -> None:
+        binding = {
+            "gateway_addresses": ["10.0.0.1"],
+            "observer_node": "proof-control-plane",
+            "observer_address": "10.0.0.9",
+            "owner_by_address": {"10.0.0.1": "node-a"},
+            "captured_before_failure": True,
+        }
+        with self.assertRaisesRegex(
+            self.ha.ref.ProofError, "drifted outside the pre-failure binding"
+        ):
+            self.ha.gateway_observer_sample(
+                "kind",
+                "proof",
+                ["10.0.0.2"],
+                80,
+                "marker",
+                observer_binding=binding,
+            )
+
     def test_gateway_observer_sample_fails_when_all_advertised_listeners_fail(self) -> None:
         node_addresses = {
             "proof-control-plane": "10.0.0.9",
@@ -1741,7 +1821,9 @@ spec:
         self.assertIn('probe_node = gateway_probe["probe_node"]', source)
         self.assertIn('probe_address = gateway_probe["address"]', source)
         self.assertIn("gateway_observer_sample(", source)
+        self.assertIn("gateway_observer_binding(", source)
         self.assertIn("non-owner-control-plane-any-advertised-address", source)
+        self.assertIn("observer_binding=availability_monitor.gateway_binding", source)
         self.assertIn('"degraded_gateway_path_samples"', source)
         self.assertIn('"post-recovery-after-measurement"', source)
         self.assertIn('"diagnostic_duration_seconds"', source)

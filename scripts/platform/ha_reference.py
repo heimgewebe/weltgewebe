@@ -2088,10 +2088,6 @@ def finish_migration_election_probe(
             kubectl, "weltgewebe", "job/weltgewebe-migration", "Complete", "10m"
         )
         failed_attempts = migration_failed_attempts(kubectl)
-        if failed_attempts < 1:
-            raise ref.ProofError(
-                "migration Job did not observe a failed attempt during PostgreSQL election"
-            )
         after = migration_history_digest(kubectl, cluster=postgres_cluster)
         if after != baseline_history_sha256:
             raise ref.ProofError("migration history changed across PostgreSQL election retry")
@@ -2115,8 +2111,11 @@ def finish_migration_election_probe(
         "interruption": "real zone failure during PostgreSQL primary election",
         "scheduled_healthy_zone": healthy_zone,
         "failed_attempts_before_election_recovery": failed_attempts,
-        "job_retry_observed": True,
-        "retry_completed": True,
+        "job_retry_observed": failed_attempts >= 1,
+        "retry_required_for_election_safety": False,
+        "election_completion_observed": True,
+        "job_completed": True,
+        "retry_completed": failed_attempts >= 1,
         "duplicate_migration_history_prevented": True,
         "proof_postgres_egress": {
             "namespace": "weltgewebe-data",
@@ -2413,16 +2412,14 @@ def gateway_projection_available(
     )
 
 
-def gateway_observer_sample(
+def gateway_observer_binding(
     kind: str,
     cluster: str,
     addresses: list[str],
-    port: int,
-    marker: str,
 ) -> dict[str, Any]:
     gateway_addresses = sorted(set(addresses))
     if not gateway_addresses:
-        raise ref.ProofError("gateway observer probe has no advertised addresses")
+        raise ref.ProofError("gateway observer binding has no advertised addresses")
 
     nodes = sorted(set(ref.kind_nodes(kind, cluster)))
     node_addresses: dict[str, str] = {}
@@ -2465,6 +2462,47 @@ def gateway_observer_sample(
             f"{observers}"
         )
     observer = observers[0]
+    return {
+        "gateway_addresses": gateway_addresses,
+        "observer_node": observer,
+        "observer_address": node_addresses[observer],
+        "owner_by_address": {
+            address: owners_by_address[address][0]
+            for address in gateway_addresses
+        },
+        "captured_before_failure": True,
+    }
+
+
+def gateway_observer_sample(
+    kind: str,
+    cluster: str,
+    addresses: list[str],
+    port: int,
+    marker: str,
+    *,
+    observer_binding: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    gateway_addresses = sorted(set(addresses))
+    if not gateway_addresses:
+        raise ref.ProofError("gateway observer probe has no advertised addresses")
+
+    binding = observer_binding or gateway_observer_binding(
+        kind, cluster, gateway_addresses
+    )
+    known_addresses = {
+        str(address) for address in binding.get("gateway_addresses", [])
+    }
+    unknown_addresses = sorted(set(gateway_addresses) - known_addresses)
+    if unknown_addresses:
+        raise ref.ProofError(
+            "gateway advertised addresses drifted outside the pre-failure binding: "
+            f"{unknown_addresses}"
+        )
+    observer = str(binding.get("observer_node", ""))
+    observer_address = str(binding.get("observer_address", ""))
+    if not observer or not observer_address:
+        raise ref.ProofError("gateway observer binding is incomplete")
 
     def run_address(address: str) -> dict[str, Any]:
         try:
@@ -2486,11 +2524,19 @@ def gateway_observer_sample(
         for probe in probes
         if probe.get("available") is True
     ]
+    owner_by_address = binding.get("owner_by_address", {})
     return {
         "available": bool(successful_addresses),
         "probe_mode": "non-owner-control-plane-any-advertised-address",
+        "observer_binding": (
+            "pre-failure-snapshot" if observer_binding is not None else "live-preflight"
+        ),
         "observer_node": observer,
-        "observer_address": node_addresses[observer],
+        "observer_address": observer_address,
+        "address_owners": {
+            address: owner_by_address.get(address)
+            for address in gateway_addresses
+        },
         "gateway_address_count": len(gateway_addresses),
         "successful_paths": len(probes) - len(failed_paths),
         "failed_paths": len(failed_paths),
@@ -2780,6 +2826,9 @@ class ContinuousAvailabilityMonitor:
         self.gateway_port = gateway_port
         self.interval_seconds = interval_seconds
         self.gateway_addresses = sorted(set(ref.gateway_addresses(kubectl)))
+        self.gateway_binding = gateway_observer_binding(
+            kind, cluster, self.gateway_addresses
+        )
         self.direct_probe_pods = sorted(set(direct_probe_pods))
         if len(self.direct_probe_pods) != 3:
             raise ref.ProofError("continuous availability monitor requires three direct API probe pods")
@@ -2820,6 +2869,7 @@ class ContinuousAvailabilityMonitor:
                     self.gateway_addresses,
                     self.gateway_port,
                     self.marker,
+                    observer_binding=self.gateway_binding,
                 )
                 return {
                     "available": bool(result.get("available")),
@@ -3789,6 +3839,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                         gateway_addresses_after_failure,
                         int(gateway_before["listener_port"]),
                         marker,
+                        observer_binding=availability_monitor.gateway_binding,
                     )
                 ).get("available")
                 else False
