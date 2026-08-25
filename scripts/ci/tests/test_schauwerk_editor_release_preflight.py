@@ -51,7 +51,14 @@ def test_valid_release_passes(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize(
     "mutation",
-    ["broken-current", "absolute-current", "missing-index", "wrong-origin", "digest-drift"],
+    [
+        "broken-current",
+        "absolute-current",
+        "symlink-release",
+        "missing-index",
+        "wrong-origin",
+        "digest-drift",
+    ],
 )
 def test_release_failures_are_closed(tmp_path: Path, mutation: str) -> None:
     root = tmp_path / "editor"
@@ -62,6 +69,10 @@ def test_release_failures_are_closed(tmp_path: Path, mutation: str) -> None:
     elif mutation == "absolute-current":
         (root / "current").unlink()
         (root / "current").symlink_to(release.resolve())
+    elif mutation == "symlink-release":
+        real_release = release.with_name("real")
+        release.rename(real_release)
+        release.symlink_to(real_release.name, target_is_directory=True)
     elif mutation == "missing-index":
         (release / "index.html").unlink()
     elif mutation == "wrong-origin":

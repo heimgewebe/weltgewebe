@@ -53,12 +53,18 @@ def verify_release(root: Path) -> dict[str, str]:
             "editor current pointer must use a relative releases/<release> target"
         )
 
+    release_path = releases / current_target.parts[1]
+    if release_path.is_symlink() or not release_path.is_dir():
+        raise ReleaseContractError(
+            f"editor release directory is missing or unsafe: {release_path}"
+        )
+
     try:
-        release = current.resolve(strict=True)
+        release = release_path.resolve(strict=True)
         releases_resolved = releases.resolve(strict=True)
     except OSError as exc:
         raise ReleaseContractError("editor current pointer is broken") from exc
-    if release.parent != releases_resolved or not release.is_dir() or release.is_symlink():
+    if release.parent != releases_resolved or not release.is_dir():
         raise ReleaseContractError("editor current pointer must resolve to one direct releases child")
 
     manifest_path = release / "manifest.json"
