@@ -77,7 +77,7 @@ def test_release_failures_are_closed(tmp_path: Path, mutation: str) -> None:
         release.rename(real_release)
         release.symlink_to(real_release.name, target_is_directory=True)
     elif mutation == "extra-file":
-        (release / ".env").write_text("SECRET=not-published\n", encoding="utf-8")
+        (release / ".env").write_text("unverified fixture\n", encoding="utf-8")
     elif mutation == "extra-symlink":
         (release / "leak").symlink_to("/etc/passwd")
     elif mutation == "extra-directory":
