@@ -3046,6 +3046,41 @@ class ContinuousAvailabilityMonitor:
             next_due += self.interval_seconds
             self._stop.wait(max(0.0, next_due - time.monotonic()))
 
+    def failure_snapshot(self) -> dict[str, Any]:
+        def summarize_channel(samples: list[dict[str, Any]]) -> dict[str, Any]:
+            post_failure = samples
+            if self._failure_elapsed_seconds is not None:
+                post_failure = [
+                    sample
+                    for sample in samples
+                    if float(sample.get("elapsed_seconds", -1.0))
+                    >= self._failure_elapsed_seconds
+                ]
+            return {
+                "sample_count": len(samples),
+                "post_failure_sample_count": len(post_failure),
+                "post_failure_successes": sum(
+                    1 for sample in post_failure if sample.get("available") is True
+                ),
+                "post_failure_failures": sum(
+                    1 for sample in post_failure if sample.get("available") is not True
+                ),
+                "last_samples": post_failure[-5:],
+            }
+
+        return {
+            "failure_marker": {
+                "label": self._failure_label,
+                "elapsed_seconds": (
+                    round(self._failure_elapsed_seconds, 3)
+                    if self._failure_elapsed_seconds is not None
+                    else None
+                ),
+            },
+            "gateway": summarize_channel(list(self._gateway_samples)),
+            "direct_api": summarize_channel(list(self._direct_samples)),
+        }
+
     def stop(self, end_reason: str) -> dict[str, Any]:
         if self._thread is None:
             raise ref.ProofError("continuous availability monitor was not started")
@@ -3095,6 +3130,170 @@ class ContinuousAvailabilityMonitor:
             "gateway": gateway,
             "direct_api": direct_api,
         }
+
+def api_readiness_failure_diagnostic(
+    kubectl: str,
+    monitor: ContinuousAvailabilityMonitor,
+) -> dict[str, Any]:
+    def read_json(argv: list[str]) -> dict[str, Any]:
+        try:
+            return json.loads(ref.output(argv))
+        except (
+            OSError,
+            subprocess.SubprocessError,
+            json.JSONDecodeError,
+            ref.ProofError,
+        ) as error:
+            return {
+                "diagnostic_error": f"{type(error).__name__}: {error}"[:300]
+            }
+
+    deployment = read_json(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "get",
+            "deployment/weltgewebe-api",
+            "-o",
+            "json",
+        ]
+    )
+    pods = read_json(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "get",
+            "pods",
+            "-l",
+            "app.kubernetes.io/name=weltgewebe-api",
+            "-o",
+            "json",
+        ]
+    )
+    endpoint_slices = read_json(
+        [
+            kubectl,
+            "-n",
+            "weltgewebe",
+            "get",
+            "endpointslices.discovery.k8s.io",
+            "-l",
+            "kubernetes.io/service-name=weltgewebe-api",
+            "-o",
+            "json",
+        ]
+    )
+
+    pod_states: list[dict[str, Any]] = []
+    health_log_needles = (
+        "health check failed",
+        "essential domain event worker",
+        "domain outbox",
+        "domain receipt consumer",
+    )
+    for item in pods.get("items", []) if isinstance(pods.get("items"), list) else []:
+        metadata = item.get("metadata", {})
+        status = item.get("status", {})
+        name = str(metadata.get("name", ""))
+        conditions = {
+            condition.get("type"): condition.get("status")
+            for condition in status.get("conditions", [])
+            if isinstance(condition, dict)
+        }
+        container_status = next(
+            (
+                entry
+                for entry in status.get("containerStatuses", [])
+                if isinstance(entry, dict) and entry.get("name") == "api"
+            ),
+            {},
+        )
+        log_excerpt: list[str] = []
+        if name:
+            try:
+                result = subprocess.run(
+                    [
+                        kubectl,
+                        "--request-timeout=5s",
+                        "-n",
+                        "weltgewebe",
+                        "logs",
+                        name,
+                        "-c",
+                        "api",
+                        "--tail=200",
+                    ],
+                    cwd=ROOT,
+                    text=True,
+                    capture_output=True,
+                    timeout=8,
+                    check=False,
+                )
+                log_excerpt = [
+                    line[:500]
+                    for line in (result.stdout or "").splitlines()
+                    if any(needle in line.lower() for needle in health_log_needles)
+                ][-20:]
+                if result.returncode != 0 and not log_excerpt:
+                    log_excerpt = [
+                        f"log_read_error: {(result.stderr or '').strip()[:300]}"
+                    ]
+            except (OSError, subprocess.SubprocessError) as error:
+                log_excerpt = [
+                    f"log_read_error: {type(error).__name__}: {str(error)[:250]}"
+                ]
+        pod_states.append(
+            {
+                "name": name,
+                "node": item.get("spec", {}).get("nodeName"),
+                "pod_ip": status.get("podIP"),
+                "phase": status.get("phase"),
+                "ready": conditions.get("Ready") == "True",
+                "container_ready": container_status.get("ready"),
+                "restart_count": container_status.get("restartCount"),
+                "deleting": bool(metadata.get("deletionTimestamp")),
+                "health_log_excerpt": log_excerpt,
+            }
+        )
+
+    endpoint_states: list[dict[str, Any]] = []
+    for item in (
+        endpoint_slices.get("items", [])
+        if isinstance(endpoint_slices.get("items"), list)
+        else []
+    ):
+        for endpoint in item.get("endpoints", []):
+            if not isinstance(endpoint, dict):
+                continue
+            endpoint_states.append(
+                {
+                    "addresses": endpoint.get("addresses", []),
+                    "node": endpoint.get("nodeName"),
+                    "target": endpoint.get("targetRef", {}).get("name"),
+                    "ready": endpoint.get("conditions", {}).get("ready"),
+                    "serving": endpoint.get("conditions", {}).get("serving"),
+                    "terminating": endpoint.get("conditions", {}).get(
+                        "terminating"
+                    ),
+                }
+            )
+
+    deployment_status = deployment.get("status", {})
+    return {
+        "capture": "post-timeout-after-measurement",
+        "continuous_availability": monitor.failure_snapshot(),
+        "deployment": {
+            "replicas": deployment_status.get("replicas"),
+            "ready_replicas": deployment_status.get("readyReplicas"),
+            "available_replicas": deployment_status.get("availableReplicas"),
+            "unavailable_replicas": deployment_status.get("unavailableReplicas", 0),
+        },
+        "pods": pod_states,
+        "endpoint_slices": endpoint_states,
+    }
+
 
 def projection_path_diagnostic(
     kubectl: str,
@@ -4000,25 +4199,43 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         postgres_rto = time.monotonic() - failure_started
         wait_until("acknowledged domain mutation after failover", lambda: node_exists(kubectl, marker), timeout_seconds=60)
         gateway_addresses_after_failure = sorted(set(ref.gateway_addresses(kubectl)))
-        gateway_recovery = wait_until(
-            "Gateway API projection after zone failure",
-            lambda: (
-                sample
-                if (
-                    sample := gateway_observer_sample(
-                        kind,
-                        args.cluster,
-                        gateway_addresses_after_failure,
-                        int(gateway_before["listener_port"]),
-                        marker,
-                        observer_binding=availability_monitor.gateway_binding,
-                    )
-                ).get("available")
-                else False
-            ),
-            timeout_seconds=180,
-            interval=1,
-        )
+        try:
+            gateway_recovery = wait_until(
+                "Gateway API projection after zone failure",
+                lambda: (
+                    sample
+                    if (
+                        sample := gateway_observer_sample(
+                            kind,
+                            args.cluster,
+                            gateway_addresses_after_failure,
+                            int(gateway_before["listener_port"]),
+                            marker,
+                            observer_binding=availability_monitor.gateway_binding,
+                        )
+                    ).get("available")
+                    else False
+                ),
+                timeout_seconds=180,
+                interval=1,
+            )
+        except ref.ProofError:
+            diagnostic_started = time.monotonic()
+            diagnostic = api_readiness_failure_diagnostic(
+                kubectl, availability_monitor
+            )
+            diagnostic["diagnostic_duration_seconds"] = round(
+                time.monotonic() - diagnostic_started, 3
+            )
+            print(
+                json.dumps(
+                    {"zone_failure_readiness_diagnostic": diagnostic},
+                    sort_keys=True,
+                ),
+                file=sys.stderr,
+                flush=True,
+            )
+            raise
         api_validation_upper_bound = time.monotonic() - failure_started
         direct_address, direct_port = direct_api_probe_target(kubectl)
         wait_until(

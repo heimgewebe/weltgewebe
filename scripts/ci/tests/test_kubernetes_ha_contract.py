@@ -328,6 +328,50 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
         self.assertLess(preload, ha_data_apply)
 
+    def test_continuous_failure_snapshot_does_not_require_recovery(self) -> None:
+        monitor = self.ha.ContinuousAvailabilityMonitor.__new__(
+            self.ha.ContinuousAvailabilityMonitor
+        )
+        monitor._failure_label = "single-zone-node-stop"
+        monitor._failure_elapsed_seconds = 10.0
+        monitor._gateway_samples = [
+            {"elapsed_seconds": 9.0, "available": True},
+            {"elapsed_seconds": 10.0, "available": False},
+            {"elapsed_seconds": 11.0, "available": False},
+        ]
+        monitor._direct_samples = [
+            {"elapsed_seconds": 9.0, "available": True},
+            {"elapsed_seconds": 10.0, "available": False},
+            {"elapsed_seconds": 11.0, "available": True},
+        ]
+
+        snapshot = monitor.failure_snapshot()
+
+        self.assertEqual(snapshot["gateway"]["post_failure_successes"], 0)
+        self.assertEqual(snapshot["gateway"]["post_failure_failures"], 2)
+        self.assertEqual(snapshot["direct_api"]["post_failure_successes"], 1)
+        self.assertEqual(snapshot["direct_api"]["post_failure_failures"], 1)
+        self.assertEqual(
+            snapshot["failure_marker"]["label"], "single-zone-node-stop"
+        )
+
+    def test_zone_failure_timeout_diagnostic_preserves_primary_error(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        wait_position = source.index(
+            '                "Gateway API projection after zone failure",'
+        )
+        diagnostic_position = source.index(
+            "            diagnostic = api_readiness_failure_diagnostic(",
+            wait_position,
+        )
+        re_raise_position = source.index("            raise\n", diagnostic_position)
+        self.assertLess(wait_position, diagnostic_position)
+        self.assertLess(diagnostic_position, re_raise_position)
+        self.assertIn(
+            '"capture": "post-timeout-after-measurement"',
+            source,
+        )
+
     def test_ha_direct_probe_respects_network_policy_without_rollout_delay(self) -> None:
         documents = list(
             self.validator._documents(
