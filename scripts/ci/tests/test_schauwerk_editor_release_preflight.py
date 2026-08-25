@@ -49,13 +49,19 @@ def test_valid_release_passes(tmp_path: Path) -> None:
     assert result["editor_origin"] == MODULE.EDITOR_ORIGIN
 
 
-@pytest.mark.parametrize("mutation", ["broken-current", "missing-index", "wrong-origin", "digest-drift"])
+@pytest.mark.parametrize(
+    "mutation",
+    ["broken-current", "absolute-current", "missing-index", "wrong-origin", "digest-drift"],
+)
 def test_release_failures_are_closed(tmp_path: Path, mutation: str) -> None:
     root = tmp_path / "editor"
     release = _write_release(root)
     if mutation == "broken-current":
         (root / "current").unlink()
         (root / "current").symlink_to("releases/missing")
+    elif mutation == "absolute-current":
+        (root / "current").unlink()
+        (root / "current").symlink_to(release.resolve())
     elif mutation == "missing-index":
         (release / "index.html").unlink()
     elif mutation == "wrong-origin":
@@ -74,7 +80,7 @@ def test_current_must_not_escape_releases(tmp_path: Path) -> None:
     outside.mkdir()
     (root / "releases").mkdir(parents=True)
     (root / "current").symlink_to(outside)
-    with pytest.raises(MODULE.ReleaseContractError, match="direct releases child"):
+    with pytest.raises(MODULE.ReleaseContractError, match="relative releases/<release> target"):
         MODULE.verify_release(root)
 
 

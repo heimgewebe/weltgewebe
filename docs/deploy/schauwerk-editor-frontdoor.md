@@ -62,7 +62,9 @@ mutation; bounded `api` and `migration` deployments intentionally do not own thi
 edge dependency. At minimum, verify all of the following:
 
 1. the release directory is a real directory, not a symlink;
-2. `current` points to the intended `releases/<schauwerk-commit>` directory;
+2. `current` is a relative symlink of the form `releases/<schauwerk-commit>`;
+   absolute host paths are rejected because the release tree is mounted at a
+   different path inside Caddy;
 3. `manifest.json` uses `schauwerk-standalone-editor-manifest.v1`;
 4. the manifest `editor_origin` equals the Caddy CSP origin;
 5. every asset digest listed in the manifest matches the installed file;

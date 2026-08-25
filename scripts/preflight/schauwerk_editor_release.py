@@ -40,6 +40,20 @@ def verify_release(root: Path) -> dict[str, str]:
         raise ReleaseContractError(f"editor current pointer must be a symlink: {current}")
 
     try:
+        current_target = current.readlink()
+    except OSError as exc:
+        raise ReleaseContractError("editor current pointer is unreadable") from exc
+    if (
+        current_target.is_absolute()
+        or len(current_target.parts) != 2
+        or current_target.parts[0] != "releases"
+        or current_target.parts[1] in {".", "..", ""}
+    ):
+        raise ReleaseContractError(
+            "editor current pointer must use a relative releases/<release> target"
+        )
+
+    try:
         release = current.resolve(strict=True)
         releases_resolved = releases.resolve(strict=True)
     except OSError as exc:
