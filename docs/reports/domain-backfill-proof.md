@@ -27,6 +27,7 @@ relations:
 > Die historischen Aussagen bleiben unverändert; aktuelle Statuswahrheit ist aus
 > den kanonischen Status-, Architektur- und Runtimequellen abzuleiten.
 
+<!-- Archivhinweis endet; historischer Originalblock folgt. -->
 
 > **Sicherheitsnachtrag 2026-07-18:** Historische Radius-/Approximate-Datensätze
 > ohne private Zufallsbindung werden beim Import nicht mehr öffentlich

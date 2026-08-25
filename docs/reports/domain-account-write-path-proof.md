@@ -37,6 +37,7 @@ relations:
 > Die historischen Aussagen bleiben unverändert; aktuelle Statuswahrheit ist aus
 > den kanonischen Status-, Architektur- und Runtimequellen abzuleiten.
 
+<!-- Archivhinweis endet; historischer Originalblock folgt. -->
 
 > **Sicherheitsnachtrag 2026-07-18:** Die in diesem historischen Phase-E-A-Beleg
 > beschriebene ID-deterministische Radiusprojektion ist durch Issue #1464 und

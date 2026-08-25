@@ -37,6 +37,7 @@ relations:
 > Gegenwartsentscheidung liegt in `docs/adr/ADR-0007__auth-persistence-production-db-path.md`;
 > aktuelle Betriebswahrheit muss aus dem heutigen Deployment/Runtime-Readback kommen.
 
+<!-- Archivhinweis endet; historischer Originalblock folgt. -->
 
 > **Zweck:** Diagnose und Kanonisierung. Dieses Dokument hält den Abgleich zwischen
 > Dev-Stack, Prod-Stack, Runtime-Befund und Proof-Dokumenten fest.
