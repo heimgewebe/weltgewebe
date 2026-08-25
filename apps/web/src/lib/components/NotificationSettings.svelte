@@ -1,7 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import {
-    NotificationsApiError,
     applicationServerKey,
     deletePushSubscription,
     getNotificationPreferences,
@@ -11,6 +10,10 @@
     type NotificationPreferences,
     type PushConfig,
   } from "$lib/api/notifications";
+  import {
+    PUSH_PERMISSION_BLOCKED,
+    describeNotificationError,
+  } from "$lib/notifications/feedback";
 
   let supported = $state(false);
   let loading = $state(true);
@@ -21,26 +24,22 @@
     direct_messages_push: false,
   });
   let browserSubscription: PushSubscription | null = $state(null);
+  let pendingRemovalEndpoint: string | null = $state(null);
   let permission: NotificationPermission | "unsupported" =
     $state("unsupported");
   let error = $state("");
+  let warning = $state("");
   let notice = $state("");
 
-  function describeError(cause: unknown): string {
-    if (cause instanceof NotificationsApiError) {
-      if (cause.status === 401)
-        return "Bitte melde dich an, um Benachrichtigungen einzustellen.";
-      if (cause.code === "push_not_configured")
-        return "Push ist in dieser Weltgewebe-Zelle noch nicht eingerichtet.";
-      if (cause.code === "push_delivery_unavailable")
-        return "Der Push-Zustellweg ist derzeit nicht verbunden.";
-      if (cause.code === "invalid_push_subscription")
-        return "Die Browserfreigabe konnte nicht sicher übernommen werden.";
-      if (cause.code === "push_subscription_limit_reached")
-        return "Für dieses Konto sind bereits 20 Geräte aktiv. Deaktiviere zuerst ein nicht mehr verwendetes Gerät.";
-    }
-    if (cause instanceof Error && cause.message) return cause.message;
-    return "Die Benachrichtigungseinstellung konnte nicht verarbeitet werden.";
+  function clearFeedback(): void {
+    error = "";
+    warning = "";
+    notice = "";
+  }
+
+  function refreshPermission(): void {
+    if (!supported || document.visibilityState === "hidden") return;
+    permission = Notification.permission;
   }
 
   async function loadBrowserSubscription(): Promise<void> {
@@ -51,7 +50,7 @@
 
   async function load(): Promise<void> {
     loading = true;
-    error = "";
+    clearFeedback();
     const controller = new AbortController();
     try {
       [config, preferences] = await Promise.all([
@@ -59,8 +58,9 @@
         getNotificationPreferences(controller.signal),
       ]);
       await loadBrowserSubscription();
+      refreshPermission();
     } catch (cause) {
-      error = describeError(cause);
+      error = describeNotificationError(cause, "load");
     } finally {
       loading = false;
     }
@@ -71,16 +71,17 @@
     const previous = preferences.direct_messages_push;
     preferences = { ...preferences, direct_messages_push: checked };
     savingPreference = true;
-    error = "";
-    notice = "";
+    clearFeedback();
     try {
       preferences = await updateNotificationPreferences(checked);
       notice = checked
-        ? "Private Nachrichten sind für Push freigegeben."
-        : "Push-Hinweise für private Nachrichten sind ausgeschaltet.";
+        ? browserSubscription
+          ? "Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet."
+          : "Push-Hinweise sind für dein Konto eingeschaltet. Aktiviere dieses Gerät, um sie hier zu empfangen."
+        : "Push-Hinweise für private Nachrichten sind für dein Konto ausgeschaltet.";
     } catch (cause) {
       preferences = { ...preferences, direct_messages_push: previous };
-      error = describeError(cause);
+      error = describeNotificationError(cause, "preference");
     } finally {
       savingPreference = false;
     }
@@ -89,17 +90,25 @@
   async function enableCurrentDevice(): Promise<void> {
     if (changingDevice || !config?.enabled || !config.application_server_key)
       return;
+    if (permission === "denied") {
+      warning = PUSH_PERMISSION_BLOCKED;
+      return;
+    }
+
     changingDevice = true;
-    error = "";
-    notice = "";
+    clearFeedback();
     let createdSubscription: PushSubscription | null = null;
+    let registeredEndpoint: string | null = null;
     try {
       permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        throw new Error(
-          "Das Gerät hat Push nicht freigegeben. Du kannst die Berechtigung in den Browser- oder Systemeinstellungen ändern.",
-        );
+        warning =
+          permission === "denied"
+            ? PUSH_PERMISSION_BLOCKED
+            : "Benachrichtigungen wurden nicht freigegeben. Ohne Freigabe bleibt Push auf diesem Gerät aus.";
+        return;
       }
+
       const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
       });
@@ -114,14 +123,39 @@
           ),
         }));
       await registerPushSubscription(createdSubscription);
+      registeredEndpoint = createdSubscription.endpoint;
       preferences = await updateNotificationPreferences(true);
       browserSubscription = createdSubscription;
-      notice = "Push ist auf diesem Gerät aktiviert.";
+      notice =
+        "Push ist auf diesem Gerät aktiviert. Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet.";
     } catch (cause) {
+      if (registeredEndpoint) {
+        await deletePushSubscription(registeredEndpoint).catch(() => undefined);
+      }
       if (createdSubscription && !browserSubscription) {
         await createdSubscription.unsubscribe().catch(() => false);
       }
-      error = describeError(cause);
+      error = describeNotificationError(cause, "device");
+    } finally {
+      changingDevice = false;
+    }
+  }
+
+  function removalWarning(): string {
+    return "Push ist auf diesem Gerät deaktiviert. Der gespeicherte Geräte-Eintrag konnte gerade nicht entfernt werden und kann vorübergehend noch als aktives Gerät zählen.";
+  }
+
+  async function retryServerRemoval(): Promise<void> {
+    if (changingDevice || !pendingRemovalEndpoint) return;
+    changingDevice = true;
+    clearFeedback();
+    const endpoint = pendingRemovalEndpoint;
+    try {
+      await deletePushSubscription(endpoint);
+      pendingRemovalEndpoint = null;
+      notice = "Der alte Geräte-Eintrag wurde entfernt.";
+    } catch {
+      warning = removalWarning();
     } finally {
       changingDevice = false;
     }
@@ -130,20 +164,21 @@
   async function disableCurrentDevice(): Promise<void> {
     if (changingDevice || !browserSubscription) return;
     changingDevice = true;
-    error = "";
-    notice = "";
+    clearFeedback();
     const endpoint = browserSubscription.endpoint;
     try {
       await browserSubscription.unsubscribe();
       browserSubscription = null;
       try {
         await deletePushSubscription(endpoint);
+        pendingRemovalEndpoint = null;
         notice = "Push ist auf diesem Gerät deaktiviert.";
-      } catch (cause) {
-        error = `${describeError(cause)} Die Browserfreigabe ist trotzdem beendet; der alte Endpunkt wird beim nächsten Zustellversuch automatisch stillgelegt.`;
+      } catch {
+        pendingRemovalEndpoint = endpoint;
+        warning = removalWarning();
       }
     } catch (cause) {
-      error = describeError(cause);
+      error = describeNotificationError(cause, "device");
     } finally {
       changingDevice = false;
     }
@@ -157,6 +192,15 @@
     permission = supported ? Notification.permission : "unsupported";
     if (supported) void load();
     else loading = false;
+
+    const handleVisibilityChange = () => refreshPermission();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", refreshPermission);
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", refreshPermission);
+    };
   });
 </script>
 
@@ -186,25 +230,33 @@
 
   {#if !supported}
     <p class="status warning">
-      Dieser Browser unterstützt Web Push nicht. Das Nachrichtenpostfach bleibt
-      vollständig nutzbar.
+      Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
+      verfügbar. Das Nachrichtenpostfach bleibt vollständig nutzbar.
     </p>
   {:else if loading}
     <p class="status">Benachrichtigungseinstellungen werden geladen …</p>
   {:else if error && !config}
-    <p class="status error" role="alert">{error}</p>
+    <div class="status error status-with-action" role="alert">
+      <p>{error}</p>
+      <button
+        class="btn secondary touch-target"
+        type="button"
+        onclick={load}>Erneut versuchen</button
+      >
+    </div>
   {:else}
     <div class="preference-row">
       <div>
         <strong>Private Nachrichten</strong>
         <p>
-          Kontoweit auswählbar. Ohne aktiviertes Gerät entstehen trotzdem keine
-          Push-Hinweise.
+          Diese Einstellung gilt für dein Konto. Push-Hinweise werden nur an
+          Geräte gesendet, auf denen du Push zusätzlich aktiviert hast.
         </p>
       </div>
       <label class="switch-label">
         <input
           type="checkbox"
+          aria-label="Push-Hinweise für private Nachrichten"
           checked={preferences.direct_messages_push}
           disabled={savingPreference}
           onchange={changePreference}
@@ -218,11 +270,11 @@
         <strong>Dieses Gerät</strong>
         <p>
           {#if browserSubscription}
-            Die Browserfreigabe ist aktiv.
+            Push ist auf diesem Gerät freigegeben.
           {:else if permission === "denied"}
-            Push wurde im Browser oder Betriebssystem blockiert.
+            Benachrichtigungen sind im Browser oder Betriebssystem blockiert.
           {:else}
-            Noch nicht für Push freigegeben.
+            Push ist auf diesem Gerät noch nicht aktiviert.
           {/if}
         </p>
       </div>
@@ -238,6 +290,10 @@
             ? "Wird deaktiviert …"
             : "Auf diesem Gerät deaktivieren"}
         </button>
+      {:else if permission === "denied"}
+        <span class="blocked-action">
+          In Browser- oder Systemeinstellungen freigeben
+        </span>
       {:else}
         <button
           class="btn primary touch-target"
@@ -252,11 +308,26 @@
 
     {#if config && !config.enabled}
       <p class="status warning">
-        Die Oberfläche ist vorbereitet, aber der Betreiber hat den
-        verschlüsselten Push-Zustellweg noch nicht konfiguriert.
+        Push ist auf diesem Weltgewebe-Server derzeit nicht verfügbar. Deine
+        Nachrichten bleiben im Postfach.
       </p>
     {/if}
     {#if notice}<p class="status success" aria-live="polite">{notice}</p>{/if}
+    {#if warning}
+      <div class="status warning status-with-action" role="status">
+        <p>{warning}</p>
+        {#if pendingRemovalEndpoint}
+          <button
+            class="btn secondary touch-target"
+            type="button"
+            disabled={changingDevice}
+            onclick={retryServerRemoval}
+          >
+            {changingDevice ? "Wird entfernt …" : "Geräte-Eintrag erneut entfernen"}
+          </button>
+        {/if}
+      </div>
+    {/if}
     {#if error}<p class="status error" role="alert">{error}</p>{/if}
   {/if}
 </section>
@@ -270,7 +341,8 @@
 
   .section-heading,
   .preference-row,
-  .device-card {
+  .device-card,
+  .status-with-action {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -292,7 +364,8 @@
   .explanation,
   .platform-note,
   .preference-row p,
-  .device-card p {
+  .device-card p,
+  .blocked-action {
     color: var(--muted);
   }
 
@@ -346,13 +419,15 @@
   @media (max-width: 620px) {
     .section-heading,
     .preference-row,
-    .device-card {
+    .device-card,
+    .status-with-action {
       align-items: stretch;
       flex-direction: column;
     }
 
     .section-heading .inbox-link,
-    .device-card button {
+    .device-card button,
+    .status-with-action button {
       width: 100%;
     }
   }
