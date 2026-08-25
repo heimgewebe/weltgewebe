@@ -71,7 +71,9 @@ fn expected_stream_config(replicas: usize) -> stream::Config {
             "Transactional Weltgewebe domain events emitted from PostgreSQL".to_string(),
         ),
         subjects: vec![STREAM_SUBJECT.to_string()],
+        retention: stream::RetentionPolicy::Limits,
         max_age: Duration::from_secs(30 * 24 * 60 * 60),
+        storage: stream::StorageType::File,
         duplicate_window: Duration::from_secs(2 * 60),
         num_replicas: replicas,
         ..Default::default()
@@ -121,6 +123,16 @@ fn validate_stream_shape_contract(config: &stream::Config) -> anyhow::Result<()>
         config.subjects
     );
     anyhow::ensure!(
+        config.retention == stream::RetentionPolicy::Limits,
+        "domain JetStream retention is {:?}, expected limits",
+        config.retention
+    );
+    anyhow::ensure!(
+        config.storage == stream::StorageType::File,
+        "domain JetStream storage is {:?}, expected file",
+        config.storage
+    );
+    anyhow::ensure!(
         config.max_age == Duration::from_secs(30 * 24 * 60 * 60),
         "domain JetStream max_age is {:?}, expected 30 days",
         config.max_age
@@ -139,7 +151,9 @@ fn stream_replica_upgrade_needed(
 ) -> anyhow::Result<bool> {
     validate_stream_shape_contract(config)?;
     match (expected_replicas, config.num_replicas) {
-        (1, 1) | (3, 3) => Ok(false),
+        // Base/local mode may inherit a stream that was already HA-replicated.
+        // Preserve 3 replicas rather than implicitly downgrading durable state.
+        (1, 1 | 3) | (3, 3) => Ok(false),
         (3, 1) => Ok(true),
         (1 | 3, observed) => anyhow::bail!(
             "domain JetStream has {observed} replicas, expected {expected_replicas}; refusing implicit downgrade or unsupported replica drift"
@@ -153,9 +167,14 @@ pub(crate) fn validate_stream_contract(
     expected_replicas: usize,
 ) -> anyhow::Result<()> {
     validate_stream_shape_contract(config)?;
+    let matches_replica_contract = match expected_replicas {
+        1 => matches!(config.num_replicas, 1 | 3),
+        3 => config.num_replicas == 3,
+        _ => false,
+    };
     anyhow::ensure!(
-        config.num_replicas == expected_replicas,
-        "domain JetStream has {} replicas, expected {expected_replicas}",
+        matches_replica_contract,
+        "domain JetStream has {} replicas, incompatible with deployment replica contract {expected_replicas}",
         config.num_replicas
     );
     Ok(())
@@ -204,7 +223,8 @@ fn consumer_replica_upgrade_needed(
 ) -> anyhow::Result<bool> {
     validate_consumer_shape_config(stream_name, consumer_name, config)?;
     match (expected_replicas, config.num_replicas) {
-        (1, 0 | 1) | (3, 3) => Ok(false),
+        // As with the stream, local/base mode never forces an HA consumer down to 1.
+        (1, 0 | 1 | 3) | (3, 3) => Ok(false),
         (3, 0 | 1) => Ok(true),
         (1 | 3, observed) => anyhow::bail!(
             "domain receipt consumer has {observed} replicas, expected {expected_replicas}; refusing implicit downgrade or unsupported replica drift"
@@ -223,7 +243,7 @@ fn validate_consumer_config(
 ) -> anyhow::Result<()> {
     validate_consumer_shape_config(stream_name, consumer_name, config)?;
     let matches_replica_contract = match expected_replicas {
-        1 => matches!(config.num_replicas, 0 | 1),
+        1 => matches!(config.num_replicas, 0 | 1 | 3),
         3 => config.num_replicas == 3,
         _ => false,
     };
@@ -737,7 +757,10 @@ mod tests {
         let ha_stream = expected_stream_config(3);
         validate_stream_contract(&ha_stream, 3).expect("HA stream contract");
         assert!(!stream_replica_upgrade_needed(&ha_stream, 3).expect("current HA stream"));
-        assert!(stream_replica_upgrade_needed(&ha_stream, 1).is_err());
+        validate_stream_contract(&ha_stream, 1).expect("local mode preserves HA stream");
+        assert!(
+            !stream_replica_upgrade_needed(&ha_stream, 1).expect("local mode preserves HA stream")
+        );
 
         let mut invalid_replica_stream = ha_stream.clone();
         invalid_replica_stream.num_replicas = 2;
@@ -748,6 +771,12 @@ mod tests {
         let mut extra_subject = ha_stream.clone();
         extra_subject.subjects.push("unrelated.>".to_string());
         assert!(validate_stream_contract(&extra_subject, 3).is_err());
+        let mut wrong_retention_policy = ha_stream.clone();
+        wrong_retention_policy.retention = stream::RetentionPolicy::WorkQueue;
+        assert!(validate_stream_contract(&wrong_retention_policy, 3).is_err());
+        let mut wrong_storage = ha_stream.clone();
+        wrong_storage.storage = stream::StorageType::Memory;
+        assert!(validate_stream_contract(&wrong_storage, 3).is_err());
         let mut wrong_retention = ha_stream.clone();
         wrong_retention.max_age = Duration::from_secs(60);
         assert!(validate_stream_contract(&wrong_retention, 3).is_err());
@@ -782,8 +811,11 @@ mod tests {
             !consumer_replica_upgrade_needed(STREAM_NAME, CONSUMER_NAME, &ha_consumer, 3,)
                 .expect("HA consumer")
         );
+        validate_consumer_config(STREAM_NAME, CONSUMER_NAME, &ha_consumer, 1)
+            .expect("local mode preserves HA consumer");
         assert!(
-            consumer_replica_upgrade_needed(STREAM_NAME, CONSUMER_NAME, &ha_consumer, 1,).is_err()
+            !consumer_replica_upgrade_needed(STREAM_NAME, CONSUMER_NAME, &ha_consumer, 1,)
+                .expect("local mode preserves HA consumer")
         );
 
         let invalid_replica_consumer = consumer(2);
