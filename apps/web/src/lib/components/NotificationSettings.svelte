@@ -39,6 +39,9 @@
   function refreshPermission(): void {
     if (!supported || document.visibilityState === "hidden") return;
     permission = Notification.permission;
+    if (permission !== "denied" && warning === PUSH_PERMISSION_BLOCKED) {
+      warning = "";
+    }
   }
 
   async function loadBrowserSubscription(): Promise<void> {
