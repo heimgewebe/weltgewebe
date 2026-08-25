@@ -191,46 +191,131 @@ class KubernetesHaContractTests(unittest.TestCase):
 
     def test_non_strict_ha_preloads_digest_bound_nats_dependencies_into_kind(self) -> None:
         nats_image = "nats@sha256:" + ("a" * 64)
+        nats_box_image = "natsio/nats-box@sha256:" + ("b" * 64)
+        nats_runtime = "weltgewebe-ha-nats:sha256-" + ("a" * 64)
+        nats_box_runtime = "weltgewebe-ha-nats-box:sha256-" + ("b" * 64)
         with mock.patch.object(
             self.ha.ref, "controlled_oci_strict", return_value=False
         ), mock.patch.object(
             self.ha, "ha_nats_runtime_image", return_value=nats_image
+        ), mock.patch.object(
+            self.ha, "NATS_BOX_IMAGE", nats_box_image
         ), mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
-            self.ha.ref, "output", return_value="sha256:image-id"
-        ) as output:
+            self.ha.ref,
+            "output",
+            side_effect=[
+                "sha256:nats-id",
+                "sha256:nats-id",
+                "sha256:nats-box-id",
+                "sha256:nats-box-id",
+            ],
+        ):
             observed = self.ha.preload_local_nats_dependencies("kind", "proof")
 
         self.assertEqual(observed["mode"], "direct-digest-preload")
-        self.assertEqual(observed["images"], [nats_image, self.ha.NATS_BOX_IMAGE])
+        self.assertEqual(
+            observed["images"],
+            {
+                "nats": {
+                    "source_image": nats_image,
+                    "runtime_image": nats_runtime,
+                    "image_id": "sha256:nats-id",
+                },
+                "nats-box": {
+                    "source_image": nats_box_image,
+                    "runtime_image": nats_box_runtime,
+                    "image_id": "sha256:nats-box-id",
+                },
+            },
+        )
         self.assertEqual(
             run.call_args_list,
             [
                 mock.call(["docker", "pull", nats_image], timeout=600),
+                mock.call(["docker", "tag", nats_image, nats_runtime]),
                 mock.call(
-                    ["kind", "load", "docker-image", "--name", "proof", nats_image],
+                    ["kind", "load", "docker-image", "--name", "proof", nats_runtime],
                     timeout=600,
                 ),
-                mock.call(["docker", "pull", self.ha.NATS_BOX_IMAGE], timeout=600),
+                mock.call(["docker", "pull", nats_box_image], timeout=600),
+                mock.call(["docker", "tag", nats_box_image, nats_box_runtime]),
                 mock.call(
                     [
                         "kind", "load", "docker-image", "--name", "proof",
-                        self.ha.NATS_BOX_IMAGE,
+                        nats_box_runtime,
                     ],
                     timeout=600,
                 ),
             ],
         )
-        self.assertEqual(output.call_count, 2)
 
     def test_strict_ha_keeps_nats_supply_on_controlled_oci_path(self) -> None:
         with mock.patch.object(
             self.ha.ref, "controlled_oci_strict", return_value=True
         ), mock.patch.object(self.ha.ref, "run") as run:
             observed = self.ha.preload_local_nats_dependencies("kind", "proof")
-        self.assertEqual(
-            observed, {"mode": "controlled-oci", "images": [], "image_ids": {}}
-        )
+        self.assertEqual(observed, {"mode": "controlled-oci", "images": {}})
         run.assert_not_called()
+
+    def test_local_ha_data_uses_preloaded_nats_tag_without_pull(self) -> None:
+        source_image = "nats@sha256:" + ("a" * 64)
+        runtime_image = "weltgewebe-ha-nats:sha256-" + ("a" * 64)
+        rendered = yaml.safe_dump_all(
+            [
+                {
+                    "apiVersion": "apps/v1",
+                    "kind": "StatefulSet",
+                    "metadata": {"name": "nats", "namespace": "weltgewebe-data"},
+                    "spec": {
+                        "template": {
+                            "spec": {
+                                "containers": [
+                                    {"name": "nats", "image": source_image}
+                                ]
+                            }
+                        }
+                    },
+                }
+            ],
+            sort_keys=False,
+        )
+        supply = {
+            "mode": "direct-digest-preload",
+            "images": {
+                "nats": {
+                    "source_image": source_image,
+                    "runtime_image": runtime_image,
+                    "image_id": "sha256:nats-id",
+                }
+            },
+        }
+        with mock.patch.object(
+            self.ha, "ha_nats_runtime_image", return_value=source_image
+        ), mock.patch.object(
+            self.ha.ref, "output", return_value=rendered
+        ), mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml:
+            self.ha.apply_ha_data("kubectl", "kustomize", supply)
+
+        documents = apply_yaml.call_args.args[1]
+        container = documents[0]["spec"]["template"]["spec"]["containers"][0]
+        self.assertEqual(container["image"], runtime_image)
+        self.assertEqual(container["imagePullPolicy"], "Never")
+
+    def test_nats_box_uses_preloaded_runtime_tag_without_pull(self) -> None:
+        runtime_image = "weltgewebe-ha-nats-box:sha256-" + ("b" * 64)
+        with mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml, mock.patch.object(
+            self.ha.ref, "wait_condition"
+        ):
+            self.ha.create_nats_box(
+                "kubectl",
+                "zone-b",
+                image=runtime_image,
+                image_pull_policy="Never",
+            )
+        document = apply_yaml.call_args.args[1]
+        container = document["spec"]["containers"][0]
+        self.assertEqual(container["image"], runtime_image)
+        self.assertEqual(container["imagePullPolicy"], "Never")
 
     def test_nats_preload_happens_before_ha_data_apply(self) -> None:
         source = (ROOT / "scripts/platform/ha_reference.py").read_text()
@@ -238,7 +323,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             "        local_nats_dependency_supply = preload_local_nats_dependencies("
         )
         ha_data_apply = source.index(
-            '        ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")',
+            "        apply_ha_data(kubectl, kustomize, local_nats_dependency_supply)",
             preload,
         )
         self.assertLess(preload, ha_data_apply)

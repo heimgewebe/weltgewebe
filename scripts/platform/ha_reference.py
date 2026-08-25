@@ -308,39 +308,107 @@ def ha_nats_runtime_image() -> str:
     return image
 
 
+def _digest_bound_local_runtime_tag(role: str, image: str) -> str:
+    name, separator, digest = image.rpartition("@sha256:")
+    if (
+        not separator
+        or not name
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ref.ProofError(f"HA dependency image is not digest-bound: {image}")
+    if role not in {"nats", "nats-box"}:
+        raise ref.ProofError(f"unsupported HA dependency role: {role}")
+    return f"weltgewebe-ha-{role}:sha256-{digest}"
+
+
 def preload_local_nats_dependencies(kind: str, cluster: str) -> dict[str, Any]:
     if ref.controlled_oci_strict():
-        return {"mode": "controlled-oci", "images": [], "image_ids": {}}
+        return {"mode": "controlled-oci", "images": {}}
 
-    images = [ha_nats_runtime_image(), NATS_BOX_IMAGE]
-    image_ids: dict[str, str] = {}
-    for image in images:
+    sources = {"nats": ha_nats_runtime_image(), "nats-box": NATS_BOX_IMAGE}
+    images: dict[str, dict[str, str]] = {}
+    for role, source_image in sources.items():
         last_error: BaseException | None = None
         for delay_seconds in (0, 5, 10):
             if delay_seconds:
                 time.sleep(delay_seconds)
             try:
-                ref.run(["docker", "pull", image], timeout=600)
+                ref.run(["docker", "pull", source_image], timeout=600)
                 last_error = None
                 break
             except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
                 last_error = error
         if last_error is not None:
             raise ref.ProofError(
-                f"failed to preload digest-bound HA dependency image: {image}"
+                f"failed to preload digest-bound HA dependency image: {source_image}"
             ) from last_error
+
+        source_image_id = ref.output(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", source_image]
+        )
+        runtime_image = _digest_bound_local_runtime_tag(role, source_image)
+        ref.run(["docker", "tag", source_image, runtime_image])
+        runtime_image_id = ref.output(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", runtime_image]
+        )
+        if runtime_image_id != source_image_id:
+            raise ref.ProofError(
+                f"local HA dependency tag changed image identity: {role}"
+            )
         ref.run(
-            [kind, "load", "docker-image", "--name", cluster, image],
+            [kind, "load", "docker-image", "--name", cluster, runtime_image],
             timeout=600,
         )
-        image_ids[image] = ref.output(
-            ["docker", "image", "inspect", "--format", "{{.Id}}", image]
-        )
-    return {
-        "mode": "direct-digest-preload",
-        "images": images,
-        "image_ids": image_ids,
-    }
+        images[role] = {
+            "source_image": source_image,
+            "runtime_image": runtime_image,
+            "image_id": source_image_id,
+        }
+    return {"mode": "direct-digest-preload", "images": images}
+
+
+def apply_ha_data(
+    kubectl: str,
+    kustomize: str,
+    dependency_supply: dict[str, Any] | None,
+) -> None:
+    if not dependency_supply or dependency_supply.get("mode") != "direct-digest-preload":
+        ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")
+        return
+
+    nats_supply = dependency_supply.get("images", {}).get("nats")
+    if not isinstance(nats_supply, dict):
+        raise ref.ProofError("local NATS dependency supply is missing")
+    source_image = nats_supply.get("source_image")
+    runtime_image = nats_supply.get("runtime_image")
+    if source_image != ha_nats_runtime_image() or not isinstance(runtime_image, str):
+        raise ref.ProofError("local NATS dependency supply identity drift")
+
+    rendered = ref.output([kustomize, "build", "platform/infrastructure/ha-data"])
+    documents = [
+        item for item in yaml.safe_load_all(rendered) if isinstance(item, dict)
+    ]
+    nats_statefulsets = [
+        document
+        for document in documents
+        if document.get("kind") == "StatefulSet"
+        and document.get("metadata", {}).get("name") == "nats"
+        and document.get("metadata", {}).get("namespace") == "weltgewebe-data"
+    ]
+    if len(nats_statefulsets) != 1:
+        raise ref.ProofError("rendered HA data must contain exactly one NATS StatefulSet")
+    containers = nats_statefulsets[0]["spec"]["template"]["spec"]["containers"]
+    nats_containers = [
+        container
+        for container in containers
+        if isinstance(container, dict) and container.get("name") == "nats"
+    ]
+    if len(nats_containers) != 1 or nats_containers[0].get("image") != source_image:
+        raise ref.ProofError("rendered HA NATS image drift")
+    nats_containers[0]["image"] = runtime_image
+    nats_containers[0]["imagePullPolicy"] = "Never"
+    ref.apply_yaml(kubectl, documents)
 
 
 def _filesystem_capacity(path: Path) -> dict[str, int]:
@@ -3626,7 +3694,28 @@ def gateway_contains_node(kubectl: str, kind: str, cluster: str, node_id: str) -
     return any(isinstance(item, dict) and item.get("id") == node_id for item in payload)
 
 
-def create_nats_box(kubectl: str, zone: str) -> None:
+def create_nats_box(
+    kubectl: str,
+    zone: str,
+    *,
+    image: str = NATS_BOX_IMAGE,
+    image_pull_policy: str | None = None,
+) -> None:
+    container = {
+        "name": "nats-box",
+        "image": image,
+        "command": ["/bin/sh", "-c", "sleep 7200"],
+        "securityContext": {
+            "allowPrivilegeEscalation": False,
+            "capabilities": {"drop": ["ALL"]},
+        },
+        "resources": {
+            "requests": {"cpu": "20m", "memory": "32Mi"},
+            "limits": {"cpu": "200m", "memory": "128Mi"},
+        },
+    }
+    if image_pull_policy is not None:
+        container["imagePullPolicy"] = image_pull_policy
     ref.apply_yaml(
         kubectl,
         {
@@ -3637,12 +3726,7 @@ def create_nats_box(kubectl: str, zone: str) -> None:
                 "nodeSelector": {"topology.kubernetes.io/zone": zone},
                 "restartPolicy": "Never",
                 "securityContext": {"runAsNonRoot": True, "runAsUser": 1000, "runAsGroup": 1000, "seccompProfile": {"type": "RuntimeDefault"}},
-                "containers": [{
-                    "name": "nats-box", "image": NATS_BOX_IMAGE,
-                    "command": ["/bin/sh", "-c", "sleep 7200"],
-                    "securityContext": {"allowPrivilegeEscalation": False, "capabilities": {"drop": ["ALL"]}},
-                    "resources": {"requests": {"cpu": "20m", "memory": "32Mi"}, "limits": {"cpu": "200m", "memory": "128Mi"}},
-                }],
+                "containers": [container],
             },
         },
     )
@@ -3795,7 +3879,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             kubectl,
             receipt["artifacts"]["barman_cloud_plugin"],
         )
-        ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")
+        apply_ha_data(kubectl, kustomize, local_nats_dependency_supply)
         ref.wait_rollout(kubectl, "weltgewebe-data", "statefulset/nats", "12m")
         wait_cluster_ready(kubectl, "postgres-ha", "15m")
         primary_barman_sidecars = verify_barman_sidecar_images(
@@ -3866,7 +3950,27 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 f"before failure: {barman_leader_alignment}"
             )
         alternate_zone = next(zone for zone in ("zone-a", "zone-b", "zone-c") if zone != failure_zone)
-        create_nats_box(kubectl, alternate_zone)
+        nats_box_image = NATS_BOX_IMAGE
+        nats_box_pull_policy: str | None = None
+        if (
+            local_nats_dependency_supply
+            and local_nats_dependency_supply.get("mode") == "direct-digest-preload"
+        ):
+            nats_box_supply = local_nats_dependency_supply.get("images", {}).get(
+                "nats-box"
+            )
+            if not isinstance(nats_box_supply, dict) or not isinstance(
+                nats_box_supply.get("runtime_image"), str
+            ):
+                raise ref.ProofError("local nats-box dependency supply is missing")
+            nats_box_image = nats_box_supply["runtime_image"]
+            nats_box_pull_policy = "Never"
+        create_nats_box(
+            kubectl,
+            alternate_zone,
+            image=nats_box_image,
+            image_pull_policy=nats_box_pull_policy,
+        )
         nats(kubectl, ["stream", "add", "WG_PROOF", "--subjects", "wg.proof", "--storage", "file", "--replicas", "3", "--retention", "limits", "--max-msgs", "100", "--defaults"])
         nats(kubectl, ["pub", "wg.proof", "before-zone-failure"])
         if nats_message_count(kubectl) != 1:
