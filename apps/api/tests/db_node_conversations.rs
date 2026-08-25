@@ -3,7 +3,7 @@
 //! Run with a direct PostgreSQL connection:
 //! `DATABASE_URL=postgres://... cargo test --locked --test db_node_conversations -- --include-ignored`
 
-use std::{path::PathBuf, str::FromStr, sync::Arc};
+use std::{path::PathBuf, str::FromStr, sync::Arc, time::Duration};
 
 use axum::{
     body,
@@ -11,6 +11,8 @@ use axum::{
     middleware::from_fn_with_state,
     Router,
 };
+use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine as _};
+use p256::elliptic_curve::sec1::ToEncodedPoint;
 use serial_test::serial;
 use sqlx::postgres::{PgConnectOptions, PgPoolOptions};
 use tower::ServiceExt;
@@ -24,6 +26,7 @@ use weltgewebe_api::{
     },
     domain_db::{delete_node_with_edges_in_postgres, NodeConversationDeleteEffect},
     middleware::{auth::auth_middleware, csrf::require_csrf},
+    notifications::WebPushService,
     routes::{
         accounts::{AccountInternal, AccountPublic, GarnrolleMapState},
         api_router,
@@ -146,6 +149,38 @@ fn config() -> AppConfig {
     }
 }
 
+fn test_web_push_service() -> Arc<WebPushService> {
+    const PRIVATE_KEY: &str = "WEB_PUSH_VAPID_PRIVATE_KEY";
+    const CONTACT: &str = "WEB_PUSH_VAPID_CONTACT";
+    const HOSTS: &str = "WEB_PUSH_ALLOWED_HOST_SUFFIXES";
+    let previous = [PRIVATE_KEY, CONTACT, HOSTS].map(|name| (name, std::env::var_os(name)));
+    std::env::set_var(PRIVATE_KEY, URL_SAFE_NO_PAD.encode([1_u8; 32]));
+    std::env::set_var(CONTACT, "mailto:push-test@example.invalid");
+    std::env::set_var(HOSTS, "push.example.invalid");
+    let service = WebPushService::from_env()
+        .expect("construct test Web Push service")
+        .expect("test Web Push service configured");
+    for (name, value) in previous {
+        if let Some(value) = value {
+            std::env::set_var(name, value);
+        } else {
+            std::env::remove_var(name);
+        }
+    }
+    Arc::new(service)
+}
+
+fn valid_push_subscription_body(endpoint: &str) -> String {
+    let secret = p256::SecretKey::from_slice(&[2_u8; 32]).expect("valid test subscription key");
+    let public = secret.public_key().to_encoded_point(false);
+    serde_json::json!({
+        "endpoint": endpoint,
+        "p256dh": URL_SAFE_NO_PAD.encode(public.as_bytes()),
+        "auth": URL_SAFE_NO_PAD.encode([3_u8; 16]),
+    })
+    .to_string()
+}
+
 fn account(id: &str, title: &str, role: Role) -> AccountInternal {
     AccountInternal {
         public: AccountPublic {
@@ -180,7 +215,10 @@ async fn seed_account(pool: &sqlx::PgPool, id: &str, title: &str, role: &str) {
     .expect("seed account");
 }
 
-async fn app(pool: sqlx::PgPool) -> (Router, String, String, String, String) {
+async fn app_with_web_push(
+    pool: sqlx::PgPool,
+    web_push: Option<Arc<WebPushService>>,
+) -> (Router, String, String, String, String) {
     let mut accounts = AccountStore::new();
     accounts.insert(account(AUTHOR_ID, "Autorin", Role::Weber));
     accounts.insert(account(OTHER_ID, "Anderer Weber", Role::Weber));
@@ -235,7 +273,7 @@ async fn app(pool: sqlx::PgPool) -> (Router, String, String, String, String) {
         passkey_registration_grants: Default::default(),
         passkey_authentications: Default::default(),
         passkeys: Default::default(),
-        web_push: None,
+        web_push,
     };
     let router = Router::new()
         .merge(api_router())
@@ -249,6 +287,10 @@ async fn app(pool: sqlx::PgPool) -> (Router, String, String, String, String) {
         format!("gewebe_session={}", admin_session.id),
         format!("gewebe_session={}", guest_session.id),
     )
+}
+
+async fn app(pool: sqlx::PgPool) -> (Router, String, String, String, String) {
+    app_with_web_push(pool, None).await
 }
 
 fn request(
@@ -360,6 +402,7 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     let subscription_id = "62000000-0000-4000-8000-000000000003";
     let current_subscription_id = "62000000-0000-4000-8000-000000000005";
     let foreign_subscription_id = "62000000-0000-4000-8000-000000000006";
+    let race_subscription_id = "62000000-0000-4000-8000-000000000008";
     let mut tx = pool.begin().await.expect("begin direct conversation proof");
     sqlx::query(
         "INSERT INTO domain_conversations (
@@ -450,7 +493,21 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .execute(&pool)
     .await
     .expect("insert current browser subscription");
-    for index in 0_u64..18 {
+    sqlx::query(
+        "INSERT INTO web_push_subscriptions (
+             id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+    )
+    .bind(race_subscription_id)
+    .bind(OTHER_ID)
+    .bind("https://push.example.invalid/race-old-subscription")
+    .bind("d".repeat(64))
+    .bind("u".repeat(80))
+    .bind("f".repeat(16))
+    .execute(&pool)
+    .await
+    .expect("insert race target subscription");
+    for index in 0_u64..17 {
         sqlx::query(
             "INSERT INTO web_push_subscriptions (
                  id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
@@ -492,7 +549,8 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .await
     .expect("queue private-message push delivery");
 
-    let (app, _author, other, _admin, _guest) = app(pool.clone()).await;
+    let (app, _author, other, _admin, _guest) =
+        app_with_web_push(pool.clone(), Some(test_web_push_service())).await;
     let mut list_request = request("GET", "/push/subscriptions", Some(&other), None, None, None);
     list_request.headers_mut().insert(
         "x-weltgewebe-push-endpoint-hash",
@@ -572,6 +630,23 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .expect("foreign subscription remains active");
     assert!(foreign_still_active);
 
+    let replacement_endpoint = "https://push.example.invalid/replacement-subscription";
+    let replacement_body = valid_push_subscription_body(replacement_endpoint);
+    let (status, limit_error) = json_response(
+        &app,
+        request(
+            "POST",
+            "/push/subscriptions",
+            Some(&other),
+            Some(&replacement_body),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::TOO_MANY_REQUESTS);
+    assert_eq!(limit_error["code"], "push_subscription_limit_reached");
+
     for attempt in 0..2 {
         let mut old_delete = request(
             "DELETE",
@@ -609,20 +684,20 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .expect("count active subscriptions after cleanup");
     assert_eq!(active_after_cleanup, 19);
 
-    sqlx::query(
-        "INSERT INTO web_push_subscriptions (
-             id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
-         ) VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+    let (status, replacement) = json_response(
+        &app,
+        request(
+            "POST",
+            "/push/subscriptions",
+            Some(&other),
+            Some(&replacement_body),
+            None,
+            None,
+        ),
     )
-    .bind("62000000-0000-4000-8000-000000000007")
-    .bind(OTHER_ID)
-    .bind("https://push.example.invalid/replacement-subscription")
-    .bind("c".repeat(64))
-    .bind("t".repeat(80))
-    .bind("e".repeat(16))
-    .execute(&pool)
-    .await
-    .expect("register replacement after freeing one slot");
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert!(replacement["id"].as_str().is_some());
     let active_after_replacement: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM web_push_subscriptions
          WHERE account_id = $1 AND disabled_at IS NULL",
@@ -632,6 +707,113 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .await
     .expect("count active subscriptions after replacement");
     assert_eq!(active_after_replacement, 20);
+
+    let race_endpoint = "https://push.example.invalid/race-replacement";
+    let race_body = valid_push_subscription_body(race_endpoint);
+    let mut blocker = pool.begin().await.expect("begin push account race blocker");
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("web-push-account:{OTHER_ID}"))
+        .fetch_one(&mut *blocker)
+        .await
+        .expect("hold push account race lock");
+
+    let delete_app = app.clone();
+    let delete_cookie = other.clone();
+    let delete_task = tokio::spawn(async move {
+        let mut delete = request(
+            "DELETE",
+            &format!("/push/subscriptions/{race_subscription_id}"),
+            Some(&delete_cookie),
+            None,
+            None,
+            None,
+        );
+        delete.headers_mut().insert(
+            "x-weltgewebe-push-endpoint-hash",
+            "b".repeat(64).parse().expect("current push marker header"),
+        );
+        json_response(&delete_app, delete).await
+    });
+    let register_app = app.clone();
+    let register_cookie = other.clone();
+    let concurrent_body = race_body.clone();
+    let register_task = tokio::spawn(async move {
+        json_response(
+            &register_app,
+            request(
+                "POST",
+                "/push/subscriptions",
+                Some(&register_cookie),
+                Some(&concurrent_body),
+                None,
+                None,
+            ),
+        )
+        .await
+    });
+    tokio::time::sleep(Duration::from_millis(25)).await;
+    blocker
+        .commit()
+        .await
+        .expect("release push account race lock");
+
+    let (delete_status, _) = delete_task.await.expect("delete race task");
+    let (register_status, register_result) = register_task.await.expect("register race task");
+    assert_eq!(delete_status, StatusCode::NO_CONTENT);
+    assert!(
+        register_status == StatusCode::CREATED || register_status == StatusCode::TOO_MANY_REQUESTS,
+        "registration must either consume the freed slot or safely observe the full account"
+    );
+    let active_after_race: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM web_push_subscriptions
+         WHERE account_id = $1 AND disabled_at IS NULL",
+    )
+    .bind(OTHER_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("count subscriptions after register/delete race");
+    assert!(
+        active_after_race <= 20,
+        "race must never oversubscribe the account"
+    );
+    if register_status == StatusCode::TOO_MANY_REQUESTS {
+        assert_eq!(register_result["code"], "push_subscription_limit_reached");
+        let (retry_status, retry) = json_response(
+            &app,
+            request(
+                "POST",
+                "/push/subscriptions",
+                Some(&other),
+                Some(&race_body),
+                None,
+                None,
+            ),
+        )
+        .await;
+        assert_eq!(retry_status, StatusCode::CREATED);
+        assert!(retry["id"].as_str().is_some());
+    } else {
+        assert!(register_result["id"].as_str().is_some());
+    }
+    let active_after_race_recovery: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM web_push_subscriptions
+         WHERE account_id = $1 AND disabled_at IS NULL",
+    )
+    .bind(OTHER_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("count subscriptions after race recovery");
+    assert_eq!(active_after_race_recovery, 20);
+    let race_target_disabled: bool = sqlx::query_scalar(
+        "SELECT disabled_at IS NOT NULL FROM web_push_subscriptions
+         WHERE id = $1::uuid AND account_id = $2",
+    )
+    .bind(race_subscription_id)
+    .bind(OTHER_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("read race target disable state");
+    assert!(race_target_disabled);
 
     sqlx::query(
         "INSERT INTO web_push_deliveries (
