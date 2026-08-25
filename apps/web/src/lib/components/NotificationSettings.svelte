@@ -155,7 +155,8 @@
       pendingRemovalEndpoint = null;
       notice = "Der alte Geräte-Eintrag wurde entfernt.";
     } catch {
-      warning = removalWarning();
+      // Keep pendingRemovalEndpoint intact. Its dedicated status stays visible
+      // until the server confirms that the stale device entry is gone.
     } finally {
       changingDevice = false;
     }
@@ -175,7 +176,6 @@
         notice = "Push ist auf diesem Gerät deaktiviert.";
       } catch {
         pendingRemovalEndpoint = endpoint;
-        warning = removalWarning();
       }
     } catch (cause) {
       error = describeNotificationError(cause, "device");
@@ -316,16 +316,19 @@
     {#if warning}
       <div class="status warning status-with-action" role="status">
         <p>{warning}</p>
-        {#if pendingRemovalEndpoint}
-          <button
-            class="btn secondary touch-target"
-            type="button"
-            disabled={changingDevice}
-            onclick={retryServerRemoval}
-          >
-            {changingDevice ? "Wird entfernt …" : "Geräte-Eintrag erneut entfernen"}
-          </button>
-        {/if}
+      </div>
+    {/if}
+    {#if pendingRemovalEndpoint}
+      <div class="status warning status-with-action" role="status">
+        <p>{removalWarning()}</p>
+        <button
+          class="btn secondary touch-target"
+          type="button"
+          disabled={changingDevice}
+          onclick={retryServerRemoval}
+        >
+          {changingDevice ? "Wird entfernt …" : "Geräte-Eintrag erneut entfernen"}
+        </button>
       </div>
     {/if}
     {#if error}<p class="status error" role="alert">{error}</p>{/if}
