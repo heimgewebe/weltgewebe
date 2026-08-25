@@ -911,7 +911,7 @@ if [[ "$DEPLOY_TARGET" == "vps" && "$DEPLOY_SCOPE" == "full" ]]; then
   if grep -qFx caddy <<< "$configured_preflight_services"; then
     set +e
     SCHAUWERK_EDITOR_HOST_ROOT="$(
-      docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | python3 -c '
+      docker compose "${BASE_ARGS[@]}" config --format json 2> /dev/null | python3 -c '
 import json, os, sys
 try:
     cfg = json.load(sys.stdin)
