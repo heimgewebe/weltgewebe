@@ -957,5 +957,11 @@ async fn federation_hardening_migration_rejects_legacy_scope_or_audience_drift()
         "legacy federation object history changed immutable scope or neighbourhood audience"
     ));
 
+    // This test deliberately installs only a migration subset. Restore the disposable
+    // database so other ignored federation persistence proofs can share this test binary.
+    sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        .execute(&pool)
+        .await?;
+
     Ok(())
 }
