@@ -146,7 +146,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
         contract = self.ha.postgres_runtime_contract()
         self.assertEqual(contract, {"cluster": "postgres-ha", "primary_service": "postgres-ha-rw"})
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_migration.py").read_text()
         self.assertNotIn('postgres_service: str = "postgres-ha-rw"', source)
         self.assertIn('postgres_service=postgres_contract["primary_service"]', source)
         self.assertIn("prove_migration_retry_and_idempotency(", source)
@@ -168,11 +168,11 @@ class KubernetesHaContractTests(unittest.TestCase):
     def test_migration_election_completion_does_not_require_failed_attempt(self) -> None:
         baseline = "a" * 64
         with mock.patch.object(self.ha.ref, "wait_condition"), mock.patch.object(
-            self.ha, "migration_failed_attempts", return_value=0
+            self.ha._ha_migration, "migration_failed_attempts", return_value=0
         ), mock.patch.object(
-            self.ha, "migration_history_digest", return_value=baseline
+            self.ha._ha_migration, "migration_history_digest", return_value=baseline
         ), mock.patch.object(
-            self.ha, "remove_migration_data_egress",
+            self.ha._ha_migration, "remove_migration_data_egress",
             return_value={"returncode": 0, "stderr": ""},
         ):
             result = self.ha.finish_migration_election_probe(
@@ -197,9 +197,9 @@ class KubernetesHaContractTests(unittest.TestCase):
         with mock.patch.object(
             self.ha.ref, "controlled_oci_strict", return_value=False
         ), mock.patch.object(
-            self.ha, "ha_nats_runtime_image", return_value=nats_image
+            self.ha._ha_dependencies, "ha_nats_runtime_image", return_value=nats_image
         ), mock.patch.object(
-            self.ha, "NATS_BOX_IMAGE", nats_box_image
+            self.ha._ha_dependencies, "NATS_BOX_IMAGE", nats_box_image
         ), mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
             self.ha.ref,
             "output",
@@ -290,7 +290,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             },
         }
         with mock.patch.object(
-            self.ha, "ha_nats_runtime_image", return_value=source_image
+            self.ha._ha_dependencies, "ha_nats_runtime_image", return_value=source_image
         ), mock.patch.object(
             self.ha.ref, "output", return_value=rendered
         ), mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml:
@@ -356,7 +356,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
 
     def test_zone_failure_timeout_diagnostic_preserves_primary_error(self) -> None:
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
         wait_position = source.index(
             '                "Gateway API projection after zone failure",'
         )
@@ -413,7 +413,7 @@ class KubernetesHaContractTests(unittest.TestCase):
             }
 
         with mock.patch.object(
-            self.ha,
+            self.ha._ha_availability,
             "direct_api_projection_sample",
             side_effect=probe_sample,
         ):
@@ -429,7 +429,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertEqual(sample["successful_probes"], ["probe-zone-b"])
         self.assertEqual(sample["failed_paths"], 2)
 
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
         self.assertIn('"same-namespace-zone-probes-any"', source)
         self.assertIn('"--request-timeout=3s"', source)
         self.assertNotIn("self.probe_node, self.direct_url", source)
@@ -1802,7 +1802,7 @@ spec:
         ), mock.patch.object(
             self.ha.ref, "output", side_effect=output
         ), mock.patch.object(
-            self.ha, "gateway_projection_sample", side_effect=sample
+            self.ha._ha_availability, "gateway_projection_sample", side_effect=sample
         ):
             observed = self.ha.gateway_observer_sample(
                 "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
@@ -1831,7 +1831,7 @@ spec:
         with mock.patch.object(self.ha.ref, "kind_nodes") as kind_nodes, mock.patch.object(
             self.ha.ref, "output"
         ) as output, mock.patch.object(
-            self.ha,
+            self.ha._ha_availability,
             "gateway_projection_sample",
             side_effect=lambda node, address, port, marker: {
                 "available": address == "10.0.0.2",
@@ -1888,7 +1888,7 @@ spec:
             "output",
             side_effect=lambda argv: node_addresses[argv[-1]],
         ), mock.patch.object(
-            self.ha,
+            self.ha._ha_availability,
             "gateway_projection_sample",
             return_value={"available": False, "returncode": 28},
         ):
@@ -1993,7 +1993,7 @@ spec:
         self.assertTrue(budget["within_budget"])
 
     def test_change_management_contract_uses_rollout_undo_and_receipt_fields(self) -> None:
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
         self.assertIn(
             '"rollout",\n            "undo"', source
         )
@@ -2100,7 +2100,7 @@ spec:
                 "postgres-ha",
                 segment,
             )
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_wal.py").read_text()
         self.assertIn("signed-s3-list-objects-v2-read-only", source)
         self.assertIn('"archive_command_reused_as_probe": False', source)
         self.assertIn('"archiver_latency_seconds"', source)
@@ -2131,7 +2131,7 @@ spec:
         )
         self.assertTrue(recovery["outage_observed"])
         self.assertEqual(recovery["observed_rto_seconds"], 3.0)
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
         self.assertIn('"continuous_availability": continuous_availability', source)
         self.assertIn("direct_api = summarize_continuous_availability(", source)
         self.assertIn("gateway = summarize_continuous_availability(", source)
