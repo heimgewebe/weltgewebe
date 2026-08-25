@@ -1,6 +1,7 @@
 <script lang="ts">
   import AccountSection from "$lib/components/AccountSection.svelte";
   import MyGarnrolleSection from "$lib/components/MyGarnrolleSection.svelte";
+  import NotificationSettings from "$lib/components/NotificationSettings.svelte";
   import type { PageData } from "./$types";
 
   interface Props {
@@ -38,7 +39,7 @@
               <strong>Meine Garnrolle</strong>
               <span>Profil, Kartenanker und Sichtbarkeit</span>
             </a>
-            <a href="/nachrichten#benachrichtigungen">
+            <a href="#benachrichtigungen">
               <strong>Benachrichtigungen</strong>
               <span>Push-Hinweise und dieses Gerät</span>
             </a>
@@ -84,6 +85,10 @@
             accountsLoadError={data.accountsLoadError}
           />
         </section>
+
+        <div class="panel notification-card">
+          <NotificationSettings />
+        </div>
 
         <div id="konto-und-sicherheit" class="panel">
           <AccountSection />
@@ -155,7 +160,8 @@
     min-height: 44px;
   }
 
-  .primary-card {
+  .primary-card,
+  .notification-card {
     padding: 0;
   }
 
