@@ -56,7 +56,10 @@ self-hosted editor engine.
 ## Release admission
 
 Provision and verify the Schauwerk release **before** deploying a Weltgewebe
-revision that contains this bind mount. At minimum, verify all of the following:
+revision that contains this bind mount. The normal full VPS path in
+`scripts/weltgewebe-up` enforces this release contract before build or container
+mutation; bounded `api` and `migration` deployments intentionally do not own this
+edge dependency. At minimum, verify all of the following:
 
 1. the release directory is a real directory, not a symlink;
 2. `current` points to the intended `releases/<schauwerk-commit>` directory;

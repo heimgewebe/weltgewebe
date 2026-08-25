@@ -900,6 +900,55 @@ if ! docker compose "${BASE_ARGS[@]}" config > /dev/null; then
   exit 1
 fi
 
+# The public VPS Caddy route for /schaubild/ depends on a separately
+# provisioned Schauwerk release. Resolve the effective bind source from the
+# rendered Compose contract and verify the exact release before any build or
+# container mutation. A partial/broken release must fail closed instead of
+# turning a nominally successful deployment into a public 404. Bounded API
+# and migration deployments intentionally do not own or mutate the public edge.
+if [[ "$DEPLOY_TARGET" == "vps" && "$DEPLOY_SCOPE" == "full" ]]; then
+  configured_preflight_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
+  if grep -qFx caddy <<< "$configured_preflight_services"; then
+    set +e
+    SCHAUWERK_EDITOR_HOST_ROOT="$(
+      docker compose "${BASE_ARGS[@]}" config --format json 2>/dev/null | python3 -c '
+import json, os, sys
+try:
+    cfg = json.load(sys.stdin)
+    volumes = cfg.get("services", {}).get("caddy", {}).get("volumes", [])
+    matches = [v for v in volumes if isinstance(v, dict) and v.get("target") == "/srv/schauwerk-editor-root"]
+    if len(matches) != 1:
+        raise ValueError("expected exactly one Schauwerk editor mount")
+    mount = matches[0]
+    source = mount.get("source")
+    bind = mount.get("bind") if isinstance(mount.get("bind"), dict) else {}
+    if mount.get("type") != "bind" or mount.get("read_only") is not True or bind.get("create_host_path") is not False:
+        raise ValueError("Schauwerk editor mount is not fail-closed read-only bind")
+    if not isinstance(source, str) or not os.path.isabs(source):
+        raise ValueError("Schauwerk editor mount source must be absolute")
+    print(source)
+except Exception as exc:
+    print(f"ERROR: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+'
+    )"
+    schauwerk_mount_rc=$?
+    set -e
+    if [[ "$schauwerk_mount_rc" != "0" || -z "$SCHAUWERK_EDITOR_HOST_ROOT" ]]; then
+      msg="Schauwerk editor mount preflight could not resolve one fail-closed host release root."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      exit 1
+    fi
+    if ! python3 scripts/preflight/schauwerk_editor_release.py --root "$SCHAUWERK_EDITOR_HOST_ROOT"; then
+      msg="Schauwerk editor release preflight failed for configured Caddy mount source."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      exit 1
+    fi
+  fi
+fi
+
 # Ollama and the projection worker are part of the bounded API deployment unit.
 # Refuse before image build or container mutation when the production VPS no
 # longer has enough measured capacity for the pinned 4B embedding model.
