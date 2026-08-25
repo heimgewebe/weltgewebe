@@ -1,0 +1,10 @@
+--- apps/api/src/routes/query.rs
++++ apps/api/src/routes/query.rs
+@@ -1,6 +1,7 @@
+ use axum::http::StatusCode;
+ use serde::Serialize;
+ use std::collections::HashMap;
++use std::fmt::Write as _;
+
+ /// Upper bound for the `limit` query parameter on list endpoints, applied so a
+ /// single request cannot force an unbounded in-memory collection.

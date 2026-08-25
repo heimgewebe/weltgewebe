@@ -7,8 +7,7 @@ metadata:
     app.kubernetes.io/name: weltgewebe-migration
     app.kubernetes.io/component: database-migration
 spec:
-  # Bounded retries cover transient election/network gaps; the deadline caps total work.
-  backoffLimit: 4
+  backoffLimit: 0
   activeDeadlineSeconds: 480
   template:
     metadata:

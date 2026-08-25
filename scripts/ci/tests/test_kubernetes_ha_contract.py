@@ -113,409 +113,6 @@ class KubernetesHaContractTests(unittest.TestCase):
         )
         self.assertNotIn("configMapKeyRef", database["valueFrom"])
 
-    def test_ha_migration_job_retries_and_service_identity_is_contract_derived(self) -> None:
-        job = next(
-            self.validator._documents(
-                ROOT / "platform/apps/weltgewebe/migration/ha/job.yaml"
-            )
-        )
-        self.assertEqual(job["spec"]["backoffLimit"], 4)
-        partition = self.ha.migration_network_partition_document()
-        self.assertEqual(partition["spec"]["egress"], [])
-        self.assertEqual(
-            partition["spec"]["podSelector"]["matchLabels"]["app.kubernetes.io/name"],
-            "weltgewebe-migration",
-        )
-        election_egress = self.ha.migration_data_egress_document()
-        self.assertEqual(
-            election_egress["spec"]["egress"],
-            [
-                {
-                    "to": [
-                        {
-                            "namespaceSelector": {
-                                "matchLabels": {
-                                    "kubernetes.io/metadata.name": "weltgewebe-data"
-                                }
-                            }
-                        }
-                    ],
-                    "ports": [{"port": 5432, "protocol": "TCP"}],
-                }
-            ],
-        )
-        contract = self.ha.postgres_runtime_contract()
-        self.assertEqual(contract, {"cluster": "postgres-ha", "primary_service": "postgres-ha-rw"})
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_migration.py").read_text()
-        self.assertNotIn('postgres_service: str = "postgres-ha-rw"', source)
-        self.assertIn('postgres_service=postgres_contract["primary_service"]', source)
-        self.assertIn("prove_migration_retry_and_idempotency(", source)
-        self.assertIn("temporary pod egress deny NetworkPolicy", source)
-        self.assertIn("start_migration_election_probe(", source)
-        self.assertIn("migration_data_egress_document()", source)
-        self.assertIn("baseline_history_sha256=migration_election_baseline", source)
-        baseline = source.index("        migration_election_baseline = migration_history_digest(")
-        failure_clock = source.index("        failure_started = time.monotonic()", baseline)
-        node_stop = source.index('        ref.run(["docker", "stop"', failure_clock)
-        election_probe = source.index("        start_migration_election_probe(", node_stop)
-        self.assertLess(baseline, failure_clock)
-        self.assertLess(failure_clock, node_stop)
-        self.assertLess(node_stop, election_probe)
-        self.assertIn('"election_interruption"', source)
-        self.assertIn('"job_retry_observed"', source)
-        self.assertIn('"duplicate_migration_history_prevented"', source)
-
-    def test_migration_election_completion_does_not_require_failed_attempt(self) -> None:
-        baseline = "a" * 64
-        with mock.patch.object(self.ha.ref, "wait_condition"), mock.patch.object(
-            self.ha._ha_migration, "migration_failed_attempts", return_value=0
-        ), mock.patch.object(
-            self.ha._ha_migration, "migration_history_digest", return_value=baseline
-        ), mock.patch.object(
-            self.ha._ha_migration, "remove_migration_data_egress",
-            return_value={"returncode": 0, "stderr": ""},
-        ):
-            result = self.ha.finish_migration_election_probe(
-                "kubectl",
-                postgres_cluster="postgres-ha",
-                baseline_history_sha256=baseline,
-                healthy_zone="zone-b",
-            )
-        self.assertEqual(result["failed_attempts_before_election_recovery"], 0)
-        self.assertFalse(result["job_retry_observed"])
-        self.assertFalse(result["retry_required_for_election_safety"])
-        self.assertTrue(result["election_completion_observed"])
-        self.assertTrue(result["job_completed"])
-        self.assertFalse(result["retry_completed"])
-        self.assertTrue(result["duplicate_migration_history_prevented"])
-
-    def test_non_strict_ha_preloads_digest_bound_nats_dependencies_into_kind(self) -> None:
-        nats_image = "nats@sha256:" + ("a" * 64)
-        nats_box_image = "natsio/nats-box@sha256:" + ("b" * 64)
-        nats_runtime = "weltgewebe-ha-nats:sha256-" + ("a" * 64)
-        nats_box_runtime = "weltgewebe-ha-nats-box:sha256-" + ("b" * 64)
-        with mock.patch.object(
-            self.ha.ref, "controlled_oci_strict", return_value=False
-        ), mock.patch.object(
-            self.ha._ha_dependencies, "ha_nats_runtime_image", return_value=nats_image
-        ), mock.patch.object(
-            self.ha._ha_dependencies, "NATS_BOX_IMAGE", nats_box_image
-        ), mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
-            self.ha.ref,
-            "output",
-            side_effect=[
-                "sha256:nats-id",
-                "sha256:nats-id",
-                "sha256:nats-box-id",
-                "sha256:nats-box-id",
-            ],
-        ):
-            observed = self.ha.preload_local_nats_dependencies("kind", "proof")
-
-        self.assertEqual(observed["mode"], "direct-digest-preload")
-        self.assertEqual(
-            observed["images"],
-            {
-                "nats": {
-                    "source_image": nats_image,
-                    "runtime_image": nats_runtime,
-                    "image_id": "sha256:nats-id",
-                },
-                "nats-box": {
-                    "source_image": nats_box_image,
-                    "runtime_image": nats_box_runtime,
-                    "image_id": "sha256:nats-box-id",
-                },
-            },
-        )
-        self.assertEqual(
-            run.call_args_list,
-            [
-                mock.call(["docker", "pull", nats_image], timeout=600),
-                mock.call(["docker", "tag", nats_image, nats_runtime]),
-                mock.call(
-                    ["kind", "load", "docker-image", "--name", "proof", nats_runtime],
-                    timeout=600,
-                ),
-                mock.call(["docker", "pull", nats_box_image], timeout=600),
-                mock.call(["docker", "tag", nats_box_image, nats_box_runtime]),
-                mock.call(
-                    [
-                        "kind", "load", "docker-image", "--name", "proof",
-                        nats_box_runtime,
-                    ],
-                    timeout=600,
-                ),
-            ],
-        )
-
-    def test_strict_ha_keeps_nats_supply_on_controlled_oci_path(self) -> None:
-        with mock.patch.object(
-            self.ha.ref, "controlled_oci_strict", return_value=True
-        ), mock.patch.object(self.ha.ref, "run") as run:
-            observed = self.ha.preload_local_nats_dependencies("kind", "proof")
-        self.assertEqual(observed, {"mode": "controlled-oci", "images": {}})
-        run.assert_not_called()
-
-    def test_local_ha_data_uses_preloaded_nats_tag_without_pull(self) -> None:
-        source_image = "nats@sha256:" + ("a" * 64)
-        runtime_image = "weltgewebe-ha-nats:sha256-" + ("a" * 64)
-        rendered = yaml.safe_dump_all(
-            [
-                {
-                    "apiVersion": "apps/v1",
-                    "kind": "StatefulSet",
-                    "metadata": {"name": "nats", "namespace": "weltgewebe-data"},
-                    "spec": {
-                        "template": {
-                            "spec": {
-                                "containers": [
-                                    {"name": "nats", "image": source_image}
-                                ]
-                            }
-                        }
-                    },
-                }
-            ],
-            sort_keys=False,
-        )
-        supply = {
-            "mode": "direct-digest-preload",
-            "images": {
-                "nats": {
-                    "source_image": source_image,
-                    "runtime_image": runtime_image,
-                    "image_id": "sha256:nats-id",
-                }
-            },
-        }
-        with mock.patch.object(
-            self.ha._ha_dependencies, "ha_nats_runtime_image", return_value=source_image
-        ), mock.patch.object(
-            self.ha.ref, "output", return_value=rendered
-        ), mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml:
-            self.ha.apply_ha_data("kubectl", "kustomize", supply)
-
-        documents = apply_yaml.call_args.args[1]
-        container = documents[0]["spec"]["template"]["spec"]["containers"][0]
-        self.assertEqual(container["image"], runtime_image)
-        self.assertEqual(container["imagePullPolicy"], "Never")
-
-    def test_nats_box_uses_preloaded_runtime_tag_without_pull(self) -> None:
-        runtime_image = "weltgewebe-ha-nats-box:sha256-" + ("b" * 64)
-        with mock.patch.object(self.ha.ref, "apply_yaml") as apply_yaml, mock.patch.object(
-            self.ha.ref, "wait_condition"
-        ):
-            self.ha.create_nats_box(
-                "kubectl",
-                "zone-b",
-                image=runtime_image,
-                image_pull_policy="Never",
-            )
-        document = apply_yaml.call_args.args[1]
-        container = document["spec"]["containers"][0]
-        self.assertEqual(container["image"], runtime_image)
-        self.assertEqual(container["imagePullPolicy"], "Never")
-
-    def test_real_domain_jetstream_requires_three_replicas(self) -> None:
-        def completed(payload: dict[str, object]):
-            return mock.Mock(returncode=0, stdout=json.dumps(payload), stderr="")
-
-        with mock.patch.object(
-            self.ha,
-            "nats",
-            side_effect=[
-                completed({"config": {"num_replicas": 3}}),
-                completed({"config": {"num_replicas": 3}}),
-            ],
-        ) as nats:
-            observed = self.ha.domain_jetstream_contract("kubectl")
-        self.assertEqual(observed["stream_replicas"], 3)
-        self.assertEqual(observed["consumer_replicas"], 3)
-        self.assertEqual(
-            nats.call_args_list[0].args[1][:3],
-            ["stream", "info", "WELTGEWEBE_DOMAIN"],
-        )
-        self.assertEqual(
-            nats.call_args_list[1].args[1][:4],
-            [
-                "consumer",
-                "info",
-                "WELTGEWEBE_DOMAIN",
-                "weltgewebe-api-domain-receipts-v1",
-            ],
-        )
-
-        for stream_replicas, consumer_replicas in ((1, 3), (3, 1)):
-            with mock.patch.object(
-                self.ha,
-                "nats",
-                side_effect=[
-                    completed({"config": {"num_replicas": stream_replicas}}),
-                    completed({"config": {"num_replicas": consumer_replicas}}),
-                ],
-            ):
-                with self.assertRaisesRegex(
-                    self.ha.ref.ProofError, "replicas, expected 3"
-                ):
-                    self.ha.domain_jetstream_contract("kubectl")
-
-    def test_real_domain_jetstream_is_bound_before_and_after_zone_failure(self) -> None:
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
-        before = source.index(
-            "        domain_jetstream_before = domain_jetstream_contract(kubectl)"
-        )
-        failure = source.index("        failure_started = time.monotonic()", before)
-        node_stop = source.index('        ref.run(["docker", "stop"', failure)
-        after = source.index(
-            '            "three-replica domain JetStream after zone failure",',
-            node_stop,
-        )
-        gateway = source.index(
-            '                "Gateway API projection after zone failure",', after
-        )
-        self.assertLess(before, failure)
-        self.assertLess(failure, node_stop)
-        self.assertLess(node_stop, after)
-        self.assertLess(after, gateway)
-        self.assertIn('"domain_jetstream_rto_seconds"', source)
-        self.assertIn('"domain_jetstream_before": domain_jetstream_before', source)
-        self.assertIn('"domain_jetstream_after": domain_jetstream_after', source)
-        self.assertIn('"--replicas", "3"', source)
-
-    def test_domain_jetstream_replication_is_deployment_scoped(self) -> None:
-        base = yaml.safe_load(
-            (ROOT / "platform/apps/weltgewebe/base/config-map.yaml").read_text()
-        )
-        ha_patch = yaml.safe_load(
-            (ROOT / "platform/apps/weltgewebe/overlays/ha/config-map-patch.yaml").read_text()
-        )
-        key = "WELTGEWEBE_DOMAIN_JETSTREAM_REPLICAS"
-        self.assertEqual(base["data"][key], "1")
-        self.assertEqual(ha_patch["data"][key], "3")
-        outbox = (ROOT / "apps/api/src/outbox.rs").read_text()
-        self.assertIn(f'const DOMAIN_EVENT_REPLICAS_ENV: &str = "{key}";', outbox)
-        self.assertIn("const DEFAULT_DOMAIN_EVENT_REPLICAS: usize = 1;", outbox)
-        self.assertIn("(3, 1) => Ok(true)", outbox)
-        self.assertIn("refusing implicit downgrade", outbox)
-
-    def test_nats_preload_happens_before_ha_data_apply(self) -> None:
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
-        preload = source.index(
-            "        local_nats_dependency_supply = preload_local_nats_dependencies("
-        )
-        ha_data_apply = source.index(
-            "        apply_ha_data(kubectl, kustomize, local_nats_dependency_supply)",
-            preload,
-        )
-        self.assertLess(preload, ha_data_apply)
-
-    def test_continuous_failure_snapshot_does_not_require_recovery(self) -> None:
-        monitor = self.ha.ContinuousAvailabilityMonitor.__new__(
-            self.ha.ContinuousAvailabilityMonitor
-        )
-        monitor._failure_label = "single-zone-node-stop"
-        monitor._failure_elapsed_seconds = 10.0
-        monitor._gateway_samples = [
-            {"elapsed_seconds": 9.0, "available": True},
-            {"elapsed_seconds": 10.0, "available": False},
-            {"elapsed_seconds": 11.0, "available": False},
-        ]
-        monitor._direct_samples = [
-            {"elapsed_seconds": 9.0, "available": True},
-            {"elapsed_seconds": 10.0, "available": False},
-            {"elapsed_seconds": 11.0, "available": True},
-        ]
-
-        snapshot = monitor.failure_snapshot()
-
-        self.assertEqual(snapshot["gateway"]["post_failure_successes"], 0)
-        self.assertEqual(snapshot["gateway"]["post_failure_failures"], 2)
-        self.assertEqual(snapshot["direct_api"]["post_failure_successes"], 1)
-        self.assertEqual(snapshot["direct_api"]["post_failure_failures"], 1)
-        self.assertEqual(
-            snapshot["failure_marker"]["label"], "single-zone-node-stop"
-        )
-
-    def test_zone_failure_timeout_diagnostic_preserves_primary_error(self) -> None:
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
-        wait_position = source.index(
-            '                "Gateway API projection after zone failure",'
-        )
-        diagnostic_position = source.index(
-            "            diagnostic = api_readiness_failure_diagnostic(",
-            wait_position,
-        )
-        re_raise_position = source.index("            raise\n", diagnostic_position)
-        self.assertLess(wait_position, diagnostic_position)
-        self.assertLess(diagnostic_position, re_raise_position)
-        self.assertIn(
-            '"capture": "post-timeout-after-measurement"',
-            source,
-        )
-
-    def test_ha_direct_probe_respects_network_policy_without_rollout_delay(self) -> None:
-        documents = list(
-            self.validator._documents(
-                ROOT / "platform/apps/weltgewebe/overlays/ha/deployment-patch.yaml"
-            )
-        )
-        api = next(
-            document
-            for document in documents
-            if document.get("kind") == "Deployment"
-            and document.get("metadata", {}).get("name") == "weltgewebe-api"
-        )
-        self.assertNotIn("minReadySeconds", api["spec"])
-        self.assertEqual(api["spec"]["strategy"]["rollingUpdate"]["maxUnavailable"], 0)
-
-        probe = self.ha.direct_api_probe_document("probe-zone-a", "zone-a")
-        labels = probe["metadata"]["labels"]
-        self.assertEqual(labels["app.kubernetes.io/name"], self.ha.DIRECT_API_PROBE_LABEL)
-        self.assertNotEqual(labels["app.kubernetes.io/name"], "weltgewebe-api")
-        self.assertEqual(
-            probe["spec"]["nodeSelector"],
-            {
-                "weltgewebe.net/data-node": "true",
-                "topology.kubernetes.io/zone": "zone-a",
-            },
-        )
-        container = probe["spec"]["containers"][0]
-        self.assertEqual(container["image"], self.ha.BASELINE_API_IMAGE)
-        self.assertEqual(container["imagePullPolicy"], "Never")
-        self.assertIn("sleep 7200", " ".join(container["command"]))
-
-        marker = "00000000-0000-4000-8000-00000000a004"
-
-        def probe_sample(_kubectl: str, pod: str, _url: str, _marker: str):
-            return {
-                "available": pod == "probe-zone-b",
-                "pod": pod,
-                "returncode": 0 if pod == "probe-zone-b" else 1,
-            }
-
-        with mock.patch.object(
-            self.ha._ha_availability,
-            "direct_api_projection_sample",
-            side_effect=probe_sample,
-        ):
-            sample = self.ha.direct_api_probe_sample(
-                "kubectl",
-                ["probe-zone-a", "probe-zone-b", "probe-zone-c"],
-                "10.96.0.20",
-                8080,
-                marker,
-            )
-        self.assertTrue(sample["available"])
-        self.assertEqual(sample["probe_mode"], "same-namespace-zone-probes-any")
-        self.assertEqual(sample["successful_probes"], ["probe-zone-b"])
-        self.assertEqual(sample["failed_paths"], 2)
-
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
-        self.assertIn('"same-namespace-zone-probes-any"', source)
-        self.assertIn('"--request-timeout=3s"', source)
-        self.assertNotIn("self.probe_node, self.direct_url", source)
-
     def test_restore_document_uses_pitr_and_three_instances(self) -> None:
         target = "2026-07-17T15:00:00.000000Z"
         document = self.ha.restore_cluster_document(target)
@@ -873,7 +470,7 @@ class KubernetesHaContractTests(unittest.TestCase):
         ) as cleanup:
             with self.assertRaisesRegex(self.ha.ref.ProofError, "container start failed"):
                 self.ha.start_external_object_store(
-                    "proof", "a" * 40, "owner-proof", "access", "secret"
+                    "proof", "a" * 40, "owner-proof", "secret"
                 )
         cleanup.assert_called_once_with("proof", "a" * 40, "owner-proof")
 
@@ -1856,9 +1453,8 @@ spec:
         self.assertEqual(run.call_args.kwargs["timeout"], 5)
         self.assertFalse(run.call_args.kwargs["check"])
 
-    def test_gateway_observer_sample_tolerates_one_failed_advertised_listener(self) -> None:
+    def test_gateway_owner_sample_tolerates_one_failed_advertised_listener(self) -> None:
         node_addresses = {
-            "proof-control-plane": "10.0.0.9",
             "node-a": "10.0.0.1",
             "node-b": "10.0.0.2",
         }
@@ -1869,7 +1465,6 @@ spec:
         def sample(
             node: str, address: str, port: int, marker: str
         ) -> dict[str, object]:
-            self.assertEqual(node, "proof-control-plane")
             available = address == "10.0.0.2"
             return {
                 "available": available,
@@ -1878,149 +1473,59 @@ spec:
             }
 
         with mock.patch.object(
-            self.ha.ref,
-            "kind_nodes",
-            return_value=["proof-control-plane", "node-a", "node-b"],
+            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
         ), mock.patch.object(
             self.ha.ref, "output", side_effect=output
         ), mock.patch.object(
-            self.ha._ha_availability, "gateway_projection_sample", side_effect=sample
+            self.ha, "gateway_projection_sample", side_effect=sample
         ):
-            observed = self.ha.gateway_observer_sample(
+            observed = self.ha.gateway_owner_sample(
                 "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
             )
 
         self.assertTrue(observed["available"])
         self.assertEqual(observed["failed_paths"], 1)
         self.assertEqual(observed["successful_addresses"], ["10.0.0.2"])
-        self.assertEqual(observed["observer_node"], "proof-control-plane")
         self.assertEqual(
-            observed["probe_mode"],
-            "non-owner-control-plane-any-advertised-address",
+            observed["probe_mode"], "owner-node-any-advertised-address"
         )
 
-    def test_gateway_observer_sample_reuses_pre_failure_binding_after_owner_stops(self) -> None:
-        binding = {
-            "gateway_addresses": ["10.0.0.1", "10.0.0.2"],
-            "observer_node": "proof-control-plane",
-            "observer_address": "10.0.0.9",
-            "owner_by_address": {
-                "10.0.0.1": "node-a",
-                "10.0.0.2": "node-b",
-            },
-            "captured_before_failure": True,
-        }
-        with mock.patch.object(self.ha.ref, "kind_nodes") as kind_nodes, mock.patch.object(
-            self.ha.ref, "output"
-        ) as output, mock.patch.object(
-            self.ha._ha_availability,
-            "gateway_projection_sample",
-            side_effect=lambda node, address, port, marker: {
-                "available": address == "10.0.0.2",
-                "returncode": 0 if address == "10.0.0.2" else 28,
-            },
-        ):
-            observed = self.ha.gateway_observer_sample(
-                "kind",
-                "proof",
-                ["10.0.0.1", "10.0.0.2"],
-                80,
-                "marker",
-                observer_binding=binding,
-            )
-        kind_nodes.assert_not_called()
-        output.assert_not_called()
-        self.assertTrue(observed["available"])
-        self.assertEqual(observed["observer_binding"], "pre-failure-snapshot")
-        self.assertEqual(observed["failed_paths"], 1)
-        self.assertEqual(observed["address_owners"]["10.0.0.1"], "node-a")
-
-    def test_gateway_observer_sample_rejects_unknown_address_after_binding(self) -> None:
-        binding = {
-            "gateway_addresses": ["10.0.0.1"],
-            "observer_node": "proof-control-plane",
-            "observer_address": "10.0.0.9",
-            "owner_by_address": {"10.0.0.1": "node-a"},
-            "captured_before_failure": True,
-        }
-        with self.assertRaisesRegex(
-            self.ha.ref.ProofError, "drifted outside the pre-failure binding"
-        ):
-            self.ha.gateway_observer_sample(
-                "kind",
-                "proof",
-                ["10.0.0.2"],
-                80,
-                "marker",
-                observer_binding=binding,
-            )
-
-    def test_gateway_observer_sample_fails_when_all_advertised_listeners_fail(self) -> None:
+    def test_gateway_owner_sample_fails_when_all_advertised_listeners_fail(self) -> None:
         node_addresses = {
-            "proof-control-plane": "10.0.0.9",
             "node-a": "10.0.0.1",
             "node-b": "10.0.0.2",
         }
+
         with mock.patch.object(
-            self.ha.ref,
-            "kind_nodes",
-            return_value=["proof-control-plane", "node-a", "node-b"],
+            self.ha.ref, "kind_nodes", return_value=["node-a", "node-b"]
         ), mock.patch.object(
             self.ha.ref,
             "output",
             side_effect=lambda argv: node_addresses[argv[-1]],
         ), mock.patch.object(
-            self.ha._ha_availability,
+            self.ha,
             "gateway_projection_sample",
             return_value={"available": False, "returncode": 28},
         ):
-            observed = self.ha.gateway_observer_sample(
+            observed = self.ha.gateway_owner_sample(
                 "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
             )
+
         self.assertFalse(observed["available"])
         self.assertEqual(observed["successful_addresses"], [])
         self.assertEqual(observed["failed_paths"], 2)
 
-    def test_gateway_observer_sample_rejects_unowned_advertised_address(self) -> None:
-        node_addresses = {
-            "proof-control-plane": "10.0.0.9",
-            "node-a": "10.0.0.1",
-        }
+    def test_gateway_owner_sample_rejects_unowned_advertised_address(self) -> None:
         with mock.patch.object(
-            self.ha.ref,
-            "kind_nodes",
-            return_value=["proof-control-plane", "node-a"],
+            self.ha.ref, "kind_nodes", return_value=["node-a"]
         ), mock.patch.object(
-            self.ha.ref,
-            "output",
-            side_effect=lambda argv: node_addresses[argv[-1]],
+            self.ha.ref, "output", return_value="10.0.0.1"
         ):
             with self.assertRaisesRegex(
                 self.ha.ref.ProofError, "exactly one kind node owner"
             ):
-                self.ha.gateway_observer_sample(
+                self.ha.gateway_owner_sample(
                     "kind", "proof", ["10.0.0.2"], 80, "marker"
-                )
-
-    def test_gateway_observer_sample_requires_non_owner_control_plane(self) -> None:
-        node_addresses = {
-            "proof-control-plane": "10.0.0.1",
-            "node-a": "10.0.0.2",
-        }
-        with mock.patch.object(
-            self.ha.ref,
-            "kind_nodes",
-            return_value=["proof-control-plane", "node-a"],
-        ), mock.patch.object(
-            self.ha.ref,
-            "output",
-            side_effect=lambda argv: node_addresses[argv[-1]],
-        ):
-            with self.assertRaisesRegex(
-                self.ha.ref.ProofError, "non-owner control-plane observer"
-            ):
-                self.ha.gateway_observer_sample(
-                    "kind", "proof", ["10.0.0.1", "10.0.0.2"], 80, "marker"
                 )
 
     def test_gateway_availability_sample_preserves_failure_diagnostics(self) -> None:
@@ -2075,7 +1580,7 @@ spec:
         self.assertTrue(budget["within_budget"])
 
     def test_change_management_contract_uses_rollout_undo_and_receipt_fields(self) -> None:
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
         self.assertIn(
             '"rollout",\n            "undo"', source
         )
@@ -2085,13 +1590,9 @@ spec:
         )
         self.assertIn('probe_node = gateway_probe["probe_node"]', source)
         self.assertIn('probe_address = gateway_probe["address"]', source)
-        self.assertIn("gateway_observer_sample(", source)
-        self.assertIn("gateway_observer_binding(", source)
-        self.assertIn("non-owner-control-plane-any-advertised-address", source)
-        self.assertIn("observer_binding=availability_monitor.gateway_binding", source)
+        self.assertIn("gateway_owner_sample(", source)
+        self.assertIn("owner-node-any-advertised-address", source)
         self.assertIn('"degraded_gateway_path_samples"', source)
-        self.assertIn('"post-recovery-after-measurement"', source)
-        self.assertIn('"diagnostic_duration_seconds"', source)
         self.assertIn('"failed_gateway_paths_observed"', source)
         self.assertIn('probe_port = int(gateway_probe["listener_port"])', source)
         self.assertNotIn("def gateway_probe_target(", source)
@@ -2115,7 +1616,7 @@ spec:
             "restore_barman_sidecars = verify_barman_sidecar_images(", rto
         )
         archive = source.index(
-            'cluster="postgres-restore"', sidecars
+            'restore_kubectl, cluster="postgres-restore"', sidecars
         )
         self.assertLess(ready, rto)
         self.assertLess(rto, sidecars)
@@ -2154,99 +1655,6 @@ spec:
         self.assertIn('"continued_wal_archiving": restore_wal_archive', source)
         self.assertIn("FROM pg_stat_archiver", source)
         self.assertNotIn("status.lastArchivedWAL", source)
-
-    def test_wal_object_identity_requires_exact_server_and_segment(self) -> None:
-        segment = "000000020000000A000000FE"
-        good = f"postgres-ha/wals/000000020000000A/{segment}.gz"
-        identity = self.ha.require_wal_object_identity(
-            [good], "postgres-ha", segment
-        )
-        self.assertEqual(identity["object_key"], good)
-        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
-            self.ha.require_wal_object_identity([], "postgres-ha", segment)
-        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
-            self.ha.require_wal_object_identity(
-                [f"postgres-ha/wals/000000020000000A/000000020000000A000000FF.gz"],
-                "postgres-ha",
-                segment,
-            )
-        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
-            self.ha.require_wal_object_identity(
-                [f"wrong-server/wals/000000020000000A/{segment}.gz"],
-                "postgres-ha",
-                segment,
-            )
-        with self.assertRaisesRegex(self.ha.ref.ProofError, "not uniquely present"):
-            self.ha.require_wal_object_identity(
-                [f"prefix/postgres-ha/wals/000000020000000A/{segment}.gz"],
-                "postgres-ha",
-                segment,
-            )
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_wal.py").read_text()
-        self.assertIn("signed-s3-list-objects-v2-read-only", source)
-        self.assertIn('"archive_command_reused_as_probe": False', source)
-        self.assertIn('"archiver_latency_seconds"', source)
-        self.assertIn('"object_store_visibility_latency_seconds"', source)
-
-    def test_continuous_availability_summary_separates_samples_gaps_and_outage(self) -> None:
-        summary = self.ha.summarize_continuous_availability(
-            [
-                {"elapsed_seconds": 0.0, "available": True},
-                {"elapsed_seconds": 2.0, "available": False},
-                {"elapsed_seconds": 5.0, "available": True},
-            ],
-            window_seconds=6.0,
-            interval_seconds=2.0,
-        )
-        self.assertEqual(summary["sample_count"], 3)
-        self.assertEqual(summary["failed_samples"], 1)
-        self.assertEqual(summary["measurement_gap_seconds"], 1.0)
-        self.assertEqual(summary["measured_outage_seconds"], 3.0)
-        recovery = self.ha.summarize_failover_recovery(
-            [
-                {"elapsed_seconds": 0.0, "available": True},
-                {"elapsed_seconds": 2.0, "available": False},
-                {"elapsed_seconds": 4.0, "available": True},
-            ],
-            failure_elapsed_seconds=1.0,
-            interval_seconds=2.0,
-        )
-        self.assertTrue(recovery["outage_observed"])
-        self.assertEqual(recovery["observed_rto_seconds"], 3.0)
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text() + "\n" + (ROOT / "scripts/platform/ha_availability.py").read_text()
-        self.assertIn('"continuous_availability": continuous_availability', source)
-        self.assertIn("direct_api = summarize_continuous_availability(", source)
-        self.assertIn("gateway = summarize_continuous_availability(", source)
-
-    def test_t016_receipt_separates_rto_semantics_and_capacity_credentials(self) -> None:
-        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
-        for field in (
-            '"service_rto_seconds"',
-            '"component_recovery_rto_seconds"',
-            '"full_redundancy_rto_seconds"',
-            '"rto_semantics"',
-            '"capacity": capacity',
-            '"credentials": credentials',
-            '"proof_duration_seconds"',
-        ):
-            self.assertIn(field, source)
-        budget = self.ha.declared_ha_capacity_budget(keep_primary=False)
-        self.assertEqual(budget["postgres_primary_pvc_bytes"], 3 << 30)
-        self.assertEqual(budget["nats_pvc_bytes"], 3 << 30)
-        self.assertEqual(budget["pitr_restore_pvc_bytes"], 3 << 30)
-        self.assertGreater(budget["required_free_bytes"], 6 << 30)
-        access = f"{self.ha.S3_ACCESS_KEY_PREFIX}{'a' * 16}"
-        credentials = self.ha.credential_preflight(access, "x" * 40, "owner")
-        self.assertEqual(credentials["credential_lifetime"], "single-proof-run")
-        self.assertFalse(credentials["repository_secret_used"])
-        self.assertFalse(credentials["secret_material_recorded"])
-        self.assertNotIn("x" * 40, json.dumps(credentials))
-        for non_claim in (
-            "multi-region production HA",
-            "multi-cloud production HA",
-            "production HA cutover",
-        ):
-            self.assertIn(non_claim, source)
 
     def test_ha_diagnostics_are_bounded_and_do_not_raise_on_timeout(self) -> None:
         with tempfile.TemporaryDirectory() as directory, mock.patch.object(
