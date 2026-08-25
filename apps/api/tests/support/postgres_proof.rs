@@ -37,8 +37,8 @@ pub fn assert_disposable_database_name(name: &str) {
     );
     let final_segment = name
         .split(['_', '-', '.'])
-        .filter(|segment| !segment.is_empty())
-        .next_back();
+        .rfind(|segment| !segment.is_empty());
+
     assert!(
         name.starts_with("weltgewebe_")
             && final_segment.is_some_and(|segment| {
