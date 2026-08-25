@@ -24,7 +24,6 @@
     direct_messages_push: false,
   });
   let browserSubscription: PushSubscription | null = $state(null);
-  let pendingRemovalEndpoint: string | null = $state(null);
   let permission: NotificationPermission | "unsupported" =
     $state("unsupported");
   let error = $state("");
@@ -90,7 +89,6 @@
   async function enableCurrentDevice(): Promise<void> {
     if (
       changingDevice ||
-      pendingRemovalEndpoint ||
       !config?.enabled ||
       !config.application_server_key
     )
@@ -134,38 +132,24 @@
       notice =
         "Push ist auf diesem Gerät aktiviert. Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet.";
     } catch (cause) {
-      if (cleanupEndpoint) {
+      if (createdSubscription && cleanupEndpoint) {
         try {
           await deletePushSubscription(cleanupEndpoint);
-        } catch {
-          pendingRemovalEndpoint = cleanupEndpoint;
+          await createdSubscription.unsubscribe().catch(() => false);
+          await loadBrowserSubscription();
+          if (browserSubscription) {
+            warning =
+              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Du kannst die Deaktivierung erneut versuchen.";
+          }
+        } catch (cleanupCause) {
+          browserSubscription = createdSubscription;
+          warning = `Die Einrichtung ist fehlgeschlagen und konnte nicht vollständig zurückgenommen werden. Das Geräte-Abo bleibt sichtbar, damit du die Deaktivierung erneut versuchen kannst. ${describeNotificationError(
+            cleanupCause,
+            "device-disable",
+          )}`;
         }
       }
-      if (createdSubscription && !browserSubscription) {
-        await createdSubscription.unsubscribe().catch(() => false);
-      }
-      error = describeNotificationError(cause, "device");
-    } finally {
-      changingDevice = false;
-    }
-  }
-
-  function removalWarning(): string {
-    return "Push ist auf diesem Gerät deaktiviert. Der gespeicherte Geräte-Eintrag konnte gerade nicht entfernt werden und kann vorübergehend noch als aktives Gerät zählen.";
-  }
-
-  async function retryServerRemoval(): Promise<void> {
-    if (changingDevice || !pendingRemovalEndpoint) return;
-    changingDevice = true;
-    clearFeedback();
-    const endpoint = pendingRemovalEndpoint;
-    try {
-      await deletePushSubscription(endpoint);
-      pendingRemovalEndpoint = null;
-      notice = "Der alte Geräte-Eintrag wurde entfernt.";
-    } catch {
-      // Keep pendingRemovalEndpoint intact. Its dedicated status stays visible
-      // until the server confirms that the stale device entry is gone.
+      error = describeNotificationError(cause, "device-enable");
     } finally {
       changingDevice = false;
     }
@@ -175,19 +159,22 @@
     if (changingDevice || !browserSubscription) return;
     changingDevice = true;
     clearFeedback();
-    const endpoint = browserSubscription.endpoint;
+    const subscription = browserSubscription;
     try {
-      await browserSubscription.unsubscribe();
-      browserSubscription = null;
-      try {
-        await deletePushSubscription(endpoint);
-        if (pendingRemovalEndpoint === endpoint) pendingRemovalEndpoint = null;
-        notice = "Push ist auf diesem Gerät deaktiviert.";
-      } catch {
-        pendingRemovalEndpoint = endpoint;
+      // Server first: if this request fails, keep the browser subscription so
+      // the endpoint remains recoverable after a reload and the user can retry.
+      await deletePushSubscription(subscription.endpoint);
+
+      await subscription.unsubscribe().catch(() => false);
+      await loadBrowserSubscription();
+      if (browserSubscription) {
+        warning =
+          "Der Geräte-Eintrag ist auf dem Server entfernt, aber das lokale Browser-Abo konnte nicht beendet werden. Versuche die Deaktivierung erneut.";
+        return;
       }
+      notice = "Push ist auf diesem Gerät deaktiviert.";
     } catch (cause) {
-      error = describeNotificationError(cause, "device");
+      error = describeNotificationError(cause, "device-disable");
     } finally {
       changingDevice = false;
     }
@@ -307,16 +294,10 @@
         <button
           class="btn primary touch-target"
           type="button"
-          disabled={
-            changingDevice || !config?.enabled || Boolean(pendingRemovalEndpoint)
-          }
+          disabled={changingDevice || !config?.enabled}
           onclick={enableCurrentDevice}
         >
-          {changingDevice
-            ? "Wird aktiviert …"
-            : pendingRemovalEndpoint
-              ? "Zuerst Geräte-Eintrag entfernen"
-              : "Auf diesem Gerät aktivieren"}
+          {changingDevice ? "Wird aktiviert …" : "Auf diesem Gerät aktivieren"}
         </button>
       {/if}
     </div>
@@ -331,19 +312,6 @@
     {#if warning}
       <div class="status warning status-with-action" role="status">
         <p>{warning}</p>
-      </div>
-    {/if}
-    {#if pendingRemovalEndpoint}
-      <div class="status warning status-with-action" role="status">
-        <p>{removalWarning()}</p>
-        <button
-          class="btn secondary touch-target"
-          type="button"
-          disabled={changingDevice}
-          onclick={retryServerRemoval}
-        >
-          {changingDevice ? "Wird entfernt …" : "Geräte-Eintrag erneut entfernen"}
-        </button>
       </div>
     {/if}
     {#if error}<p class="status error" role="alert">{error}</p>{/if}
