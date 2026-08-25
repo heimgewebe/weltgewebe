@@ -2,7 +2,6 @@ use axum::http::StatusCode;
 use serde::Serialize;
 use std::collections::HashMap;
 
-
 /// Upper bound for the `limit` query parameter on list endpoints, applied so a
 /// single request cannot force an unbounded in-memory collection.
 pub const MAX_PAGE_SIZE: usize = 1000;
