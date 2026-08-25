@@ -2,6 +2,7 @@ import argparse
 import datetime
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -15,15 +16,22 @@ from scripts.docmeta.docmeta import (
 
 RETIRED_STATUSES = {"archived", "deprecated", "obsolete", "retired", "superseded"}
 RETIRED_LIFECYCLE_STATES = {"archived", "deprecated", "obsolete", "retired", "superseded"}
+YYYY_MM_DD_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
+
+
+def _parse_yyyy_mm_dd(value: str) -> datetime.date:
+    if YYYY_MM_DD_RE.fullmatch(value) is None:
+        raise ValueError("date must use literal YYYY-MM-DD form")
+    return datetime.date.fromisoformat(value)
 
 
 def _today_from_arg(value: str | None) -> datetime.date:
     if value is None:
         return datetime.date.today()
     try:
-        return datetime.date.fromisoformat(value)
+        return _parse_yyyy_mm_dd(value)
     except ValueError as exc:
-        raise ValueError("--today must be a valid ISO date in YYYY-MM-DD format") from exc
+        raise ValueError("--today must be a valid date in YYYY-MM-DD format") from exc
 
 
 def _tracked_markdown_files(root: str) -> list[str]:
@@ -88,7 +96,7 @@ def _check_review_after(
         entry["review_retired"] = _is_retired(frontmatter)
 
         try:
-            review_after_date = datetime.date.fromisoformat(review_after_str)
+            review_after_date = _parse_yyyy_mm_dd(review_after_str)
         except ValueError:
             entry["review_due"] = None
             errors.append(

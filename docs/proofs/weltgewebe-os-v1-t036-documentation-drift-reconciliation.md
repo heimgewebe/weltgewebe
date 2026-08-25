@@ -20,9 +20,12 @@ den exakt geprüften Ausgangshead
 Das historische Inventar ist Recovery-Evidenz, keine heutige Wahrheit. Seine
 Identität ist durch Audit-Head `39d5a8f5fa637ba9f8a487074c86856e6a6b897c`
 und SHA-256
-`56e4a159d8b3dc79d6275ac46248f845337dbbe124b9f26f695a6a9ccfff8c0`
-gebunden. Die damalige Aggregation lautete 11 P1 + 41 P2; sie wird hier nicht
-ungeprüft fortgeschrieben.
+`56e4a159d8b3dc79d6275ac46248f845337dbbe124b9f26f695a6a9ccfff8c0b`
+gebunden. Die byte-identische historische Inventarquelle ist dauerhaft unter
+`docs/proofs/sources/weltgewebe-os-v1-t036-documentation-drift-audit.json`
+versioniert; Tests binden ihre 52 IDs und P1/P2-Schweregrade an die Tabelle unten.
+Die damalige Aggregation lautete 11 P1 + 41 P2; sie wird hier nicht ungeprüft
+fortgeschrieben.
 
 **Disposition** bezeichnet den Zustand auf dem Ausgangshead vor der T036-
 Bereinigung:

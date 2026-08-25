@@ -1,0 +1,355 @@
+{
+  "schema_version": 1,
+  "audit_id": "WELTGEWEBE-OS-V1-T022",
+  "current_head": "39d5a8f5fa637ba9f8a487074c86856e6a6b897c",
+  "status": "drift_detected",
+  "summary": "Dokumentationsdrift-Audit WELTGEWEBE-OS-V1-T022 auf HEAD 39d5a8f5fa637ba9f8a487074c86856e6a6b897c abgeschlossen. Es wurden 237 Markdown-Dateien und 214 Frontmatter-Blöcke analysiert. Insgesamt 52 Drift-Befunde identifiziert: 11 P1-Befunde (kritische/hohe Drift in Runbooks, README, Index und Architektur-Claims), 41 P2-Befunde (abgelaufenes review_after, nicht-existierende Pfade/Skripte in Blueprints/Reports) sowie 0 P0-Befunde.",
+  "inventory_summary": {
+    "total_markdown_files": 237,
+    "files_with_frontmatter": 214,
+    "audited_categories": {
+      "adr": 15,
+      "architecture": 7,
+      "blueprints": 24,
+      "claims": 1,
+      "deploy": 19,
+      "domain": 2,
+      "edge": 1,
+      "konzepte": 2,
+      "policies": 3,
+      "process": 7,
+      "proofs": 5,
+      "reference": 6,
+      "reports": 50,
+      "runbooks": 11,
+      "security": 1,
+      "specs": 15,
+      "tasks": 3,
+      "top_level": 4
+    },
+    "metadata_health": {
+      "expired_review_after_count": 8,
+      "explicitly_stale_or_superseded_docs": 38,
+      "broken_path_references_count": 35
+    }
+  },
+  "findings": [
+    {
+      "id": "DRIFT-001",
+      "severity": "P1",
+      "summary": "Runbook verweist auf nicht-existierenden Pfad `apps/web/releases/` für Web-Deployments",
+      "evidence": "docs/runbook.md:114"
+    },
+    {
+      "id": "DRIFT-002",
+      "severity": "P1",
+      "summary": "Runbook verweist auf relativen Pfad `deploy/README.md` ohne `docs/`-Präfix",
+      "evidence": "docs/runbook.md:20"
+    },
+    {
+      "id": "DRIFT-003",
+      "severity": "P1",
+      "summary": "Runbook verweist auf relativen Pfad `deploy/vps-db-initialization-boundary.md` ohne `docs/`-Präfix",
+      "evidence": "docs/runbook.md:133"
+    },
+    {
+      "id": "DRIFT-004",
+      "severity": "P1",
+      "summary": "Runbook verweist auf relativen Pfad `deploy/vps.md` ohne `docs/`-Präfix",
+      "evidence": "docs/runbook.md:174"
+    },
+    {
+      "id": "DRIFT-005",
+      "severity": "P1",
+      "summary": "CONTRIBUTING.md verweist auf nicht-existierenden Dienst/Ordner `apps/worker/`",
+      "evidence": "CONTRIBUTING.md:50"
+    },
+    {
+      "id": "DRIFT-006",
+      "severity": "P1",
+      "summary": "CONTRIBUTING.md verweist auf nicht-existierenden Dienst/Ordner `apps/search/`",
+      "evidence": "CONTRIBUTING.md:50"
+    },
+    {
+      "id": "DRIFT-007",
+      "severity": "P1",
+      "summary": "CONTRIBUTING.md verweist auf veraltete Backend-Verzeichnisse `apps/api/src/domain/`, `repo/`, `events/`",
+      "evidence": "CONTRIBUTING.md:81"
+    },
+    {
+      "id": "DRIFT-008",
+      "severity": "P1",
+      "summary": "docs/index.md verweist auf relative Pfade `deploy/vps.md` und `deploy/README.md` ohne `docs/`-Präfix",
+      "evidence": "docs/index.md:71"
+    },
+    {
+      "id": "DRIFT-009",
+      "severity": "P1",
+      "summary": "docs/index.md verweist auf relative Pfade `runbooks/incident-response.md` und `runbooks/db-recovery.md` ohne `docs/`-Präfix",
+      "evidence": "docs/index.md:73"
+    },
+    {
+      "id": "DRIFT-010",
+      "severity": "P1",
+      "summary": "Behaupteter Convergence Protocol HEAD `83ed435bf9eb490e81a6ff2103b6c1397440d40b` weicht vom aktuellen Git HEAD ab",
+      "evidence": "docs/architecture/weltgewebe-os-convergence-adapter.md:37"
+    },
+    {
+      "id": "DRIFT-011",
+      "severity": "P1",
+      "summary": "Behaupteter Convergence Protocol HEAD in JSON-Beispiel `83ed435bf9eb490e81a6ff2103b6c1397440d40b` weicht vom aktuellen Git HEAD ab",
+      "evidence": "docs/architecture/weltgewebe-os-convergence-adapter.md:132"
+    },
+    {
+      "id": "DRIFT-012",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-16 < 2026-07-22) in active report Frontmatter",
+      "evidence": "docs/reports/domain-account-write-path-proof.md:9"
+    },
+    {
+      "id": "DRIFT-013",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-17 < 2026-07-22) in active report Frontmatter",
+      "evidence": "docs/reports/auth-persistence-runtime-target-reconciliation.md:9"
+    },
+    {
+      "id": "DRIFT-014",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-16 < 2026-07-22) in active report Frontmatter",
+      "evidence": "docs/reports/domain-backfill-proof.md:9"
+    },
+    {
+      "id": "DRIFT-015",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-16 < 2026-07-22) in deprecated report Frontmatter",
+      "evidence": "docs/reports/domain-edge-write-path-proof.md:10"
+    },
+    {
+      "id": "DRIFT-016",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-16 < 2026-07-22) in active report Frontmatter",
+      "evidence": "docs/reports/domain-read-path-proof.md:9"
+    },
+    {
+      "id": "DRIFT-017",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-13 < 2026-07-22) in active report Frontmatter",
+      "evidence": "docs/reports/domain-account-email-uniqueness-audit.md:9"
+    },
+    {
+      "id": "DRIFT-018",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-16 < 2026-07-22) in active report Frontmatter",
+      "evidence": "docs/reports/domain-node-write-path-proof.md:9"
+    },
+    {
+      "id": "DRIFT-019",
+      "severity": "P2",
+      "summary": "Abgelaufenes review_after Datum (2026-07-16 < 2026-07-22) in active report Frontmatter",
+      "evidence": "docs/reports/domain-edge-reference-audit.md:9"
+    },
+    {
+      "id": "DRIFT-020",
+      "severity": "P2",
+      "summary": "Blueprints verweisen auf nicht-existierende Komponente `ActionBar.svelte`",
+      "evidence": "docs/blueprints/ui-state-machine.md:203"
+    },
+    {
+      "id": "DRIFT-021",
+      "severity": "P2",
+      "summary": "Blueprints verweisen auf nicht-existierende Datei `apps/web/src/lib/map/load.ts`",
+      "evidence": "docs/blueprints/kartenklarheit.md:152"
+    },
+    {
+      "id": "DRIFT-022",
+      "severity": "P2",
+      "summary": "Blueprints verweisen auf nicht-existierende Typendefinition `apps/web/src/lib/map/scene.types.ts`",
+      "evidence": "docs/blueprints/kartenklarheit.md:428"
+    },
+    {
+      "id": "DRIFT-023",
+      "severity": "P2",
+      "summary": "Blueprints verweisen auf nicht-existierende Komponente `MapDiagnostics.svelte`",
+      "evidence": "docs/blueprints/kartenklarheit.md:429"
+    },
+    {
+      "id": "DRIFT-024",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/agent/check_changed_paths_scope.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:286"
+    },
+    {
+      "id": "DRIFT-025",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/agent/check_generated_direct_edit.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:287"
+    },
+    {
+      "id": "DRIFT-026",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/agent/check_agent_status_claims.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:288"
+    },
+    {
+      "id": "DRIFT-027",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Artefakt `docs/_generated/agent-readiness.json`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:362"
+    },
+    {
+      "id": "DRIFT-028",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/docmeta/check_claim_evidence.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:396"
+    },
+    {
+      "id": "DRIFT-029",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierende JSON-Schemas in `contracts/agent/`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:507"
+    },
+    {
+      "id": "DRIFT-030",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/docmeta/validate_agent_handoff.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:512"
+    },
+    {
+      "id": "DRIFT-031",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/docmeta/check_roadmap_claims.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:709"
+    },
+    {
+      "id": "DRIFT-032",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/docmeta/check_statusmatrix_proofs.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:710"
+    },
+    {
+      "id": "DRIFT-033",
+      "severity": "P2",
+      "summary": "Blueprint Agent Safety verweist auf nicht-existierendes Skript `scripts/docmeta/check_blueprint_activation.py`",
+      "evidence": "docs/blueprints/blueprint-agent-safety-control-layer.md:711"
+    },
+    {
+      "id": "DRIFT-034",
+      "severity": "P2",
+      "summary": "Runbook verweist auf nicht-existierendes Heimberry DDNS-Skript `scripts/heimberry/install_weltgewebe_ddns.sh`",
+      "evidence": "docs/runbooks/weltgewebe-ddns-runtime-verification.md:29"
+    },
+    {
+      "id": "DRIFT-035",
+      "severity": "P2",
+      "summary": "CHANGELOG verweist auf nicht-existierenden Pfad `src/lib/generated/`",
+      "evidence": "docs/deploy/CHANGELOG.md:257"
+    },
+    {
+      "id": "DRIFT-036",
+      "severity": "P2",
+      "summary": "Mail-Migration Runbook verweist auf nicht-existierendes Skript `scripts/heimberry/install_weltgewebe_ddns.sh`",
+      "evidence": "docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md:74"
+    },
+    {
+      "id": "DRIFT-037",
+      "severity": "P2",
+      "summary": "Dokumentationsübersicht verweist auf nicht-existierenden Ordner `docs/ethik/`",
+      "evidence": "docs/overview/zusammenstellung.md:25"
+    },
+    {
+      "id": "DRIFT-038",
+      "severity": "P2",
+      "summary": "Dokumentationsübersicht verweist auf nicht-existierenden Ordner `docs/ux/`",
+      "evidence": "docs/overview/zusammenstellung.md:26"
+    },
+    {
+      "id": "DRIFT-039",
+      "severity": "P2",
+      "summary": "Auth-Diagnosebericht verweist auf nicht-existierenden Proof `docs/proofs/auth-postgres-direct-proof.md`",
+      "evidence": "docs/reports/auth-persistence-direct-proof-diagnose-audit.md:35"
+    },
+    {
+      "id": "DRIFT-040",
+      "severity": "P2",
+      "summary": "Optimierungsbericht verweist auf nicht-existierenden Dienst `apps/worker/`",
+      "evidence": "docs/reports/optimierungsbericht.md:332"
+    },
+    {
+      "id": "DRIFT-041",
+      "severity": "P2",
+      "summary": "Auth-Statusmatrix verweist auf nicht-existierenden Pfad `src/lib.rs` (Crate im API Subdirectory)",
+      "evidence": "docs/reports/auth-status-matrix.md:197"
+    },
+    {
+      "id": "DRIFT-042",
+      "severity": "P2",
+      "summary": "Passkey DB Store Report verweist auf nicht-existierenden Test `tests/db_passkey_store_persistence.rs`",
+      "evidence": "docs/reports/auth-pg-002-passkey-db-store.md:42"
+    },
+    {
+      "id": "DRIFT-043",
+      "severity": "P2",
+      "summary": "Agent Readiness Audit verweist auf nicht-existierende Policy `docs/policies/agent-readiness.md`",
+      "evidence": "docs/reports/agent-readiness-audit.md:277"
+    },
+    {
+      "id": "DRIFT-044",
+      "severity": "P2",
+      "summary": "Platform README verweist auf nicht-existierenden Manifest-Pfad `apps/weltgewebe/base/`",
+      "evidence": "platform/README.md:34"
+    },
+    {
+      "id": "DRIFT-045",
+      "severity": "P2",
+      "summary": "Platform README verweist auf nicht-existierenden Manifest-Pfad `apps/weltgewebe/overlays/`",
+      "evidence": "platform/README.md:35"
+    },
+    {
+      "id": "DRIFT-046",
+      "severity": "P2",
+      "summary": "Semantic Search Architektur doku verweist auf nicht-existierenden Dienst `apps/semantic-service`",
+      "evidence": "architecture/semantic-search.md:317"
+    },
+    {
+      "id": "DRIFT-047",
+      "severity": "P2",
+      "summary": "Aktive Roadmap verweist auf deprecated Bericht `docs/reports/auth-persistence-readiness.md`",
+      "evidence": "docs/roadmap.md:89"
+    },
+    {
+      "id": "DRIFT-048",
+      "severity": "P2",
+      "summary": "Aktive Roadmap verweist auf deprecated Bericht `docs/reports/auth-persistence-next-step.md`",
+      "evidence": "docs/roadmap.md:89"
+    },
+    {
+      "id": "DRIFT-049",
+      "severity": "P2",
+      "summary": "Aktive Roadmap verweist auf deprecated Bericht `docs/reports/auth-persistence-runtime-proof.md`",
+      "evidence": "docs/roadmap.md:127"
+    },
+    {
+      "id": "DRIFT-050",
+      "severity": "P2",
+      "summary": "Aktive Roadmap verweist auf deprecated Bericht `docs/reports/planning-registration-findings.md`",
+      "evidence": "docs/roadmap.md:166"
+    },
+    {
+      "id": "DRIFT-051",
+      "severity": "P2",
+      "summary": "Runbooks README verweist auf deprecated Runbook `docs/runbooks/domain-mail-cutover.md`",
+      "evidence": "docs/runbooks/README.md:30"
+    },
+    {
+      "id": "DRIFT-052",
+      "severity": "P2",
+      "summary": "Auth Statusmatrix verweist auf deprecated Bericht `docs/reports/passkey-register-verify-prep.md`",
+      "evidence": "docs/reports/auth-status-matrix.md:179"
+    }
+  ],
+  "gaps": [
+    "Keine automatische CI-Prüfung für Pfad-Existenz in Markdown-Links und Inline-Code-Referenzen vorhanden (check_links.py prüft nur Standard-Links, keine Inline-Pfade).",
+    "Automatische Staleness-Generierung script/docmeta/generate_staleness_report.py läuft nicht automatisch im CI-Workflow vor Merges.",
+    "Bestehende Blueprints und Architekturdokumente enthalten historische Entwurfs-Pfade (z.B. apps/worker, apps/semantic-service), die nach dem Refactoring nicht bereinigt oder als hypothetisch gekennzeichnet wurden."
+  ]
+}

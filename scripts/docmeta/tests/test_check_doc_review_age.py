@@ -82,6 +82,19 @@ class ReviewAfterLifecycleTests(unittest.TestCase):
         self.assertEqual(warnings, [])
         self.assertFalse(report["docs.future"]["review_due"])
 
+    def test_review_after_rejects_non_literal_iso_date_forms(self):
+        for index, value in enumerate(("20260824", "2026-W35-1"), start=1):
+            with self.subTest(value=value):
+                rel = self._write(
+                    f"invalid-shape-{index}",
+                    f"id: docs.invalid-shape-{index}\nstatus: active\nreview_after: {value}",
+                )
+                errors, warnings, report = self._run(rel, mode="warn")
+                self.assertEqual(warnings, [])
+                self.assertEqual(len(errors), 1)
+                self.assertIn("Must be YYYY-MM-DD", errors[0])
+                self.assertIsNone(report[f"docs.invalid-shape-{index}"]["review_due"])
+
     def test_invalid_review_after_is_always_an_error(self):
         rel = self._write(
             "invalid",
@@ -98,8 +111,10 @@ class ReviewAfterLifecycleTests(unittest.TestCase):
             review_age._today_from_arg("2026-08-24"),
             datetime.date(2026, 8, 24),
         )
-        with self.assertRaises(ValueError):
-            review_age._today_from_arg("24.08.2026")
+        for invalid in ("24.08.2026", "20260824", "2026-W35-1"):
+            with self.subTest(invalid=invalid):
+                with self.assertRaises(ValueError):
+                    review_age._today_from_arg(invalid)
 
 
 if __name__ == "__main__":
