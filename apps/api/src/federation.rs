@@ -835,22 +835,31 @@ impl PostgresFederationRepository {
         .execute(&mut *tx)
         .await?;
 
+        let rows = sqlx::query(
+            "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256 \
+             FROM federation_peer_relationships \
+             WHERE remote_cell_id = ANY($1::text[]) FOR UPDATE",
+        )
+        .bind(&cell_ids)
+        .fetch_all(&mut *tx)
+        .await?;
+
+        let mut existing_peers = std::collections::HashMap::with_capacity(rows.len());
+        for row in rows {
+            use sqlx::Row;
+            let id: String = row.try_get("remote_cell_id")?;
+            let base_url: Option<String> = row.try_get("delivery_base_url")?;
+            let fingerprint: Option<String> = row.try_get("delivery_policy_sha256")?;
+            existing_peers.insert(id, (base_url, fingerprint));
+        }
+
         for (policy, endpoint, fingerprint) in normalized {
             let cell_id = &policy.remote_cell_id;
-            let row = sqlx::query(
-                "SELECT delivery_base_url, delivery_policy_sha256 \
-                 FROM federation_peer_relationships \
-                 WHERE remote_cell_id = $1 FOR UPDATE",
-            )
-            .bind(cell_id)
-            .fetch_optional(&mut *tx)
-            .await?;
-            let Some(row) = row else {
+            let Some((previous_endpoint, previous_fingerprint)) = existing_peers.get(cell_id)
+            else {
                 bail!("delivery endpoint references unknown peer {cell_id}");
             };
-            let previous_endpoint: Option<String> = row.try_get("delivery_base_url")?;
-            let previous_fingerprint: Option<String> = row.try_get("delivery_policy_sha256")?;
-            if previous_endpoint == endpoint && previous_fingerprint == fingerprint {
+            if previous_endpoint == &endpoint && previous_fingerprint == &fingerprint {
                 continue;
             }
             sqlx::query(
