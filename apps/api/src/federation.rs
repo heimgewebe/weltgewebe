@@ -921,11 +921,22 @@ impl FederationRepository for PostgresFederationRepository {
         .bind(&supplied_key_ids)
         .execute(&mut *tx)
         .await?;
-        for key in policy.keys {
+        if !policy.keys.is_empty() {
+            let mut key_ids = Vec::with_capacity(policy.keys.len());
+            let mut public_keys = Vec::with_capacity(policy.keys.len());
+            let mut actives = Vec::with_capacity(policy.keys.len());
+
+            for key in &policy.keys {
+                key_ids.push(key.key_id.clone());
+                public_keys.push(key.public_key.to_vec());
+                actives.push(key.active);
+            }
+
             sqlx::query(
                 "INSERT INTO federation_peer_keys \
                  (remote_cell_id, key_id, public_key, active, retired_at) \
-                 VALUES ($1, $2, $3, $4, CASE WHEN $4 THEN NULL ELSE NOW() END) \
+                 SELECT $1, u.key_id, u.public_key, u.active, CASE WHEN u.active THEN NULL ELSE NOW() END \
+                 FROM UNNEST($2::text[], $3::bytea[], $4::boolean[]) AS u(key_id, public_key, active) \
                  ON CONFLICT (remote_cell_id, key_id) DO UPDATE SET \
                    active = EXCLUDED.active, \
                    retired_at = CASE \
@@ -934,9 +945,9 @@ impl FederationRepository for PostgresFederationRepository {
                    END",
             )
             .bind(&policy.remote_cell_id)
-            .bind(&key.key_id)
-            .bind(key.public_key.as_slice())
-            .bind(key.active)
+            .bind(&key_ids)
+            .bind(&public_keys)
+            .bind(&actives)
             .execute(&mut *tx)
             .await?;
         }
