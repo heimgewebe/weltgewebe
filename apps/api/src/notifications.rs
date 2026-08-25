@@ -19,8 +19,8 @@ use async_nats::{
     Client,
 };
 use axum::{
-    extract::State,
-    http::StatusCode,
+    extract::{Path, State},
+    http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     Extension, Json,
 };
@@ -46,6 +46,7 @@ const CLAIM_BATCH_SIZE: i64 = 16;
 const CLAIM_LEASE_SECONDS: i32 = 30;
 const MAX_DELIVERY_ATTEMPTS: i32 = 8;
 const MAX_ACTIVE_PUSH_SUBSCRIPTIONS_PER_ACCOUNT: i64 = 20;
+const PUSH_ENDPOINT_HASH_HEADER: &str = "x-weltgewebe-push-endpoint-hash";
 const PUSH_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 
 #[derive(Clone)]
@@ -440,6 +441,31 @@ fn database_error(context: &'static str, error: sqlx::Error) -> NotificationApiE
     )
 }
 
+fn current_endpoint_hash(headers: &HeaderMap) -> Result<Option<String>, NotificationApiError> {
+    let Some(value) = headers.get(PUSH_ENDPOINT_HASH_HEADER) else {
+        return Ok(None);
+    };
+    let value = value.to_str().map_err(|_| {
+        NotificationApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_push_device_marker",
+            "the current push device marker is invalid",
+        )
+    })?;
+    if value.len() != 64
+        || !value
+            .bytes()
+            .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+    {
+        return Err(NotificationApiError::new(
+            StatusCode::BAD_REQUEST,
+            "invalid_push_device_marker",
+            "the current push device marker is invalid",
+        ));
+    }
+    Ok(Some(value.to_string()))
+}
+
 #[derive(Debug, Serialize)]
 pub struct NotificationPreferencesView {
     direct_messages_push: bool,
@@ -541,6 +567,60 @@ pub async fn get_push_config(
     }))
 }
 
+#[derive(Debug, Serialize)]
+pub struct ManagedPushSubscriptionView {
+    id: String,
+    created_at: chrono::DateTime<chrono::Utc>,
+    updated_at: chrono::DateTime<chrono::Utc>,
+    current: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PushSubscriptionsView {
+    items: Vec<ManagedPushSubscriptionView>,
+    limit: i64,
+}
+
+pub async fn list_push_subscriptions(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+    headers: HeaderMap,
+) -> Result<Json<PushSubscriptionsView>, NotificationApiError> {
+    let account_id = account_id(&auth)?;
+    let pool = database_pool(&state)?;
+    let current_hash = current_endpoint_hash(&headers)?;
+    let rows: Vec<(
+        String,
+        chrono::DateTime<chrono::Utc>,
+        chrono::DateTime<chrono::Utc>,
+        String,
+    )> = sqlx::query_as(
+        "SELECT id::text, created_at, updated_at, endpoint_hash \
+             FROM web_push_subscriptions \
+             WHERE account_id = $1 AND disabled_at IS NULL \
+             ORDER BY created_at DESC, id DESC",
+    )
+    .bind(account_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|error| database_error("list active push subscriptions", error))?;
+    let items = rows
+        .into_iter()
+        .map(
+            |(id, created_at, updated_at, endpoint_hash)| ManagedPushSubscriptionView {
+                id,
+                created_at,
+                updated_at,
+                current: current_hash.as_deref() == Some(endpoint_hash.as_str()),
+            },
+        )
+        .collect();
+    Ok(Json(PushSubscriptionsView {
+        items,
+        limit: MAX_ACTIVE_PUSH_SUBSCRIPTIONS_PER_ACCOUNT,
+    }))
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RegisterPushSubscriptionRequest {
@@ -579,15 +659,15 @@ pub async fn register_push_subscription(
         .await
         .map_err(|error| database_error("begin push subscription update", error))?;
     sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
-        .bind(format!("web-push-endpoint:{endpoint_hash}"))
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|error| database_error("lock push endpoint", error))?;
-    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
         .bind(format!("web-push-account:{account_id}"))
         .fetch_one(&mut *tx)
         .await
         .map_err(|error| database_error("lock push account", error))?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("web-push-endpoint:{endpoint_hash}"))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock push endpoint", error))?;
     let active_subscriptions: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM web_push_subscriptions \
          WHERE account_id = $1 AND disabled_at IS NULL AND endpoint_hash <> $2",
@@ -670,6 +750,16 @@ pub async fn delete_push_subscription(
         .begin()
         .await
         .map_err(|error| database_error("begin push subscription removal", error))?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("web-push-account:{account_id}"))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock push account", error))?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("web-push-endpoint:{endpoint_hash}"))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock push endpoint", error))?;
     sqlx::query(
         "UPDATE web_push_deliveries \
          SET status = 'gone', claimed_until = NULL, last_error = 'disabled by account' \
@@ -696,6 +786,84 @@ pub async fn delete_push_subscription(
     tx.commit()
         .await
         .map_err(|error| database_error("commit push subscription removal", error))?;
+    Ok(StatusCode::NO_CONTENT)
+}
+
+pub async fn disable_push_subscription_by_id(
+    Path(subscription_id): Path<String>,
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+    headers: HeaderMap,
+) -> Result<StatusCode, NotificationApiError> {
+    let account_id = account_id(&auth)?;
+    let pool = database_pool(&state)?;
+    let current_hash = current_endpoint_hash(&headers)?;
+    let Ok(subscription_id) = Uuid::parse_str(&subscription_id) else {
+        return Ok(StatusCode::NO_CONTENT);
+    };
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|error| database_error("begin managed push subscription removal", error))?;
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("web-push-account:{account_id}"))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock push account", error))?;
+    let endpoint_hash: Option<String> = sqlx::query_scalar(
+        "SELECT endpoint_hash FROM web_push_subscriptions \
+         WHERE account_id = $1 AND id = $2 AND disabled_at IS NULL",
+    )
+    .bind(account_id)
+    .bind(subscription_id)
+    .fetch_optional(&mut *tx)
+    .await
+    .map_err(|error| database_error("find managed push subscription", error))?;
+    let Some(endpoint_hash) = endpoint_hash else {
+        tx.commit().await.map_err(|error| {
+            database_error("commit idempotent push subscription removal", error)
+        })?;
+        return Ok(StatusCode::NO_CONTENT);
+    };
+    if current_hash.as_deref() == Some(endpoint_hash.as_str()) {
+        return Err(NotificationApiError::new(
+            StatusCode::CONFLICT,
+            "push_subscription_is_current_device",
+            "the current push device must be disabled from its local browser controls",
+        ));
+    }
+    sqlx::query("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))")
+        .bind(format!("web-push-endpoint:{endpoint_hash}"))
+        .fetch_one(&mut *tx)
+        .await
+        .map_err(|error| database_error("lock push endpoint", error))?;
+    sqlx::query(
+        "UPDATE web_push_deliveries \
+         SET status = 'gone', claimed_until = NULL, last_error = 'disabled by account' \
+         WHERE subscription_id = $2 \
+           AND subscription_id IN ( \
+               SELECT id FROM web_push_subscriptions WHERE account_id = $1 AND id = $2 \
+           ) \
+           AND status IN ('pending', 'retry', 'sending')",
+    )
+    .bind(account_id)
+    .bind(subscription_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| database_error("retire managed push deliveries", error))?;
+    sqlx::query(
+        "UPDATE web_push_subscriptions \
+         SET disabled_at = NOW(), updated_at = NOW(), last_error = NULL \
+         WHERE account_id = $1 AND id = $2 AND disabled_at IS NULL",
+    )
+    .bind(account_id)
+    .bind(subscription_id)
+    .execute(&mut *tx)
+    .await
+    .map_err(|error| database_error("disable managed push subscription", error))?;
+    tx.commit()
+        .await
+        .map_err(|error| database_error("commit managed push subscription removal", error))?;
     Ok(StatusCode::NO_CONTENT)
 }
 

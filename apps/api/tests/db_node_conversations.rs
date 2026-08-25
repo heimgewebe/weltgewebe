@@ -358,6 +358,8 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     let conversation_id = "62000000-0000-4000-8000-000000000001";
     let message_id = "62000000-0000-4000-8000-000000000002";
     let subscription_id = "62000000-0000-4000-8000-000000000003";
+    let current_subscription_id = "62000000-0000-4000-8000-000000000005";
+    let foreign_subscription_id = "62000000-0000-4000-8000-000000000006";
     let mut tx = pool.begin().await.expect("begin direct conversation proof");
     sqlx::query(
         "INSERT INTO domain_conversations (
@@ -435,6 +437,50 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .await
     .expect("insert recipient browser subscription");
     sqlx::query(
+        "INSERT INTO web_push_subscriptions (
+             id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+    )
+    .bind(current_subscription_id)
+    .bind(OTHER_ID)
+    .bind("https://push.example.invalid/subscription-current")
+    .bind("b".repeat(64))
+    .bind("q".repeat(80))
+    .bind("b".repeat(16))
+    .execute(&pool)
+    .await
+    .expect("insert current browser subscription");
+    for index in 0_u64..18 {
+        sqlx::query(
+            "INSERT INTO web_push_subscriptions (
+                 id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
+             ) VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+        )
+        .bind(uuid::Uuid::new_v4())
+        .bind(OTHER_ID)
+        .bind(format!("https://push.example.invalid/extra-{index:02}"))
+        .bind(format!("{:064x}", index + 1))
+        .bind("r".repeat(80))
+        .bind("c".repeat(16))
+        .execute(&pool)
+        .await
+        .expect("insert extra browser subscription");
+    }
+    sqlx::query(
+        "INSERT INTO web_push_subscriptions (
+             id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+    )
+    .bind(foreign_subscription_id)
+    .bind(AUTHOR_ID)
+    .bind("https://push.example.invalid/foreign-subscription")
+    .bind("f".repeat(64))
+    .bind("s".repeat(80))
+    .bind("d".repeat(16))
+    .execute(&pool)
+    .await
+    .expect("insert foreign browser subscription");
+    sqlx::query(
         "INSERT INTO web_push_deliveries (
              source_event_id, subscription_id, conversation_id
          ) VALUES ($1, $2::uuid, $3::uuid)",
@@ -447,6 +493,158 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .expect("queue private-message push delivery");
 
     let (app, _author, other, _admin, _guest) = app(pool.clone()).await;
+    let mut list_request = request("GET", "/push/subscriptions", Some(&other), None, None, None);
+    list_request.headers_mut().insert(
+        "x-weltgewebe-push-endpoint-hash",
+        "b".repeat(64).parse().expect("current push marker header"),
+    );
+    let (status, managed) = json_response(&app, list_request).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(managed["limit"], 20);
+    let items = managed["items"].as_array().expect("managed push items");
+    assert_eq!(
+        items.len(),
+        20,
+        "only the account's own active subscriptions"
+    );
+    assert_eq!(
+        items.iter().filter(|item| item["current"] == true).count(),
+        1,
+        "exactly the transient endpoint hash marks the current device"
+    );
+    assert!(items.iter().any(|item| {
+        item["id"].as_str() == Some(current_subscription_id) && item["current"] == true
+    }));
+    assert!(!items
+        .iter()
+        .any(|item| item["id"].as_str() == Some(foreign_subscription_id)));
+    let serialized = managed.to_string();
+    for secret_field in [
+        "\"endpoint\"",
+        "\"endpoint_hash\"",
+        "\"p256dh\"",
+        "\"auth_secret\"",
+    ] {
+        assert!(!serialized.contains(secret_field));
+    }
+    assert!(!serialized.contains("subscription-proof"));
+
+    let mut current_delete = request(
+        "DELETE",
+        &format!("/push/subscriptions/{current_subscription_id}"),
+        Some(&other),
+        None,
+        None,
+        None,
+    );
+    current_delete.headers_mut().insert(
+        "x-weltgewebe-push-endpoint-hash",
+        "b".repeat(64).parse().expect("current push marker header"),
+    );
+    let (status, current_error) = json_response(&app, current_delete).await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(current_error["code"], "push_subscription_is_current_device");
+
+    let mut foreign_delete = request(
+        "DELETE",
+        &format!("/push/subscriptions/{foreign_subscription_id}"),
+        Some(&other),
+        None,
+        None,
+        None,
+    );
+    foreign_delete.headers_mut().insert(
+        "x-weltgewebe-push-endpoint-hash",
+        "b".repeat(64).parse().expect("current push marker header"),
+    );
+    let (status, _) = json_response(&app, foreign_delete).await;
+    assert_eq!(status, StatusCode::NO_CONTENT);
+    let foreign_still_active: bool = sqlx::query_scalar(
+        "SELECT EXISTS (
+             SELECT 1 FROM web_push_subscriptions
+             WHERE id = $1::uuid AND account_id = $2 AND disabled_at IS NULL
+         )",
+    )
+    .bind(foreign_subscription_id)
+    .bind(AUTHOR_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("foreign subscription remains active");
+    assert!(foreign_still_active);
+
+    for attempt in 0..2 {
+        let mut old_delete = request(
+            "DELETE",
+            &format!("/push/subscriptions/{subscription_id}"),
+            Some(&other),
+            None,
+            None,
+            None,
+        );
+        old_delete.headers_mut().insert(
+            "x-weltgewebe-push-endpoint-hash",
+            "b".repeat(64).parse().expect("current push marker header"),
+        );
+        let (status, _) = json_response(&app, old_delete).await;
+        assert_eq!(status, StatusCode::NO_CONTENT, "disable attempt {attempt}");
+    }
+    let retired_delivery: (String, Option<String>) = sqlx::query_as(
+        "SELECT status, last_error FROM web_push_deliveries
+         WHERE source_event_id = $1 AND subscription_id = $2::uuid",
+    )
+    .bind(source_event_id)
+    .bind(subscription_id)
+    .fetch_one(&pool)
+    .await
+    .expect("read retired old-device delivery");
+    assert_eq!(retired_delivery.0, "gone");
+    assert_eq!(retired_delivery.1.as_deref(), Some("disabled by account"));
+    let active_after_cleanup: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM web_push_subscriptions
+         WHERE account_id = $1 AND disabled_at IS NULL",
+    )
+    .bind(OTHER_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("count active subscriptions after cleanup");
+    assert_eq!(active_after_cleanup, 19);
+
+    sqlx::query(
+        "INSERT INTO web_push_subscriptions (
+             id, account_id, endpoint, endpoint_hash, p256dh, auth_secret
+         ) VALUES ($1::uuid, $2, $3, $4, $5, $6)",
+    )
+    .bind("62000000-0000-4000-8000-000000000007")
+    .bind(OTHER_ID)
+    .bind("https://push.example.invalid/replacement-subscription")
+    .bind("c".repeat(64))
+    .bind("t".repeat(80))
+    .bind("e".repeat(16))
+    .execute(&pool)
+    .await
+    .expect("register replacement after freeing one slot");
+    let active_after_replacement: i64 = sqlx::query_scalar(
+        "SELECT count(*) FROM web_push_subscriptions
+         WHERE account_id = $1 AND disabled_at IS NULL",
+    )
+    .bind(OTHER_ID)
+    .fetch_one(&pool)
+    .await
+    .expect("count active subscriptions after replacement");
+    assert_eq!(active_after_replacement, 20);
+
+    sqlx::query(
+        "INSERT INTO web_push_deliveries (
+             source_event_id, subscription_id, conversation_id
+         ) VALUES ($1, $2::uuid, $3::uuid)",
+    )
+    .bind(source_event_id)
+    .bind(current_subscription_id)
+    .bind(conversation_id)
+    .execute(&pool)
+    .await
+    .expect("queue current-device delivery for preference proof");
+
     let (status, before) = json_response(
         &app,
         request(
@@ -482,7 +680,7 @@ async fn private_message_push_preference_cancels_queued_delivery() {
          WHERE source_event_id = $1 AND subscription_id = $2::uuid",
     )
     .bind(source_event_id)
-    .bind(subscription_id)
+    .bind(current_subscription_id)
     .fetch_one(&pool)
     .await
     .expect("read cancelled push delivery");
