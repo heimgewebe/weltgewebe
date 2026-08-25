@@ -98,7 +98,7 @@
     changingDevice = true;
     clearFeedback();
     let createdSubscription: PushSubscription | null = null;
-    let registeredEndpoint: string | null = null;
+    let cleanupEndpoint: string | null = null;
     try {
       permission = await Notification.requestPermission();
       if (permission !== "granted") {
@@ -122,15 +122,19 @@
             config.application_server_key,
           ),
         }));
+      cleanupEndpoint = createdSubscription.endpoint;
       await registerPushSubscription(createdSubscription);
-      registeredEndpoint = createdSubscription.endpoint;
       preferences = await updateNotificationPreferences(true);
       browserSubscription = createdSubscription;
       notice =
         "Push ist auf diesem Gerät aktiviert. Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet.";
     } catch (cause) {
-      if (registeredEndpoint) {
-        await deletePushSubscription(registeredEndpoint).catch(() => undefined);
+      if (cleanupEndpoint) {
+        try {
+          await deletePushSubscription(cleanupEndpoint);
+        } catch {
+          pendingRemovalEndpoint = cleanupEndpoint;
+        }
       }
       if (createdSubscription && !browserSubscription) {
         await createdSubscription.unsubscribe().catch(() => false);
