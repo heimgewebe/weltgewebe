@@ -154,12 +154,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "Runtime health, deployment health, or the correctness of claims inside individual reports."
   ],
-  "generated_at": "2026-08-24T17:04:00Z",
+  "generated_at": "2026-08-25T06:19:45+02:00",
   "limitations": [
     "The report reflects repository files only and does not execute product runtime checks."
   ],
   "schema_version": 1,
-  "source_revision": "e82d4242c24939f21dd915daaebd20a80207389a",
+  "source_revision": "101c2aed984f725b96b975304e5db468a6d7b693",
   "sources": [
     {
       "path": "docs/reports/agent-readiness-audit.md",
@@ -235,7 +235,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/auth-status-matrix.md",
-      "sha256": "bdc4356c835ad30599ff07cc5a7224ac3e5951cb12d9c09a14c7606bd8b06b32"
+      "sha256": "d11caeeff96963286a9619900ee6194e7342f37cb809c556140c448c1cee2a82"
     },
     {
       "path": "docs/reports/cost-report.md",
@@ -331,7 +331,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/optimierungsbericht.md",
-      "sha256": "2bdf8f7a2670f0b222d77fa98aab3fea4a0944baaa3fd9155d89cdbbfe00cd48"
+      "sha256": "e55e2e9e676d05e49e3373f9d47b675c61c837afb234aa72b57885f2b9e16830"
     },
     {
       "path": "docs/reports/optimierungsstatus.md",

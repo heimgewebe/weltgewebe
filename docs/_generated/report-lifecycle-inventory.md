@@ -107,7 +107,7 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
 | docs/reports/auth-persistence-next-step.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/optimierungsstatus.md | deprecated | 5 | 6 | 4 | review_after |  |
 | docs/reports/auth-persistence-readiness.md | report | deprecated | superseded | decision-prep | OPT-API-002 |  | docs/reports/optimierungsstatus.md | deprecated | 5 | 6 | 3 | review_after |  |
 | docs/reports/auth-persistence-runtime-proof.md | report | deprecated | superseded | proof | OPT-API-002 |  | docs/reports/optimierungsstatus.md | deprecated | 4 | 5 | 6 | review_after |  |
-| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | deprecated | archived | audit | OPT-API-002 |  |  | deprecated | 2 | 4 | 5 | review_after |  |
+| docs/reports/auth-persistence-runtime-target-reconciliation.md | report | deprecated | archived | audit | OPT-API-002 |  |  | deprecated | 2 | 5 | 5 | review_after |  |
 | docs/reports/auth-pg-002-controlled-preflight.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | not_decision_relevant | 1 | 4 | 2 |  |  |
 | docs/reports/auth-pg-002-cutover-plan.md | report | active | active | planning | AUTH-PG-002 | 2026-09-30 |  | not_decision_relevant | 7 | 4 | 4 |  |  |
 | docs/reports/auth-pg-002-passkey-db-store.md | report | active | active | proof | AUTH-PG-002 | 2026-09-30 |  | not_decision_relevant | 4 | 4 | 3 |  |  |
@@ -122,18 +122,18 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
 | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md | report | active | active | proof | AUTH-PG-003 | 2026-09-30 |  | not_decision_relevant | 1 | 4 | 2 |  |  |
 | docs/reports/auth-status-matrix.md | reference | active |  |  |  |  |  | not_decision_relevant | 16 | 5 | 3 | lifecycle, owner_task, review_after, lifecycle_state |  |
 | docs/reports/cost-report.md | report | active | active | generated | DOCMETA-REPORT-LIFECYCLE-001 | 2026-09-29 |  | not_decision_relevant | 1 | 4 | 3 |  |  |
-| docs/reports/domain-account-email-uniqueness-audit.md | report | deprecated | archived | audit | OPT-ARC-001 |  |  | deprecated | 2 | 4 | 4 | review_after |  |
-| docs/reports/domain-account-write-path-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 6 | 4 | 6 | review_after |  |
-| docs/reports/domain-backfill-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 2 | 4 | 4 | review_after |  |
+| docs/reports/domain-account-email-uniqueness-audit.md | report | deprecated | archived | audit | OPT-ARC-001 |  |  | deprecated | 2 | 5 | 4 | review_after |  |
+| docs/reports/domain-account-write-path-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 6 | 5 | 6 | review_after |  |
+| docs/reports/domain-backfill-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 2 | 5 | 4 | review_after |  |
 | docs/reports/domain-edge-cache-limit-design.md | report | active | active | decision-prep | DOMAIN-PG-003 | 2026-09-29 |  | not_decision_relevant | 0 | 4 | 5 |  |  |
 | docs/reports/domain-edge-create-semantics-preflight.md | report | deprecated | superseded | decision-prep | OPT-ARC-001 |  | docs/reports/domain-edge-write-path-proof.md | deprecated | 1 | 6 | 7 | review_after |  |
 | docs/reports/domain-edge-faden-lifecycle-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-10-17 |  | not_decision_relevant | 1 | 5 | 3 |  |  |
-| docs/reports/domain-edge-reference-audit.md | report | deprecated | archived | audit | OPT-ARC-001 |  |  | deprecated | 3 | 4 | 6 | review_after |  |
+| docs/reports/domain-edge-reference-audit.md | report | deprecated | archived | audit | OPT-ARC-001 |  |  | deprecated | 3 | 5 | 6 | review_after |  |
 | docs/reports/domain-edge-write-path-proof.md | report | deprecated | superseded | proof | OPT-ARC-001 | 2026-07-16 | docs/reports/domain-edge-faden-lifecycle-proof.md | deprecated | 3 | 7 | 8 |  |  |
-| docs/reports/domain-node-write-path-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 4 | 4 | 6 | review_after |  |
+| docs/reports/domain-node-write-path-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 4 | 5 | 6 | review_after |  |
 | docs/reports/domain-postgres-instance-coherence-decision.md | report | active | active | audit | WELTGEWEBE-OS-002 | 2027-01-16 |  | not_decision_relevant | 6 | 6 | 10 |  |  |
 | docs/reports/domain-provider-role-finding.md | report | active | active | audit | DEPLOY-DNS-001 | 2026-07-23 |  | not_decision_relevant | 4 | 4 | 3 |  |  |
-| docs/reports/domain-read-path-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 5 | 4 | 5 | review_after |  |
+| docs/reports/domain-read-path-proof.md | report | deprecated | archived | proof | OPT-ARC-001 |  |  | deprecated | 5 | 5 | 5 | review_after |  |
 | docs/reports/domain-runtime-data-source-reconciliation.md | report | active | active | audit | DB-PROOF-001 | 2026-07-18 |  | not_decision_relevant | 1 | 4 | 5 |  |  |
 | docs/reports/garnrolle-identity-cutover-proof.md | report | active | active | proof | OPT-ARC-001 | 2026-10-24 |  | not_decision_relevant | 1 | 4 | 4 |  |  |
 | docs/reports/github-action-ref-pinning-audit.md | report | active | active | audit | OPT-INF-002 | 2026-09-30 |  | not_decision_relevant | 0 | 4 | 4 |  |  |
@@ -534,6 +534,7 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
 
 - `docs/reports/auth-pg-002-controlled-preflight.md`
   - `docs/_generated/backlinks.md`
@@ -625,18 +626,21 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
 
 - `docs/reports/domain-account-write-path-proof.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
 
 - `docs/reports/domain-backfill-proof.md`
   - `docs/_generated/backlinks.md`
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
 
 - `docs/reports/domain-edge-cache-limit-design.md`
   - `docs/_generated/backlinks.md`
@@ -664,6 +668,7 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
 
 - `docs/reports/domain-edge-write-path-proof.md`
   - `docs/_generated/backlinks.md`
@@ -679,6 +684,7 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
 
 - `docs/reports/domain-postgres-instance-coherence-decision.md`
   - `docs/_generated/backlinks.md`
@@ -699,6 +705,7 @@ This section is a readable projection of `.wgx/generated-artifacts.yml`; the reg
   - `docs/_generated/doc-index.md`
   - `docs/_generated/relates-to-audit.md`
   - `docs/_generated/report-lifecycle.md`
+  - `docs/_generated/staleness-report.md`
 
 - `docs/reports/domain-runtime-data-source-reconciliation.md`
   - `docs/_generated/backlinks.md`
@@ -871,12 +878,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "The correctness of claims inside individual reports, runtime use of declared consumers, or deployment truth."
   ],
-  "generated_at": "2026-08-24T17:04:00Z",
+  "generated_at": "2026-08-25T06:19:45+02:00",
   "limitations": [
     "The inventory evaluates repository metadata, exact path references and declared control contracts, not runtime behaviour."
   ],
   "schema_version": 1,
-  "source_revision": "e82d4242c24939f21dd915daaebd20a80207389a",
+  "source_revision": "101c2aed984f725b96b975304e5db468a6d7b693",
   "sources": [
     {
       "path": ".wgx/generated-artifacts.yml",
@@ -956,7 +963,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/auth-status-matrix.md",
-      "sha256": "bdc4356c835ad30599ff07cc5a7224ac3e5951cb12d9c09a14c7606bd8b06b32"
+      "sha256": "d11caeeff96963286a9619900ee6194e7342f37cb809c556140c448c1cee2a82"
     },
     {
       "path": "docs/reports/cost-report.md",
@@ -1052,7 +1059,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/optimierungsbericht.md",
-      "sha256": "2bdf8f7a2670f0b222d77fa98aab3fea4a0944baaa3fd9155d89cdbbfe00cd48"
+      "sha256": "e55e2e9e676d05e49e3373f9d47b675c61c837afb234aa72b57885f2b9e16830"
     },
     {
       "path": "docs/reports/optimierungsstatus.md",

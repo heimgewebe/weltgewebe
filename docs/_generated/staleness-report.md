@@ -12,7 +12,7 @@ Generated automatically. Do not edit.
 
 > This report is metadata-based. It does not infer semantic staleness from prose.
 
-Explicitly stale documents: **39**
+Explicitly stale documents: **46**
 
 | Document | status | lifecycle_state |
 | --- | --- | --- |
@@ -41,8 +41,15 @@ Explicitly stale documents: **39**
 | `docs/reports/auth-persistence-next-step.md` | deprecated | superseded |
 | `docs/reports/auth-persistence-readiness.md` | deprecated | superseded |
 | `docs/reports/auth-persistence-runtime-proof.md` | deprecated | superseded |
+| `docs/reports/auth-persistence-runtime-target-reconciliation.md` | deprecated | archived |
+| `docs/reports/domain-account-email-uniqueness-audit.md` | deprecated | archived |
+| `docs/reports/domain-account-write-path-proof.md` | deprecated | archived |
+| `docs/reports/domain-backfill-proof.md` | deprecated | archived |
 | `docs/reports/domain-edge-create-semantics-preflight.md` | deprecated | superseded |
+| `docs/reports/domain-edge-reference-audit.md` | deprecated | archived |
 | `docs/reports/domain-edge-write-path-proof.md` | deprecated | superseded |
+| `docs/reports/domain-node-write-path-proof.md` | deprecated | archived |
+| `docs/reports/domain-read-path-proof.md` | deprecated | archived |
 | `docs/reports/inwx-zone-reconciliation-plan.md` | deprecated | archived |
 | `docs/reports/map-architekturkritik.md` | deprecated | archived |
 | `docs/reports/map-basemap-proof-gap-reconciliation.md` | deprecated | archived |

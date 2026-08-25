@@ -124,13 +124,14 @@ Generated automatically. Do not edit.
 | proofs.sqlx-postgres-direct-session-crud-proof | SQLx \u2192 direkter PostgreSQL \u2014 Session-CRUD-Proof | report | active | docs/proofs/sqlx-postgres-direct-session-crud-proof.md |
 | proofs.weltgewebe-os-v1-t005-two-cell-proof | WELTGEWEBE-OS-V1-T005 — Zwei-Zellen-Beweis | report | active | docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md |
 | proofs.weltgewebe-os-v1-t032-federation-delivery | WELTGEWEBE-OS-V1-T032 — Automatische Föderationsauslieferung | report | active | docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md |
+| proofs.weltgewebe-os-v1-t036-documentation-drift-reconciliation | WELTGEWEBE-OS-V1-T036 Dokumentationsdrift-Reconciliation | proof | active | docs/proofs/weltgewebe-os-v1-t036-documentation-drift-reconciliation.md |
 | quickstart-gate-c | Quickstart Gate C | reference | active | docs/quickstart-gate-c.md |
 | reference.glossar | Glossar | reference | active | docs/reference/glossar.md |
 | reports.auth-persistence-direct-proof-diagnose-audit | Auth-Persistenz - Diagnose-Audit zum Direct-Postgres-Proof | report | deprecated | docs/reports/auth-persistence-direct-proof-diagnose-audit.md |
 | reports.auth-persistence-next-step | Auth-Persistenz — Nächster Schritt | report | deprecated | docs/reports/auth-persistence-next-step.md |
 | reports.auth-persistence-readiness | Auth-Persistenzbereitschaft — OPT-API-002 | report | deprecated | docs/reports/auth-persistence-readiness.md |
 | reports.auth-persistence-runtime-proof | Auth-Persistenz — Runtime-Proof | report | deprecated | docs/reports/auth-persistence-runtime-proof.md |
-| reports.auth-persistence-runtime-target-reconciliation | Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres) | report | active | docs/reports/auth-persistence-runtime-target-reconciliation.md |
+| reports.auth-persistence-runtime-target-reconciliation | Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres) | report | deprecated | docs/reports/auth-persistence-runtime-target-reconciliation.md |
 | reports.auth-pg-002-controlled-preflight | AUTH-PG-002 Controlled Preflight | report | active | docs/reports/auth-pg-002-controlled-preflight.md |
 | reports.auth-pg-002-cutover-plan | AUTH-PG-002 Passkey PostgreSQL Cutover Plan | report | active | docs/reports/auth-pg-002-cutover-plan.md |
 | reports.auth-pg-002-passkey-db-store | AUTH-PG-002 Passkey Credential DB-Store (Slice A) Proof | report | active | docs/reports/auth-pg-002-passkey-db-store.md |
@@ -145,18 +146,18 @@ Generated automatically. Do not edit.
 | reports.auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01 | AUTH-PG-003 Runtime Audit Smoke: wg-pg-proof 2026-07-01 | report | active | docs/reports/auth-pg-003-runtime-audit-wg-pg-proof-2026-07-01.md |
 | reports.auth-status-matrix | Auth Status Matrix | reference | active | docs/reports/auth-status-matrix.md |
 | reports.cost-report | Cost Report | report | active | docs/reports/cost-report.md |
-| reports.domain-account-email-uniqueness-audit | Domain Account E-Mail Uniqueness Audit | report | active | docs/reports/domain-account-email-uniqueness-audit.md |
-| reports.domain-account-write-path-proof | Domain Account Write Path Proof | report | active | docs/reports/domain-account-write-path-proof.md |
-| reports.domain-backfill-proof | Domain Backfill Proof | report | active | docs/reports/domain-backfill-proof.md |
+| reports.domain-account-email-uniqueness-audit | Domain Account E-Mail Uniqueness Audit | report | deprecated | docs/reports/domain-account-email-uniqueness-audit.md |
+| reports.domain-account-write-path-proof | Domain Account Write Path Proof | report | deprecated | docs/reports/domain-account-write-path-proof.md |
+| reports.domain-backfill-proof | Domain Backfill Proof | report | deprecated | docs/reports/domain-backfill-proof.md |
 | reports.domain-edge-cache-limit-design | Domain Edge Cache-Limit Design — DOMAIN-PG-003 | report | active | docs/reports/domain-edge-cache-limit-design.md |
 | reports.domain-edge-create-semantics-preflight | Domain Edge Create Semantics Preflight — OPT-ARC-001 Phase E-C | report | deprecated | docs/reports/domain-edge-create-semantics-preflight.md |
 | reports.domain-edge-faden-lifecycle-proof | Domain Edge — Faden-Lifecycle-Proof | report | active | docs/reports/domain-edge-faden-lifecycle-proof.md |
-| reports.domain-edge-reference-audit | Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4 | report | active | docs/reports/domain-edge-reference-audit.md |
+| reports.domain-edge-reference-audit | Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4 | report | deprecated | docs/reports/domain-edge-reference-audit.md |
 | reports.domain-edge-write-path-proof | Domain Edge Write Path Proof | report | deprecated | docs/reports/domain-edge-write-path-proof.md |
-| reports.domain-node-write-path-proof | Domain Node Write Path Proof | report | active | docs/reports/domain-node-write-path-proof.md |
+| reports.domain-node-write-path-proof | Domain Node Write Path Proof | report | deprecated | docs/reports/domain-node-write-path-proof.md |
 | reports.domain-postgres-instance-coherence-decision | Domain PostgreSQL Instance Coherence Decision — DOMAIN-PG-002 | report | active | docs/reports/domain-postgres-instance-coherence-decision.md |
 | reports.domain-provider-role-finding | Finding: Aktuelle Domain- und Provider-Rollen | report | active | docs/reports/domain-provider-role-finding.md |
-| reports.domain-read-path-proof | Domain Read Path Proof | report | active | docs/reports/domain-read-path-proof.md |
+| reports.domain-read-path-proof | Domain Read Path Proof | report | deprecated | docs/reports/domain-read-path-proof.md |
 | reports.garnrolle-identity-cutover-proof | Garnrolle Identity Cutover Proof | report | active | docs/reports/garnrolle-identity-cutover-proof.md |
 | reports.github-action-ref-pinning-audit | GitHub Action Reference Pinning Audit — OPT-INF-002 | report | active | docs/reports/github-action-ref-pinning-audit.md |
 | reports.github-actions-node24-readiness | GitHub Actions Node-24 Runtime Readiness — OPT-CI-005 | report | active | docs/reports/github-actions-node24-readiness.md |
