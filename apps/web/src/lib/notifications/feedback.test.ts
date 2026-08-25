@@ -1,12 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { NotificationsApiError } from "../api/notifications";
-import {
-  PUSH_PERMISSION_BLOCKED,
-  describeNotificationError,
-} from "./feedback";
+import { PUSH_PERMISSION_BLOCKED, describeNotificationError } from "./feedback";
 
 describe("notification feedback", () => {
-  it("turns notification store failures into a safe user-facing message", () => {
+  it("maps store failures safely", () => {
     const error = new NotificationsApiError(
       500,
       "notification_database_error",
@@ -20,7 +17,7 @@ describe("notification feedback", () => {
     expect(message).not.toContain("internal database detail");
   });
 
-  it("does not leak unknown backend messages", () => {
+  it("hides unknown backend messages", () => {
     const error = new NotificationsApiError(
       500,
       "unexpected_backend_failure",
@@ -32,7 +29,7 @@ describe("notification feedback", () => {
     );
   });
 
-  it("does not expose raw browser or network errors", () => {
+  it("hides raw browser errors", () => {
     expect(
       describeNotificationError(
         new Error("Failed to fetch https://internal.example.invalid"),
@@ -43,7 +40,7 @@ describe("notification feedback", () => {
     );
   });
 
-  it("explains the active-device limit", () => {
+  it("explains device limit", () => {
     const error = new NotificationsApiError(
       429,
       "push_subscription_limit_reached",
@@ -55,7 +52,7 @@ describe("notification feedback", () => {
     );
   });
 
-  it("maps a denied browser permission to the dedicated recovery hint", () => {
+  it("maps denied browser permission", () => {
     if (typeof DOMException === "undefined") return;
 
     expect(
