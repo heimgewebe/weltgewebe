@@ -68,6 +68,43 @@ class InlineRepositoryPathTests(unittest.TestCase):
         self.assertEqual(total, 1)
         self.assertEqual(broken, ["src/lib.rs"])
 
+    def test_assignment_token_is_not_treated_as_repository_path(self):
+        rel, content = self._write_doc(
+            "assignment",
+            "Runtime: `APP_BASE_URL=https://weltgewebe.net`.",
+        )
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual((total, broken), (0, []))
+
+    def test_equals_inside_repository_path_does_not_evade_check(self):
+        candidate = "configs/foo=bar.json"
+        rel, content = self._write_doc(
+            "equals-path",
+            f"Aktueller Repositorypfad: `{candidate}`.",
+        )
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual(total, 1)
+        self.assertEqual(broken, [candidate])
+
+    def test_symlink_escape_outside_repository_is_rejected(self):
+        outside_dir = self.root.parent / f"{self.root.name}-outside-dir"
+        outside_dir.mkdir()
+        try:
+            (outside_dir / "proof.md").write_text("outside", encoding="utf-8")
+            (self.root / "docs" / "external-link").symlink_to(outside_dir, target_is_directory=True)
+            candidate = "external-link/proof.md"
+            rel, content = self._write_doc(
+                "symlink-escape",
+                f"Aktueller Repositorypfad: `{candidate}`.",
+            )
+            total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        finally:
+            (self.root / "docs" / "external-link").unlink(missing_ok=True)
+            (outside_dir / "proof.md").unlink(missing_ok=True)
+            outside_dir.rmdir()
+        self.assertEqual(total, 1)
+        self.assertEqual(broken, [candidate])
+
     def test_existing_path_outside_repository_is_rejected(self):
         outside = self.root.parent / f"{self.root.name}-escape.md"
         candidate = f"../../{outside.name}"

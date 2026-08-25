@@ -28,6 +28,7 @@ SCOPE_POLICY_CONTEXT_RE = re.compile(
     re.IGNORECASE,
 )
 HOSTNAME_PATH_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]*\.)[A-Za-z]{2,}/")
+ASSIGNMENT_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_.-]*=.*$")
 INLINE_CODE_RE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
 PATH_FILE_RE = re.compile(r"(?:^|/)[^/]+\.[A-Za-z0-9]{1,12}$")
 NONLIVE_CONTEXT_RE = re.compile(
@@ -91,7 +92,7 @@ def _normalize_inline_path(value: str) -> str | None:
         return None
     if token.startswith(("http://", "https://", "mailto:", "tel:", "doc:")):
         return None
-    if "://" in token or "=" in token or HOSTNAME_PATH_RE.match(token):
+    if "://" in token or ASSIGNMENT_RE.fullmatch(token) or HOSTNAME_PATH_RE.match(token):
         return None
     if token.startswith(("$", "-", "~", "/")):
         # Absolute/runtime paths are not repository-internal path claims.
@@ -111,16 +112,16 @@ def _normalize_inline_path(value: str) -> str | None:
 
 
 def _path_within_repository(root: str, path: str) -> bool:
-    root_abs = os.path.abspath(root)
-    path_abs = os.path.abspath(path)
+    root_real = os.path.realpath(root)
+    path_real = os.path.realpath(path)
     try:
-        return os.path.commonpath((root_abs, path_abs)) == root_abs
+        return os.path.commonpath((root_real, path_real)) == root_real
     except ValueError:
         return False
 
 
 def _path_exists_within_repository(root: str, path: str) -> bool:
-    return _path_within_repository(root, path) and os.path.exists(os.path.abspath(path))
+    return _path_within_repository(root, path) and os.path.exists(os.path.realpath(path))
 
 
 def _path_is_git_ignored(root: str, path: str) -> bool:
