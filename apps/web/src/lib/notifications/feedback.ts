@@ -4,7 +4,9 @@ export type NotificationErrorContext =
   | "load"
   | "preference"
   | "device-enable"
-  | "device-disable";
+  | "device-disable"
+  | "device-list"
+  | "device-remove";
 
 export const PUSH_PERMISSION_BLOCKED =
   "Benachrichtigungen sind für Weltgewebe blockiert. Erlaube sie in den Browser- oder Systemeinstellungen und kehre danach zu dieser Seite zurück.";
@@ -17,6 +19,10 @@ const fallbackMessages: Record<NotificationErrorContext, string> = {
     "Dieses Gerät konnte nicht für Push eingerichtet werden. Versuche es erneut.",
   "device-disable":
     "Push konnte auf diesem Gerät nicht deaktiviert werden. Versuche es erneut.",
+  "device-list":
+    "Die registrierten Push-Geräte konnten nicht geladen werden. Versuche es erneut.",
+  "device-remove":
+    "Das Push-Gerät konnte nicht entfernt werden. Versuche es erneut.",
 };
 
 export function describeNotificationError(
@@ -38,8 +44,12 @@ export function describeNotificationError(
         return "Push ist vorübergehend nicht verfügbar. Deine Nachrichten bleiben im Postfach. Versuche es später erneut.";
       case "invalid_push_subscription":
         return "Dieses Gerät konnte nicht für Push registriert werden. Lade die Seite neu und versuche es erneut.";
+      case "invalid_push_device_marker":
+        return "Dieses Gerät konnte nicht sicher als aktuelles Push-Gerät zugeordnet werden. Lade die Seite neu und versuche es erneut.";
+      case "push_subscription_is_current_device":
+        return "Dieses Gerät wird nicht über die Liste entfernt. Verwende dafür die Schaltfläche „Auf diesem Gerät deaktivieren“.";
       case "push_subscription_limit_reached":
-        return "Für dieses Konto sind bereits 20 Geräte für Push registriert. Deaktiviere Push auf einem anderen Gerät und versuche es erneut.";
+        return "Für dieses Konto sind bereits 20 Push-Geräte registriert. Entferne unten ein nicht mehr benötigtes Gerät und versuche die Aktivierung danach erneut.";
       default:
         return fallbackMessages[context];
     }

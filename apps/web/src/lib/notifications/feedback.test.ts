@@ -51,6 +51,23 @@ describe("notification feedback", () => {
     );
   });
 
+  it("hides raw errors while listing and removing managed devices", () => {
+    expect(
+      describeNotificationError(
+        new Error("GET /api/push/subscriptions leaked endpoint"),
+        "device-list",
+      ),
+    ).toBe(
+      "Die registrierten Push-Geräte konnten nicht geladen werden. Versuche es erneut.",
+    );
+    expect(
+      describeNotificationError(
+        new Error("DELETE /api/push/subscriptions/internal-id failed"),
+        "device-remove",
+      ),
+    ).toBe("Das Push-Gerät konnte nicht entfernt werden. Versuche es erneut.");
+  });
+
   it("surfaces expired sessions while disabling", () => {
     const error = new NotificationsApiError(
       401,
@@ -63,16 +80,29 @@ describe("notification feedback", () => {
     );
   });
 
-  it("explains device limit", () => {
+  it("turns the device limit into an in-page recovery action", () => {
     const error = new NotificationsApiError(
       429,
       "push_subscription_limit_reached",
       "the account has reached the active Web Push device limit",
     );
 
-    expect(describeNotificationError(error, "device-enable")).toBe(
-      "Für dieses Konto sind bereits 20 Geräte für Push registriert. Deaktiviere Push auf einem anderen Gerät und versuche es erneut.",
+    const message = describeNotificationError(error, "device-enable");
+    expect(message).toContain("20 Push-Geräte");
+    expect(message).toContain("Entferne unten");
+    expect(message).not.toContain("active Web Push device limit");
+  });
+
+  it("protects the current device from remote-list removal", () => {
+    const error = new NotificationsApiError(
+      409,
+      "push_subscription_is_current_device",
+      "raw endpoint hash detail",
     );
+
+    const message = describeNotificationError(error, "device-remove");
+    expect(message).toContain("Auf diesem Gerät deaktivieren");
+    expect(message).not.toContain("endpoint hash");
   });
 
   it("maps denied browser permission", () => {
