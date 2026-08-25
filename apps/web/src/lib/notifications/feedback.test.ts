@@ -43,7 +43,7 @@ describe("notification feedback", () => {
     );
   });
 
-  it("explains the active-device limit without pretending this device can fix it", () => {
+  it("explains the active-device limit", () => {
     const error = new NotificationsApiError(
       429,
       "push_subscription_limit_reached",
