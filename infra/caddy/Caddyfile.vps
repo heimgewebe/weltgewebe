@@ -84,7 +84,7 @@
 	# dedicated path through the shared HTTPS edge.
 	@schauwerkRoot path /schaubild
 	handle @schauwerkRoot {
-		redir /schaubild/ 308
+		redir * /schaubild/ 308
 	}
 
 	handle_path /schaubild/* {

@@ -31,7 +31,7 @@ class SchaubildFrontdoorTest(unittest.TestCase):
         self.assertLess(self.caddy.index(root_redirect), self.caddy.index(trailing))
         self.assertLess(self.caddy.index(route), self.caddy.index(trailing))
         self.assertLess(self.caddy.index(route), self.caddy.index(generic))
-        self.assertIn("redir /schaubild/ 308", self.caddy)
+        self.assertIn("redir * /schaubild/ 308", self.caddy)
         self.assertIn('header Cache-Control "no-store"', self.caddy)
 
     def test_editor_gets_exact_cross_origin_frame_csp_not_frontend_csp(self) -> None:

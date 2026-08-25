@@ -104,6 +104,28 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
                 self.assertIn('"Location": ["{http.request.uri}"]', adapted)
                 self.assertIn('"status_code": 308', adapted)
 
+    def test_vps_schauwerk_redirect_and_prefix_strip_are_semantically_adapted(self) -> None:
+        routes = app_routes(adapt("infra/caddy/Caddyfile.vps"), "weltgewebe.net")
+
+        redirect = next(
+            route
+            for route in routes
+            if route.get("match") == [{"path": ["/schaubild"]}]
+        )
+        redirect_json = json.dumps(redirect, sort_keys=True)
+        self.assertIn('"Location": ["/schaubild/"]', redirect_json)
+        self.assertIn('"status_code": 308', redirect_json)
+
+        static = next(
+            route
+            for route in routes
+            if route.get("match") == [{"path": ["/schaubild/*"]}]
+        )
+        static_json = json.dumps(static, sort_keys=True)
+        self.assertIn('"strip_path_prefix": "/schaubild"', static_json)
+        self.assertIn('"root": "/srv/schauwerk-editor-root/current"', static_json)
+        self.assertIn('"handler": "file_server"', static_json)
+
     def test_vps_legacy_redirect_precedes_catchall_static_handle_after_adapt(self) -> None:
         routes = app_routes(adapt("infra/caddy/Caddyfile.vps"), "weltgewebe.net")
 
