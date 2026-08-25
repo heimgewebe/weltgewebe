@@ -79,6 +79,20 @@
 		file_server
 	}
 
+	# Schauwerk is deployed as a separately versioned static artifact. Keep the
+	# product release outside the Weltgewebe web build and expose only this
+	# dedicated path through the shared HTTPS edge.
+	@schauwerkRoot path /schaubild
+	handle @schauwerkRoot {
+		redir /schaubild/ 308
+	}
+
+	handle_path /schaubild/* {
+		root * /srv/schauwerk-editor-root/current
+		header Cache-Control "no-store"
+		file_server
+	}
+
 	# Legacy static filenames must never reach the SvelteKit document. The
 	# generated map.html bootstraps the canonical /map route and otherwise
 	# reloads itself forever. Redirect only this exact path and preserve its
@@ -131,8 +145,10 @@
 		}
 	}
 	header @nonDocumentResponse >Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+	@schauwerkResponse path /schaubild /schaubild/*
+	header @schauwerkResponse >Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; frame-src https://embed.diagrams.net; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
 	@frontendResponse {
-		not path /api/* /health/*
+		not path /api/* /health/* /schaubild /schaubild/*
 	}
 	header @frontendResponse Content-Security-Policy "style-src 'self' 'unsafe-inline'; connect-src 'self'; img-src 'self' data: blob:; worker-src 'self' blob:; font-src 'self'; media-src 'self'; manifest-src 'self'; child-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none';"
 

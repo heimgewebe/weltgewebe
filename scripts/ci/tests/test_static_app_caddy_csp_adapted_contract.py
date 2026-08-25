@@ -10,6 +10,12 @@ REPO = Path(__file__).resolve().parents[3]
 MAGIC_LINK_CONFIRM_PATH = "/api/auth/magic-link/consume"
 MAGIC_POLICY = "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none';"
 STRICT_POLICY = "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+SCHAUWERK_PATHS = ["/schaubild", "/schaubild/*"]
+SCHAUWERK_POLICY = (
+    "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
+    "frame-src https://embed.diagrams.net; connect-src 'none'; object-src 'none'; "
+    "base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+)
 CASES = (
     ("infra/caddy/Caddyfile", None, ["/api/*"]),
     ("infra/caddy/Caddyfile.heim", "weltgewebe.home.arpa", ["/api/*"]),
@@ -124,17 +130,20 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
         for relative, host, protected_paths in CASES:
             with self.subTest(caddyfile=relative):
                 policies = collect_csp(app_routes(adapt(relative), host))
-                self.assertEqual(len(policies), 3, policies)
+                is_vps = relative == "infra/caddy/Caddyfile.vps"
+                self.assertEqual(len(policies), 4 if is_vps else 3, policies)
 
                 magic = [item for item in policies if item["policy"] == MAGIC_POLICY]
                 strict = [item for item in policies if item["policy"] == STRICT_POLICY]
+                schauwerk = [item for item in policies if item["policy"] == SCHAUWERK_POLICY]
                 frontend = [
                     item
                     for item in policies
-                    if item["policy"] not in {MAGIC_POLICY, STRICT_POLICY}
+                    if item["policy"] not in {MAGIC_POLICY, STRICT_POLICY, SCHAUWERK_POLICY}
                 ]
                 self.assertEqual(len(magic), 1, policies)
                 self.assertEqual(len(strict), 1, policies)
+                self.assertEqual(len(schauwerk), 1 if is_vps else 0, policies)
                 self.assertEqual(len(frontend), 1, policies)
 
                 magic_match = [
@@ -154,11 +163,30 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
                         "path": protected_paths,
                     }
                 ]
-                frontend_match = [{"not": [{"path": protected_paths}]}]
+                frontend_paths = [*protected_paths, *SCHAUWERK_PATHS] if is_vps else protected_paths
+                frontend_match = [{"not": [{"path": frontend_paths}]}]
 
                 self.assertEqual(magic[0]["match"], magic_match)
                 self.assertEqual(strict[0]["match"], strict_match)
                 self.assertEqual(frontend[0]["match"], frontend_match)
+                if is_vps:
+                    self.assertEqual(schauwerk[0]["match"], [{"path": SCHAUWERK_PATHS}])
+                    self.assertTrue(schauwerk[0]["deferred"])
+                    self.assertEqual(
+                        directive_map(schauwerk[0]["policy"]),
+                        {
+                            "default-src": ("'self'",),
+                            "script-src": ("'self'",),
+                            "style-src": ("'self'",),
+                            "img-src": ("'self'", "data:", "blob:"),
+                            "frame-src": ("https://embed.diagrams.net",),
+                            "connect-src": ("'none'",),
+                            "object-src": ("'none'",),
+                            "base-uri": ("'none'",),
+                            "form-action": ("'none'",),
+                            "frame-ancestors": ("'none'",),
+                        },
+                    )
 
                 self.assertTrue(
                     magic[0]["deferred"],
