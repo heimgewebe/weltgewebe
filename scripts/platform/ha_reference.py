@@ -279,6 +279,70 @@ def declared_ha_capacity_budget(*, keep_primary: bool) -> dict[str, Any]:
     }
 
 
+def ha_nats_runtime_image() -> str:
+    nats = next(
+        document
+        for document in yaml.safe_load_all(
+            (ROOT / "platform/infrastructure/ha-data/nats.yaml").read_text(
+                encoding="utf-8"
+            )
+        )
+        if isinstance(document, dict) and document.get("kind") == "StatefulSet"
+    )
+    image = next(
+        (
+            str(container.get("image", ""))
+            for container in nats["spec"]["template"]["spec"]["containers"]
+            if container.get("name") == "nats"
+        ),
+        "",
+    )
+    name, separator, digest = image.rpartition("@sha256:")
+    if (
+        not separator
+        or not name
+        or len(digest) != 64
+        or any(character not in "0123456789abcdef" for character in digest)
+    ):
+        raise ref.ProofError("HA NATS runtime image is not digest-bound")
+    return image
+
+
+def preload_local_nats_dependencies(kind: str, cluster: str) -> dict[str, Any]:
+    if ref.controlled_oci_strict():
+        return {"mode": "controlled-oci", "images": [], "image_ids": {}}
+
+    images = [ha_nats_runtime_image(), NATS_BOX_IMAGE]
+    image_ids: dict[str, str] = {}
+    for image in images:
+        last_error: BaseException | None = None
+        for delay_seconds in (0, 5, 10):
+            if delay_seconds:
+                time.sleep(delay_seconds)
+            try:
+                ref.run(["docker", "pull", image], timeout=600)
+                last_error = None
+                break
+            except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+                last_error = error
+        if last_error is not None:
+            raise ref.ProofError(
+                f"failed to preload digest-bound HA dependency image: {image}"
+            ) from last_error
+        ref.run(
+            [kind, "load", "docker-image", "--name", cluster, image],
+            timeout=600,
+        )
+        image_ids[image] = ref.output(
+            ["docker", "image", "inspect", "--format", "{{.Id}}", image]
+        )
+    return {
+        "mode": "direct-digest-preload",
+        "images": images,
+        "image_ids": image_ids,
+    }
+
+
 def _filesystem_capacity(path: Path) -> dict[str, int]:
     try:
         resolved = path.resolve(strict=True)
@@ -3678,6 +3742,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         node_image = oci_host["kind_node_image"]
     primary_oci_cluster: dict[str, Any] | None = None
     restore_oci_cluster: dict[str, Any] | None = None
+    local_nats_dependency_supply: dict[str, Any] | None = None
     primary_cluster_retirement: dict[str, Any] | None = None
     lifecycle = ClusterLifecycle()
     object_store_created = False
@@ -3699,6 +3764,9 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
             "platform/clusters/ha/kind.yaml", commit, owner_id
         )
         lifecycle.primary_created = True
+        local_nats_dependency_supply = preload_local_nats_dependencies(
+            kind, args.cluster
+        )
         if ref.controlled_oci_strict():
             primary_oci_cluster = ref.load_controlled_oci_into_kind(
                 kind, args.cluster, "ha-recovery"
@@ -4038,6 +4106,7 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
                 "primary_cluster": primary_oci_cluster,
                 "restore_cluster": restore_oci_cluster,
             },
+            "local_nats_dependency_supply": local_nats_dependency_supply,
             "operator_nodes": {
                 "primary": primary_operator_nodes,
                 "restore": restore_operator_nodes,

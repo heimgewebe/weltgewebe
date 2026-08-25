@@ -189,6 +189,60 @@ class KubernetesHaContractTests(unittest.TestCase):
         self.assertFalse(result["retry_completed"])
         self.assertTrue(result["duplicate_migration_history_prevented"])
 
+    def test_non_strict_ha_preloads_digest_bound_nats_dependencies_into_kind(self) -> None:
+        nats_image = "nats@sha256:" + ("a" * 64)
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=False
+        ), mock.patch.object(
+            self.ha, "ha_nats_runtime_image", return_value=nats_image
+        ), mock.patch.object(self.ha.ref, "run") as run, mock.patch.object(
+            self.ha.ref, "output", return_value="sha256:image-id"
+        ) as output:
+            observed = self.ha.preload_local_nats_dependencies("kind", "proof")
+
+        self.assertEqual(observed["mode"], "direct-digest-preload")
+        self.assertEqual(observed["images"], [nats_image, self.ha.NATS_BOX_IMAGE])
+        self.assertEqual(
+            run.call_args_list,
+            [
+                mock.call(["docker", "pull", nats_image], timeout=600),
+                mock.call(
+                    ["kind", "load", "docker-image", "--name", "proof", nats_image],
+                    timeout=600,
+                ),
+                mock.call(["docker", "pull", self.ha.NATS_BOX_IMAGE], timeout=600),
+                mock.call(
+                    [
+                        "kind", "load", "docker-image", "--name", "proof",
+                        self.ha.NATS_BOX_IMAGE,
+                    ],
+                    timeout=600,
+                ),
+            ],
+        )
+        self.assertEqual(output.call_count, 2)
+
+    def test_strict_ha_keeps_nats_supply_on_controlled_oci_path(self) -> None:
+        with mock.patch.object(
+            self.ha.ref, "controlled_oci_strict", return_value=True
+        ), mock.patch.object(self.ha.ref, "run") as run:
+            observed = self.ha.preload_local_nats_dependencies("kind", "proof")
+        self.assertEqual(
+            observed, {"mode": "controlled-oci", "images": [], "image_ids": {}}
+        )
+        run.assert_not_called()
+
+    def test_nats_preload_happens_before_ha_data_apply(self) -> None:
+        source = (ROOT / "scripts/platform/ha_reference.py").read_text()
+        preload = source.index(
+            "        local_nats_dependency_supply = preload_local_nats_dependencies("
+        )
+        ha_data_apply = source.index(
+            '        ref.apply_direct(kubectl, kustomize, "platform/infrastructure/ha-data")',
+            preload,
+        )
+        self.assertLess(preload, ha_data_apply)
+
     def test_ha_direct_probe_respects_network_policy_without_rollout_delay(self) -> None:
         documents = list(
             self.validator._documents(
