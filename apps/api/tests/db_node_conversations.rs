@@ -672,7 +672,7 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .fetch_one(&pool)
     .await
     .expect("read retired old-device delivery");
-    assert_eq!(retired_delivery.0, "gone");
+    assert_eq!(retired_delivery.0, "cancelled");
     assert_eq!(retired_delivery.1.as_deref(), Some("disabled by account"));
     let active_after_cleanup: i64 = sqlx::query_scalar(
         "SELECT count(*) FROM web_push_subscriptions

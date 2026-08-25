@@ -130,8 +130,7 @@ describe("notification API", () => {
 
   it("removes an old managed subscription by opaque id without sending its endpoint", async () => {
     stubPushHash();
-    const currentEndpoint =
-      "https://push.example.invalid/subscription-current";
+    const currentEndpoint = "https://push.example.invalid/subscription-current";
     const fetchMock = vi
       .fn()
       .mockResolvedValue(new Response(null, { status: 204 }));
@@ -154,7 +153,9 @@ describe("notification API", () => {
         },
       }),
     );
-    expect(JSON.stringify(fetchMock.mock.calls[0])).not.toContain(currentEndpoint);
+    expect(JSON.stringify(fetchMock.mock.calls[0])).not.toContain(
+      currentEndpoint,
+    );
   });
 
   it("refuses to guess the current device when Web Crypto is unavailable", async () => {
@@ -163,7 +164,9 @@ describe("notification API", () => {
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(
-      listPushSubscriptions("https://push.example.invalid/subscription-current"),
+      listPushSubscriptions(
+        "https://push.example.invalid/subscription-current",
+      ),
     ).rejects.toThrow("nicht sicher zugeordnet");
     expect(fetchMock).not.toHaveBeenCalled();
   });

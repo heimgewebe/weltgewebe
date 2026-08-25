@@ -762,7 +762,7 @@ pub async fn delete_push_subscription(
         .map_err(|error| database_error("lock push endpoint", error))?;
     sqlx::query(
         "UPDATE web_push_deliveries \
-         SET status = 'gone', claimed_until = NULL, last_error = 'disabled by account' \
+         SET status = 'cancelled', claimed_until = NULL, last_error = 'disabled by account' \
          WHERE subscription_id IN ( \
              SELECT id FROM web_push_subscriptions \
              WHERE account_id = $1 AND endpoint_hash = $2 \
@@ -839,7 +839,7 @@ pub async fn disable_push_subscription_by_id(
         .map_err(|error| database_error("lock push endpoint", error))?;
     sqlx::query(
         "UPDATE web_push_deliveries \
-         SET status = 'gone', claimed_until = NULL, last_error = 'disabled by account' \
+         SET status = 'cancelled', claimed_until = NULL, last_error = 'disabled by account' \
          WHERE subscription_id = $2 \
            AND subscription_id IN ( \
                SELECT id FROM web_push_subscriptions WHERE account_id = $1 AND id = $2 \

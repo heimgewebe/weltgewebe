@@ -69,7 +69,9 @@ async function currentPushHeaders(
 ): Promise<Record<string, string>> {
   if (!endpoint) return {};
   if (!globalThis.crypto?.subtle) {
-    throw new Error("Der aktuelle Push-Browser kann nicht sicher zugeordnet werden.");
+    throw new Error(
+      "Der aktuelle Push-Browser kann nicht sicher zugeordnet werden.",
+    );
   }
   const digest = await globalThis.crypto.subtle.digest(
     "SHA-256",
