@@ -2047,10 +2047,14 @@ def start_migration_election_probe(
     kubectl: str,
     kustomize: str,
     *,
-    postgres_cluster: str,
     healthy_zone: str,
-) -> str:
-    baseline = migration_history_digest(kubectl, cluster=postgres_cluster)
+    baseline_history_sha256: str,
+) -> None:
+    if len(baseline_history_sha256) != 64 or any(
+        character not in "0123456789abcdef"
+        for character in baseline_history_sha256
+    ):
+        raise ref.ProofError("migration election baseline must be a pre-failure SHA-256 digest")
     # The normal HA app overlay is already active here and default-denies egress.
     # Give only the proof migration pods the same narrow PostgreSQL port/namespace
     # reachability they need, while DNS remains covered by the normal allow-dns policy.
@@ -2070,7 +2074,6 @@ def start_migration_election_probe(
                 file=sys.stderr,
             )
         raise
-    return baseline
 
 
 def finish_migration_election_probe(
@@ -3751,16 +3754,22 @@ def prove(args: argparse.Namespace) -> dict[str, Any]:
         if nats_message_count(kubectl) != 1:
             raise ref.ProofError("JetStream did not acknowledge the baseline message")
 
+        # Capture the migration ledger while PostgreSQL is still healthy. Reading a
+        # "baseline" after the node stop races CNPG promotion: currentPrimary may
+        # already name the promoted pod before psql is ready there.
+        migration_election_baseline = migration_history_digest(
+            kubectl, cluster=postgres_contract["cluster"]
+        )
         failure_started = time.monotonic()
         if availability_monitor is None:
             raise ref.ProofError("continuous availability monitor disappeared before zone failure")
         availability_monitor.mark_failure("single-zone-node-stop")
         ref.run(["docker", "stop", "--timeout", "10", stopped_node], timeout=60)
-        migration_election_baseline = start_migration_election_probe(
+        start_migration_election_probe(
             kubectl,
             kustomize,
-            postgres_cluster=postgres_contract["cluster"],
             healthy_zone=alternate_zone,
+            baseline_history_sha256=migration_election_baseline,
         )
         def new_primary_probe():
             candidate = current_primary(kubectl)
