@@ -11,6 +11,7 @@ from pathlib import Path
 MANIFEST_SCHEMA = "schauwerk-standalone-editor-manifest.v1"
 EDITOR_ORIGIN = "https://embed.diagrams.net"
 EXPECTED_ASSETS = {"app.js", "canvas-import.js", "index.html", "styles.css"}
+EXPECTED_RELEASE_ENTRIES = EXPECTED_ASSETS | {"manifest.json"}
 
 
 class ReleaseContractError(RuntimeError):
@@ -67,9 +68,21 @@ def verify_release(root: Path) -> dict[str, str]:
     if release.parent != releases_resolved or not release.is_dir():
         raise ReleaseContractError("editor current pointer must resolve to one direct releases child")
 
+    try:
+        release_entries = {entry.name: entry for entry in release.iterdir()}
+    except OSError as exc:
+        raise ReleaseContractError("editor release directory is unreadable") from exc
+    if set(release_entries) != EXPECTED_RELEASE_ENTRIES:
+        raise ReleaseContractError("editor release directory entry set mismatch")
+    for name, entry in release_entries.items():
+        if entry.is_symlink() or not entry.is_file():
+            raise ReleaseContractError(
+                f"editor release entry is not a regular file: {name}"
+            )
+
     manifest_path = release / "manifest.json"
-    if not manifest_path.is_file() or manifest_path.is_symlink() or manifest_path.stat().st_size == 0:
-        raise ReleaseContractError("editor manifest is missing, unsafe or empty")
+    if manifest_path.stat().st_size == 0:
+        raise ReleaseContractError("editor manifest is empty")
     try:
         manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
@@ -104,9 +117,9 @@ def verify_release(root: Path) -> dict[str, str]:
         raise ReleaseContractError("editor manifest asset set mismatch")
 
     for name, expected in listed.items():
-        asset = release / name
-        if not asset.is_file() or asset.is_symlink() or asset.stat().st_size == 0:
-            raise ReleaseContractError(f"editor asset is missing, unsafe or empty: {name}")
+        asset = release_entries[name]
+        if asset.stat().st_size == 0:
+            raise ReleaseContractError(f"editor asset is empty: {name}")
         if _sha256(asset) != expected:
             raise ReleaseContractError(f"editor asset digest mismatch: {name}")
 

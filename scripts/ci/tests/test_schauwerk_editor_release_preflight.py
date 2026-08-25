@@ -55,6 +55,9 @@ def test_valid_release_passes(tmp_path: Path) -> None:
         "broken-current",
         "absolute-current",
         "symlink-release",
+        "extra-file",
+        "extra-symlink",
+        "extra-directory",
         "missing-index",
         "wrong-origin",
         "digest-drift",
@@ -73,6 +76,12 @@ def test_release_failures_are_closed(tmp_path: Path, mutation: str) -> None:
         real_release = release.with_name("real")
         release.rename(real_release)
         release.symlink_to(real_release.name, target_is_directory=True)
+    elif mutation == "extra-file":
+        (release / ".env").write_text("SECRET=not-published\n", encoding="utf-8")
+    elif mutation == "extra-symlink":
+        (release / "leak").symlink_to("/etc/passwd")
+    elif mutation == "extra-directory":
+        (release / "backup").mkdir()
     elif mutation == "missing-index":
         (release / "index.html").unlink()
     elif mutation == "wrong-origin":

@@ -65,10 +65,14 @@ edge dependency. At minimum, verify all of the following:
 2. `current` is a relative symlink of the form `releases/<schauwerk-commit>`;
    absolute host paths are rejected because the release tree is mounted at a
    different path inside Caddy;
-3. `manifest.json` uses `schauwerk-standalone-editor-manifest.v1`;
-4. the manifest `editor_origin` equals the Caddy CSP origin;
-5. every asset digest listed in the manifest matches the installed file;
-6. the transport artifact digest is checked before extraction.
+3. the release directory contains exactly `manifest.json`, `app.js`,
+   `canvas-import.js`, `index.html` and `styles.css`, all as regular files; extra
+   files, directories or symlinks are rejected because Caddy would otherwise be
+   able to publish unverified content;
+4. `manifest.json` uses `schauwerk-standalone-editor-manifest.v1`;
+5. the manifest `editor_origin` equals the Caddy CSP origin;
+6. every asset digest listed in the manifest matches the installed file;
+7. the transport artifact digest is checked before extraction.
 
 Do not weaken the Schauwerk development server from loopback-only as a deployment
 shortcut. Public delivery belongs at this explicit HTTPS edge boundary.
