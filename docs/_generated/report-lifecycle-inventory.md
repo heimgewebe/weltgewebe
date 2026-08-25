@@ -878,12 +878,12 @@ Schema: `contracts/audit-report-truth.schema.json`
   "does_not_establish": [
     "The correctness of claims inside individual reports, runtime use of declared consumers, or deployment truth."
   ],
-  "generated_at": "2026-08-25T06:19:45+02:00",
+  "generated_at": "2026-08-25T06:34:16+02:00",
   "limitations": [
     "The inventory evaluates repository metadata, exact path references and declared control contracts, not runtime behaviour."
   ],
   "schema_version": 1,
-  "source_revision": "101c2aed984f725b96b975304e5db468a6d7b693",
+  "source_revision": "09890a20bc43cea7de396ee47469563b9b9f287c",
   "sources": [
     {
       "path": ".wgx/generated-artifacts.yml",
@@ -911,7 +911,7 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/auth-persistence-runtime-target-reconciliation.md",
-      "sha256": "7c23556b3d2a94c838314706090aaf8bf34b5b8dfd90c9f3f3d2770d1f41c338"
+      "sha256": "e9f045e7ad1b184f2967299fa9d36cca7c78efe432df46ad0c44436224a60501"
     },
     {
       "path": "docs/reports/auth-pg-002-controlled-preflight.md",
@@ -975,11 +975,11 @@ Schema: `contracts/audit-report-truth.schema.json`
     },
     {
       "path": "docs/reports/domain-account-write-path-proof.md",
-      "sha256": "58d9cdaca2c7f29bdd91b2fc7d7241a21fe4997eb3cd65827cee3232e8531598"
+      "sha256": "3833e752a31d37acca9caad2b20fc250a3b0352051d01024cdc7da484718e161"
     },
     {
       "path": "docs/reports/domain-backfill-proof.md",
-      "sha256": "72eb5ea1fee6178392f839a635f342c965809acc53ea4b6192192b51081db759"
+      "sha256": "ad8f3913b7494616951c9943562b47c7f29cdbb3039a48fd3eb6f4e4962184e3"
     },
     {
       "path": "docs/reports/domain-edge-cache-limit-design.md",
