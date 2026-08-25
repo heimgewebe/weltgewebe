@@ -83,6 +83,67 @@ class InlineRepositoryPathTests(unittest.TestCase):
         self.assertEqual(total, 1)
         self.assertEqual(broken, [candidate])
 
+    def test_policy_scope_is_not_treated_as_repository_existence_claim(self):
+        rel, content = self._write_doc(
+            "policy-scope",
+            "| `secrets/` | **Policy-Scope**, Existenz ist nicht erforderlich |",
+        )
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual((total, broken), (0, []))
+
+    def test_hostname_resource_is_not_repository_path(self):
+        rel, content = self._write_doc(
+            "hostname-resource",
+            "Basemap: `tiles.weltgewebe.org/basemap.pmtiles`.",
+        )
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual((total, broken), (0, []))
+
+    def test_explicit_ignored_runtime_path_can_be_exempted_without_hiding_typos(self):
+        rel, content = self._write_doc(
+            "runtime-output",
+            "Laufzeitartefakt: `build/runtime-output.json`.",
+        )
+        total, broken = check_links._inline_path_findings(
+            str(self.root),
+            rel,
+            content,
+            ignored_path_predicate=lambda path: path.endswith("build/runtime-output.json"),
+        )
+        self.assertEqual((total, broken), (1, []))
+
+    def test_git_ignore_probe_fails_closed_on_git_error(self):
+        failure = subprocess.CompletedProcess(
+            args=["git", "check-ignore"],
+            returncode=128,
+            stdout=b"",
+            stderr=b"fatal",
+        )
+        with patch("scripts.docmeta.check_links.subprocess.run", return_value=failure):
+            with self.assertRaises(subprocess.CalledProcessError):
+                check_links._path_is_git_ignored(
+                    str(self.root),
+                    str(self.root / "build" / "runtime.json"),
+                )
+
+    def test_git_ignore_directory_probe_checks_child_sentinel(self):
+        not_ignored = subprocess.CompletedProcess(
+            args=["git", "check-ignore"], returncode=1, stdout=b"", stderr=b""
+        )
+        ignored = subprocess.CompletedProcess(
+            args=["git", "check-ignore"], returncode=0, stdout=b"", stderr=b""
+        )
+        with patch(
+            "scripts.docmeta.check_links.subprocess.run",
+            side_effect=[not_ignored, ignored],
+        ):
+            self.assertTrue(
+                check_links._path_is_git_ignored(
+                    str(self.root),
+                    str(self.root / "build"),
+                )
+            )
+
     def test_tracked_document_discovery_fails_closed(self):
         failure = subprocess.CalledProcessError(128, ["git", "ls-files"])
         with patch("scripts.docmeta.check_links.subprocess.run", side_effect=failure):

@@ -19,13 +19,23 @@ CURRENT_LIFECYCLE_STATES = {"active", "deferred"}
 EXTERNAL_COMMIT_BINDING_RE = re.compile(
     r"\b[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+@[0-9a-f]{40}\b"
 )
+EXTERNAL_REPO_CONTEXT_RE = re.compile(
+    r"\b(?:public|external|extern(?:e|en|er|es)?)\b.{0,100}\b(?:repository|repo|repositorys)\b",
+    re.IGNORECASE,
+)
+SCOPE_POLICY_CONTEXT_RE = re.compile(
+    r"\b(?:forbidden|guarded|policy-scope|human review required|menschliches review|pfadgruppe|target-proof erforderlich|never generator targets)\b",
+    re.IGNORECASE,
+)
+HOSTNAME_PATH_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9.-]*\.)[A-Za-z]{2,}/")
 INLINE_CODE_RE = re.compile(r"(?<!`)`([^`\n]+)`(?!`)")
 PATH_FILE_RE = re.compile(r"(?:^|/)[^/]+\.[A-Za-z0-9]{1,12}$")
 NONLIVE_CONTEXT_RE = re.compile(
-    r"\b(?:zielbild|geplant|planung|später|zukünftig|verboten|beispiel|optional)\b"
+    r"\b(?:zielbild|geplant|planung|später|zukünftig|verboten|beispiel|optional|laufzeitrelativ|historisch|superseded|gegenhypothese)\b"
     r"|\bz\.?\s*[.\u202f ]?b\.?\b"
     r"|\bbevor\b.{0,120}\bimplementiert\b"
-    r"|\bnicht\b.{0,80}\b(?:reale|existierende|vorhandene)\b",
+    r"|\bnicht\b.{0,80}\b(?:reale|existierende|vorhanden(?:e)?)\b"
+    r"|(?:^|\n)\s*-\s*\[\s\]",
     re.IGNORECASE,
 )
 HISTORICAL_DOC_TYPES = {"changelog"}
@@ -69,7 +79,9 @@ def _paragraph_for_offset(content: str, offset: int) -> str:
 def _explicitly_nonlive_context(paragraph: str) -> bool:
     return bool(
         EXTERNAL_COMMIT_BINDING_RE.search(paragraph)
+        or EXTERNAL_REPO_CONTEXT_RE.search(paragraph)
         or NONLIVE_CONTEXT_RE.search(paragraph)
+        or SCOPE_POLICY_CONTEXT_RE.search(paragraph)
     )
 
 
@@ -78,6 +90,8 @@ def _normalize_inline_path(value: str) -> str | None:
     if not token or any(ch.isspace() for ch in token):
         return None
     if token.startswith(("http://", "https://", "mailto:", "tel:", "doc:")):
+        return None
+    if "://" in token or "=" in token or HOSTNAME_PATH_RE.match(token):
         return None
     if token.startswith(("$", "-", "~", "/")):
         # Absolute/runtime paths are not repository-internal path claims.
@@ -96,17 +110,51 @@ def _normalize_inline_path(value: str) -> str | None:
     return token.split("#", 1)[0]
 
 
-def _path_exists_within_repository(root: str, path: str) -> bool:
+def _path_within_repository(root: str, path: str) -> bool:
     root_abs = os.path.abspath(root)
     path_abs = os.path.abspath(path)
     try:
-        within_repository = os.path.commonpath((root_abs, path_abs)) == root_abs
+        return os.path.commonpath((root_abs, path_abs)) == root_abs
     except ValueError:
         return False
-    return within_repository and os.path.exists(path_abs)
 
 
-def _inline_path_findings(root: str, rel_file_path: str, content: str) -> tuple[int, list[str]]:
+def _path_exists_within_repository(root: str, path: str) -> bool:
+    return _path_within_repository(root, path) and os.path.exists(os.path.abspath(path))
+
+
+def _path_is_git_ignored(root: str, path: str) -> bool:
+    if not _path_within_repository(root, path):
+        return False
+    root_abs = os.path.abspath(root)
+    relative = os.path.relpath(os.path.abspath(path), root_abs)
+    for probe in (relative, f"{relative.rstrip('/')}/.wgx-ignore-probe"):
+        completed = subprocess.run(
+            ["git", "check-ignore", "-q", "--", probe],
+            cwd=root_abs,
+            capture_output=True,
+        )
+        if completed.returncode == 0:
+            return True
+        if completed.returncode not in {0, 1}:
+            raise subprocess.CalledProcessError(
+                completed.returncode,
+                completed.args,
+                output=completed.stdout,
+                stderr=completed.stderr,
+            )
+    return False
+
+
+def _inline_path_findings(
+    root: str,
+    rel_file_path: str,
+    content: str,
+    *,
+    ignored_path_predicate=None,
+) -> tuple[int, list[str]]:
+    if os.path.basename(rel_file_path).casefold() == "changelog.md":
+        return 0, []
     frontmatter = parse_frontmatter(os.path.join(root, rel_file_path))
     if not _is_current_document(frontmatter):
         return 0, []
@@ -126,9 +174,12 @@ def _inline_path_findings(root: str, rel_file_path: str, content: str) -> tuple[
         total += 1
         doc_relative = os.path.abspath(os.path.join(doc_dir, candidate))
         repo_relative = os.path.abspath(os.path.join(root, candidate))
+        ignored = ignored_path_predicate or (lambda _path: False)
         if not (
             _path_exists_within_repository(root, doc_relative)
             or _path_exists_within_repository(root, repo_relative)
+            or ignored(doc_relative)
+            or ignored(repo_relative)
         ):
             broken.append(candidate)
 
@@ -260,7 +311,12 @@ def main() -> None:
             content = Path(file_path).read_text(encoding="utf-8")
         except OSError:
             continue
-        total, broken = _inline_path_findings(REPO_ROOT, rel_file_path, content)
+        total, broken = _inline_path_findings(
+            REPO_ROOT,
+            rel_file_path,
+            content,
+            ignored_path_predicate=lambda path: _path_is_git_ignored(REPO_ROOT, path),
+        )
         if not total and not broken:
             continue
         info = link_report.setdefault(

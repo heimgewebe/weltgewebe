@@ -4,6 +4,9 @@ title: WELTGEWEBE-OS-V1-T036 Dokumentationsdrift-Reconciliation
 doc_type: proof
 status: active
 summary: Revisionsgebundene Einzeldisposition aller 52 historischen Ox-Dokumentationsdrift-Findings gegen den aktuellen Ausgangshead und ihre T036-Bereinigung.
+relations:
+  - type: relates_to
+    target: docs/roadmap.md
 ---
 
 # WELTGEWEBE-OS-V1-T036 — Dokumentationsdrift-Reconciliation
@@ -98,6 +101,27 @@ aus den 52 Tabellenzeilen unten abgeleitet.
 | DRIFT-050 | P2 | weiterhin gültig | `docs/roadmap.md` verlinkte `planning-registration-findings.md` ohne Hinweis, dass der Bericht deprecated/archived ist. | Link bleibt als Evidenz erhalten, ist nun ausdrücklich „archivierter Ausgangsbefund“. |
 | DRIFT-051 | P2 | weiterhin gültig | `docs/runbooks/README.md` führte `domain-mail-cutover.md` trotz deprecated/archived Status in der Liste aktueller wiederkehrender Runbooks. | Aktive Liste verweist auf die DDNS-/Runtime-Verifikation; Domain-/Mail-Cutover steht separat unter „Historische Runbooks“. |
 | DRIFT-052 | P2 | weiterhin gültig | `docs/reports/auth-status-matrix.md` präsentierte `passkey-register-verify-prep.md` als Dokumentationsbeleg, obwohl der Report deprecated/archived ist. | Aktueller Cutover-Plan ist Hauptbeleg; der alte Prep-Report ist ausdrücklich als archivierter Vorbereitungsbericht markiert. |
+
+## Zusätzliche Current-Head-Restfunde außerhalb des historischen 52er-Inventars
+
+Der neue Inline-Pfad-/Truth-Check wurde während T036 gegen den gesamten aktiven
+Markdown-Bestand ausgeführt. Dabei wurden zusätzliche Gegenwartsdrifts sichtbar,
+die im historischen Ox-Inventar nicht enthalten waren. Sie verändern die
+52er-Dispositionsmatrix nicht, werden aber vor Closeout ebenfalls bereinigt:
+
+| Restfund | Befund | Current-Head-Disposition |
+|---|---|---|
+| CURRENT-001 | Aktive Versionierungsgrundlage behauptete weiterhin `VersionDiagnostics.svelte`, obwohl die Diagnose heute als `/build`-Vollansicht implementiert ist. | Auf `apps/web/src/routes/build/+page.svelte` und den weiterhin gültigen Browserbeleg `apps/web/tests/version-diagnostics.spec.ts` korrigiert. |
+| CURRENT-002 | `auth-status-matrix.md` verwendete die verkürzten Ist-Pfade `middleware/csrf.rs` und `routes/auth.rs`. | Auf `apps/api/src/middleware/csrf.rs` und `apps/api/src/routes/auth.rs` qualifiziert. |
+| CURRENT-003 | Das aktive DB-Recovery-Runbook stellte `postgres/proofs/` wie einen lokalen Repositorypfad dar. | Laufzeit-Default `/var/backups/weltgewebe/postgres/proofs/` und `RESTORE_PROOF_DIR` explizit gemacht. |
+| CURRENT-004 | `optimierungsbericht.md` führte `ci/budget.json` noch als aktuelle Budgetquelle. | Altbefund als superseded markiert; Gegenwartsquelle ist `policies/performance.v1.json`, Legacy-Rückkehr ist testseitig verboten. |
+| CURRENT-005 | Derselbe Bericht behandelte `../caddy/Caddyfile.prod` pauschal als aufrufverzeichnisabhängigen Produktionsfehler. | Altprämisse als superseded markiert; reale Quelle `infra/caddy/Caddyfile.prod`, erlaubter Compose-Mount durch bestehenden Volume-Guard belegt. |
+| CURRENT-006 | Der aktive Fahrplan verwendete `migrations/` ohne Repositoryqualifikation. | Auf `apps/api/migrations/` qualifiziert. |
+| CURRENT-007 | Deploy-Dokumentation ließ `receipts/...` wie Repositoryinhalt erscheinen. | Als Pfad unter `$WELTGEWEBE_DEPLOY_STATE_ROOT` mit Default `/var/lib/weltgewebe-main-reconciler` gebunden. |
+| CURRENT-008 | Mehrere legitime Nicht-Repo-Bezüge (Runtime-Ausgaben, Policy-Scope, Hostname-Ressourcen, geplante Ziele) erzeugten ohne Semantikgrenze False Positives. | Scanner nutzt vorhandene Gitignore-Wahrheit für unversionierte Ausgaben und eng markierte Kontextklassen; Tippfehler, unbekannte Repo-Pfade und Repository-Flucht bleiben blockierbar. |
+
+Nach dieser Reconciliation läuft `scripts/docmeta/check_links.py` gegen den
+aktiven getrackten Markdown-Bestand mit **0 Fehlern und 0 Warnungen**.
 
 ## Automatisierte Lifecycle- und Truth-Gates
 
