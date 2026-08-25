@@ -64,6 +64,20 @@ def test_runner_preflights_postgres_and_jetstream_before_the_first_target() -> N
     assert 'docker exec "$POSTGRES_RESET_CONTAINER" psql' in runner
 
 
+def test_default_runner_executes_push_device_limit_recovery_proof() -> None:
+    runner = RUNNER.read_text(encoding="utf-8")
+    proof = "private_message_push_preference_cancels_queued_delivery"
+    assert 'if [[ -z "${POSTGRES_PROOF_TARGETS:-}" ]]; then' in runner
+    assert "--test db_node_conversations" in runner
+    assert proof in runner
+    default_guard = runner.index('if [[ -z "${POSTGRES_PROOF_TARGETS:-}" ]]; then')
+    target_override = runner.index('if [[ -n "${POSTGRES_PROOF_TARGETS:-}" ]]; then')
+    assert default_guard > target_override
+    proof_command = runner.index("--test db_node_conversations", default_guard)
+    reset = runner.rfind("reset_database", default_guard, proof_command)
+    assert reset != -1, "the Push proof must run against a freshly reset disposable database"
+
+
 def test_ci_delegates_jetstream_lifecycle_to_runner() -> None:
     workflow = yaml.safe_load(CI.read_text(encoding="utf-8"))
     job = workflow["jobs"]["postgres-proofs"]
