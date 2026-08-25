@@ -29,14 +29,37 @@ describe("notification feedback", () => {
     );
   });
 
-  it("hides raw browser errors", () => {
+  it("hides raw browser errors while enabling", () => {
     expect(
       describeNotificationError(
         new Error("Failed to fetch https://internal.example.invalid"),
-        "device",
+        "device-enable",
       ),
     ).toBe(
       "Dieses Gerät konnte nicht für Push eingerichtet werden. Versuche es erneut.",
+    );
+  });
+
+  it("hides raw browser errors while disabling", () => {
+    expect(
+      describeNotificationError(
+        new Error("DELETE https://internal.example.invalid failed"),
+        "device-disable",
+      ),
+    ).toBe(
+      "Push konnte auf diesem Gerät nicht deaktiviert werden. Versuche es erneut.",
+    );
+  });
+
+  it("surfaces expired sessions while disabling", () => {
+    const error = new NotificationsApiError(
+      401,
+      "unauthorized",
+      "raw authentication detail",
+    );
+
+    expect(describeNotificationError(error, "device-disable")).toBe(
+      "Deine Sitzung ist abgelaufen. Melde dich erneut an.",
     );
   });
 
@@ -47,7 +70,7 @@ describe("notification feedback", () => {
       "the account has reached the active Web Push device limit",
     );
 
-    expect(describeNotificationError(error, "device")).toBe(
+    expect(describeNotificationError(error, "device-enable")).toBe(
       "Für dieses Konto sind bereits 20 Geräte für Push registriert. Deaktiviere Push auf einem anderen Gerät und versuche es erneut.",
     );
   });
@@ -58,7 +81,7 @@ describe("notification feedback", () => {
     expect(
       describeNotificationError(
         new DOMException("permission denied", "NotAllowedError"),
-        "device",
+        "device-enable",
       ),
     ).toBe(PUSH_PERMISSION_BLOCKED);
   });
