@@ -88,7 +88,12 @@
   }
 
   async function enableCurrentDevice(): Promise<void> {
-    if (changingDevice || !config?.enabled || !config.application_server_key)
+    if (
+      changingDevice ||
+      pendingRemovalEndpoint ||
+      !config?.enabled ||
+      !config.application_server_key
+    )
       return;
     if (permission === "denied") {
       warning = PUSH_PERMISSION_BLOCKED;
@@ -176,7 +181,7 @@
       browserSubscription = null;
       try {
         await deletePushSubscription(endpoint);
-        pendingRemovalEndpoint = null;
+        if (pendingRemovalEndpoint === endpoint) pendingRemovalEndpoint = null;
         notice = "Push ist auf diesem Gerät deaktiviert.";
       } catch {
         pendingRemovalEndpoint = endpoint;
@@ -302,10 +307,16 @@
         <button
           class="btn primary touch-target"
           type="button"
-          disabled={changingDevice || !config?.enabled}
+          disabled={
+            changingDevice || !config?.enabled || Boolean(pendingRemovalEndpoint)
+          }
           onclick={enableCurrentDevice}
         >
-          {changingDevice ? "Wird aktiviert …" : "Auf diesem Gerät aktivieren"}
+          {changingDevice
+            ? "Wird aktiviert …"
+            : pendingRemovalEndpoint
+              ? "Zuerst Geräte-Eintrag entfernen"
+              : "Auf diesem Gerät aktivieren"}
         </button>
       {/if}
     </div>
