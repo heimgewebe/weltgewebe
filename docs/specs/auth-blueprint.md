@@ -91,7 +91,7 @@ Verhindern, dass spätere Implementierung bestehende Architektur bricht.
 
 ### Artefakt
 
-- Kurzer Abschnitt in `docs/auth.md` oder Ergänzung ADR-0005:
+- **Optional, noch nicht vorhanden:** kurzer Zielabschnitt in `docs/auth.md` oder Ergänzung ADR-0005:
   > „Diese Invarianten dürfen durch keine Auth-Implementierung verletzt werden.“
 
 ---
