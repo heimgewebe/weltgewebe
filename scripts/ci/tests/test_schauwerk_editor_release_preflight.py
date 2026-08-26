@@ -134,8 +134,10 @@ def test_full_vps_deploy_reads_back_editor_through_caddy_before_state_commit() -
         deploying,
     )
     resolve = deploy.index('SCHAUWERK_RESOLVE="weltgewebe.net:443:${CADDY_BIND}"', postflight_scope)
-    index_url = deploy.index('https://weltgewebe.net/schaubild/', resolve)
-    manifest_url = deploy.index('https://weltgewebe.net/schaubild/manifest.json', index_url)
+    expected_csp = deploy.index('SCHAUWERK_EXPECTED_CSP="default-src', resolve)
+    index_url = deploy.index('https://weltgewebe.net/schaubild/', expected_csp)
+    csp_compare = deploy.index('if values != [expected]:', index_url)
+    manifest_url = deploy.index('https://weltgewebe.net/schaubild/manifest.json', csp_compare)
     digest_compare = deploy.index('SCHAUWERK_LIVE_MANIFEST_SHA', manifest_url)
     asset_bindings = deploy.index('SCHAUWERK_ASSET_BINDINGS', digest_compare)
     asset_url = deploy.index('https://weltgewebe.net/schaubild/${SCHAUWERK_ASSET_NAME}', asset_bindings)
@@ -147,7 +149,9 @@ def test_full_vps_deploy_reads_back_editor_through_caddy_before_state_commit() -
         < deploying
         < postflight_scope
         < resolve
+        < expected_csp
         < index_url
+        < csp_compare
         < manifest_url
         < digest_compare
         < asset_bindings
@@ -161,6 +165,15 @@ def test_full_vps_deploy_reads_back_editor_through_caddy_before_state_commit() -
     assert "--noproxy '*'" in postflight
     assert '--resolve "$SCHAUWERK_RESOLVE"' in postflight
     assert 'Cache-Control: no-store' in postflight
+    expected_policy = (
+        "default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; "
+        "frame-src https://embed.diagrams.net; connect-src 'none'; object-src 'none'; "
+        "base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+    )
+    caddy = (repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
+    assert f'SCHAUWERK_EXPECTED_CSP="{expected_policy}"' in postflight
+    assert f'>Content-Security-Policy "{expected_policy}"' in caddy
+    assert 'values != [expected]' in postflight
     assert 'SCHAUWERK_LIVE_MANIFEST_SHA" != "$SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA' in postflight
     assert 'SCHAUWERK_ASSET_LIVE_SHA" != "$SCHAUWERK_ASSET_EXPECTED_SHA' in postflight
     assert 'SCHAUWERK_ASSET_COUNT" != "4"' in postflight

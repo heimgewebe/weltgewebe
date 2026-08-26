@@ -2875,6 +2875,7 @@ else
     SCHAUWERK_INDEX_HEADERS_OUT="$(mktemp)"
     SCHAUWERK_MANIFEST_OUT="$(mktemp)"
     SCHAUWERK_RESOLVE="weltgewebe.net:443:${CADDY_BIND}"
+    SCHAUWERK_EXPECTED_CSP="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; frame-src https://embed.diagrams.net; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
     if ! SCHAUWERK_INDEX_HTTP_CODE="$(
       curl -sS --noproxy '*' --connect-timeout 5 --max-time 20 --retry 3 --retry-delay 1 --retry-connrefused \
         --resolve "$SCHAUWERK_RESOLVE" -o /dev/null -D "$SCHAUWERK_INDEX_HEADERS_OUT" \
@@ -2895,6 +2896,26 @@ else
     fi
     if ! grep -iq '^Cache-Control:.*no-store' "$SCHAUWERK_INDEX_HEADERS_OUT"; then
       msg="Schauwerk editor postflight did not receive Cache-Control: no-store for /schaubild/."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      rm -f "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
+      exit 1
+    fi
+    if ! python3 - "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_EXPECTED_CSP" << 'PY'; then
+import sys
+from pathlib import Path
+
+headers = Path(sys.argv[1]).read_text(encoding="utf-8", errors="strict").splitlines()
+expected = sys.argv[2]
+values = []
+for line in headers:
+    name, separator, value = line.partition(":")
+    if separator and name.strip().lower() == "content-security-policy":
+        values.append(value.strip())
+if values != [expected]:
+    raise SystemExit(1)
+PY
+      msg="Schauwerk editor postflight did not receive the exact isolated Content-Security-Policy for /schaubild/."
       echo "ERROR: $msg" >&2
       generate_failure_bundle "$msg"
       rm -f "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
