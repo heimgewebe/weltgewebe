@@ -2,11 +2,10 @@
 id: reports.domain-node-write-path-proof
 title: "Domain Node Write Path Proof"
 doc_type: report
-status: active
-lifecycle_state: active
+status: deprecated
+lifecycle_state: archived
 lifecycle: proof
 owner_task: OPT-ARC-001
-review_after: 2026-07-16
 canonicality: evidence
 created: 2026-06-05
 lang: de
@@ -33,6 +32,11 @@ relations:
 ---
 
 # Domain Node Write Path Proof
+
+> **Lifecycle-Hinweis (2026-08-24):** Archivierter Point-in-Time-Beleg.
+> Die historischen Aussagen bleiben unverändert; aktuelle Statuswahrheit ist aus
+> den kanonischen Status-, Architektur- und Runtimequellen abzuleiten.
+
 
 ## Scope
 

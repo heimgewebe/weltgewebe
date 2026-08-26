@@ -102,7 +102,7 @@ und ein Betriebsvertrag bestehen. Aktuell nicht als Standard vorhanden sind:
 - `apps/worker` für Projektionen oder Outbox-Relay,
 - `platform/` als kanonischer Kubernetes-/GitOps-Vertrag,
 - eigenständige Search-Services,
-- `packages/` als gemeinsame SDK-Schicht,
+- **Geplant, aktuell nicht vorhanden:** `packages/` als gemeinsame SDK-Schicht,
 - belegter Kubernetes-Produktionsbetrieb,
 - Föderationsgateway und Zellkonformitätstests,
 - Event-Sourcing als allgemeines Persistenzmodell,
