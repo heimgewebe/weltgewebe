@@ -396,7 +396,7 @@ SMTP_PORT=587
 SMTP_AUTH=on
 SMTP_USER=<secret>
 SMTP_PASS=<secret>
-SMTP_FROM=noreply@weltgewebe.net
+SMTP_FROM=noreply@login.weltgewebe.net
 ```
 
 Vor einem Rollout wird die vorbereitete Runtime-Secret-Quelle read-only geprüft:
