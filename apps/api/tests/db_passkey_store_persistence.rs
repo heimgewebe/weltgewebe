@@ -1059,7 +1059,8 @@ async fn passkey_register_reload_auth_route_proof() {
     );
 
     // Step 2b: register/verify with a REAL ES256 attestation.
-    let authenticator = soft_passkey::SoftPasskey::new("example.com", "https://example.com");
+    let authenticator =
+        soft_passkey::SoftPasskey::new("commonthing.net", "https://commonthing.net");
     let (status, headers, verify_body) = post_json(
         &app1,
         "/auth/passkeys/register/verify",

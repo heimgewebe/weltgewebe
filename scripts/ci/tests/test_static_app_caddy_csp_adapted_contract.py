@@ -200,7 +200,8 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
             if ":443" in server.get("listen", [])
             for route in server.get("routes", [])
             if any(
-                "weltgewebe.net" in matcher.get("host", [])
+                matcher.get("host")
+                == ["www.commonthing.net", "weltgewebe.net", "www.weltgewebe.net"]
                 for matcher in route.get("match", [])
             )
         )
