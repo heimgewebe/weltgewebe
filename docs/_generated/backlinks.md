@@ -557,6 +557,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/merge-to-live.md
 - [relates_to] docs/deploy/public-metrics-boundary.md
+- [relates_to] docs/deploy/schauwerk-editor-frontdoor.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
@@ -1238,6 +1239,7 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/map-html-canonical-route.md
 - [relates_to] docs/deploy/public-metrics-boundary.md
+- [relates_to] docs/deploy/schauwerk-editor-frontdoor.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 
 ## infra/compose/compose.observ.yml
@@ -1250,6 +1252,7 @@ Generated automatically. Do not edit.
 
 ## infra/compose/compose.vps.override.yml
 
+- [relates_to] docs/deploy/schauwerk-editor-frontdoor.md
 - [relates_to] docs/deploy/vps-http-route-smoke.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md
