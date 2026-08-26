@@ -688,23 +688,26 @@ pub async fn register_push_subscription(
         "UPDATE web_push_deliveries \
          SET status = 'gone', claimed_until = NULL, last_error = 'subscription refreshed' \
          WHERE subscription_id IN ( \
-             SELECT id FROM web_push_subscriptions WHERE endpoint_hash = $1 \
+             SELECT id FROM web_push_subscriptions \
+             WHERE account_id = $2 AND endpoint_hash = $1 \
          ) AND status IN ('pending', 'retry', 'sending')",
     )
     .bind(&endpoint_hash)
+    .bind(account_id)
     .execute(&mut *tx)
     .await
     .map_err(|error| database_error("retire previous push deliveries", error))?;
 
     let id = Uuid::new_v4().to_string();
-    let stored_id: String = sqlx::query_scalar(
+    let stored_id: Option<String> = sqlx::query_scalar(
         "INSERT INTO web_push_subscriptions ( \
              id, account_id, endpoint, endpoint_hash, p256dh, auth_secret \
          ) VALUES ($1::uuid, $2, $3, $4, $5, $6) \
          ON CONFLICT (endpoint_hash) DO UPDATE \
-         SET account_id = EXCLUDED.account_id, endpoint = EXCLUDED.endpoint, \
-             p256dh = EXCLUDED.p256dh, auth_secret = EXCLUDED.auth_secret, \
+         SET endpoint = EXCLUDED.endpoint, p256dh = EXCLUDED.p256dh, \
+             auth_secret = EXCLUDED.auth_secret, \
              disabled_at = NULL, last_error = NULL, updated_at = NOW() \
+         WHERE web_push_subscriptions.account_id = EXCLUDED.account_id \
          RETURNING id::text",
     )
     .bind(id)
@@ -713,9 +716,16 @@ pub async fn register_push_subscription(
     .bind(&endpoint_hash)
     .bind(&request.p256dh)
     .bind(&request.auth)
-    .fetch_one(&mut *tx)
+    .fetch_optional(&mut *tx)
     .await
     .map_err(|error| database_error("store push subscription", error))?;
+    let Some(stored_id) = stored_id else {
+        return Err(NotificationApiError::new(
+            StatusCode::CONFLICT,
+            "push_subscription_conflict",
+            "the browser push subscription could not be registered for this account",
+        ));
+    };
     tx.commit()
         .await
         .map_err(|error| database_error("commit push subscription", error))?;

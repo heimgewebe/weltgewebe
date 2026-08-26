@@ -560,6 +560,17 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .execute(&pool)
     .await
     .expect("queue private-message push delivery");
+    sqlx::query(
+        "INSERT INTO web_push_deliveries (
+             source_event_id, subscription_id, conversation_id
+         ) VALUES ($1, $2::uuid, $3::uuid)",
+    )
+    .bind(source_event_id)
+    .bind(foreign_subscription_id)
+    .bind(conversation_id)
+    .execute(&pool)
+    .await
+    .expect("queue foreign-account push delivery");
 
     let (app, _author, other, _admin, _guest) =
         app_with_web_push(pool.clone(), Some(test_web_push_service())).await;
@@ -695,6 +706,40 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .await
     .expect("count active subscriptions after cleanup");
     assert_eq!(active_after_cleanup, 19);
+
+    let foreign_endpoint = "https://push.example.invalid/foreign-subscription";
+    let foreign_body = valid_push_subscription_body(foreign_endpoint);
+    let (status, foreign_register_error) = json_response(
+        &app,
+        request(
+            "POST",
+            "/push/subscriptions",
+            Some(&other),
+            Some(&foreign_body),
+            None,
+            None,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(foreign_register_error["code"], "push_subscription_conflict");
+    let foreign_owner: String =
+        sqlx::query_scalar("SELECT account_id FROM web_push_subscriptions WHERE id = $1::uuid")
+            .bind(foreign_subscription_id)
+            .fetch_one(&pool)
+            .await
+            .expect("foreign registration keeps original account owner");
+    assert_eq!(foreign_owner, AUTHOR_ID);
+    let foreign_delivery_status: String = sqlx::query_scalar(
+        "SELECT status FROM web_push_deliveries
+         WHERE source_event_id = $1 AND subscription_id = $2::uuid",
+    )
+    .bind(source_event_id)
+    .bind(foreign_subscription_id)
+    .fetch_one(&pool)
+    .await
+    .expect("foreign registration keeps foreign delivery receipt untouched");
+    assert_eq!(foreign_delivery_status, "pending");
 
     let (status, replacement) = json_response(
         &app,
