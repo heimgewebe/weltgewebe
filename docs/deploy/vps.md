@@ -20,7 +20,7 @@ relations:
 ---
 # VPS Deployment Runbook
 
-Dieses Runbook beschreibt den kanonischen Public-Produktionspfad für CommonThing unter `commonthing.net`.
+Dieses Runbook beschreibt den kanonischen Public-Produktionspfad für commonThing unter `commonthing.net`.
 Der VPS `wg-prod-1` stellt API, Datenbank, NATS und den Caddy-Frontdoor bereit. Das
 Frontend wird im VPS-Checkout gebaut und vom Stack-internen Caddy unter der
 Domain ausgeliefert.
@@ -43,9 +43,24 @@ Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 * **AAAA-Record** (nur falls IPv6 geprüft und freigegeben ist): entsprechende Hostnamen -> `<VPS_IPV6_ADRESSE>`
 
 Die Subdomain `api.weltgewebe.net` bleibt der API-Host und muss auf dieselbe
-VPS-IPv4 zeigen wie die CommonThing- und Legacy-Webhosts. Caddy liefert die App
+VPS-IPv4 zeigen wie die commonThing- und Legacy-Webhosts. Caddy liefert die App
 nur unter `commonthing.net`; `www.commonthing.net`, `weltgewebe.net` und
 `www.weltgewebe.net` leiten permanent und URI-erhaltend auf den Apex um.
+
+**Erster Domain-Cutover:** Nach dem Merge zuerst die A-Records von
+`commonthing.net` und `www.commonthing.net` auf die ausgewählte VPS-Adresse
+umstellen und autoritativ zurücklesen; erst danach den exakten Merge-Commit
+aktivieren und den öffentlichen HTTPS-Readback ausführen. Der DNS-freie
+HTTP-Smoke darf vorher laufen, aktiviert aber keinen Produktionsstack. Die
+Legacy-Webhosts bleiben bis zur Stack-Aktivierung auf dem bisherigen Origin
+erreichbar.
+
+**Sitzungen und Passkeys:** Das Session-Cookie ist hostgebunden und wird nicht
+von `weltgewebe.net` auf `commonthing.net` übertragen. Beim ersten Redirect ist
+daher eine einmalige Neuanmeldung erwarteter Cutover-Effekt, kein Datenverlust.
+`WEBAUTHN_RP_*` darf nicht allein aus der Beispielkonfiguration in die Runtime
+übernommen werden: Vor einer Aktivierung oder RP-Änderung müssen die effektive
+Live-Konfiguration und vorhandene Passkey-Credentials separat geprüft werden.
 
 Der Deploy bindet Caddy niemals automatisch an eine beliebige Adresse, wenn der VPS
 mehrere globale IPv4- oder IPv6-Adressen besitzt. Bei genau einer globalen IPv4
@@ -408,7 +423,7 @@ IPv6-DNS-Erwartung geprüft:
 ```
 
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
-prüft DNS-A-Records, den kanonischen CommonThing-HTTPS-Apex, permanente und
+prüft DNS-A-Records, den kanonischen commonThing-HTTPS-Apex, permanente und
 URI-erhaltende Redirects von `www.commonthing.net`, `weltgewebe.net` und
 `www.weltgewebe.net`, `/map`,
 `api.weltgewebe.net/health/ready`, die privaten öffentlichen Metrics-Grenzen

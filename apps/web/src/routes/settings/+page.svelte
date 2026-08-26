@@ -44,7 +44,7 @@
 </script>
 
 <svelte:head>
-  <title>Einstellungen – CommonThing</title>
+  <title>Einstellungen – commonThing</title>
 </svelte:head>
 
 <div class="settings-page">

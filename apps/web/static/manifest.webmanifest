@@ -1,7 +1,7 @@
 {
-  "name": "CommonThing",
-  "short_name": "CommonThing",
-  "description": "Mit CommonThing Commons, Knoten, Garnrollen und ihre Beziehungen gemeinsam auf einer Karte verwalten.",
+  "name": "commonThing",
+  "short_name": "commonThing",
+  "description": "Mit commonThing Commons, Knoten, Garnrollen und ihre Beziehungen gemeinsam auf einer Karte verwalten.",
   "lang": "de",
   "start_url": "/map",
   "scope": "/",

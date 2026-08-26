@@ -9,11 +9,11 @@ import {
   renderSitemap,
 } from "./generate-public-web-assets.mjs";
 
-test("uses the canonical CommonThing production origin by default", () => {
+test("uses the canonical commonThing production origin by default", () => {
   assert.equal(DEFAULT_PUBLIC_ORIGIN, "https://commonthing.net");
 });
 
-test("emits CommonThing crawler assets when no origin override is supplied", () => {
+test("emits commonThing crawler assets when no origin override is supplied", () => {
   const emitted = [];
   const plugin = createPublicWebAssetsPlugin();
 

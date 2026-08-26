@@ -113,7 +113,7 @@ fn config() -> AppConfig {
         smtp_from: None,
         webauthn_rp_id: Some("commonthing.net".to_string()),
         webauthn_rp_origin: Some("https://commonthing.net".to_string()),
-        webauthn_rp_name: Some("CommonThing Test".to_string()),
+        webauthn_rp_name: Some("commonThing Test".to_string()),
         auth_log_magic_token: false,
     }
 }

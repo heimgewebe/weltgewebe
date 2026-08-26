@@ -143,7 +143,7 @@ fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
         auth_log_magic_token: true,
         webauthn_rp_id: Some("commonthing.net".to_string()),
         webauthn_rp_origin: Some("https://commonthing.net".to_string()),
-        webauthn_rp_name: Some("CommonThing Test".to_string()),
+        webauthn_rp_name: Some("commonThing Test".to_string()),
     };
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",

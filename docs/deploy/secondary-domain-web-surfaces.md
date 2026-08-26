@@ -150,7 +150,7 @@ automatisiert prüfen:
 - Der vorgesehene Edge-Pfad ist
   `/srv/weltgewebe-web/weltweberei`.
 - Die Wurzelroute liefert die Informationsseite.
-- Anfragen werden weder an die CommonThing-App noch an die API
+- Anfragen werden weder an die commonThing-App noch an die API
   weitergereicht.
 - Es werden restriktive Sicherheitsheader gesetzt.
 - Skripte, Formulare, Frames, externe Ressourcen und Tracking bleiben

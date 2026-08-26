@@ -6,7 +6,7 @@ status: active
 summary: >
   Aktuelle Providerarchitektur sowie historische Referenz des abgeschlossenen
   IONOS-zu-INWX-Cutovers für die erhaltenen weltgewebe.net-Mailidentitäten und
-  den CommonThing-Webcutover.
+  den commonThing-Webcutover.
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -37,14 +37,17 @@ Die Repository-Konfiguration dieses Changes setzt `commonthing.net` als neue
 Live-Evidence: Bis Merge, Deployment, DNS-Cutover und öffentlichem Readback ist
 `weltgewebe.net` weiterhin der belegte produktive Web-Origin. Registrar-,
 Nameserver- und Live-DNS-Evidence für `commonthing.net` muss im Cutover separat
-erbracht werden.
+erbracht werden. Für den ersten Webcutover ist die operative Reihenfolge nach
+dem Merge eindeutig: `commonthing.net`/`www` auf die ausgewählte VPS-Adresse
+setzen und autoritativ zurücklesen, danach den exakten Merge-Commit deployen und
+öffentlich über HTTPS verifizieren.
 
 Bis zum noch offenen DNS-Cutover verweisen `weltweb.net` und `weltweberei.org`
 weiterhin auf alte UI-DNS-/IONOS-Nameserver.
 
 Die IONOS-Kündigung wurde nach menschlicher Freigabe durchgeführt. Ein reproduzierbarer 48-Stunden-Nachweis ist nicht Bestandteil dieses Repository-Artefakts.
 
-## 2. Domainrollen nach abgeschlossenem CommonThing-Cutover
+## 2. Domainrollen nach abgeschlossenem commonThing-Cutover
 
 Die folgenden Webrollen sind der normative Zielzustand. Vor erfolgreichem
 Runtime- und DNS-Readback beschreiben sie **keinen bereits erreichten Livezustand**.
@@ -52,7 +55,7 @@ Runtime- und DNS-Readback beschreiben sie **keinen bereits erreichten Livezustan
 
 ### commonthing.net
 
-- **Public Web:** kanonischer CommonThing-App-Origin `https://commonthing.net`.
+- **Public Web:** kanonischer commonThing-App-Origin `https://commonthing.net`.
 - **www:** `www.commonthing.net` leitet permanent und URI-erhaltend auf den Apex.
 - **Beweisgrenze:** Registrar, autoritative Delegation und Live-A-/AAAA-Records
   sind keine belegten Repository-Fakten und benötigen externe Betriebsbelege.
@@ -125,7 +128,7 @@ Ein vollständiger aktueller Runtime-Nachweis erfordert separat:
 
 1. `runtime/README.md`, `docs/deploy/vps.md` und eine aktuelle Deployment-Identität weisen `wg-prod-1` sowie die unabhängig bestimmte erwartete VPS-Adresse aus,
 2. die jeweils autoritativen Nameserver liefern für alle fünf Public-Hosts genau diesen erwarteten VPS-A-Record,
-3. öffentliches HTTPS liefert CommonThing am neuen Apex, permanente URI-erhaltende Redirects für beide `www`- und beide Legacy-Hosts sowie die API am erhaltenen API-Host,
+3. öffentliches HTTPS liefert commonThing am neuen Apex, permanente URI-erhaltende Redirects für beide `www`- und beide Legacy-Hosts sowie die API am erhaltenen API-Host,
 4. die kanonischen API-Health-Pfade antworten erfolgreich,
 5. `weltgewebe-ddns.timer` auf Heimberry ist `disabled` und `inactive`,
 6. seit der Stilllegung wurden keine weiteren DDNS-Schreibereignisse des Heimberry-Dienstes protokolliert.

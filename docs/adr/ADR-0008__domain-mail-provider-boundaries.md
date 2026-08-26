@@ -34,7 +34,7 @@ accepted
 - INWX für Registrar/DNS.
 - mailbox.org für menschliche Mailbox `kontakt@weltgewebe.net`.
 - Brevo für technische Magic-Link-Mail `noreply@login.weltgewebe.net`.
-- `https://commonthing.net` und die Marke CommonThing für die öffentliche App.
+- `https://commonthing.net` und die Marke commonThing für die öffentliche App.
 - `weltgewebe.net` bleibt Maildomain und wird als Legacy-Webdomain permanent
   und URI-erhaltend auf `https://commonthing.net` umgeleitet;
   `api.weltgewebe.net` bleibt der API-Host.

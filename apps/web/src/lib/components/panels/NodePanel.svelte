@@ -446,7 +446,7 @@
           </p>{/if}
         {#if conflictNode}
           <section class="conflict-current" aria-label="Aktueller Serverstand">
-            <strong>Aktueller Stand in CommonThing</strong>
+            <strong>Aktueller Stand in commonThing</strong>
             <dl>
               <div>
                 <dt>Titel</dt>

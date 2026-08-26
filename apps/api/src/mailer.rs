@@ -43,13 +43,13 @@ fn escape_html(value: &str) -> String {
 
 fn magic_link_email(link: &str, requested_at: DateTime<Utc>) -> (String, String) {
     let request_label = requested_at.to_rfc3339_opts(SecondsFormat::Secs, true);
-    let subject = format!("Log in to CommonThing · {request_label}");
+    let subject = format!("Log in to commonThing · {request_label}");
     let safe_link = escape_html(link);
     let body = format!(
         r#"<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; padding: 20px;">
-    <h2>Log in to CommonThing</h2>
+    <h2>Log in to commonThing</h2>
     <p>Click the link below to sign in:</p>
     <p style="margin: 20px 0;">
         <a href="{safe_link}" style="background-color: #0070f3; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Sign In</a>
@@ -167,13 +167,13 @@ impl Mailer {
         let email = Message::builder()
             .from(self.from.parse().context("invalid from address")?)
             .to(to.parse().context("invalid to address")?)
-            .subject("Confirm sensitive action in CommonThing")
+            .subject("Confirm sensitive action in commonThing")
             .header(ContentType::TEXT_HTML)
             .body(format!(
                 r#"<!DOCTYPE html>
 <html>
 <body style="font-family: sans-serif; padding: 20px;">
-    <h2>Confirm your action in CommonThing</h2>
+    <h2>Confirm your action in commonThing</h2>
     <p>Click the link below to confirm your sensitive action. This link is strictly bound to your current session.</p>
     <p style="margin: 20px 0;"><a href="{safe_link}" style="background-color: #d32f2f; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Confirm Action</a></p>
     <p style="color: #666; font-size: 0.9em;">This link expires in a few minutes.</p>
@@ -238,7 +238,7 @@ mod tests {
         let link = "https://commonthing.net/api/auth/magic-link/consume?token=a&next=<home>";
         let (subject, body) = magic_link_email(link, requested_at);
 
-        assert_eq!(subject, "Log in to CommonThing · 2026-07-10T06:42:43Z");
+        assert_eq!(subject, "Log in to commonThing · 2026-07-10T06:42:43Z");
         assert!(body.contains("Requested:</strong> 2026-07-10T06:42:43Z"));
         assert!(body.contains("Only the newest sign-in email for your address is valid."));
         assert!(body.contains("Button not working?"));

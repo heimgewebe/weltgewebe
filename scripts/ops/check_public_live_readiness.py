@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the public CommonThing VPS live-readiness surface.
+"""Check the public commonThing VPS live-readiness surface.
 
 The checker is intentionally read-only. It performs DNS lookups and public HTTP(S)
 requests only. It does not read env files, connect to the VPS, mutate runtime
@@ -497,7 +497,7 @@ class PublicLiveChecker:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Check public CommonThing live-readiness.")
+    parser = argparse.ArgumentParser(description="Check public commonThing live-readiness.")
     parser.add_argument("--domain", default=DEFAULT_DOMAIN)
     parser.add_argument("--www-domain", default=DEFAULT_WWW_DOMAIN)
     parser.add_argument("--legacy-domain", default=DEFAULT_LEGACY_DOMAIN)

@@ -26,13 +26,13 @@
 </script>
 
 <svelte:head>
-  <title>CommonThing – Commons gemeinsam verwalten</title>
+  <title>commonThing – Commons gemeinsam verwalten</title>
   <meta
     name="description"
-    content="CommonThing macht Commons, Knoten, Garnrollen und ihre Beziehungen auf einer gemeinsamen Karte sichtbar und verwaltbar."
+    content="commonThing macht Commons, Knoten, Garnrollen und ihre Beziehungen auf einer gemeinsamen Karte sichtbar und verwaltbar."
   />
-  <meta name="application-name" content="CommonThing" />
-  <meta property="og:site_name" content="CommonThing" />
+  <meta name="application-name" content="commonThing" />
+  <meta property="og:site_name" content="commonThing" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   {#if data?.canonical}

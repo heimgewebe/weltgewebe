@@ -82,7 +82,7 @@ test.describe("weltweberei information surface", () => {
       expect(response!.ok(), "response status is 2xx").toBeTruthy();
 
       // 3. Document title is correct.
-      await expect(page).toHaveTitle("Weltweberei – Konzept und CommonThing");
+      await expect(page).toHaveTitle("Weltweberei – Konzept und commonThing");
 
       // 4. Exactly one visible main heading containing "Weltweberei".
       const headings = page.locator("h1");
@@ -101,7 +101,7 @@ test.describe("weltweberei information surface", () => {
         "weltweberei-info-v1",
       );
 
-      // 7. Visible link to the canonical CommonThing origin.
+      // 7. Visible link to the canonical commonThing origin.
       await expect(link).toHaveCount(1);
       await expect(link).toBeVisible();
     });

@@ -7,7 +7,7 @@ export type NotificationErrorContext =
   | "device-disable";
 
 export const PUSH_PERMISSION_BLOCKED =
-  "Benachrichtigungen sind für CommonThing blockiert. Erlaube sie in den Browser- oder Systemeinstellungen und kehre danach zu dieser Seite zurück.";
+  "Benachrichtigungen sind für commonThing blockiert. Erlaube sie in den Browser- oder Systemeinstellungen und kehre danach zu dieser Seite zurück.";
 
 const fallbackMessages: Record<NotificationErrorContext, string> = {
   load: "Die Benachrichtigungseinstellungen konnten nicht geladen werden. Versuche es erneut.",
@@ -33,7 +33,7 @@ export function describeNotificationError(
       case "notification_database_error":
         return "Die Benachrichtigungseinstellungen sind gerade nicht erreichbar. Deine Nachrichten bleiben im Postfach. Versuche es später erneut.";
       case "push_not_configured":
-        return "Push ist auf diesem CommonThing-Server derzeit nicht verfügbar. Deine Nachrichten bleiben im Postfach.";
+        return "Push ist auf diesem commonThing-Server derzeit nicht verfügbar. Deine Nachrichten bleiben im Postfach.";
       case "push_delivery_unavailable":
         return "Push ist vorübergehend nicht verfügbar. Deine Nachrichten bleiben im Postfach. Versuche es später erneut.";
       case "invalid_push_subscription":

@@ -232,10 +232,10 @@
 </script>
 
 <svelte:head>
-  <title>Anträge · CommonThing</title>
+  <title>Anträge · commonThing</title>
   <meta
     name="description"
-    content="Offene Anträge, Konsentphasen, Vetos, Gespräche und Abstimmungen in CommonThing."
+    content="Offene Anträge, Konsentphasen, Vetos, Gespräche und Abstimmungen in commonThing."
   />
 </svelte:head>
 
@@ -297,7 +297,7 @@
                 bind:value={summary}
                 maxlength="2000"
                 rows="5"
-                placeholder="Was möchtest du in CommonThing beitragen?"
+                placeholder="Was möchtest du in commonThing beitragen?"
               ></textarea>
             </div>
             <button
@@ -315,7 +315,7 @@
           >
             {leaving
               ? "Gastkonto wird aufgelöst…"
-              : "CommonThing vollständig verlassen"}
+              : "commonThing vollständig verlassen"}
           </button>
         </section>
       {/if}

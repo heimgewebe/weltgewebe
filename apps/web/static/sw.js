@@ -1,4 +1,4 @@
-/* CommonThing Web Push worker.
+/* commonThing Web Push worker.
  * Push is only a privacy-safe hint. The canonical message is loaded after the
  * user opens /nachrichten; no message content is cached here.
  */
@@ -12,11 +12,11 @@ self.addEventListener("push", (event) => {
   }
 
   const title =
-    typeof payload.title === "string" ? payload.title : "CommonThing";
+    typeof payload.title === "string" ? payload.title : "commonThing";
   const body =
     typeof payload.body === "string"
       ? payload.body
-      : "Neue Aktivität in CommonThing";
+      : "Neue Aktivität in commonThing";
   const tag =
     typeof payload.tag === "string" ? payload.tag : "weltgewebe-activity";
   const requestedUrl =

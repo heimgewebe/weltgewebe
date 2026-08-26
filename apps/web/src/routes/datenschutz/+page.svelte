@@ -1,8 +1,8 @@
 <svelte:head>
-  <title>Datenschutz – CommonThing</title>
+  <title>Datenschutz – commonThing</title>
   <meta
     name="description"
-    content="Datenschutzhinweise für die Nutzung von CommonThing."
+    content="Datenschutzhinweise für die Nutzung von commonThing."
   />
 </svelte:head>
 
@@ -11,12 +11,12 @@
   <p>
     <strong>Verantwortlicher:</strong> Alexander Mohr, Huskoppelallee 13, 23795
     Klein Rönnau,
-    <a href="mailto:kontakt@weltweberei.org">kontakt@weltweberei.org</a>.
+    <a href="mailto:kontakt@weltgewebe.net">kontakt@weltgewebe.net</a>.
   </p>
 
   <h2>Grundsatz</h2>
   <p>
-    CommonThing erhebt keine Daten für Werbung, Tracking oder verdeckte
+    commonThing erhebt keine Daten für Werbung, Tracking oder verdeckte
     Profilbildung. Sichtbar wird nur, was Nutzer selbst eintragen und
     ausdrücklich als öffentlich kennzeichnen.
   </p>
@@ -63,8 +63,8 @@
 
   <h2>Kontakt</h2>
   <p>
-    Datenschutzanfragen können an <a href="mailto:kontakt@weltweberei.org"
-      >kontakt@weltweberei.org</a
+    Datenschutzanfragen können an <a href="mailto:kontakt@weltgewebe.net"
+      >kontakt@weltgewebe.net</a
     > gerichtet werden.
   </p>
 

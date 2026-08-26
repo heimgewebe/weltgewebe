@@ -19,7 +19,7 @@ Stand: 2026-08-26
 Für den aktuellen Wert von `APP_BASE_URL` und den bereits erbrachten Magic-Link-Proof ersetzt dieses Dokument den historischen Ist-Zustand sowie die entsprechenden offenen Belegpunkte in `docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md`. Die dort noch genannte `.home.arpa`-Konfiguration beschreibt den Zustand vor dem Runtime-Cutover und darf nicht als aktuelle Betriebs- oder Copy-Paste-Quelle verwendet werden.
 
 Der frühere Live-Proof mit `APP_BASE_URL=https://weltgewebe.net` bleibt ein
-historischer Beleg für den damaligen Runtime-Zustand. Seit dem CommonThing-Cutover
+historischer Beleg für den damaligen Runtime-Zustand. Seit dem commonThing-Cutover
 ist er keine aktuelle Copy-Paste-Vorgabe. Nach dem Merge bleibt ein kontrollierter
 Abgleich des Server-Checkouts und eine erneute Prüfung der effektiven Runtime
 erforderlich.

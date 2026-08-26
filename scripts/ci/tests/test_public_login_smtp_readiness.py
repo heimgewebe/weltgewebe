@@ -37,8 +37,8 @@ def test_production_example_cuts_over_app_and_webauthn_but_preserves_smtp() -> N
     assert values["APP_BASE_URL"] == "https://commonthing.net"
     assert values["WEBAUTHN_RP_ID"] == "commonthing.net"
     assert values["WEBAUTHN_RP_ORIGIN"] == "https://commonthing.net"
-    assert values["WEBAUTHN_RP_NAME"] == "CommonThing"
-    assert values["SMTP_FROM"] == "noreply@weltgewebe.net"
+    assert values["WEBAUTHN_RP_NAME"] == "commonThing"
+    assert values["SMTP_FROM"] == "noreply@login.weltgewebe.net"
 
 
 def test_production_public_login_passes_with_authenticated_smtp(tmp_path: Path) -> None:
