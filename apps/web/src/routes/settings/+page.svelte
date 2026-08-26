@@ -1,7 +1,8 @@
 <script lang="ts">
+  import { onMount, tick } from "svelte";
   import AccountSection from "$lib/components/AccountSection.svelte";
   import MyGarnrolleSection from "$lib/components/MyGarnrolleSection.svelte";
-  import NotificationSettings from "$lib/components/NotificationSettings.svelte";
+  import { authStore } from "$lib/auth/store";
   import type { PageData } from "./$types";
 
   interface Props {
@@ -9,6 +10,56 @@
   }
 
   let { data }: Props = $props();
+  let NotificationSettings:
+    | typeof import("$lib/components/NotificationSettings.svelte").default
+    | null = $state(null);
+  let notificationFallback: HTMLElement | null = $state(null);
+  let notificationModuleError = $state(false);
+
+  function focusNotificationFallback(): void {
+    if (window.location.hash !== "#benachrichtigungen") return;
+    notificationFallback?.focus({ preventScroll: true });
+  }
+
+  async function loadNotificationSettings(): Promise<void> {
+    if (NotificationSettings) return;
+    notificationModuleError = false;
+    try {
+      const module = await import("$lib/components/NotificationSettings.svelte");
+      NotificationSettings = module.default;
+    } catch {
+      notificationModuleError = true;
+      await tick();
+      focusNotificationFallback();
+    }
+  }
+
+  async function checkNotificationAuth(force = false): Promise<void> {
+    const status = await authStore.checkAuth(force ? { force: true } : undefined);
+    if (status.state === "authenticated" && status.authenticated) {
+      await loadNotificationSettings();
+      return;
+    }
+    await tick();
+    focusNotificationFallback();
+  }
+
+  onMount(() => {
+    let active = true;
+    void checkNotificationAuth().then(() => {
+      if (!active) return;
+      focusNotificationFallback();
+    });
+
+    const handleHashChange = () => focusNotificationFallback();
+    window.addEventListener("hashchange", handleHashChange);
+    focusNotificationFallback();
+
+    return () => {
+      active = false;
+      window.removeEventListener("hashchange", handleHashChange);
+    };
+  });
 </script>
 
 <svelte:head>
@@ -87,7 +138,66 @@
         </section>
 
         <div class="panel notification-card">
-          <NotificationSettings />
+          {#if NotificationSettings}
+            <NotificationSettings />
+          {:else}
+            <section
+              bind:this={notificationFallback}
+              id="benachrichtigungen"
+              class="notification-placeholder"
+              aria-labelledby="notification-settings-heading"
+              tabindex="-1"
+            >
+              <div class="notification-heading">
+                <div>
+                  <p class="notification-eyebrow">Push für private Nachrichten</p>
+                  <h2 id="notification-settings-heading">Benachrichtigungen</h2>
+                </div>
+                <a class="notification-inbox touch-target" href="/nachrichten"
+                  >Zum Postfach</a
+                >
+              </div>
+
+              {#if notificationModuleError}
+                <div class="notification-status notification-error" role="alert">
+                  <p>
+                    Die Benachrichtigungseinstellungen konnten nicht geladen
+                    werden. Versuche es erneut.
+                  </p>
+                  <button
+                    class="btn secondary touch-target"
+                    type="button"
+                    onclick={loadNotificationSettings}>Erneut versuchen</button
+                  >
+                </div>
+              {:else if $authStore.state === "degraded"}
+                <div class="notification-status notification-error" role="alert">
+                  <p>
+                    Dein Anmeldestatus konnte nicht geprüft werden. Prüfe die
+                    Verbindung und versuche es erneut.
+                  </p>
+                  <button
+                    class="btn secondary touch-target"
+                    type="button"
+                    onclick={() => checkNotificationAuth(true)}
+                    >Anmeldung erneut prüfen</button
+                  >
+                </div>
+              {:else if $authStore.state === "unauthenticated"}
+                <div class="notification-status" role="status">
+                  <p>
+                    Melde dich an, um Push-Hinweise und Gerätefreigaben zu
+                    verwalten.
+                  </p>
+                  <a class="btn secondary touch-target" href="/login">Anmelden</a>
+                </div>
+              {:else}
+                <p class="notification-status" role="status">
+                  Benachrichtigungseinstellungen werden geladen …
+                </p>
+              {/if}
+            </section>
+          {/if}
         </div>
 
         <div id="konto-und-sicherheit" class="panel">
@@ -117,7 +227,9 @@
   .page-header h1,
   .intro,
   .menu-heading,
-  .menu-hint {
+  .menu-hint,
+  .notification-placeholder h2,
+  .notification-placeholder p {
     margin: 0;
   }
 
@@ -144,13 +256,15 @@
 
   .menu-links span,
   .menu-hint,
-  .diagnostics-link {
+  .diagnostics-link,
+  .notification-eyebrow {
     color: var(--muted);
     font-size: 0.82rem;
   }
 
   .back-link,
-  .diagnostics-link {
+  .diagnostics-link,
+  .notification-inbox {
     display: inline-flex;
     align-items: center;
     width: fit-content;
@@ -169,6 +283,45 @@
     padding: clamp(1rem, 3vw, 1.5rem);
   }
 
+  .notification-placeholder {
+    display: grid;
+    gap: 1rem;
+    padding: clamp(1rem, 3vw, 1.5rem);
+    scroll-margin-top: 1rem;
+  }
+
+  .notification-placeholder:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+
+  .notification-heading,
+  .notification-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+  }
+
+  .notification-eyebrow {
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .notification-inbox {
+    color: var(--accent);
+  }
+
+  .notification-status {
+    padding: 0.75rem 0.9rem;
+    border-radius: 0.65rem;
+    background: var(--panel-solid);
+  }
+
+  .notification-error {
+    border-inline-start: 3px solid var(--danger, currentColor);
+  }
+
   @media (max-width: 860px) {
     .settings-layout {
       grid-template-columns: 1fr;
@@ -176,6 +329,20 @@
 
     .settings-menu {
       position: static;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .notification-heading,
+    .notification-status {
+      align-items: stretch;
+      flex-direction: column;
+    }
+
+    .notification-heading .notification-inbox,
+    .notification-status button,
+    .notification-status a {
+      width: 100%;
     }
   }
 </style>
