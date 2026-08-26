@@ -543,7 +543,7 @@ async fn private_message_push_preference_cancels_queued_delivery() {
     .bind(foreign_subscription_id)
     .bind(AUTHOR_ID)
     .bind("https://push.example.invalid/foreign-subscription")
-    .bind("f".repeat(64))
+    .bind("30321d15294cc533fecae134512cacd1dfddc0135c3f3ed14340fee4a74ab7ae")
     .bind("s".repeat(80))
     .bind("d".repeat(16))
     .execute(&pool)
