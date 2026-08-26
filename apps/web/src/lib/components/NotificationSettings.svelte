@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import PushDeviceManager from "$lib/components/PushDeviceManager.svelte";
   import { authStore } from "$lib/auth/store";
   import {
     applicationServerKey,
@@ -348,6 +349,8 @@
         </button>
       {/if}
     </div>
+
+    <PushDeviceManager currentEndpoint={browserSubscription?.endpoint ?? null} />
 
     {#if config && !config.enabled}
       <p class="status warning">
