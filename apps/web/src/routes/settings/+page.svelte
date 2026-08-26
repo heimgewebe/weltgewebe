@@ -12,20 +12,11 @@
   let NotificationSettings:
     | typeof import("$lib/components/NotificationSettings.svelte").default
     | null = $state(null);
-  let notificationLoadFailed = $state(false);
-
-  async function loadNotificationSettings(): Promise<void> {
-    notificationLoadFailed = false;
-    try {
-      const module = await import("$lib/components/NotificationSettings.svelte");
-      NotificationSettings = module.default;
-    } catch {
-      notificationLoadFailed = true;
-    }
-  }
 
   onMount(() => {
-    void loadNotificationSettings();
+    void import("$lib/components/NotificationSettings.svelte").then(
+      (module) => (NotificationSettings = module.default),
+    );
   });
 </script>
 
@@ -115,18 +106,7 @@
             >
               <p class="menu-heading">Push für private Nachrichten</p>
               <h2 id="notification-settings-heading">Benachrichtigungen</h2>
-              {#if notificationLoadFailed}
-                <p role="alert">
-                  Die Benachrichtigungseinstellungen konnten nicht geladen werden.
-                </p>
-                <button
-                  class="btn secondary touch-target"
-                  type="button"
-                  onclick={loadNotificationSettings}>Erneut versuchen</button
-                >
-              {:else}
-                <p role="status">Benachrichtigungseinstellungen werden geladen …</p>
-              {/if}
+              <p role="status">Benachrichtigungseinstellungen werden geladen …</p>
             </section>
           {/if}
         </div>
@@ -158,9 +138,7 @@
   .page-header h1,
   .intro,
   .menu-heading,
-  .menu-hint,
-  .notification-loading h2,
-  .notification-loading p {
+  .menu-hint {
     margin: 0;
   }
 
