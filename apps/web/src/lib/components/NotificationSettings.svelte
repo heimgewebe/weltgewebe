@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { authStore } from "$lib/auth/store";
   import {
     applicationServerKey,
     deletePushSubscription,
@@ -29,6 +30,7 @@
   let error = $state("");
   let warning = $state("");
   let notice = $state("");
+  let sectionElement: HTMLElement | null = null;
 
   function clearFeedback(): void {
     error = "";
@@ -42,6 +44,11 @@
     if (permission !== "denied" && warning === PUSH_PERMISSION_BLOCKED) {
       warning = "";
     }
+  }
+
+  function focusDeepLink(): void {
+    if (window.location.hash !== "#benachrichtigungen") return;
+    sectionElement?.focus({ preventScroll: true });
   }
 
   async function loadBrowserSubscription(): Promise<void> {
@@ -68,6 +75,17 @@
     }
   }
 
+  async function retryAuth(): Promise<void> {
+    clearFeedback();
+    loading = true;
+    const status = await authStore.checkAuth({ force: true });
+    if (status.state === "authenticated" && status.authenticated) {
+      await load();
+      return;
+    }
+    loading = false;
+  }
+
   async function changePreference(event: Event): Promise<void> {
     const checked = (event.currentTarget as HTMLInputElement).checked;
     const previous = preferences.direct_messages_push;
@@ -90,11 +108,7 @@
   }
 
   async function enableCurrentDevice(): Promise<void> {
-    if (
-      changingDevice ||
-      !config?.enabled ||
-      !config.application_server_key
-    )
+    if (changingDevice || !config?.enabled || !config.application_server_key)
       return;
     if (permission === "denied") {
       warning = PUSH_PERMISSION_BLOCKED;
@@ -189,31 +203,45 @@
       "PushManager" in window &&
       "Notification" in window;
     permission = supported ? Notification.permission : "unsupported";
-    if (supported) void load();
-    else loading = false;
+    if (supported) {
+      void authStore.checkAuth().then((status) => {
+        if (status.state === "authenticated" && status.authenticated) {
+          void load();
+        } else {
+          loading = false;
+        }
+      });
+    } else {
+      loading = false;
+    }
 
     const handleVisibilityChange = () => refreshPermission();
     document.addEventListener("visibilitychange", handleVisibilityChange);
     window.addEventListener("focus", refreshPermission);
+    window.addEventListener("hashchange", focusDeepLink);
+    focusDeepLink();
 
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", refreshPermission);
+      window.removeEventListener("hashchange", focusDeepLink);
     };
   });
 </script>
 
 <section
+  bind:this={sectionElement}
   id="benachrichtigungen"
   class="notification-settings"
   aria-labelledby="notification-settings-heading"
+  tabindex="-1"
 >
   <div class="section-heading">
     <div>
-      <p class="eyebrow">Benachrichtigungen</p>
-      <h2 id="notification-settings-heading">Push auf deinen Geräten</h2>
+      <p class="eyebrow">Push für private Nachrichten</p>
+      <h2 id="notification-settings-heading">Benachrichtigungen</h2>
     </div>
-    <a class="inbox-link" href="/settings">Einstellungen</a>
+    <a class="inbox-link touch-target" href="/nachrichten">Zum Postfach</a>
   </div>
 
   <p class="explanation">
@@ -232,24 +260,39 @@
       Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
       verfügbar. Das Nachrichtenpostfach bleibt vollständig nutzbar.
     </p>
-  {:else if loading}
+  {:else if $authStore.state === "checking" || loading}
     <p class="status">Benachrichtigungseinstellungen werden geladen …</p>
-  {:else if error && !config}
+  {:else if $authStore.state === "degraded"}
     <div class="status error status-with-action" role="alert">
-      <p>{error}</p>
+      <p>
+        Dein Anmeldestatus konnte nicht geprüft werden. Prüfe die Verbindung und
+        versuche es erneut.
+      </p>
       <button
         class="btn secondary touch-target"
         type="button"
-        onclick={load}>Erneut versuchen</button
+        onclick={retryAuth}>Anmeldung erneut prüfen</button
+      >
+    </div>
+  {:else if !$authStore.authenticated}
+    <div class="status status-with-action" role="status">
+      <p>Melde dich an, um Push-Hinweise und Gerätefreigaben zu verwalten.</p>
+      <a class="btn secondary touch-target" href="/login">Anmelden</a>
+    </div>
+  {:else if error && !config}
+    <div class="status error status-with-action" role="alert">
+      <p>{error}</p>
+      <button class="btn secondary touch-target" type="button" onclick={load}
+        >Erneut versuchen</button
       >
     </div>
   {:else}
     <div class="preference-row">
       <div>
-        <strong>Private Nachrichten</strong>
+        <strong>Kontoeinstellung</strong>
         <p>
-          Diese Einstellung gilt für dein Konto. Push-Hinweise werden nur an
-          Geräte gesendet, auf denen du Push zusätzlich aktiviert hast.
+          Push-Hinweise für private Nachrichten. Diese Einstellung legt fest, ob
+          Weltgewebe solche Hinweise für dein Konto senden soll.
         </p>
       </div>
       <label class="switch-label">
@@ -266,14 +309,15 @@
 
     <div class="device-card">
       <div>
-        <strong>Dieses Gerät</strong>
+        <strong>Geräteeinstellung</strong>
         <p>
           {#if browserSubscription}
-            Push ist auf diesem Gerät freigegeben.
+            Push auf diesem Gerät: aktiviert.
           {:else if permission === "denied"}
-            Benachrichtigungen sind im Browser oder Betriebssystem blockiert.
+            Push auf diesem Gerät: blockiert. Die Freigabe muss im Browser oder
+            Betriebssystem geändert werden.
           {:else}
-            Push ist auf diesem Gerät noch nicht aktiviert.
+            Push auf diesem Gerät: nicht aktiviert.
           {/if}
         </p>
       </div>
@@ -326,6 +370,12 @@
     display: grid;
     gap: 1rem;
     padding: clamp(1rem, 3vw, 1.5rem);
+    scroll-margin-top: 1rem;
+  }
+
+  .notification-settings:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
   }
 
   .section-heading,
@@ -384,6 +434,8 @@
   }
 
   .inbox-link {
+    display: inline-flex;
+    align-items: center;
     color: var(--accent);
   }
 
@@ -416,7 +468,8 @@
 
     .section-heading .inbox-link,
     .device-card button,
-    .status-with-action button {
+    .status-with-action button,
+    .status-with-action a {
       width: 100%;
     }
   }
