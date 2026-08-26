@@ -175,6 +175,15 @@ async function installApiMocks(
       });
     }
 
+    if (pathname === "/api/push/subscriptions" && method === "GET") {
+      options.onPushRead?.(pathname);
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ items: [], limit: 20 }),
+      });
+    }
+
     if (pathname === "/api/push/subscriptions" && method === "DELETE") {
       if (deleteStatus >= 400) {
         return route.fulfill({
@@ -237,6 +246,15 @@ test.describe("Settings — notifications information architecture", () => {
     await expect(page.locator("#benachrichtigungen")).toBeFocused();
     await expect(
       page.getByRole("heading", { name: "Benachrichtigungen", level: 2 }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", {
+        name: "Registrierte Push-Geräte",
+        level: 3,
+      }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Für dieses Konto sind keine aktiven Push-Geräte registriert."),
     ).toBeVisible();
   });
 
