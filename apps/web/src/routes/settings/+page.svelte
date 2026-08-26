@@ -14,14 +14,32 @@
   let AccountSection:
     | typeof import("$lib/components/AccountSection.svelte").default
     | null = $state(null);
+  let notificationLoadFailed = $state(false);
+  let accountLoadFailed = $state(false);
+
+  async function loadNotificationSettings(): Promise<void> {
+    notificationLoadFailed = false;
+    try {
+      const module = await import("$lib/components/NotificationSettings.svelte");
+      NotificationSettings = module.default;
+    } catch {
+      notificationLoadFailed = true;
+    }
+  }
+
+  async function loadAccountSection(): Promise<void> {
+    accountLoadFailed = false;
+    try {
+      const module = await import("$lib/components/AccountSection.svelte");
+      AccountSection = module.default;
+    } catch {
+      accountLoadFailed = true;
+    }
+  }
 
   onMount(() => {
-    void import("$lib/components/NotificationSettings.svelte").then(
-      (module) => (NotificationSettings = module.default),
-    );
-    void import("$lib/components/AccountSection.svelte").then(
-      (module) => (AccountSection = module.default),
-    );
+    void loadNotificationSettings();
+    void loadAccountSection();
   });
 </script>
 
@@ -103,13 +121,37 @@
         <div class="panel notification-card">
           {#if NotificationSettings}
             <NotificationSettings />
+          {:else if notificationLoadFailed}
+            <div id="benachrichtigungen" class="lazy-status" role="alert">
+              <p>Benachrichtigungen konnten nicht geladen werden.</p>
+              <button
+                class="btn secondary touch-target"
+                type="button"
+                onclick={loadNotificationSettings}>Erneut versuchen</button
+              >
+            </div>
           {:else}
-            <div id="benachrichtigungen"></div>
+            <p id="benachrichtigungen" class="lazy-status" role="status">
+              Benachrichtigungen werden geladen …
+            </p>
           {/if}
         </div>
 
         <div id="konto-und-sicherheit" class="panel">
-          {#if AccountSection}<AccountSection />{/if}
+          {#if AccountSection}
+            <AccountSection />
+          {:else if accountLoadFailed}
+            <div class="lazy-status" role="alert">
+              <p>Konto &amp; Sicherheit konnte nicht geladen werden.</p>
+              <button
+                class="btn secondary touch-target"
+                type="button"
+                onclick={loadAccountSection}>Erneut versuchen</button
+              >
+            </div>
+          {:else}
+            <p class="lazy-status" role="status">Konto &amp; Sicherheit wird geladen …</p>
+          {/if}
         </div>
       </main>
     </div>
@@ -135,7 +177,8 @@
   .page-header h1,
   .intro,
   .menu-heading,
-  .menu-hint {
+  .menu-hint,
+  .lazy-status p {
     margin: 0;
   }
 
@@ -187,6 +230,14 @@
     padding: clamp(1rem, 3vw, 1.5rem);
   }
 
+  .lazy-status {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: clamp(1rem, 3vw, 1.5rem);
+  }
+
   @media (max-width: 860px) {
     .settings-layout {
       grid-template-columns: 1fr;
@@ -194,6 +245,13 @@
 
     .settings-menu {
       position: static;
+    }
+  }
+
+  @media (max-width: 620px) {
+    .lazy-status {
+      align-items: stretch;
+      flex-direction: column;
     }
   }
 </style>
