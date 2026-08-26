@@ -26,6 +26,10 @@ HUB_OUTBOUND_THRESHOLD = 8
 HUB_INBOUND_THRESHOLD = 10
 
 
+def _raise_walk_error(error):
+    raise error
+
+
 def collect_relations_graph():
     """
     Walk all docs/*.md (excluding _generated) and build the relations graph.
@@ -38,21 +42,17 @@ def collect_relations_graph():
     edges = []
     all_docs = set()
 
-    for root, dirs, files in os.walk(docs_dir):
-        if "_generated" in root:
-            continue
-        for file in files:
+    for root, dirs, files in os.walk(docs_dir, onerror=_raise_walk_error):
+        dirs[:] = sorted(directory for directory in dirs if directory != "_generated")
+        for file in sorted(files):
             if not file.endswith(".md"):
                 continue
             abs_path = os.path.join(root, file)
             rel_path = os.path.relpath(abs_path, REPO_ROOT)
             all_docs.add(rel_path)
 
-            try:
-                with open(abs_path, "r", encoding="utf-8") as f:
-                    content = f.read()
-            except Exception:
-                continue
+            with open(abs_path, "r", encoding="utf-8") as f:
+                content = f.read()
 
             relations = extract_relations_from_content(content)
             for rel in relations:

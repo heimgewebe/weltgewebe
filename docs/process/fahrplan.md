@@ -64,7 +64,7 @@ relations:
 - [ ] OpenAPI-Stub (utoipa) generiert und CI veröffentlicht Artefakt.
 - [ ] Kernverträge (`POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /conversations`) als Stubs
   implementiert.
-- [ ] `migrations/` vorbereitet (Basis-Tabellen) und CI führt `cargo fmt`, `clippy -D warnings`,
+- [ ] `apps/api/migrations/` vorbereitet (Basis-Tabellen) und CI führt `cargo fmt`, `clippy -D warnings`,
   `cargo test` aus.
 - [ ] `docker compose` (nur API) startet fehlerfrei.
 - [ ] Contract-Test gegen `POST /nodes` grün, OpenAPI JSON abrufbar.
@@ -146,7 +146,7 @@ relations:
 - OpenAPI-Stub (utoipa) generiert.
 - **Kernverträge:** `POST /nodes`, `GET /nodes/{id}`, `POST /roles`, `POST /conversations`
   (Stub-Implementierung).
-- `migrations/` vorbereitet (ohne Fachtabellen).
+- `apps/api/migrations/` vorbereitet (ohne Fachtabellen).
 - CI: `cargo fmt`, `clippy -D warnings`, `cargo test`.
 
 ### Gate B: Done
