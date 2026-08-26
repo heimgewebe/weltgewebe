@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { authStore } from "$lib/auth/store";
   import {
-    NotificationsApiError,
     applicationServerKey,
     deletePushSubscription,
     getNotificationPreferences,
@@ -11,6 +11,10 @@
     type NotificationPreferences,
     type PushConfig,
   } from "$lib/api/notifications";
+  import {
+    PUSH_PERMISSION_BLOCKED,
+    describeNotificationError,
+  } from "$lib/notifications/feedback";
 
   let supported = $state(false);
   let loading = $state(true);
@@ -24,23 +28,27 @@
   let permission: NotificationPermission | "unsupported" =
     $state("unsupported");
   let error = $state("");
+  let warning = $state("");
   let notice = $state("");
+  let sectionElement: HTMLElement | null = null;
 
-  function describeError(cause: unknown): string {
-    if (cause instanceof NotificationsApiError) {
-      if (cause.status === 401)
-        return "Bitte melde dich an, um Benachrichtigungen einzustellen.";
-      if (cause.code === "push_not_configured")
-        return "Push ist in dieser Weltgewebe-Zelle noch nicht eingerichtet.";
-      if (cause.code === "push_delivery_unavailable")
-        return "Der Push-Zustellweg ist derzeit nicht verbunden.";
-      if (cause.code === "invalid_push_subscription")
-        return "Die Browserfreigabe konnte nicht sicher übernommen werden.";
-      if (cause.code === "push_subscription_limit_reached")
-        return "Für dieses Konto sind bereits 20 Geräte aktiv. Deaktiviere zuerst ein nicht mehr verwendetes Gerät.";
+  function clearFeedback(): void {
+    error = "";
+    warning = "";
+    notice = "";
+  }
+
+  function refreshPermission(): void {
+    if (!supported || document.visibilityState === "hidden") return;
+    permission = Notification.permission;
+    if (permission !== "denied" && warning === PUSH_PERMISSION_BLOCKED) {
+      warning = "";
     }
-    if (cause instanceof Error && cause.message) return cause.message;
-    return "Die Benachrichtigungseinstellung konnte nicht verarbeitet werden.";
+  }
+
+  function focusDeepLink(): void {
+    if (window.location.hash !== "#benachrichtigungen") return;
+    sectionElement?.focus({ preventScroll: true });
   }
 
   async function loadBrowserSubscription(): Promise<void> {
@@ -51,7 +59,7 @@
 
   async function load(): Promise<void> {
     loading = true;
-    error = "";
+    clearFeedback();
     const controller = new AbortController();
     try {
       [config, preferences] = await Promise.all([
@@ -59,11 +67,23 @@
         getNotificationPreferences(controller.signal),
       ]);
       await loadBrowserSubscription();
+      refreshPermission();
     } catch (cause) {
-      error = describeError(cause);
+      error = describeNotificationError(cause, "load");
     } finally {
       loading = false;
     }
+  }
+
+  async function retryAuth(): Promise<void> {
+    clearFeedback();
+    loading = true;
+    const status = await authStore.checkAuth({ force: true });
+    if (status.state === "authenticated" && status.authenticated) {
+      await load();
+      return;
+    }
+    loading = false;
   }
 
   async function changePreference(event: Event): Promise<void> {
@@ -71,16 +91,17 @@
     const previous = preferences.direct_messages_push;
     preferences = { ...preferences, direct_messages_push: checked };
     savingPreference = true;
-    error = "";
-    notice = "";
+    clearFeedback();
     try {
       preferences = await updateNotificationPreferences(checked);
       notice = checked
-        ? "Private Nachrichten sind für Push freigegeben."
-        : "Push-Hinweise für private Nachrichten sind ausgeschaltet.";
+        ? browserSubscription
+          ? "Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet."
+          : "Push-Hinweise sind für dein Konto eingeschaltet. Aktiviere dieses Gerät, um sie hier zu empfangen."
+        : "Push-Hinweise für private Nachrichten sind für dein Konto ausgeschaltet.";
     } catch (cause) {
       preferences = { ...preferences, direct_messages_push: previous };
-      error = describeError(cause);
+      error = describeNotificationError(cause, "preference");
     } finally {
       savingPreference = false;
     }
@@ -89,17 +110,25 @@
   async function enableCurrentDevice(): Promise<void> {
     if (changingDevice || !config?.enabled || !config.application_server_key)
       return;
+    if (permission === "denied") {
+      warning = PUSH_PERMISSION_BLOCKED;
+      return;
+    }
+
     changingDevice = true;
-    error = "";
-    notice = "";
+    clearFeedback();
     let createdSubscription: PushSubscription | null = null;
+    let cleanupEndpoint: string | null = null;
     try {
       permission = await Notification.requestPermission();
       if (permission !== "granted") {
-        throw new Error(
-          "Das Gerät hat Push nicht freigegeben. Du kannst die Berechtigung in den Browser- oder Systemeinstellungen ändern.",
-        );
+        warning =
+          permission === "denied"
+            ? PUSH_PERMISSION_BLOCKED
+            : "Benachrichtigungen wurden nicht freigegeben. Ohne Freigabe bleibt Push auf diesem Gerät aus.";
+        return;
       }
+
       const registration = await navigator.serviceWorker.register("/sw.js", {
         scope: "/",
       });
@@ -113,15 +142,31 @@
             config.application_server_key,
           ),
         }));
+      cleanupEndpoint = createdSubscription.endpoint;
       await registerPushSubscription(createdSubscription);
       preferences = await updateNotificationPreferences(true);
       browserSubscription = createdSubscription;
-      notice = "Push ist auf diesem Gerät aktiviert.";
+      notice =
+        "Push ist auf diesem Gerät aktiviert. Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet.";
     } catch (cause) {
-      if (createdSubscription && !browserSubscription) {
-        await createdSubscription.unsubscribe().catch(() => false);
+      if (createdSubscription && cleanupEndpoint) {
+        try {
+          await deletePushSubscription(cleanupEndpoint);
+          await createdSubscription.unsubscribe().catch(() => false);
+          await loadBrowserSubscription();
+          if (browserSubscription) {
+            warning =
+              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Du kannst die Deaktivierung erneut versuchen.";
+          }
+        } catch (cleanupCause) {
+          browserSubscription = createdSubscription;
+          warning = `Die Einrichtung ist fehlgeschlagen und konnte nicht vollständig zurückgenommen werden. Das Geräte-Abo bleibt sichtbar, damit du die Deaktivierung erneut versuchen kannst. ${describeNotificationError(
+            cleanupCause,
+            "device-disable",
+          )}`;
+        }
       }
-      error = describeError(cause);
+      error = describeNotificationError(cause, "device-enable");
     } finally {
       changingDevice = false;
     }
@@ -130,20 +175,23 @@
   async function disableCurrentDevice(): Promise<void> {
     if (changingDevice || !browserSubscription) return;
     changingDevice = true;
-    error = "";
-    notice = "";
-    const endpoint = browserSubscription.endpoint;
+    clearFeedback();
+    const subscription = browserSubscription;
     try {
-      await browserSubscription.unsubscribe();
-      browserSubscription = null;
-      try {
-        await deletePushSubscription(endpoint);
-        notice = "Push ist auf diesem Gerät deaktiviert.";
-      } catch (cause) {
-        error = `${describeError(cause)} Die Browserfreigabe ist trotzdem beendet; der alte Endpunkt wird beim nächsten Zustellversuch automatisch stillgelegt.`;
+      // Server first: if this request fails, keep the browser subscription so
+      // the endpoint remains recoverable after a reload and the user can retry.
+      await deletePushSubscription(subscription.endpoint);
+
+      await subscription.unsubscribe().catch(() => false);
+      await loadBrowserSubscription();
+      if (browserSubscription) {
+        warning =
+          "Der Geräte-Eintrag ist auf dem Server entfernt, aber das lokale Browser-Abo konnte nicht beendet werden. Versuche die Deaktivierung erneut.";
+        return;
       }
+      notice = "Push ist auf diesem Gerät deaktiviert.";
     } catch (cause) {
-      error = describeError(cause);
+      error = describeNotificationError(cause, "device-disable");
     } finally {
       changingDevice = false;
     }
@@ -155,22 +203,45 @@
       "PushManager" in window &&
       "Notification" in window;
     permission = supported ? Notification.permission : "unsupported";
-    if (supported) void load();
-    else loading = false;
+    if (supported) {
+      void authStore.checkAuth().then((status) => {
+        if (status.state === "authenticated" && status.authenticated) {
+          void load();
+        } else {
+          loading = false;
+        }
+      });
+    } else {
+      loading = false;
+    }
+
+    const handleVisibilityChange = () => refreshPermission();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", refreshPermission);
+    window.addEventListener("hashchange", focusDeepLink);
+    focusDeepLink();
+
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", refreshPermission);
+      window.removeEventListener("hashchange", focusDeepLink);
+    };
   });
 </script>
 
 <section
+  bind:this={sectionElement}
   id="benachrichtigungen"
   class="notification-settings"
   aria-labelledby="notification-settings-heading"
+  tabindex="-1"
 >
   <div class="section-heading">
     <div>
-      <p class="eyebrow">Benachrichtigungen</p>
-      <h2 id="notification-settings-heading">Push auf deinen Geräten</h2>
+      <p class="eyebrow">Push für private Nachrichten</p>
+      <h2 id="notification-settings-heading">Benachrichtigungen</h2>
     </div>
-    <a class="inbox-link" href="/settings">Einstellungen</a>
+    <a class="inbox-link touch-target" href="/nachrichten">Zum Postfach</a>
   </div>
 
   <p class="explanation">
@@ -186,25 +257,48 @@
 
   {#if !supported}
     <p class="status warning">
-      Dieser Browser unterstützt Web Push nicht. Das Nachrichtenpostfach bleibt
-      vollständig nutzbar.
+      Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
+      verfügbar. Das Nachrichtenpostfach bleibt vollständig nutzbar.
     </p>
-  {:else if loading}
+  {:else if $authStore.state === "checking" || loading}
     <p class="status">Benachrichtigungseinstellungen werden geladen …</p>
+  {:else if $authStore.state === "degraded"}
+    <div class="status error status-with-action" role="alert">
+      <p>
+        Dein Anmeldestatus konnte nicht geprüft werden. Prüfe die Verbindung und
+        versuche es erneut.
+      </p>
+      <button
+        class="btn secondary touch-target"
+        type="button"
+        onclick={retryAuth}>Anmeldung erneut prüfen</button
+      >
+    </div>
+  {:else if !$authStore.authenticated}
+    <div class="status status-with-action" role="status">
+      <p>Melde dich an, um Push-Hinweise und Gerätefreigaben zu verwalten.</p>
+      <a class="btn secondary touch-target" href="/login">Anmelden</a>
+    </div>
   {:else if error && !config}
-    <p class="status error" role="alert">{error}</p>
+    <div class="status error status-with-action" role="alert">
+      <p>{error}</p>
+      <button class="btn secondary touch-target" type="button" onclick={load}
+        >Erneut versuchen</button
+      >
+    </div>
   {:else}
     <div class="preference-row">
       <div>
-        <strong>Private Nachrichten</strong>
+        <strong>Kontoeinstellung</strong>
         <p>
-          Kontoweit auswählbar. Ohne aktiviertes Gerät entstehen trotzdem keine
-          Push-Hinweise.
+          Push-Hinweise für private Nachrichten. Diese Einstellung legt fest, ob
+          Weltgewebe solche Hinweise für dein Konto senden soll.
         </p>
       </div>
       <label class="switch-label">
         <input
           type="checkbox"
+          aria-label="Push-Hinweise für private Nachrichten"
           checked={preferences.direct_messages_push}
           disabled={savingPreference}
           onchange={changePreference}
@@ -215,14 +309,15 @@
 
     <div class="device-card">
       <div>
-        <strong>Dieses Gerät</strong>
+        <strong>Geräteeinstellung</strong>
         <p>
           {#if browserSubscription}
-            Die Browserfreigabe ist aktiv.
+            Push auf diesem Gerät: aktiviert.
           {:else if permission === "denied"}
-            Push wurde im Browser oder Betriebssystem blockiert.
+            Push auf diesem Gerät: blockiert. Die Freigabe muss im Browser oder
+            Betriebssystem geändert werden.
           {:else}
-            Noch nicht für Push freigegeben.
+            Push auf diesem Gerät: nicht aktiviert.
           {/if}
         </p>
       </div>
@@ -238,6 +333,10 @@
             ? "Wird deaktiviert …"
             : "Auf diesem Gerät deaktivieren"}
         </button>
+      {:else if permission === "denied"}
+        <span class="blocked-action">
+          In Browser- oder Systemeinstellungen freigeben
+        </span>
       {:else}
         <button
           class="btn primary touch-target"
@@ -252,11 +351,16 @@
 
     {#if config && !config.enabled}
       <p class="status warning">
-        Die Oberfläche ist vorbereitet, aber der Betreiber hat den
-        verschlüsselten Push-Zustellweg noch nicht konfiguriert.
+        Push ist auf diesem Weltgewebe-Server derzeit nicht verfügbar. Deine
+        Nachrichten bleiben im Postfach.
       </p>
     {/if}
     {#if notice}<p class="status success" aria-live="polite">{notice}</p>{/if}
+    {#if warning}
+      <div class="status warning status-with-action" role="status">
+        <p>{warning}</p>
+      </div>
+    {/if}
     {#if error}<p class="status error" role="alert">{error}</p>{/if}
   {/if}
 </section>
@@ -266,11 +370,18 @@
     display: grid;
     gap: 1rem;
     padding: clamp(1rem, 3vw, 1.5rem);
+    scroll-margin-top: 1rem;
+  }
+
+  .notification-settings:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
   }
 
   .section-heading,
   .preference-row,
-  .device-card {
+  .device-card,
+  .status-with-action {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -292,7 +403,8 @@
   .explanation,
   .platform-note,
   .preference-row p,
-  .device-card p {
+  .device-card p,
+  .blocked-action {
     color: var(--muted);
   }
 
@@ -322,6 +434,8 @@
   }
 
   .inbox-link {
+    display: inline-flex;
+    align-items: center;
     color: var(--accent);
   }
 
@@ -346,13 +460,16 @@
   @media (max-width: 620px) {
     .section-heading,
     .preference-row,
-    .device-card {
+    .device-card,
+    .status-with-action {
       align-items: stretch;
       flex-direction: column;
     }
 
     .section-heading .inbox-link,
-    .device-card button {
+    .device-card button,
+    .status-with-action button,
+    .status-with-action a {
       width: 100%;
     }
   }

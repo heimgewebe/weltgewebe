@@ -5,7 +5,6 @@
   import { authStore } from "$lib/auth/store";
   import type { ConversationMessage } from "$lib/api/nodeConversation";
   import { NodeConversationApiError } from "$lib/api/nodeConversation";
-  import NotificationSettings from "$lib/components/NotificationSettings.svelte";
   import {
     DirectMessagesApiError,
     listDirectConversations,
@@ -238,6 +237,11 @@
   }
 
   onMount(async () => {
+    if (window.location.hash === "#benachrichtigungen") {
+      await goto("/settings#benachrichtigungen", { replaceState: true });
+      return;
+    }
+
     await authStore.checkAuth();
     if ($authStore.authenticated) {
       await refreshInbox();
@@ -294,6 +298,12 @@
       Nur die beiden beteiligten Konten können diese Unterhaltung öffnen. Die
       Nachrichten sind jedoch nicht Ende-zu-Ende verschlüsselt.
     </p>
+
+    <div class="message-settings">
+      <a class="notification-settings-link" href="/settings#benachrichtigungen">
+        Benachrichtigungen einstellen
+      </a>
+    </div>
 
     {#if error}<div class="error" role="alert">{error}</div>{/if}
 
@@ -457,10 +467,6 @@
         {/if}
       </section>
     </div>
-
-    <div class="notification-management">
-      <NotificationSettings />
-    </div>
   {/if}
 </main>
 
@@ -496,7 +502,8 @@
   }
 
   .back-link,
-  .primary-link {
+  .primary-link,
+  .notification-settings-link {
     min-height: 44px;
     display: inline-flex;
     align-items: center;
@@ -523,12 +530,19 @@
     font-size: 0.9rem;
   }
 
-  .error {
-    border-color: var(--danger, #b44343);
+  .message-settings {
+    display: flex;
+    justify-content: flex-end;
+    margin: 0 0 1rem;
   }
 
-  .notification-management {
-    margin-top: 1rem;
+  .notification-settings-link {
+    border-color: transparent;
+    color: var(--accent);
+  }
+
+  .error {
+    border-color: var(--danger, #b44343);
   }
 
   .messages-layout {
@@ -746,6 +760,15 @@
   @media (max-width: 720px) {
     .page-heading {
       align-items: flex-start;
+    }
+
+    .message-settings {
+      justify-content: stretch;
+    }
+
+    .notification-settings-link {
+      width: 100%;
+      justify-content: center;
     }
 
     .messages-layout {
