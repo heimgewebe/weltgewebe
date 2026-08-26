@@ -129,16 +129,38 @@ def test_full_vps_deploy_reads_back_editor_through_caddy_before_state_commit() -
 
     preflight_digest = deploy.index('SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA="${BASH_REMATCH[1]}"')
     deploying = deploy.index('echo ">> Deploying..."')
-    postflight_scope = deploy.index('if [[ "$DEPLOY_SCOPE" == "full" ]]; then', deploying)
+    postflight_scope = deploy.index(
+        'if [[ "$DEPLOY_SCOPE" == "full" && "$SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED" == "1" ]]; then',
+        deploying,
+    )
     resolve = deploy.index('SCHAUWERK_RESOLVE="weltgewebe.net:443:${CADDY_BIND}"', postflight_scope)
     index_url = deploy.index('https://weltgewebe.net/schaubild/', resolve)
     manifest_url = deploy.index('https://weltgewebe.net/schaubild/manifest.json', index_url)
     digest_compare = deploy.index('SCHAUWERK_LIVE_MANIFEST_SHA', manifest_url)
+    asset_bindings = deploy.index('SCHAUWERK_ASSET_BINDINGS', digest_compare)
+    asset_url = deploy.index('https://weltgewebe.net/schaubild/${SCHAUWERK_ASSET_NAME}', asset_bindings)
+    asset_digest = deploy.index('SCHAUWERK_ASSET_LIVE_SHA', asset_url)
     state_commit = deploy.index('# 8. Update State (Post-Health)')
 
-    assert preflight_digest < deploying < postflight_scope < resolve < index_url < manifest_url < digest_compare < state_commit
+    assert (
+        preflight_digest
+        < deploying
+        < postflight_scope
+        < resolve
+        < index_url
+        < manifest_url
+        < digest_compare
+        < asset_bindings
+        < asset_url
+        < asset_digest
+        < state_commit
+    )
     postflight = deploy[postflight_scope:state_commit]
+    assert 'SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED="0"' in deploy[:deploying]
+    assert 'SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED="1"' in deploy[:deploying]
     assert "--noproxy '*'" in postflight
     assert '--resolve "$SCHAUWERK_RESOLVE"' in postflight
     assert 'Cache-Control: no-store' in postflight
     assert 'SCHAUWERK_LIVE_MANIFEST_SHA" != "$SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA' in postflight
+    assert 'SCHAUWERK_ASSET_LIVE_SHA" != "$SCHAUWERK_ASSET_EXPECTED_SHA' in postflight
+    assert 'SCHAUWERK_ASSET_COUNT" != "4"' in postflight

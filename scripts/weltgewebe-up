@@ -908,6 +908,7 @@ fi
 # and migration deployments intentionally do not own or mutate the public edge.
 SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT=""
 SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA=""
+SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED="0"
 if [[ "$DEPLOY_TARGET" == "vps" && "$DEPLOY_SCOPE" == "full" ]]; then
   configured_preflight_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
   if grep -qFx caddy <<< "$configured_preflight_services"; then
@@ -953,6 +954,7 @@ except Exception as exc:
     echo "$SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT"
     if [[ "$SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT" =~ manifest_sha256=([0-9a-f]{64}) ]]; then
       SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA="${BASH_REMATCH[1]}"
+      SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED="1"
     else
       msg="Schauwerk editor release preflight did not return a bound manifest digest."
       echo "ERROR: $msg" >&2
@@ -2862,7 +2864,7 @@ else
   echo "   Legacy Heimserver edge/home.arpa guards skipped for DEPLOY_TARGET=vps."
   echo "   Local/API health was verified by the generic health check above."
 
-  if [[ "$DEPLOY_SCOPE" == "full" ]]; then
+  if [[ "$DEPLOY_SCOPE" == "full" && "$SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED" == "1" ]]; then
     if [[ -z "$SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA" || -z "${CADDY_BIND:-}" ]]; then
       msg="Schauwerk editor postflight is missing its preflight manifest digest or Caddy bind."
       echo "ERROR: $msg" >&2
@@ -2925,6 +2927,83 @@ else
       rm -f "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
       exit 1
     fi
+
+    if ! SCHAUWERK_ASSET_BINDINGS="$(
+      python3 - "$SCHAUWERK_MANIFEST_OUT" <<'PY'
+import json
+import sys
+from pathlib import Path
+
+manifest = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+files = manifest.get("files")
+if not isinstance(files, list):
+    raise SystemExit(2)
+for item in files:
+    if not isinstance(item, dict):
+        raise SystemExit(2)
+    name = item.get("path")
+    digest = item.get("sha256")
+    if (
+        not isinstance(name, str)
+        or not name
+        or "/" in name
+        or name in {".", ".."}
+        or not isinstance(digest, str)
+        or len(digest) != 64
+        or any(ch not in "0123456789abcdef" for ch in digest)
+    ):
+        raise SystemExit(2)
+    print(f"{name}\t{digest}")
+PY
+    )"; then
+      msg="Schauwerk editor postflight could not read asset bindings from the verified manifest."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      rm -f "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
+      exit 1
+    fi
+
+    SCHAUWERK_ASSET_COUNT=0
+    while IFS=$'\t' read -r SCHAUWERK_ASSET_NAME SCHAUWERK_ASSET_EXPECTED_SHA; do
+      [[ -n "$SCHAUWERK_ASSET_NAME" ]] || continue
+      SCHAUWERK_ASSET_OUT="$(mktemp)"
+      if ! SCHAUWERK_ASSET_HTTP_CODE="$(
+        curl -sS --noproxy '*' --connect-timeout 5 --max-time 20 --retry 3 --retry-delay 1 --retry-connrefused \
+          --resolve "$SCHAUWERK_RESOLVE" -o "$SCHAUWERK_ASSET_OUT" \
+          -w "%{http_code}" "https://weltgewebe.net/schaubild/${SCHAUWERK_ASSET_NAME}"
+      )"; then
+        msg="Schauwerk editor postflight failed to fetch manifest asset $SCHAUWERK_ASSET_NAME through Caddy."
+        echo "ERROR: $msg" >&2
+        generate_failure_bundle "$msg"
+        rm -f "$SCHAUWERK_ASSET_OUT" "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
+        exit 1
+      fi
+      if [[ "$SCHAUWERK_ASSET_HTTP_CODE" != "200" ]]; then
+        msg="Schauwerk editor postflight returned HTTP $SCHAUWERK_ASSET_HTTP_CODE for asset $SCHAUWERK_ASSET_NAME."
+        echo "ERROR: $msg" >&2
+        generate_failure_bundle "$msg"
+        rm -f "$SCHAUWERK_ASSET_OUT" "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
+        exit 1
+      fi
+      SCHAUWERK_ASSET_LIVE_SHA="$(sha256sum "$SCHAUWERK_ASSET_OUT" | awk '{print $1}')"
+      if [[ "$SCHAUWERK_ASSET_LIVE_SHA" != "$SCHAUWERK_ASSET_EXPECTED_SHA" ]]; then
+        msg="Schauwerk editor postflight asset digest mismatch for $SCHAUWERK_ASSET_NAME: live $SCHAUWERK_ASSET_LIVE_SHA, expected $SCHAUWERK_ASSET_EXPECTED_SHA."
+        echo "ERROR: $msg" >&2
+        generate_failure_bundle "$msg"
+        rm -f "$SCHAUWERK_ASSET_OUT" "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
+        exit 1
+      fi
+      rm -f "$SCHAUWERK_ASSET_OUT"
+      SCHAUWERK_ASSET_COUNT=$((SCHAUWERK_ASSET_COUNT + 1))
+    done <<< "$SCHAUWERK_ASSET_BINDINGS"
+    if [[ "$SCHAUWERK_ASSET_COUNT" != "4" ]]; then
+      msg="Schauwerk editor postflight verified $SCHAUWERK_ASSET_COUNT assets, expected 4."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      rm -f "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
+      exit 1
+    fi
+
     rm -f "$SCHAUWERK_INDEX_HEADERS_OUT" "$SCHAUWERK_MANIFEST_OUT"
     echo "   Schauwerk editor verified through Caddy (manifest $SCHAUWERK_LIVE_MANIFEST_SHA)."
   fi
