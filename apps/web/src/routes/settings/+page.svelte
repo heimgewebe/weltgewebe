@@ -1,6 +1,5 @@
 <script lang="ts">
   import { onMount } from "svelte";
-  import AccountSection from "$lib/components/AccountSection.svelte";
   import MyGarnrolleSection from "$lib/components/MyGarnrolleSection.svelte";
   import type { PageData } from "./$types";
 
@@ -12,10 +11,16 @@
   let NotificationSettings:
     | typeof import("$lib/components/NotificationSettings.svelte").default
     | null = $state(null);
+  let AccountSection:
+    | typeof import("$lib/components/AccountSection.svelte").default
+    | null = $state(null);
 
   onMount(() => {
     void import("$lib/components/NotificationSettings.svelte").then(
       (module) => (NotificationSettings = module.default),
+    );
+    void import("$lib/components/AccountSection.svelte").then(
+      (module) => (AccountSection = module.default),
     );
   });
 </script>
@@ -104,7 +109,7 @@
         </div>
 
         <div id="konto-und-sicherheit" class="panel">
-          <AccountSection />
+          {#if AccountSection}<AccountSection />{/if}
         </div>
       </main>
     </div>
