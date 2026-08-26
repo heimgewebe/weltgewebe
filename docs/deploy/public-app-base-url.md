@@ -12,17 +12,23 @@ relations:
 ---
 # Öffentliche APP_BASE_URL im Produktionsbetrieb
 
-Stand: 2026-06-19
+Stand: 2026-08-26
 
 ## Abgrenzung zum Migrationsplan
 
 Für den aktuellen Wert von `APP_BASE_URL` und den bereits erbrachten Magic-Link-Proof ersetzt dieses Dokument den historischen Ist-Zustand sowie die entsprechenden offenen Belegpunkte in `docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md`. Die dort noch genannte `.home.arpa`-Konfiguration beschreibt den Zustand vor dem Runtime-Cutover und darf nicht als aktuelle Betriebs- oder Copy-Paste-Quelle verwendet werden.
 
-Vor diesem Repo-Fix war bereits belegt, dass die Live-Runtime `APP_BASE_URL=https://weltgewebe.net` verwendet und ein danach erzeugter Magic Link auf `https://weltgewebe.net` zeigte und erfolgreich eine Session erzeugte. Davon getrennt bleibt nach dem Merge ein kontrollierter Abgleich des Server-Checkouts und eine erneute Prüfung der effektiven Runtime erforderlich.
+Der frühere Live-Proof mit `APP_BASE_URL=https://weltgewebe.net` bleibt ein
+historischer Beleg für den damaligen Runtime-Zustand. Seit dem CommonThing-Cutover
+ist er keine aktuelle Copy-Paste-Vorgabe. Nach dem Merge bleibt ein kontrollierter
+Abgleich des Server-Checkouts und eine erneute Prüfung der effektiven Runtime
+erforderlich.
 
 ## Produktionsvertrag
 
-Die produktive `APP_BASE_URL` ist `https://weltgewebe.net`. Sie wird für öffentlich klickbare URLs verwendet, insbesondere für Magic Links.
+Die produktive `APP_BASE_URL` ist `https://commonthing.net`. Sie wird für
+öffentlich klickbare URLs verwendet, insbesondere für Magic Links. Die
+SMTP-Absenderidentitäten bleiben davon unberührt.
 
 Die internen Proxy-Ziele bleiben davon getrennt:
 

@@ -2,11 +2,35 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  DEFAULT_PUBLIC_ORIGIN,
   createPublicWebAssetsPlugin,
   normalizePublicOrigin,
   renderRobots,
   renderSitemap,
 } from "./generate-public-web-assets.mjs";
+
+test("uses the canonical CommonThing production origin by default", () => {
+  assert.equal(DEFAULT_PUBLIC_ORIGIN, "https://commonthing.net");
+});
+
+test("emits CommonThing crawler assets when no origin override is supplied", () => {
+  const emitted = [];
+  const plugin = createPublicWebAssetsPlugin();
+
+  plugin.generateBundle.call({
+    emitFile(asset) {
+      emitted.push(asset);
+      return String(emitted.length);
+    },
+  });
+
+  assert.match(
+    emitted[0].source,
+    /^Sitemap: https:\/\/commonthing\.net\/sitemap\.xml$/m,
+  );
+  assert.match(emitted[1].source, /https:\/\/commonthing\.net\/map/);
+  assert.doesNotMatch(emitted[1].source, /https:\/\/weltgewebe\.net/);
+});
 
 test("normalizes an origin and removes a trailing slash", () => {
   assert.equal(

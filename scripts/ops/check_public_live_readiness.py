@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the public weltgewebe VPS live-readiness surface.
+"""Check the public CommonThing VPS live-readiness surface.
 
 The checker is intentionally read-only. It performs DNS lookups and public HTTP(S)
 requests only. It does not read env files, connect to the VPS, mutate runtime
@@ -18,10 +18,13 @@ import urllib.request
 from dataclasses import dataclass, field
 from typing import Callable, Mapping, Sequence
 
-DEFAULT_DOMAIN = "weltgewebe.net"
-DEFAULT_WWW_DOMAIN = "www.weltgewebe.net"
+DEFAULT_DOMAIN = "commonthing.net"
+DEFAULT_WWW_DOMAIN = "www.commonthing.net"
+DEFAULT_LEGACY_DOMAIN = "weltgewebe.net"
+DEFAULT_LEGACY_WWW_DOMAIN = "www.weltgewebe.net"
 DEFAULT_API_DOMAIN = "api.weltgewebe.net"
 DEFAULT_EXPECTED_IP = "94.16.121.119"
+REDIRECT_PROOF_URI = "/cutover-readiness/path?source=public-live"
 DEFAULT_GLYPH_PATH = "/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf"
 PMTILES_CONTENT_TYPE = "application/octet-stream"
 DEFAULT_PMTILES_PATHS = (
@@ -166,6 +169,8 @@ def fail_result(name: str, detail: str, **data: object) -> CheckResult:
 class PublicLiveChecker:
     domain: str = DEFAULT_DOMAIN
     www_domain: str = DEFAULT_WWW_DOMAIN
+    legacy_domain: str = DEFAULT_LEGACY_DOMAIN
+    legacy_www_domain: str = DEFAULT_LEGACY_WWW_DOMAIN
     api_domain: str = DEFAULT_API_DOMAIN
     expected_ip: str = DEFAULT_EXPECTED_IP
     expected_ipv6: str | None = None
@@ -182,9 +187,42 @@ class PublicLiveChecker:
         checks = [
             *self.check_dns(),
             *self.check_dns_ipv6(),
-            self.check_http_redirect(),
+            self.check_redirect(
+                "http-redirect",
+                f"http://{self.domain}{REDIRECT_PROOF_URI}",
+                f"https://{self.domain}{REDIRECT_PROOF_URI}",
+            ),
+            self.check_redirect(
+                f"redirect:http:{self.www_domain}",
+                f"http://{self.www_domain}{REDIRECT_PROOF_URI}",
+                f"https://{self.domain}{REDIRECT_PROOF_URI}",
+            ),
+            self.check_redirect(
+                f"redirect:https:{self.www_domain}",
+                f"https://{self.www_domain}{REDIRECT_PROOF_URI}",
+                f"https://{self.domain}{REDIRECT_PROOF_URI}",
+            ),
+            self.check_redirect(
+                f"redirect:http:{self.legacy_domain}",
+                f"http://{self.legacy_domain}{REDIRECT_PROOF_URI}",
+                f"https://{self.domain}{REDIRECT_PROOF_URI}",
+            ),
+            self.check_redirect(
+                f"redirect:https:{self.legacy_domain}",
+                f"https://{self.legacy_domain}{REDIRECT_PROOF_URI}",
+                f"https://{self.domain}{REDIRECT_PROOF_URI}",
+            ),
+            self.check_redirect(
+                f"redirect:http:{self.legacy_www_domain}",
+                f"http://{self.legacy_www_domain}{REDIRECT_PROOF_URI}",
+                f"https://{self.domain}{REDIRECT_PROOF_URI}",
+            ),
+            self.check_redirect(
+                f"redirect:https:{self.legacy_www_domain}",
+                f"https://{self.legacy_www_domain}{REDIRECT_PROOF_URI}",
+                f"https://{self.domain}{REDIRECT_PROOF_URI}",
+            ),
             self.check_https_root(self.domain),
-            self.check_https_root(self.www_domain),
             self.check_map_route(),
             self.check_api_ready(),
             self.check_public_metrics_private(
@@ -204,7 +242,7 @@ class PublicLiveChecker:
 
     def check_dns(self) -> list[CheckResult]:
         results: list[CheckResult] = []
-        for host in (self.domain, self.www_domain, self.api_domain):
+        for host in self.public_hosts():
             try:
                 observed = sorted(self.resolve_host(host))
             except Exception as exc:
@@ -227,7 +265,7 @@ class PublicLiveChecker:
         if not self.expected_ipv6:
             return []
         results: list[CheckResult] = []
-        for host in (self.domain, self.www_domain, self.api_domain):
+        for host in self.public_hosts():
             try:
                 observed = sorted(dig_resolve_ipv6(host, self.authoritative_servers))
             except Exception as exc:
@@ -251,16 +289,35 @@ class PublicLiveChecker:
             return dig_resolve_ipv4(host, self.authoritative_servers)
         return self.resolver(host)
 
-    def check_http_redirect(self) -> CheckResult:
-        url = f"http://{self.domain}/"
+    def public_hosts(self) -> tuple[str, ...]:
+        return (
+            self.domain,
+            self.www_domain,
+            self.legacy_domain,
+            self.legacy_www_domain,
+            self.api_domain,
+        )
+
+    def check_redirect(self, name: str, url: str, expected_location: str) -> CheckResult:
         try:
             result = self.fetcher(url, None, self.timeout)
         except Exception as exc:
-            return fail_result("http-redirect", str(exc), url=url)
+            return fail_result(name, str(exc), url=url)
         location = _lower_headers(result.headers).get("location", "")
-        if result.status in {301, 302, 307, 308} and location.startswith(f"https://{self.domain}"):
-            return pass_result("http-redirect", "HTTP redirects to HTTPS", status=result.status, location=location)
-        return fail_result("http-redirect", "HTTP did not redirect to the canonical HTTPS site", status=result.status, location=location)
+        if result.status in {301, 308} and location == expected_location:
+            return pass_result(
+                name,
+                "Permanent redirect preserves the canonical URI",
+                status=result.status,
+                location=location,
+            )
+        return fail_result(
+            name,
+            "Request did not permanently redirect to the exact canonical URI",
+            status=result.status,
+            location=location,
+            expected_location=expected_location,
+        )
 
     def check_https_root(self, host: str) -> CheckResult:
         url = f"https://{host}/"
@@ -440,9 +497,11 @@ class PublicLiveChecker:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Check public weltgewebe live-readiness.")
+    parser = argparse.ArgumentParser(description="Check public CommonThing live-readiness.")
     parser.add_argument("--domain", default=DEFAULT_DOMAIN)
     parser.add_argument("--www-domain", default=DEFAULT_WWW_DOMAIN)
+    parser.add_argument("--legacy-domain", default=DEFAULT_LEGACY_DOMAIN)
+    parser.add_argument("--legacy-www-domain", default=DEFAULT_LEGACY_WWW_DOMAIN)
     parser.add_argument("--api-domain", default=DEFAULT_API_DOMAIN)
     parser.add_argument("--expected-ip", default=DEFAULT_EXPECTED_IP)
     parser.add_argument("--expected-ipv6")
@@ -459,6 +518,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     checker = PublicLiveChecker(
         domain=args.domain,
         www_domain=args.www_domain,
+        legacy_domain=args.legacy_domain,
+        legacy_www_domain=args.legacy_www_domain,
         api_domain=args.api_domain,
         expected_ip=args.expected_ip,
         expected_ipv6=args.expected_ipv6,

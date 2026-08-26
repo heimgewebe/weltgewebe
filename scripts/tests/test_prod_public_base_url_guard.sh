@@ -115,13 +115,23 @@ echo "Running prod-public-base-url guard tests..."
 
 run_case \
   "valid production contract" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
   "__absent__" \
   "__absent__" \
   "1" "0" \
   0 "prod-public-base-url guard passed"
+
+run_case \
+  "legacy public APP_BASE_URL is rejected" \
+  "https://weltgewebe.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
+  "1" "0" \
+  1 "services.api.environment.APP_BASE_URL"
 
 run_case \
   "internal APP_BASE_URL is rejected" \
@@ -135,9 +145,9 @@ run_case \
 
 run_case \
   "public API WEB_UPSTREAM_URL is rejected" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "weltgewebe.home.arpa" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "__absent__" \
   "__absent__" \
   "1" "0" \
@@ -145,27 +155,27 @@ run_case \
 
 run_case \
   "legacy Caddy WEB_UPSTREAM_HOST is rejected" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
-  "weltgewebe.net" \
+  "commonthing.net" \
   "https://weltgewebe.home.arpa" \
   "1" "0" \
   1 "services.caddy.environment.WEB_UPSTREAM_HOST"
 
 run_case \
   "legacy Caddy WEB_UPSTREAM_URL is rejected" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
   "weltgewebe.home.arpa" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "1" "0" \
   1 "services.caddy.environment.WEB_UPSTREAM_URL"
 
 run_case \
   "disabled public login is rejected" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
   "__absent__" \
@@ -175,7 +185,7 @@ run_case \
 
 run_case \
   "magic-token logging is rejected" \
-  "https://weltgewebe.net" \
+  "https://commonthing.net" \
   "weltgewebe.home.arpa" \
   "https://weltgewebe.home.arpa" \
   "__absent__" \

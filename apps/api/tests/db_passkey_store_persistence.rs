@@ -141,9 +141,9 @@ fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
         smtp_pass: None,
         smtp_from: None,
         auth_log_magic_token: true,
-        webauthn_rp_id: Some("example.com".to_string()),
-        webauthn_rp_origin: Some("https://example.com".to_string()),
-        webauthn_rp_name: Some("Weltgewebe Test".to_string()),
+        webauthn_rp_id: Some("commonthing.net".to_string()),
+        webauthn_rp_origin: Some("https://commonthing.net".to_string()),
+        webauthn_rp_name: Some("CommonThing Test".to_string()),
     };
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",

@@ -5,7 +5,8 @@ doc_type: reference
 status: active
 summary: >
   Aktuelle Providerarchitektur sowie historische Referenz des abgeschlossenen
-  IONOS-zu-INWX-Cutovers für weltgewebe.net.
+  IONOS-zu-INWX-Cutovers für die erhaltenen weltgewebe.net-Mailidentitäten und
+  den CommonThing-Webcutover.
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -25,25 +26,53 @@ relations:
 
 # Domain- und Providerarchitektur
 
-## 1. Erreichter Zustand
+## 1. Erreichter Zustand und laufender Cutover
 
-Der Registrar-/DNS-Cutover für `weltgewebe.net` ist abgeschlossen. INWX ist Registrar aller drei Domains und autoritativer DNS-Provider für `weltgewebe.net`. Die IONOS-Verträge sind gekündigt. Bis zum noch offenen DNS-Cutover verweisen `weltweb.net` und `weltweberei.org` weiterhin auf alte UI-DNS-/IONOS-Nameserver.
+Der Registrar-/DNS-Cutover für `weltgewebe.net` ist abgeschlossen. INWX ist
+Registrar der bisher dokumentierten Domains und autoritativer DNS-Provider für
+`weltgewebe.net`. Die IONOS-Verträge sind gekündigt.
+
+Die Repository-Konfiguration dieses Changes setzt `commonthing.net` als neue
+öffentliche Produktdomain. Das ist zunächst **Zielzustand**, nicht automatisch
+Live-Evidence: Bis Merge, Deployment, DNS-Cutover und öffentlichem Readback ist
+`weltgewebe.net` weiterhin der belegte produktive Web-Origin. Registrar-,
+Nameserver- und Live-DNS-Evidence für `commonthing.net` muss im Cutover separat
+erbracht werden.
+
+Bis zum noch offenen DNS-Cutover verweisen `weltweb.net` und `weltweberei.org`
+weiterhin auf alte UI-DNS-/IONOS-Nameserver.
 
 Die IONOS-Kündigung wurde nach menschlicher Freigabe durchgeführt. Ein reproduzierbarer 48-Stunden-Nachweis ist nicht Bestandteil dieses Repository-Artefakts.
 
-## 2. Domainrollen
+## 2. Domainrollen nach abgeschlossenem CommonThing-Cutover
+
+Die folgenden Webrollen sind der normative Zielzustand. Vor erfolgreichem
+Runtime- und DNS-Readback beschreiben sie **keinen bereits erreichten Livezustand**.
+
+
+### commonthing.net
+
+- **Public Web:** kanonischer CommonThing-App-Origin `https://commonthing.net`.
+- **www:** `www.commonthing.net` leitet permanent und URI-erhaltend auf den Apex.
+- **Beweisgrenze:** Registrar, autoritative Delegation und Live-A-/AAAA-Records
+  sind keine belegten Repository-Fakten und benötigen externe Betriebsbelege.
 
 ### weltgewebe.net
 
 - **Registrar:** INWX
 - **Autoritative DNS-Verwaltung:** INWX
-- **Web/API:** Die öffentlichen A-Records für Apex, `www` und `api` zeigen auf den kanonischen Public-VPS-Pfad `wg-prod-1`. Heimberry besitzt keinen aktiven DNS-Schreibpfad mehr. Die konkrete VPS-Adresse ist zu jedem Prüfzeitpunkt aus einer unabhängigen, freigegebenen Deployment-Identität zu bestimmen und anschließend gegen autoritative DNS- und Runtime-Evidence zu prüfen.
+- **Web/API:** Apex und `www` bleiben Legacy-Webhosts und leiten permanent sowie
+  URI-erhaltend auf `https://commonthing.net`; `api.weltgewebe.net` bleibt der
+  API-Host. Heimberry besitzt keinen aktiven DNS-Schreibpfad mehr. Die konkrete
+  VPS-Adresse ist zu jedem Prüfzeitpunkt aus einer unabhängigen, freigegebenen
+  Deployment-Identität zu bestimmen und anschließend gegen autoritative DNS-
+  und Runtime-Evidence zu prüfen.
 
 ### weltweb.net
 
 - **Registrar:** INWX
 - **Autoritative DNS-Verwaltung:** Die Domain ist weiterhin an alte UI-DNS-/IONOS-Nameserver delegiert. INWX ist für diese Domain noch nicht autoritativ. Es existiert noch kein belegter öffentlicher Zielzustand.
-- **Ziel:** INWX-Delegation; permanente Weiterleitung auf `https://weltgewebe.net` (Pfad und Query nach Möglichkeit erhalten); defensive No-Mail-Records; HTTPS-Nachweis.
+- **Ziel:** INWX-Delegation; permanente Weiterleitung auf `https://commonthing.net` (Pfad und Query nach Möglichkeit erhalten); defensive No-Mail-Records; HTTPS-Nachweis.
 
 ### weltweberei.org
 
@@ -59,10 +88,11 @@ Die IONOS-Kündigung wurde nach menschlicher Freigabe durchgeführt. Ein reprodu
 ## 4. DNS- und historischer DDNS-Pfad
 
 Der kanonische öffentliche Produktionspfad ist `wg-prod-1` gemäß
-`runtime/README.md` und `docs/deploy/vps.md`. Die drei öffentlichen A-Records
-für `weltgewebe.net`, `www.weltgewebe.net` und `api.weltgewebe.net` müssen auf
-den ausdrücklich freigegebenen VPS zeigen. Eine wechselnde Heim-WAN-Adresse ist
-kein zulässiges Produktionsziel.
+`runtime/README.md` und `docs/deploy/vps.md`. Die A-Records für
+`commonthing.net`, `www.commonthing.net`, `weltgewebe.net`,
+`www.weltgewebe.net` und `api.weltgewebe.net` müssen auf den ausdrücklich
+freigegebenen VPS zeigen. Eine wechselnde Heim-WAN-Adresse ist kein zulässiges
+Produktionsziel.
 
 ### Historischer Implementierungsbesitz
 
@@ -94,8 +124,8 @@ Freigabe des DNS-Zielbilds und frische Ende-zu-Ende-Belege.
 Ein vollständiger aktueller Runtime-Nachweis erfordert separat:
 
 1. `runtime/README.md`, `docs/deploy/vps.md` und eine aktuelle Deployment-Identität weisen `wg-prod-1` sowie die unabhängig bestimmte erwartete VPS-Adresse aus,
-2. alle drei autoritativen INWX-Nameserver liefern für alle drei Hosts genau diesen erwarteten VPS-A-Record,
-3. öffentliches HTTPS antwortet für Apex, `www` und `api`,
+2. die jeweils autoritativen Nameserver liefern für alle fünf Public-Hosts genau diesen erwarteten VPS-A-Record,
+3. öffentliches HTTPS liefert CommonThing am neuen Apex, permanente URI-erhaltende Redirects für beide `www`- und beide Legacy-Hosts sowie die API am erhaltenen API-Host,
 4. die kanonischen API-Health-Pfade antworten erfolgreich,
 5. `weltgewebe-ddns.timer` auf Heimberry ist `disabled` und `inactive`,
 6. seit der Stilllegung wurden keine weiteren DDNS-Schreibereignisse des Heimberry-Dienstes protokolliert.

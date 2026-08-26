@@ -667,7 +667,7 @@ def positive_hours(value: str) -> float:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Collect redacted Weltgewebe production runtime evidence.")
-    parser.add_argument("--domain", default="weltgewebe.net")
+    parser.add_argument("--domain", default="commonthing.net")
     parser.add_argument("--api-domain", default="api.weltgewebe.net")
     parser.add_argument("--timeout", type=float, default=8.0)
     parser.add_argument("--docker-bin", default="docker")

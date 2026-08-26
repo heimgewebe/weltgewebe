@@ -133,14 +133,14 @@ def test_full_vps_deploy_reads_back_editor_through_caddy_before_state_commit() -
         'if [[ "$DEPLOY_SCOPE" == "full" && "$SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED" == "1" ]]; then',
         deploying,
     )
-    resolve = deploy.index('SCHAUWERK_RESOLVE="weltgewebe.net:443:${CADDY_BIND}"', postflight_scope)
+    resolve = deploy.index('SCHAUWERK_RESOLVE="commonthing.net:443:${CADDY_BIND}"', postflight_scope)
     expected_csp = deploy.index('SCHAUWERK_EXPECTED_CSP="default-src', resolve)
-    index_url = deploy.index('https://weltgewebe.net/schaubild/', expected_csp)
+    index_url = deploy.index('https://commonthing.net/schaubild/', expected_csp)
     csp_compare = deploy.index('if values != [expected]:', index_url)
-    manifest_url = deploy.index('https://weltgewebe.net/schaubild/manifest.json', csp_compare)
+    manifest_url = deploy.index('https://commonthing.net/schaubild/manifest.json', csp_compare)
     digest_compare = deploy.index('SCHAUWERK_LIVE_MANIFEST_SHA', manifest_url)
     asset_bindings = deploy.index('SCHAUWERK_ASSET_BINDINGS', digest_compare)
-    asset_url = deploy.index('https://weltgewebe.net/schaubild/${SCHAUWERK_ASSET_NAME}', asset_bindings)
+    asset_url = deploy.index('https://commonthing.net/schaubild/${SCHAUWERK_ASSET_NAME}', asset_bindings)
     asset_digest = deploy.index('SCHAUWERK_ASSET_LIVE_SHA', asset_url)
     state_commit = deploy.index('# 8. Update State (Post-Health)')
 

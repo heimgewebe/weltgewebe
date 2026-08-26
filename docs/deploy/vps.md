@@ -20,7 +20,7 @@ relations:
 ---
 # VPS Deployment Runbook
 
-Dieses Runbook beschreibt den kanonischen Public-Produktionspfad für `weltgewebe.net`.
+Dieses Runbook beschreibt den kanonischen Public-Produktionspfad für CommonThing unter `commonthing.net`.
 Der VPS `wg-prod-1` stellt API, Datenbank, NATS und den Caddy-Frontdoor bereit. Das
 Frontend wird im VPS-Checkout gebaut und vom Stack-internen Caddy unter der
 Domain ausgeliefert.
@@ -28,20 +28,24 @@ Domain ausgeliefert.
 ## Voraussetzungen
 
 1. **VPS**: Ein Linux-Server (z.B. Ubuntu) mit öffentlicher statischer IPv4 (und optional IPv6).
-2. **Domain**: Zugriff auf die DNS-Verwaltung deiner Domain (z.B. `weltgewebe.net`).
+2. **Domain**: Zugriff auf die DNS-Verwaltung für `commonthing.net` und die Legacy-Domain `weltgewebe.net`.
 3. **Docker & Docker Compose**: Müssen auf dem VPS installiert sein.
 
 ## 1. DNS Konfiguration
 
 Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 
-* **A-Record**: `weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
-* **A-Record**: `www.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
+* **A-Record**: `commonthing.net` -> `<VPS_IPV4_ADRESSE>`
+* **A-Record**: `www.commonthing.net` -> `<VPS_IPV4_ADRESSE>`
+* **Legacy-A-Record**: `weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
+* **Legacy-A-Record**: `www.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
 * **A-Record**: `api.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
 * **AAAA-Record** (nur falls IPv6 geprüft und freigegeben ist): entsprechende Hostnamen -> `<VPS_IPV6_ADRESSE>`
 
-Die Subdomain `api.weltgewebe.net` ist Teil des aktuellen Public-VPS-Zielbilds
-und muss auf dieselbe VPS-IPv4 zeigen wie Root und `www`.
+Die Subdomain `api.weltgewebe.net` bleibt der API-Host und muss auf dieselbe
+VPS-IPv4 zeigen wie die CommonThing- und Legacy-Webhosts. Caddy liefert die App
+nur unter `commonthing.net`; `www.commonthing.net`, `weltgewebe.net` und
+`www.weltgewebe.net` leiten permanent und URI-erhaltend auf den Apex um.
 
 Der Deploy bindet Caddy niemals automatisch an eine beliebige Adresse, wenn der VPS
 mehrere globale IPv4- oder IPv6-Adressen besitzt. Bei genau einer globalen IPv4
@@ -361,15 +365,16 @@ Vor dem INWX-DNS-Cutover darf der Stack lokal auf dem VPS über den HTTP-Host-He
 geprüft werden, ohne öffentliche DNS-Records umzubiegen:
 
 ```bash
-curl -H 'Host: weltgewebe.net' http://127.0.0.1/health/proxy
-curl -H 'Host: weltgewebe.net' http://127.0.0.1/api/health/ready
+curl -H 'Host: commonthing.net' http://127.0.0.1/health/proxy
+curl -H 'Host: commonthing.net' http://127.0.0.1/api/health/ready
 ```
 
 Nach dem DNS-Cutover sind zusätzlich die öffentlichen HTTPS-Pfade zu prüfen:
 
 ```bash
-curl -fsS https://weltgewebe.net/api/health/ready
+curl -fsS https://commonthing.net/api/health/ready
 curl -fsS https://api.weltgewebe.net/health/ready
+curl -sS -o /dev/null -D - 'https://weltgewebe.net/map?from=legacy'
 ```
 
 ### Public live readiness receipt
@@ -403,7 +408,9 @@ IPv6-DNS-Erwartung geprüft:
 ```
 
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
-prüft DNS-A-Records, HTTP-zu-HTTPS-Redirect, Root-/`www`-HTTPS, `/map`,
+prüft DNS-A-Records, den kanonischen CommonThing-HTTPS-Apex, permanente und
+URI-erhaltende Redirects von `www.commonthing.net`, `weltgewebe.net` und
+`www.weltgewebe.net`, `/map`,
 `api.weltgewebe.net/health/ready`, die privaten öffentlichen Metrics-Grenzen
 `/api/metrics` und `api.weltgewebe.net/metrics` auf HTTP `404`, `/_app/version.json`,
 lokale Basemap-Style-, Glyph- und PMTiles-Auslieferung. Ein PASS ist ein

@@ -6,7 +6,7 @@ fail() {
   exit 1
 }
 
-API_VERSION_URL="${API_VERSION_URL:-https://weltgewebe.net/api/version}"
+API_VERSION_URL="${API_VERSION_URL:-https://commonthing.net/api/version}"
 EXPECTED_COMMIT="${EXPECTED_COMMIT:-}"
 EXPECTED_BUILD_TIMESTAMP="${EXPECTED_BUILD_TIMESTAMP:-}"
 CONNECT_TIMEOUT_SECONDS="${CONNECT_TIMEOUT_SECONDS:-5}"

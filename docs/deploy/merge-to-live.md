@@ -254,8 +254,8 @@ umgeschrieben.
 Der Workflow `Production live contract` vergleicht bei jedem Push auf `main`
 und zusätzlich alle fünf Minuten:
 
-- `https://weltgewebe.net/_app/version.json`;
-- `https://weltgewebe.net/api/version`;
+- `https://commonthing.net/_app/version.json`;
+- `https://commonthing.net/api/version`;
 - `X-Weltgewebe-API-Build`;
 - `X-Weltgewebe-Build`;
 - die geschlossene `artifact_tree`-Deklaration mit Baumhash, Dateizahl,

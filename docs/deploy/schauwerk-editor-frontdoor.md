@@ -14,7 +14,7 @@ relations:
 ---
 # Schauwerk editor frontdoor
 
-The public product entry point is `https://weltgewebe.net/schaubild/`. Weltgewebe
+The public product entry point is `https://commonthing.net/schaubild/`. Weltgewebe
 provides only the shared HTTPS frontdoor. The editor itself remains a separately
 versioned Schauwerk static release and is not copied into the Weltgewebe web build.
 
@@ -90,9 +90,9 @@ After that exact-commit deployment succeeds, read back the public edge as well:
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' \
-  https://weltgewebe.net/schaubild
-curl -fsSI https://weltgewebe.net/schaubild/
-curl -fsS https://weltgewebe.net/schaubild/manifest.json
+  https://commonthing.net/schaubild
+curl -fsSI https://commonthing.net/schaubild/
+curl -fsS https://commonthing.net/schaubild/manifest.json
 curl -fsS https://weltgewebe.net/health/proxy
 ```
 

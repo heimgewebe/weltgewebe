@@ -46,7 +46,7 @@ export default defineConfig({
         CSRF_ALLOWED_ORIGINS: `http://localhost:${PORT}`,
         WEBAUTHN_RP_ID: "localhost",
         WEBAUTHN_RP_ORIGIN: `http://localhost:${PORT}`,
-        WEBAUTHN_RP_NAME: "Weltgewebe Test",
+        WEBAUTHN_RP_NAME: "CommonThing Test",
         ...(process.env.AUTH_PASSKEY_PROOF_POSTGRES === "1"
           ? {
               WELTGEWEBE_DOMAIN_READ_SOURCE: "postgres",

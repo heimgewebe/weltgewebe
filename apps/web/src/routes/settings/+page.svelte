@@ -44,7 +44,7 @@
 </script>
 
 <svelte:head>
-  <title>Einstellungen – Weltgewebe</title>
+  <title>Einstellungen – CommonThing</title>
 </svelte:head>
 
 <div class="settings-page">

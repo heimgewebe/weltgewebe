@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title">
-  <title id="title">Weltgewebe</title>
+  <title id="title">CommonThing</title>
   <rect width="128" height="128" rx="24" fill="#f5f1e8"/>
   <g fill="none" stroke="#2f4538" stroke-width="8" stroke-linecap="round">
     <path d="M24 32c20 0 20 64 40 64s20-64 40-64"/>

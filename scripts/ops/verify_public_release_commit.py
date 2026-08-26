@@ -18,8 +18,8 @@ from typing import Any, Mapping
 
 from weltgewebe_secure_receipt_io import write_secure_json
 
-DEFAULT_FRONTEND_URL = "https://weltgewebe.net/_app/version.json"
-DEFAULT_API_URL = "https://weltgewebe.net/api/version"
+DEFAULT_FRONTEND_URL = "https://commonthing.net/_app/version.json"
+DEFAULT_API_URL = "https://commonthing.net/api/version"
 DEFAULT_MAX_RESPONSE_BYTES = 1024 * 1024
 COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")

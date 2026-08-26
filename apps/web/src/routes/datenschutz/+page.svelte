@@ -1,8 +1,8 @@
 <svelte:head>
-  <title>Datenschutz – Weltgewebe</title>
+  <title>Datenschutz – CommonThing</title>
   <meta
     name="description"
-    content="Datenschutzhinweise für die Nutzung des Weltgewebes."
+    content="Datenschutzhinweise für die Nutzung von CommonThing."
   />
 </svelte:head>
 
@@ -16,7 +16,7 @@
 
   <h2>Grundsatz</h2>
   <p>
-    Das Weltgewebe erhebt keine Daten für Werbung, Tracking oder verdeckte
+    CommonThing erhebt keine Daten für Werbung, Tracking oder verdeckte
     Profilbildung. Sichtbar wird nur, was Nutzer selbst eintragen und
     ausdrücklich als öffentlich kennzeichnen.
   </p>

@@ -351,7 +351,7 @@ fn private_message_payload(conversation_id: &str) -> anyhow::Result<Vec<u8>> {
     serde_json::to_vec(&json!({
         "version": 1,
         "kind": "direct_message",
-        "title": "Weltgewebe",
+        "title": "CommonThing",
         "body": "Neue private Nachricht",
         "url": format!("/nachrichten?id={conversation_id}"),
         "tag": format!("direct-message:{conversation_id}")
@@ -1043,6 +1043,7 @@ mod tests {
         let payload: serde_json::Value =
             serde_json::from_slice(&private_message_payload(conversation_id).unwrap()).unwrap();
         assert_eq!(payload["kind"], "direct_message");
+        assert_eq!(payload["title"], "CommonThing");
         assert_eq!(payload["body"], "Neue private Nachricht");
         assert_eq!(
             payload["url"],

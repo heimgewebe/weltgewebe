@@ -13,7 +13,7 @@ test.describe("public web truth", () => {
   test("declares German language and global metadata", async ({ page }) => {
     await page.goto("/map");
     await expect(page.locator("html")).toHaveAttribute("lang", "de");
-    await expect(page).toHaveTitle(/Weltgewebe/);
+    await expect(page).toHaveTitle(/CommonThing/);
     await expect(page.locator('meta[name="description"]')).toHaveAttribute(
       "content",
       /Commons/,
@@ -30,7 +30,7 @@ test.describe("public web truth", () => {
       page.getByRole("heading", { name: "Impressum", level: 1 }),
     ).toBeVisible();
     await expect(page.getByText("Alexander Mohr")).toBeVisible();
-    await expect(page).toHaveTitle("Impressum – Weltgewebe");
+    await expect(page).toHaveTitle("Impressum – CommonThing");
   });
 
   test("serves a real privacy page", async ({ page }) => {
@@ -39,7 +39,7 @@ test.describe("public web truth", () => {
       page.getByRole("heading", { name: "Datenschutzerklärung", level: 1 }),
     ).toBeVisible();
     await expect(page.getByText(/kein.*Werbung/i)).toBeVisible();
-    await expect(page).toHaveTitle("Datenschutz – Weltgewebe");
+    await expect(page).toHaveTitle("Datenschutz – CommonThing");
   });
 
   test("serves origin-consistent crawler discovery files", async ({
@@ -73,7 +73,8 @@ test.describe("public web truth", () => {
     expect(manifest.ok()).toBeTruthy();
     const data = await manifest.json();
     expect(data).toMatchObject({
-      name: "Weltgewebe",
+      name: "CommonThing",
+      short_name: "CommonThing",
       lang: "de",
       start_url: "/map",
       icons: expect.arrayContaining([

@@ -1,8 +1,8 @@
 <svelte:head>
-  <title>Impressum – Weltgewebe</title>
+  <title>Impressum – CommonThing</title>
   <meta
     name="description"
-    content="Anbieterkennzeichnung und Kontakt für das Weltgewebe."
+    content="Anbieterkennzeichnung und Kontakt für CommonThing."
   />
 </svelte:head>
 

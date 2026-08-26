@@ -200,33 +200,41 @@
 	}
 }
 
-# HTTP sites are intentionally narrow: they support pre-DNS smoke tests for
-# health/API readiness, but do not serve the full app over plaintext.
-http://weltgewebe.net, http://www.weltgewebe.net {
-	header Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
-	header X-Content-Type-Options "nosniff"
+# The canonical HTTP app site remains intentionally narrow: it supports
+# pre-DNS smoke tests for health/API readiness, but does not serve the full app
+# over plaintext. All other public web hosts redirect directly to the canonical
+# HTTPS apex while preserving path and query through {uri}.
+http://commonthing.net {
+	route {
+		header Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
+		header X-Content-Type-Options "nosniff"
 
-	handle /health/proxy {
-		respond 200
-	}
-
-	handle /api/metrics {
-		respond 404
-	}
-	handle /api/metrics/* {
-		respond 404
-	}
-
-	handle_path /api/* {
-		reverse_proxy api:8080 {
-			# Caddy owns the client-IP chain. Never pass a public client's
-			# RFC 7239 header to an API that trusts this proxy peer.
-			header_up -Forwarded
-			header_up X-Forwarded-For {remote_host}
+		handle /health/proxy {
+			respond 200
 		}
-	}
 
-	redir https://{host}{uri} 308
+		handle /api/metrics {
+			respond 404
+		}
+		handle /api/metrics/* {
+			respond 404
+		}
+
+		handle_path /api/* {
+			reverse_proxy api:8080 {
+				# Caddy owns the client-IP chain. Never pass a public client's
+				# RFC 7239 header to an API that trusts this proxy peer.
+				header_up -Forwarded
+				header_up X-Forwarded-For {remote_host}
+			}
+		}
+
+		redir https://commonthing.net{uri} 308
+	}
+}
+
+http://www.commonthing.net, http://weltgewebe.net, http://www.weltgewebe.net {
+	redir https://commonthing.net{uri} 308
 }
 
 http://api.weltgewebe.net {
@@ -249,8 +257,12 @@ http://api.weltgewebe.net {
 	redir https://{host}{uri} 308
 }
 
-https://weltgewebe.net, https://www.weltgewebe.net {
+https://commonthing.net {
 	import app_common
+}
+
+https://www.commonthing.net, https://weltgewebe.net, https://www.weltgewebe.net {
+	redir https://commonthing.net{uri} 308
 }
 
 https://api.weltgewebe.net {

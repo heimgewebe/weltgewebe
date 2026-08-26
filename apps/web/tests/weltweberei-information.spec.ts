@@ -13,7 +13,7 @@ import { expect, test, type Request, type Response } from "@playwright/test";
  */
 
 const SURFACE_PATH = "/weltweberei/";
-const WELTGEWEBE_LINK = "https://weltgewebe.net/";
+const COMMONTHING_LINK = "https://commonthing.net/";
 
 // Known legacy contact strings that must never reach the public artifact.
 // This is a targeted contact-channel guard, not a general PII scanner.
@@ -74,7 +74,7 @@ test.describe("weltweberei information surface", () => {
 
     const response = await page.goto(SURFACE_PATH, { waitUntil: "load" });
     const pageOrigin = new URL(page.url()).origin;
-    const link = page.locator(`a[href="${WELTGEWEBE_LINK}"]`);
+    const link = page.locator(`a[href="${COMMONTHING_LINK}"]`);
 
     await test.step("document and surface contract", async () => {
       // 1./2. The built page is reachable and the response is successful.
@@ -82,7 +82,7 @@ test.describe("weltweberei information surface", () => {
       expect(response!.ok(), "response status is 2xx").toBeTruthy();
 
       // 3. Document title is correct.
-      await expect(page).toHaveTitle("Weltweberei – Konzept und Weltgewebe");
+      await expect(page).toHaveTitle("Weltweberei – Konzept und CommonThing");
 
       // 4. Exactly one visible main heading containing "Weltweberei".
       const headings = page.locator("h1");
@@ -101,7 +101,7 @@ test.describe("weltweberei information surface", () => {
         "weltweberei-info-v1",
       );
 
-      // 7. Visible link to weltgewebe.net.
+      // 7. Visible link to the canonical CommonThing origin.
       await expect(link).toHaveCount(1);
       await expect(link).toBeVisible();
     });

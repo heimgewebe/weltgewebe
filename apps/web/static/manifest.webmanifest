@@ -1,7 +1,7 @@
 {
-  "name": "Weltgewebe",
-  "short_name": "Weltgewebe",
-  "description": "Commons, Knoten, Garnrollen und ihre Beziehungen gemeinsam auf einer Karte verwalten.",
+  "name": "CommonThing",
+  "short_name": "CommonThing",
+  "description": "Mit CommonThing Commons, Knoten, Garnrollen und ihre Beziehungen gemeinsam auf einer Karte verwalten.",
   "lang": "de",
   "start_url": "/map",
   "scope": "/",

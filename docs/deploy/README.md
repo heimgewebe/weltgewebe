@@ -390,7 +390,7 @@ einem separaten SMTP-Delivery-Receipt aktiviert.
 ```bash
 AUTH_PUBLIC_LOGIN=1
 AUTH_LOG_MAGIC_TOKEN=0
-APP_BASE_URL=https://weltgewebe.net
+APP_BASE_URL=https://commonthing.net
 SMTP_HOST=<provider-host>
 SMTP_PORT=587
 SMTP_AUTH=on
@@ -412,7 +412,7 @@ Der Check gibt nur Status- und Presence-Metadaten aus, keine SMTP-Werte.
 ### Regeln
 
 - Wenn `AUTH_PUBLIC_LOGIN=1` gesetzt ist, **muss** `APP_BASE_URL` gesetzt sein.
-- `APP_BASE_URL` muss `https://weltgewebe.net` sein.
+- `APP_BASE_URL` muss `https://commonthing.net` sein.
 - Ohne SMTP ist Magic Link Login nicht zustellbar.
 - `AUTH_LOG_MAGIC_TOKEN=1` ist ausschließlich Debug/Development und kein Produktionsmodus.
 - `SMTP_AUTH=off` ist für den Public-VPS-Rollout nicht zulässig, außer ein bewusst
