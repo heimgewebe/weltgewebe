@@ -248,11 +248,23 @@ async fn app_with_web_push(
         build_timestamp: "test",
     })
     .expect("metrics");
+    let nats_client = if web_push.is_some() {
+        let nats_url = std::env::var("NATS_URL")
+            .expect("NATS_URL is required for the Web Push integration proof");
+        Some(
+            async_nats::connect(nats_url)
+                .await
+                .expect("connect Web Push integration proof to NATS"),
+        )
+    } else {
+        None
+    };
+    let nats_configured = nats_client.is_some();
     let state = ApiState {
         db_pool: Some(pool),
         db_pool_configured: true,
-        nats_client: None,
-        nats_configured: false,
+        nats_client,
+        nats_configured,
         config: config.clone(),
         metrics,
         sessions,
