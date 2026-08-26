@@ -126,10 +126,8 @@ abschließenden Leerraum, verlangt `Cache-Control: no-store` und bindet
 Dauer und letzter Fehlergrund werden ausgegeben. Ein Rollback löscht einen neuen
 Release nur, wenn derselbe Lauf ihn angelegt hat und seine Dateisystemidentität
 unverändert ist. Dies ist ein verifizierter Umschalt- und Rollbackvertrag, aber
-kein Blue-Green- oder allgemeiner Zero-Downtime-Vertrag. Der Default von
-`WEB_RELEASES_DIR` in `scripts/ops/install-web-artifact.sh` ist
-`/opt/weltgewebe/apps/web/releases/`; dieses Verzeichnis ist Laufzeitzustand und
-darf den Produktionscheckout nicht verschmutzen.
+kein Blue-Green- oder allgemeiner Zero-Downtime-Vertrag. `apps/web/releases/`
+ist Laufzeitzustand und darf den Produktionscheckout nicht verschmutzen.
 
 ## 3. Datenquellen und Migrationen
 

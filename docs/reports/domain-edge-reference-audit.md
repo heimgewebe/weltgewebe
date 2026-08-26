@@ -2,10 +2,11 @@
 id: reports.domain-edge-reference-audit
 title: "Domain Edge Reference Audit — OPT-ARC-001 Teilaufgabe 4"
 doc_type: report
-status: deprecated
-lifecycle_state: archived
+status: active
+lifecycle_state: active
 lifecycle: audit
 owner_task: OPT-ARC-001
+review_after: 2026-07-16
 created: 2026-06-14
 lang: de
 summary: >
@@ -29,11 +30,6 @@ relations:
 ---
 
 # Domain Edge Reference Audit
-
-> **Lifecycle-Hinweis (2026-08-24):** Archivierter Point-in-Time-Beleg.
-> Die historischen Aussagen bleiben unverändert; aktuelle Statuswahrheit ist aus
-> den kanonischen Status-, Architektur- und Runtimequellen abzuleiten.
-
 
 Task: OPT-ARC-001 Teilaufgabe 4
 Status: partial / audit_harness_proven / postgres_empty_smoke_passed / representative_runtime_data_pending

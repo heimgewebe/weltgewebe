@@ -2,10 +2,11 @@
 id: reports.domain-backfill-proof
 title: Domain Backfill Proof
 doc_type: report
-status: deprecated
-lifecycle_state: archived
+status: active
+lifecycle_state: active
 lifecycle: proof
 owner_task: OPT-ARC-001
+review_after: 2026-07-16
 canonicality: evidence
 summary: >
   Proof-Bericht für OPT-ARC-001 Phase C: deterministischer JSONL→PostgreSQL-Backfill
@@ -22,12 +23,6 @@ relations:
 ---
 
 # Domain Backfill Proof
-
-> **Lifecycle-Hinweis (2026-08-24):** Archivierter Point-in-Time-Beleg.
-> Die historischen Aussagen bleiben unverändert; aktuelle Statuswahrheit ist aus
-> den kanonischen Status-, Architektur- und Runtimequellen abzuleiten.
-
-<!-- Archivhinweis endet; historischer Originalblock folgt. -->
 
 > **Sicherheitsnachtrag 2026-07-18:** Historische Radius-/Approximate-Datensätze
 > ohne private Zufallsbindung werden beim Import nicht mehr öffentlich

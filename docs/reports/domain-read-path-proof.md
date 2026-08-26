@@ -2,10 +2,11 @@
 id: reports.domain-read-path-proof
 title: "Domain Read Path Proof"
 doc_type: report
-status: deprecated
-lifecycle_state: archived
+status: active
+lifecycle_state: active
 lifecycle: proof
 owner_task: OPT-ARC-001
+review_after: 2026-07-16
 created: 2026-06-03
 lang: de
 summary: >
@@ -26,11 +27,6 @@ relations:
 ---
 
 # Domain Read Path Proof
-
-> **Lifecycle-Hinweis (2026-08-24):** Archivierter Point-in-Time-Beleg.
-> Die historischen Aussagen bleiben unverändert; aktuelle Statuswahrheit ist aus
-> den kanonischen Status-, Architektur- und Runtimequellen abzuleiten.
-
 
 ## Scope
 

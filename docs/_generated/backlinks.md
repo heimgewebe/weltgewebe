@@ -557,7 +557,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/README.md
 - [relates_to] docs/deploy/merge-to-live.md
 - [relates_to] docs/deploy/public-metrics-boundary.md
-- [relates_to] docs/deploy/schauwerk-editor-frontdoor.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
@@ -954,7 +953,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
-- [relates_to] docs/proofs/weltgewebe-os-v1-t036-documentation-drift-reconciliation.md
 - [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
 
 ## docs/runbook.md
@@ -996,6 +994,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+- [relates_to] docs/runbooks/README.md
 
 ## docs/runbooks/gewebezelle-manual-pilot.md
 
@@ -1030,7 +1029,6 @@ Generated automatically. Do not edit.
 ## docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
-- [relates_to] docs/runbooks/README.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 
 ## docs/specs/auth-api.md
@@ -1240,7 +1238,6 @@ Generated automatically. Do not edit.
 
 - [relates_to] docs/deploy/map-html-canonical-route.md
 - [relates_to] docs/deploy/public-metrics-boundary.md
-- [relates_to] docs/deploy/schauwerk-editor-frontdoor.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 
 ## infra/compose/compose.observ.yml
@@ -1253,7 +1250,6 @@ Generated automatically. Do not edit.
 
 ## infra/compose/compose.vps.override.yml
 
-- [relates_to] docs/deploy/schauwerk-editor-frontdoor.md
 - [relates_to] docs/deploy/vps-http-route-smoke.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/deploy/vps-migration-safe-runtime-smoke.md

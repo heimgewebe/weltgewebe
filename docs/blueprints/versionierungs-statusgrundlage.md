@@ -36,9 +36,9 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 
 ### 2.4 UI-Diagnose
 
-- **Implementierung:** Die heutige Vollansicht liegt unter `apps/web/src/routes/build/+page.svelte`; der weiterhin passende Browservertrag liegt in `apps/web/tests/version-diagnostics.spec.ts`. Die frühere Komponente `VersionDiagnostics.svelte` ist nicht mehr Teil des Repositorys.
-- **Begriffsverwendung:** Die Build-Diagnose verlangt für den Serverstand ein nichtleeres `version`-Feld und vergleicht es mit der lokal eingebetteten Build-Version. `build_id`, `built_at`, `commit` und `release` werden nur als zusätzlicher Kontext angezeigt, wenn sie vorhanden sind.
-- **Cache:** Die Vollansicht lädt `/_app/version.json` explizit mit `cache: "no-store"`.
+- **Implementierung:** `apps/web/src/lib/components/VersionDiagnostics.svelte` und zugehörige Tests (`apps/web/tests/version-diagnostics.spec.ts`) sind **bereits vollständig umgesetzt**.
+- **Begriffsverwendung:** Die UI sucht primär nach `version`: `const canonicalVersion = versionData.version || versionData.commit || versionData.build;`. `build_id` wird als sekundärer Kontext ("Build abc1234-174...") angezeigt.
+- **Cache:** Das UI fetched die Datei explizit ungecached: `fetch('/_app/version.json', { cache: 'no-store' })`.
 
 ### 2.5 Tests
 
@@ -65,7 +65,7 @@ Dieses Dokument dient als belastbare, repo-belegte Ist-Stand-Analyse der Weltgew
 | `version.json.build_id` | `generate-version.js` | UI, `weltgewebe-up` | Volatile CI Run ID | Implementiert & konsistent | Niedrig |
 | Caddy Cache-Control für `/_app/version.json` | `Caddyfile.heim` | Browser, `weltgewebe-up` | `no-store` | Implementiert & konsistent | Niedrig |
 | `weltgewebe-up` Frontend Guard für `version.json` | `weltgewebe-up` | CI/CD | Harter Fehler bei Fehlen oder invalidem JSON | Implementiert & konsistent | Niedrig |
-| UI-Diagnoseanzeige | `apps/web/src/routes/build/+page.svelte` | Benutzer | Vergleicht lokale und serverseitige `version`; zeigt weitere Buildfelder als Kontext | Implementiert (`no-store`) | Niedrig |
+| UI-Diagnoseanzeige | `VersionDiagnostics.svelte` | Benutzer | Zeigt `version` primär, `build_id` sekundär | Fertig (fetched mit `no-store`) | Niedrig |
 | Deploy-Tests (22a, 22b, 22c) | `test_verify_deployment.sh` | CI/CD | Absicherung der Cache-Header | Implementiert | Mittel |
 | Deploy-Tests (22d, 22e) | `test_verify_deployment.sh` | CI/CD | Absicherung von `version.json` Constraints | Implementiert | Mittel |
 
@@ -100,7 +100,7 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
 ### Beantwortung der Kernfragen
 
 1. **Ist version aktuell kanonisch oder build_id?**
-   `version` ist kanonisch. `generate-version.js` und die Build-Diagnose unter `apps/web/src/routes/build/+page.svelte` behandeln `version` konsistent als die primäre Artefakt-ID.
+   `version` ist kanonisch. `generate-version.js` und `VersionDiagnostics.svelte` behandeln `version` konsistent als die primäre, deterministische Artefakt-ID.
 2. **Ist das aktuelle Schema wirklich konsistent zwischen den Dateien?**
    Ja, das Schema (Fokus auf `version`, sekundär `build_id`/`built_at`) ist zwischen Generator, UI und Blaupause konsistent. Der Infrastruktur-Code (`Caddyfile.heim`, `weltgewebe-up`) setzt die daraus resultierenden *Verträge* (`no-store`, hartes Failen) durch.
 3. **Ist REQUIRE_FRONTEND heute eine saubere Override-Schnittstelle oder nur pragmatischer Testhebel?**
@@ -108,7 +108,7 @@ Die Deploy-Verify-Tests müssen klar in zwei semantische Gruppen getrennt werden
 4. **Welche Tests rund um 22c/22d/22e sind logisch korrekt benannt und welche nicht?**
    `22c` ist korrekt als Positivtest. `22d` und `22e` sind korrekt als Negativtests implementiert.
 5. **Ist die UI-Diagnose inhaltlich schon „fertig genug“, sodass PR 2 im Wesentlichen als erledigt gelten kann?**
-   Ja. Die frühere Einzelkomponente wurde durch die vollständige `/build`-Diagnoseseite ersetzt; `apps/web/tests/version-diagnostics.spec.ts` prüft den Einstieg und den Live-Versionsreadback.
+   Ja, die UI-Komponente ist vollständig implementiert, abgetestet und erfüllt die Anforderungen von Phase E der Blaupause.
 
 ## 7. Abschlussstatus
 

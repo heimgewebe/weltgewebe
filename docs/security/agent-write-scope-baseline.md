@@ -43,8 +43,8 @@ deklariert sind.
 | Pfad | Begründung |
 |---|---|
 | `docs/_generated/*` | Automatisch generierte Diagnoseartefakte; niemals direkt editieren |
-| `secrets/` | **Policy-Scope**, Credentials und Geheimnisse; Existenz ist nicht erforderlich |
-| `snapshots/` | **Policy-Scope**, Deploy-Snapshots; kein direkter Agent-Zugriff, Existenz ist nicht erforderlich |
+| `secrets/` | Credentials und Geheimnisse |
+| `snapshots/` | Deploy-Snapshots; kein direkter Agent-Zugriff |
 
 Quelle: `agent-policy.yaml` → `forbidden_write_paths`
 

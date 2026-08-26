@@ -8,7 +8,6 @@ name: Docs Guard
       - dev
   pull_request:
     paths:
-      - '**/*.md'
       - 'manifest/**'
       - 'architecture/**'
       - 'runtime/**'

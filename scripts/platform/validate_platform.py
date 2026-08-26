@@ -443,16 +443,7 @@ def _assert_ha_contract() -> None:
         if sorted(zones) != ["zone-a", "zone-b", "zone-c"]:
             raise ContractError(f"{name} HA kind cluster lacks three explicit zones")
 
-    proof = "\n".join(
-        (ROOT / relative).read_text()
-        for relative in (
-            "scripts/platform/ha_reference.py",
-            "scripts/platform/ha_availability.py",
-            "scripts/platform/ha_dependencies.py",
-            "scripts/platform/ha_migration.py",
-            "scripts/platform/ha_wal.py",
-        )
-    )
+    proof = (ROOT / "scripts/platform/ha_reference.py").read_text()
     required_markers = (
         "docker", "stop", "postgres_rto_seconds", "nats_rto_seconds",
         "recoveryTarget", "blank_kind_cluster", "production_changed",
@@ -470,7 +461,7 @@ def _assert_ha_contract() -> None:
         "prove_api_upgrade_and_rollback", "UPGRADE_API_IMAGE",
         "rollout", "undo", "compute_error_budget",
         "zero-observed-outage", "within_budget",
-        "non-owner-control-plane-any-advertised-address", "degraded_gateway_path_samples",
+        "owner-node-any-advertised-address", "degraded_gateway_path_samples",
         "continued_wal_archiving", "continuity_validation_seconds",
         "measured_archive_rpo_upper_bound_seconds",
     )

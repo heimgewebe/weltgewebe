@@ -18,7 +18,7 @@ relations:
   - type: relates_to
     target: docs/runbooks/uv-tooling.md
   - type: relates_to
-    target: docs/runbooks/weltgewebe-ddns-runtime-verification.md
+    target: docs/runbooks/domain-mail-cutover.md
   - type: relates_to
     target: docs/runbooks/gewebezelle-manual-pilot.md
   - type: relates_to
@@ -31,12 +31,8 @@ Anleitungen für wiederkehrende Aufgaben.
 - [Incident Response](incident-response.md)
 - [DB Recovery](db-recovery.md)
 - [UV Tooling – Ist-Stand & Ausbauoptionen](uv-tooling.md)
-- [DDNS-/Runtime-Verifikation](weltgewebe-ddns-runtime-verification.md)
+- [Domain-/Mail-Cutover](domain-mail-cutover.md)
 - [Manuelles GewebeZelle-Pilotprofil](gewebezelle-manual-pilot.md)
 - [Zwei-Betreiber-GewebeZelle-Pilotvertrag v1](gewebezelle-two-operator-pilot-v1.md)
 - [Codespaces Recovery](codespaces-recovery.md)
 - [Zurück zum Doku-Index](../index.md)
-
-## Historische Runbooks
-
-- [Domain-/Mail-Cutover](domain-mail-cutover.md) — archivierter Cutover-Beleg; nicht als aktuelles Betriebsrunbook verwenden.

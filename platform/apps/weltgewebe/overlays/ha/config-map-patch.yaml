@@ -7,4 +7,3 @@ data:
   APP_BASE_URL: http://weltgewebe.localhost
   AUTH_COOKIE_SECURE: "0"
   OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector.weltgewebe-observability.svc.cluster.local:4317
-  WELTGEWEBE_DOMAIN_JETSTREAM_REPLICAS: "3"

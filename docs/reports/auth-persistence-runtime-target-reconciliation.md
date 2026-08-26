@@ -2,10 +2,11 @@
 id: reports.auth-persistence-runtime-target-reconciliation
 title: "Auth-Persistenz — Runtime-Zielarchitektur-Abgleich (PgBouncer vs. direkter Postgres)"
 doc_type: report
-status: deprecated
-lifecycle_state: archived
+status: active
+lifecycle_state: active
 lifecycle: audit
 owner_task: OPT-API-002
+review_after: 2026-08-22
 created: 2026-05-13
 lang: de
 summary: >
@@ -32,13 +33,6 @@ relations:
 
 # Auth-Persistenz — Runtime-Zielarchitektur-Abgleich
 
-> **Lifecycle-Hinweis (2026-08-24):** Archivierter Point-in-Time-Abgleich.
-> Die historischen Runtime-Beobachtungen bleiben unverändert. Die normative
-> Gegenwartsentscheidung liegt in `docs/adr/ADR-0007__auth-persistence-production-db-path.md`;
-> aktuelle Betriebswahrheit muss aus dem heutigen Deployment/Runtime-Readback kommen.
-
-<!-- Archivhinweis endet; historischer Originalblock folgt. -->
-
 > **Zweck:** Diagnose und Kanonisierung. Dieses Dokument hält den Abgleich zwischen
 > Dev-Stack, Prod-Stack, Runtime-Befund und Proof-Dokumenten fest.
 >
@@ -52,13 +46,13 @@ relations:
 
 ## Lifecycle
 
-- **Lifecycle-State:** archived
+- **Lifecycle-State:** active
 - **Lifecycle:** audit
 - **Owner-Task:** OPT-API-002
-- **Review after:** entfällt; am 2026-08-24 archiviert
-- **Bewertung:** Archivierter Architekturabgleich zur Produktionsentscheidung.
-  ADR-0007 bleibt normative Quelle; aktuelle Runtime-Aussagen werden nicht aus
-  diesem historischen Bericht abgeleitet.
+- **Review after:** 2026-08-22
+- **Bewertung:** Weiterhin aktiver Architekturabgleich zur Produktionsentscheidung
+  direkter PostgreSQL-Pfad vs. PgBouncer-Dev-/Spezialpfad. Keine neue
+  Runtime-Aussage in diesem PR.
 
 ---
 

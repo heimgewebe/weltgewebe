@@ -29,10 +29,6 @@ MAX_NEGATIVE_EXAMPLES = 3
 SUPERSESSION_SUFFIXES = ["-v2", "-v3", "-new", "-deprecated", "-legacy", "-alt", "-revised"]
 
 
-def _raise_walk_error(error):
-    raise error
-
-
 def collect_relations_graph():
     """
     Walk all docs/*.md (excluding _generated) and build the relations graph.
@@ -45,17 +41,21 @@ def collect_relations_graph():
     edges = []
     all_docs = set()
 
-    for root, dirs, files in os.walk(docs_dir, onerror=_raise_walk_error):
-        dirs[:] = sorted(directory for directory in dirs if directory != "_generated")
-        for file in sorted(files):
+    for root, dirs, files in os.walk(docs_dir):
+        if "_generated" in root:
+            continue
+        for file in files:
             if not file.endswith(".md"):
                 continue
             abs_path = os.path.join(root, file)
             rel_path = os.path.relpath(abs_path, REPO_ROOT)
             all_docs.add(rel_path)
 
-            with open(abs_path, "r", encoding="utf-8") as f:
-                content = f.read()
+            try:
+                with open(abs_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+            except Exception:
+                continue
 
             relations = extract_relations_from_content(content)
             for rel in relations:

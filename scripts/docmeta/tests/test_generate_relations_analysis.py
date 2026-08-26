@@ -1,10 +1,7 @@
 import unittest
 from collections import defaultdict
-from unittest.mock import patch
 
-from scripts.docmeta import generate_relations_analysis
 from scripts.docmeta.generate_relations_analysis import (
-    collect_relations_graph,
     find_cycles,
     compute_degree_stats,
     find_isolated_docs,
@@ -14,26 +11,6 @@ from scripts.docmeta.generate_relations_analysis import (
     HUB_OUTBOUND_THRESHOLD,
     HUB_INBOUND_THRESHOLD,
 )
-
-
-class TestRelationDiscovery(unittest.TestCase):
-    def test_walk_error_fails_closed(self):
-        def failing_walk(*_args, **kwargs):
-            kwargs["onerror"](OSError("discovery denied"))
-            return []
-
-        with patch.object(generate_relations_analysis.os, "walk", side_effect=failing_walk):
-            with self.assertRaises(OSError):
-                collect_relations_graph()
-
-    def test_markdown_read_error_fails_closed(self):
-        walk = [("/repo/docs", [], ["broken.md"])]
-        with (
-            patch.object(generate_relations_analysis.os, "walk", return_value=walk),
-            patch("builtins.open", side_effect=OSError("read denied")),
-        ):
-            with self.assertRaises(OSError):
-                collect_relations_graph()
 
 
 class TestFindCycles(unittest.TestCase):

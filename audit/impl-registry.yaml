@@ -90,12 +90,9 @@ implementations:
     documented_by:
       - docs/deploy/README.md
       - docs/deploy/heimserver.deployment.md
-      - docs/deploy/schauwerk-editor-frontdoor.md
       - docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
     verified_by:
       - .github/workflows/compose-smoke.yml
-      - scripts/ci/tests/test_schaubild_frontdoor.py
-      - scripts/ci/tests/test_schauwerk_editor_release_preflight.py
       - scripts/tests/test_compose_volumes_guard.sh
       - scripts/guard-compose-no-relative-volumes.sh
 
@@ -175,13 +172,10 @@ implementations:
     documented_by:
       - docs/blueprints/map-blaupause.md
       - docs/deployment.md
-      - docs/deploy/schauwerk-editor-frontdoor.md
     verified_by:
       - scripts/guard/caddy-basemap-route-guard.sh
       - scripts/ci/tests/test_regional_basemap_style.py
       - scripts/ci/tests/test_public_live_readiness.py
-      - scripts/ci/tests/test_schaubild_frontdoor.py
-      - scripts/ci/tests/test_static_app_caddy_csp_adapted_contract.py
 
   - id: impl.guard.basemap-runtime-proof
     path: scripts/guard/basemap-runtime-proof.sh

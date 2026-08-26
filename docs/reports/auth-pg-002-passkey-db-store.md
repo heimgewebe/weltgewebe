@@ -39,7 +39,7 @@ relations:
 - Reine (DB-freie) Unit-Tests für die Persistenz-Invarianten:
   `Passkey`-JSON-Roundtrip, Stabilität/Reversibilität des
   Credential-ID-Schlüssels und Fehlerfälle beim Hex-Decode.
-- Ignored Integration-Proof `apps/api/tests/db_passkey_store_persistence.rs` analog zu
+- Ignored Integration-Proof `tests/db_passkey_store_persistence.rs` analog zu
   `db_session_store_persistence.rs`, plus CI-Job
   `db-passkey-persistence-proof` in `.github/workflows/api.yml`.
 

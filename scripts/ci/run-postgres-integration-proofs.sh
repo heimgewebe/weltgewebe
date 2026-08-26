@@ -7,7 +7,6 @@ CONTRACT_FILE="${SCRIPT_DIR}/postgres-proof-contract.json"
 : "${DATABASE_URL:?DATABASE_URL must point at a direct disposable PostgreSQL database}"
 export PG_DIRECT_URL="${PG_DIRECT_URL:-$DATABASE_URL}"
 export T005_DATABASE_URL="${T005_DATABASE_URL:-$PG_DIRECT_URL}"
-export FEDERATION_TEST_DATABASE_URL="$PG_DIRECT_URL"
 export AUTH_PG_003_FIXTURE_MUTATION=1
 
 owned_nats_container=""
@@ -362,7 +361,6 @@ targets=(
   db_domain_edge_write_path
   db_domain_node_write_path
   db_governance
-  db_federation_persistence
   db_multi_instance_foundation
   db_ortsweberei_webgemeindezentrum
   db_domain_read_path

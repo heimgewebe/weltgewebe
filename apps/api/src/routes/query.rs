@@ -1,6 +1,7 @@
 use axum::http::StatusCode;
 use serde::Serialize;
 use std::collections::HashMap;
+use std::fmt::Write as _;
 
 /// Upper bound for the `limit` query parameter on list endpoints, applied so a
 /// single request cannot force an unbounded in-memory collection.
@@ -55,7 +56,12 @@ pub enum ListResponse<T> {
 /// Encode an id into an opaque, URL-safe cursor token (lowercase hex of the
 /// id's UTF-8 bytes). Clients MUST treat the token as opaque.
 pub fn encode_cursor(id: &str) -> String {
-    hex::encode(id)
+    let mut out = String::with_capacity(id.len() * 2);
+    for byte in id.bytes() {
+        // Writing to a String is infallible.
+        let _ = write!(out, "{byte:02x}");
+    }
+    out
 }
 
 /// Decode a cursor token produced by [`encode_cursor`] back into the id.

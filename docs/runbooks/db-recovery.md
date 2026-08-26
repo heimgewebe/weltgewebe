@@ -111,7 +111,7 @@ startet einen Wegwerfcontainer mit:
 `postgres-restore-proof.sh` prüft Manifest und Gzip, verlangt ein leeres Ziel,
 spielt den Dump ein und verifiziert danach alle Pflichtstrukturen. Das
 Proof-Artefakt endet nur bei Erfolg mit `result=ok` und liegt mit Modus `0600`
-unter dem Runtime-Default `/var/backups/weltgewebe/postgres/proofs/` (über `RESTORE_PROOF_DIR` konfigurierbar). Der Wegwerfcontainer wird in jedem Ausgang entfernt.
+unter `postgres/proofs/`. Der Wegwerfcontainer wird in jedem Ausgang entfernt.
 
 Systemd:
 

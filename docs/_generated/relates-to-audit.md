@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 716 |
+| Relationen gesamt | 712 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 661 |
+| — relates_to | 657 |
 | — supersedes | 12 |
 | — verifies | 9 |
 | relates_to Anteil | 92% |
@@ -32,7 +32,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (281 Dokumente):
+**Cluster 1** (279 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -126,7 +126,6 @@ _Keine Lücken erkannt._
 - `docs/deploy/merge-to-live.md`
 - `docs/deploy/public-app-base-url.md`
 - `docs/deploy/public-metrics-boundary.md`
-- `docs/deploy/schauwerk-editor-frontdoor.md`
 - `docs/deploy/secondary-domain-web-surfaces.md`
 - `docs/deploy/security.md`
 - `docs/deploy/vps-db-initialization-boundary.md`
@@ -165,7 +164,6 @@ _Keine Lücken erkannt._
 - `docs/proofs/sqlx-postgres-direct-session-crud-proof.md`
 - `docs/proofs/weltgewebe-os-v1-t005-two-cell-proof.md`
 - `docs/proofs/weltgewebe-os-v1-t032-federation-delivery.md`
-- `docs/proofs/weltgewebe-os-v1-t036-documentation-drift-reconciliation.md`
 - `docs/quickstart-gate-c.md`
 - `docs/reference/agent-dry-run-runner.md`
 - `docs/reference/agent-handoff-contract.md`

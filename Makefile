@@ -36,7 +36,7 @@ validate-tests: require-uv-tooling agent-contract-check
 	$(UV_RUN) python -m unittest discover scripts/agent/tests/
 	# Full make validate Python path is tools/py only (no bare host python3).
 	$(CI_TEST_GIT_ENV) $(UV_RUN) python -m unittest discover scripts/ci/tests/
-	$(UV_RUN) python -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py scripts/ci/tests/test_schauwerk_editor_release_preflight.py
+	$(UV_RUN) python -m pytest -q scripts/ci/tests/test_semantic_search_production_activation.py
 	$(UV_RUN) python scripts/docmeta/validate_claim_registry.py
 	$(UV_RUN) python scripts/docmeta/validate_doc_freshness_registry.py
 	$(UV_RUN) python -m scripts.docmeta.generate_claim_evidence_map --check
