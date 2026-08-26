@@ -895,23 +895,6 @@ impl FederationRepository for PostgresFederationRepository {
         .execute(&mut *tx)
         .await?;
         let supplied_key_ids: Vec<_> = policy.keys.iter().map(|key| key.key_id.clone()).collect();
-        for key in &policy.keys {
-            let existing: Option<Vec<u8>> = sqlx::query_scalar(
-                "SELECT public_key FROM federation_peer_keys \
-                 WHERE remote_cell_id = $1 AND key_id = $2 FOR UPDATE",
-            )
-            .bind(&policy.remote_cell_id)
-            .bind(&key.key_id)
-            .fetch_optional(&mut *tx)
-            .await?;
-            if existing.is_some_and(|public_key| public_key != key.public_key) {
-                bail!(
-                    "public key for ({}, {}) is immutable",
-                    policy.remote_cell_id,
-                    key.key_id
-                );
-            }
-        }
         sqlx::query(
             "UPDATE federation_peer_keys SET active = FALSE, \
              retired_at = COALESCE(retired_at, NOW()) \
@@ -921,24 +904,52 @@ impl FederationRepository for PostgresFederationRepository {
         .bind(&supplied_key_ids)
         .execute(&mut *tx)
         .await?;
-        for key in policy.keys {
-            sqlx::query(
+        if !policy.keys.is_empty() {
+            let mut key_ids = Vec::with_capacity(policy.keys.len());
+            let mut public_keys = Vec::with_capacity(policy.keys.len());
+            let mut actives = Vec::with_capacity(policy.keys.len());
+
+            for key in &policy.keys {
+                key_ids.push(key.key_id.clone());
+                public_keys.push(key.public_key.to_vec());
+                actives.push(key.active);
+            }
+
+            let upserted_key_ids: HashSet<String> = sqlx::query_scalar(
                 "INSERT INTO federation_peer_keys \
                  (remote_cell_id, key_id, public_key, active, retired_at) \
-                 VALUES ($1, $2, $3, $4, CASE WHEN $4 THEN NULL ELSE NOW() END) \
+                 SELECT $1, u.key_id, u.public_key, u.active, CASE WHEN u.active THEN NULL ELSE NOW() END \
+                 FROM UNNEST($2::text[], $3::bytea[], $4::boolean[]) AS u(key_id, public_key, active) \
                  ON CONFLICT (remote_cell_id, key_id) DO UPDATE SET \
                    active = EXCLUDED.active, \
                    retired_at = CASE \
                      WHEN EXCLUDED.active THEN NULL \
                      ELSE COALESCE(federation_peer_keys.retired_at, NOW()) \
-                   END",
+                   END \
+                 WHERE federation_peer_keys.public_key = EXCLUDED.public_key \
+                 RETURNING key_id",
             )
             .bind(&policy.remote_cell_id)
-            .bind(&key.key_id)
-            .bind(key.public_key.as_slice())
-            .bind(key.active)
-            .execute(&mut *tx)
-            .await?;
+            .bind(&key_ids)
+            .bind(&public_keys)
+            .bind(&actives)
+            .fetch_all(&mut *tx)
+            .await?
+            .into_iter()
+            .collect();
+            if upserted_key_ids.len() != policy.keys.len() {
+                let mismatched_key_id = policy
+                    .keys
+                    .iter()
+                    .find(|key| !upserted_key_ids.contains(&key.key_id))
+                    .map(|key| key.key_id.as_str())
+                    .unwrap_or("<unknown>");
+                bail!(
+                    "public key for ({}, {}) is immutable",
+                    policy.remote_cell_id,
+                    mismatched_key_id
+                );
+            }
         }
         tx.commit().await?;
         Ok(())
