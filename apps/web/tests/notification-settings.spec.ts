@@ -253,10 +253,9 @@ test.describe("Settings — notifications information architecture", () => {
     await page.goto("/settings#benachrichtigungen");
 
     const section = page.locator("#benachrichtigungen");
-    await expect(section.getByRole("link", { name: "Anmelden" })).toHaveAttribute(
-      "href",
-      "/login",
-    );
+    await expect(
+      section.getByRole("link", { name: "Anmelden" }),
+    ).toHaveAttribute("href", "/login");
     await expect(section.getByText(/Sitzung .*abgelaufen/i)).toHaveCount(0);
     await page.waitForLoadState("networkidle");
     expect(pushReads).toBe(0);
