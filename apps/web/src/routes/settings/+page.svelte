@@ -12,13 +12,7 @@
   let NotificationSettings:
     | typeof import("$lib/components/NotificationSettings.svelte").default
     | null = $state(null);
-  let notificationFallback: HTMLElement | null = $state(null);
   let notificationLoadFailed = $state(false);
-
-  function focusNotificationFallback(): void {
-    if (window.location.hash !== "#benachrichtigungen") return;
-    notificationFallback?.focus({ preventScroll: true });
-  }
 
   async function loadNotificationSettings(): Promise<void> {
     notificationLoadFailed = false;
@@ -32,11 +26,6 @@
 
   onMount(() => {
     void loadNotificationSettings();
-    const handleHashChange = () => focusNotificationFallback();
-    window.addEventListener("hashchange", handleHashChange);
-    focusNotificationFallback();
-
-    return () => window.removeEventListener("hashchange", handleHashChange);
   });
 </script>
 
@@ -120,11 +109,9 @@
             <NotificationSettings />
           {:else}
             <section
-              bind:this={notificationFallback}
               id="benachrichtigungen"
               class="col notification-loading"
               aria-labelledby="notification-settings-heading"
-              tabindex="-1"
             >
               <p class="menu-heading">Push für private Nachrichten</p>
               <h2 id="notification-settings-heading">Benachrichtigungen</h2>
@@ -227,12 +214,6 @@
 
   .notification-loading {
     padding: clamp(1rem, 3vw, 1.5rem);
-    scroll-margin-top: 1rem;
-  }
-
-  .notification-loading:focus-visible {
-    outline: 2px solid var(--accent);
-    outline-offset: 3px;
   }
 
   @media (max-width: 860px) {
