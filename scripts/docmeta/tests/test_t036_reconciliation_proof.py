@@ -3,13 +3,17 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 
 PROOF = Path("docs/proofs/weltgewebe-os-v1-t036-documentation-drift-reconciliation.md")
 SOURCE = Path("docs/proofs/sources/weltgewebe-os-v1-t036-documentation-drift-audit.json")
 SOURCE_SHA256 = "56e4a159d8b3dc79d6275ac46248f845337dbbe124b9f26f695a6a9ccfff8c0b"
+BASE_REVISION = "e34a27a160a37b86e06ba906e320ff24e871db0d"
+AUDIT_REVISION = "39d5a8f5fa637ba9f8a487074c86856e6a6b897c"
 LIFECYCLE = Path("docs/_generated/report-lifecycle.md")
+DOCS_GUARD = Path(".github/workflows/docs-guard.yml")
 ROW_RE = re.compile(
     r"^\| DRIFT-(\d{3}) \| (P[12]) \| "
     r"(weiterhin gültig|bereits behoben|superseded|falsch-positiv) \|"
@@ -32,6 +36,13 @@ ARCHIVED_BY_T036 = (
 
 
 class T036ReconciliationProofTests(unittest.TestCase):
+    def test_docs_guard_triggers_for_every_markdown_pull_request(self):
+        workflow = DOCS_GUARD.read_text(encoding="utf-8")
+        self.assertEqual(
+            sum(line.strip() == "- '**/*.md'" for line in workflow.splitlines()),
+            1,
+        )
+
     def test_all_52_findings_are_uniquely_dispositioned_and_matrix_is_derived(self):
         text = PROOF.read_text(encoding="utf-8")
         rows = [match.groups() for line in text.splitlines() if (match := ROW_RE.match(line))]
@@ -51,7 +62,7 @@ class T036ReconciliationProofTests(unittest.TestCase):
         source_bytes = SOURCE.read_bytes()
         self.assertEqual(hashlib.sha256(source_bytes).hexdigest(), SOURCE_SHA256)
         source = json.loads(source_bytes)
-        self.assertEqual(source["current_head"], "39d5a8f5fa637ba9f8a487074c86856e6a6b897c")
+        self.assertEqual(source["current_head"], AUDIT_REVISION)
 
         source_rows = [(item["id"], item["severity"]) for item in source["findings"]]
         self.assertEqual(len(source_rows), 52)
@@ -70,6 +81,17 @@ class T036ReconciliationProofTests(unittest.TestCase):
         self.assertEqual(proof_rows, source_rows)
         self.assertIn(str(SOURCE), proof_text)
         self.assertIn(SOURCE_SHA256, proof_text)
+
+    def test_claimed_source_revisions_resolve_to_local_commit_objects(self):
+        proof_text = PROOF.read_text(encoding="utf-8")
+        self.assertIn(BASE_REVISION, proof_text)
+        for revision in (BASE_REVISION, AUDIT_REVISION):
+            with self.subTest(revision=revision):
+                subprocess.run(
+                    ["git", "cat-file", "-e", f"{revision}^{{commit}}"],
+                    check=True,
+                    capture_output=True,
+                )
 
     def test_generated_lifecycle_projection_contains_t036_archivals(self):
         text = LIFECYCLE.read_text(encoding="utf-8")

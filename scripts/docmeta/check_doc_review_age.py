@@ -5,7 +5,6 @@ import os
 import re
 import subprocess
 import sys
-from pathlib import Path
 
 from scripts.docmeta.docmeta import (
     REPO_ROOT,
@@ -16,6 +15,7 @@ from scripts.docmeta.docmeta import (
 
 RETIRED_STATUSES = {"archived", "deprecated", "obsolete", "retired", "superseded"}
 RETIRED_LIFECYCLE_STATES = {"archived", "deprecated", "obsolete", "retired", "superseded"}
+CURRENT_REVIEW_STATUSES = {"active", "canonical", "draft"}
 YYYY_MM_DD_RE = re.compile(r"^[0-9]{4}-[0-9]{2}-[0-9]{2}$")
 
 
@@ -51,6 +51,11 @@ def _tracked_markdown_files(root: str) -> list[str]:
 def _is_retired(frontmatter: dict) -> bool:
     status = str(frontmatter.get("status", "")).strip().lower()
     lifecycle_state = str(frontmatter.get("lifecycle_state", "")).strip().lower()
+    # The lifecycle contract derives review obligations from status before it
+    # adds lifecycle_state rules. A contradictory active/archived document must
+    # therefore remain review-visible instead of being silently retired.
+    if status in CURRENT_REVIEW_STATUSES:
+        return False
     return status in RETIRED_STATUSES or lifecycle_state in RETIRED_LIFECYCLE_STATES
 
 

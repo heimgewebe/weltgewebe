@@ -116,6 +116,7 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
     );
 
     let identity_a = identity("cell-a", "key-a", 61);
+    let secondary_key = identity("cell-a", "key-a-secondary", 63).peer_key();
     let sender = FederationService::new(
         identity("cell-a", "key-a", 61),
         Arc::new(MemoryFederationRepository::new()),
@@ -134,9 +135,24 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
                 "object.upserted".to_string(),
                 "object.deleted".to_string(),
             ]),
-            keys: vec![identity_a.peer_key()],
+            keys: vec![identity_a.peer_key(), secondary_key.clone()],
         })
         .await?;
+    let installed_key_states: Vec<(String, bool, bool)> = sqlx::query_as(
+        "SELECT key_id, active, retired_at IS NOT NULL \
+         FROM federation_peer_keys \
+         WHERE remote_cell_id = 'cell-a' \
+         ORDER BY key_id",
+    )
+    .fetch_all(&pool)
+    .await?;
+    assert_eq!(
+        installed_key_states,
+        vec![
+            ("key-a".to_string(), true, false),
+            ("key-a-secondary".to_string(), true, false),
+        ]
+    );
     let mut replacement_key = identity_a.peer_key();
     replacement_key.public_key = [77; 32];
     let replacement_error = receiver
@@ -160,6 +176,16 @@ async fn postgres_repository_survives_restart_and_keeps_quarantine_separate() ->
     .await?;
     assert_eq!(peer_state, "trusted");
     assert_eq!(stored_key, identity_a.peer_key().public_key);
+    let secondary_active: bool = sqlx::query_scalar(
+        "SELECT active FROM federation_peer_keys \
+         WHERE remote_cell_id = 'cell-a' AND key_id = 'key-a-secondary'",
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert!(
+        secondary_active,
+        "failed immutable-key reinstall must roll back retirement of omitted keys"
+    );
 
     let event = sender
         .publish_local(PublishRequest {
@@ -930,6 +956,12 @@ async fn federation_hardening_migration_rejects_legacy_scope_or_audience_drift()
     assert!(migration_error.to_string().contains(
         "legacy federation object history changed immutable scope or neighbourhood audience"
     ));
+
+    // This test deliberately installs only a migration subset. Restore the disposable
+    // database so other ignored federation persistence proofs can share this test binary.
+    sqlx::raw_sql("DROP SCHEMA public CASCADE; CREATE SCHEMA public;")
+        .execute(&pool)
+        .await?;
 
     Ok(())
 }

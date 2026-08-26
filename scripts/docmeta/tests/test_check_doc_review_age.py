@@ -72,6 +72,19 @@ class ReviewAfterLifecycleTests(unittest.TestCase):
         self.assertTrue(report["docs.retired"]["review_retired"])
         self.assertFalse(report["docs.retired"]["review_due"])
 
+    def test_active_status_keeps_conflicting_archived_state_review_visible(self):
+        rel = self._write(
+            "active-archived-conflict",
+            "id: docs.active-archived-conflict\nstatus: active\n"
+            "lifecycle_state: archived\nreview_after: 2026-08-23",
+        )
+        errors, warnings, report = self._run(rel, mode="strict")
+        self.assertEqual(warnings, [])
+        self.assertEqual(len(errors), 1)
+        self.assertIn("due/overdue", errors[0])
+        self.assertFalse(report["docs.active-archived-conflict"]["review_retired"])
+        self.assertTrue(report["docs.active-archived-conflict"]["review_due"])
+
     def test_future_review_after_is_not_due(self):
         rel = self._write(
             "future",

@@ -40,6 +40,12 @@ services:
       - ../../build/basemap:/srv/weltgewebe-basemap:ro
       - ../../map-style:/srv/weltgewebe-map-style:ro
       - ../../apps/web/build:/srv/weltgewebe-web:ro
+      - type: bind
+        source: ${SCHAUWERK_EDITOR_ROOT:-/opt/schauwerk-editor}
+        target: /srv/schauwerk-editor-root
+        read_only: true
+        bind:
+          create_host_path: false
       - caddy_data:/data
       - caddy_config:/config
     environment:

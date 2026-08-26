@@ -59,6 +59,19 @@ class InlineRepositoryPathTests(unittest.TestCase):
         self.assertEqual(total, 1)
         self.assertEqual(broken, ["apss/api/src/lib.rs"])
 
+    def test_dotfile_first_component_is_validated(self):
+        (self.root / ".github" / "workflows").mkdir(parents=True)
+        (self.root / ".github" / "workflows" / "docs.yml").write_text(
+            "", encoding="utf-8"
+        )
+        rel, content = self._write_doc(
+            "dotfile-component",
+            "Workflow: `.github/workflows/docs.yml`; fehlend: `.wgx/missing.yml`.",
+        )
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual(total, 2)
+        self.assertEqual(broken, [".wgx/missing.yml"])
+
     def test_package_relative_src_path_is_not_silently_skipped(self):
         rel, content = self._write_doc(
             "package-relative",
@@ -187,6 +200,18 @@ class InlineRepositoryPathTests(unittest.TestCase):
             with self.assertRaises(subprocess.CalledProcessError):
                 check_links._tracked_markdown_files(str(self.root))
 
+    def test_tracked_document_read_failure_is_not_silently_skipped(self):
+        rel, _ = self._write_doc("unreadable", "Aktuell: `apps/api/src/lib.rs`.")
+        with (
+            patch.object(check_links, "REPO_ROOT", str(self.root)),
+            patch.object(check_links, "parse_review_policy", return_value={"mode": "strict"}),
+            patch.object(check_links, "parse_repo_index", return_value={"zones": {}}),
+            patch.object(check_links, "_tracked_markdown_files", return_value=[rel]),
+            patch("scripts.docmeta.check_links.Path.read_text", side_effect=OSError("denied")),
+        ):
+            with self.assertRaises(OSError):
+                check_links.main()
+
     def test_retired_document_is_not_reactivated_as_path_truth(self):
         rel, content = self._write_doc(
             "retired",
@@ -195,6 +220,19 @@ class InlineRepositoryPathTests(unittest.TestCase):
         )
         total, broken = check_links._inline_path_findings(str(self.root), rel, content)
         self.assertEqual((total, broken), (0, []))
+
+    def test_active_status_keeps_conflicting_archived_state_path_visible(self):
+        rel, content = self._write_doc(
+            "active-archived-conflict",
+            "Aktueller Pfad: `apps/api/src/missing.rs`.",
+        )
+        content = content.replace(
+            "status: active\n", "status: active\nlifecycle_state: archived\n"
+        )
+        (self.root / rel).write_text(content, encoding="utf-8")
+        total, broken = check_links._inline_path_findings(str(self.root), rel, content)
+        self.assertEqual(total, 1)
+        self.assertEqual(broken, ["apps/api/src/missing.rs"])
 
     def test_external_commit_bound_reference_is_not_local_path_claim(self):
         rel, content = self._write_doc(

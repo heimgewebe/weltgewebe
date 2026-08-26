@@ -148,15 +148,15 @@ bauen:
 5. `.github/workflows/docs-guard.yml` löst auf jedem Markdown-PR aus und führt
    über `make ci-validate` die bestehenden Docmeta-Gates aus.
 
-## Produktions- und Revisionswahrheit während der Reconciliation
+## Reproduzierbare Revisionsgrenze
 
-Beim Ausgangsreadback am 24. August 2026 identifizierten sowohl Web- als auch
-API-Runtime den exakten Commit
-`e34a27a160a37b86e06ba906e320ff24e871db0d`. Ein abweichender Source-Checkout
-auf dem Produktionshost wurde deshalb **nicht** mit der laufenden
-Release-Identität gleichgesetzt. Diese Trennung ist Teil des Truth-Vertrags:
-Source-Checkout, Deployment und aktive Runtime dürfen nicht als dieselbe
-Identität behandelt werden.
+Der Ausgangsquellstand ist durch das im lokalen Git-Objektbestand vorhandene
+Commitobjekt `e34a27a160a37b86e06ba906e320ff24e871db0d` gebunden. Dieser
+Repository-Proof enthält dagegen keinen byte-gebundenen Produktions-Receipt und
+trifft deshalb keine positive Aussage über den damaligen oder heutigen
+Runtime-Readback. Source-Checkout, Deployment und aktive Runtime dürfen nicht
+als dieselbe Identität behandelt werden; aktuelle Runtime-Wahrheit erfordert
+einen frischen, separat gebundenen Beleg.
 
 ## Grenzen
 

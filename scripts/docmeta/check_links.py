@@ -66,9 +66,16 @@ def _is_current_document(frontmatter: dict | None) -> bool:
     doc_type = str(frontmatter.get("doc_type", "")).strip().lower()
     if doc_type in HISTORICAL_DOC_TYPES:
         return False
-    if status in RETIRED_STATUSES or lifecycle_state in RETIRED_LIFECYCLE_STATES:
+    # Match lifecycle-rule precedence: an explicit active/canonical status is
+    # current even when lifecycle_state is contradictory. Conversely, an
+    # explicitly retired status must not be reactivated by lifecycle_state.
+    if status in CURRENT_STATUSES:
+        return True
+    if status in RETIRED_STATUSES:
         return False
-    return status in CURRENT_STATUSES or lifecycle_state in CURRENT_LIFECYCLE_STATES
+    if lifecycle_state in RETIRED_LIFECYCLE_STATES:
+        return False
+    return lifecycle_state in CURRENT_LIFECYCLE_STATES
 
 
 def _paragraph_for_offset(content: str, offset: int) -> str:
@@ -308,10 +315,9 @@ def main() -> None:
     # are not silently turned into present repository claims.
     for rel_file_path in _tracked_markdown_files(REPO_ROOT):
         file_path = os.path.join(REPO_ROOT, rel_file_path)
-        try:
-            content = Path(file_path).read_text(encoding="utf-8")
-        except OSError:
-            continue
+        # Discovery is authoritative: a tracked file that cannot be read must
+        # abort the check rather than disappear from the generated report.
+        content = Path(file_path).read_text(encoding="utf-8")
         total, broken = _inline_path_findings(
             REPO_ROOT,
             rel_file_path,
