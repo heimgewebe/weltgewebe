@@ -99,15 +99,7 @@
           {#if NotificationSettings}
             <NotificationSettings />
           {:else}
-            <section
-              id="benachrichtigungen"
-              class="col notification-loading"
-              aria-labelledby="notification-settings-heading"
-            >
-              <p class="menu-heading">Push für private Nachrichten</p>
-              <h2 id="notification-settings-heading">Benachrichtigungen</h2>
-              <p role="status">Benachrichtigungseinstellungen werden geladen …</p>
-            </section>
+            <div id="benachrichtigungen"></div>
           {/if}
         </div>
 
@@ -187,10 +179,6 @@
   }
 
   .primary-card :global(.my-garnrolle) {
-    padding: clamp(1rem, 3vw, 1.5rem);
-  }
-
-  .notification-loading {
     padding: clamp(1rem, 3vw, 1.5rem);
   }
 
