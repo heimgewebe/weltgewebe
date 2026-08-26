@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import { authStore } from "$lib/auth/store";
   import {
     applicationServerKey,
     deletePushSubscription,
@@ -72,6 +73,17 @@
     } finally {
       loading = false;
     }
+  }
+
+  async function retryAuth(): Promise<void> {
+    clearFeedback();
+    loading = true;
+    const status = await authStore.checkAuth({ force: true });
+    if (status.state === "authenticated" && status.authenticated) {
+      await load();
+      return;
+    }
+    loading = false;
   }
 
   async function changePreference(event: Event): Promise<void> {
@@ -191,8 +203,17 @@
       "PushManager" in window &&
       "Notification" in window;
     permission = supported ? Notification.permission : "unsupported";
-    if (supported) void load();
-    else loading = false;
+    if (supported) {
+      void authStore.checkAuth().then((status) => {
+        if (status.state === "authenticated" && status.authenticated) {
+          void load();
+        } else {
+          loading = false;
+        }
+      });
+    } else {
+      loading = false;
+    }
 
     const handleVisibilityChange = () => refreshPermission();
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -239,8 +260,25 @@
       Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
       verfügbar. Das Nachrichtenpostfach bleibt vollständig nutzbar.
     </p>
-  {:else if loading}
+  {:else if $authStore.state === "checking" || loading}
     <p class="status">Benachrichtigungseinstellungen werden geladen …</p>
+  {:else if $authStore.state === "degraded"}
+    <div class="status error status-with-action" role="alert">
+      <p>
+        Dein Anmeldestatus konnte nicht geprüft werden. Prüfe die Verbindung und
+        versuche es erneut.
+      </p>
+      <button
+        class="btn secondary touch-target"
+        type="button"
+        onclick={retryAuth}>Anmeldung erneut prüfen</button
+      >
+    </div>
+  {:else if !$authStore.authenticated}
+    <div class="status status-with-action" role="status">
+      <p>Melde dich an, um Push-Hinweise und Gerätefreigaben zu verwalten.</p>
+      <a class="btn secondary touch-target" href="/login">Anmelden</a>
+    </div>
   {:else if error && !config}
     <div class="status error status-with-action" role="alert">
       <p>{error}</p>
@@ -430,7 +468,8 @@
 
     .section-heading .inbox-link,
     .device-card button,
-    .status-with-action button {
+    .status-with-action button,
+    .status-with-action a {
       width: 100%;
     }
   }
