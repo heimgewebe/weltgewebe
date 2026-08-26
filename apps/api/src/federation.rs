@@ -838,15 +838,15 @@ impl PostgresFederationRepository {
         let rows = sqlx::query(
             "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256 \
              FROM federation_peer_relationships \
-             WHERE remote_cell_id = ANY($1::text[]) FOR UPDATE",
+             WHERE remote_cell_id = ANY($1::text[]) \
+             ORDER BY remote_cell_id FOR UPDATE",
         )
         .bind(&cell_ids)
         .fetch_all(&mut *tx)
         .await?;
 
-        let mut existing_peers = std::collections::HashMap::with_capacity(rows.len());
+        let mut existing_peers = HashMap::with_capacity(rows.len());
         for row in rows {
-            use sqlx::Row;
             let id: String = row.try_get("remote_cell_id")?;
             let base_url: Option<String> = row.try_get("delivery_base_url")?;
             let fingerprint: Option<String> = row.try_get("delivery_policy_sha256")?;
@@ -872,6 +872,9 @@ impl PostgresFederationRepository {
             .bind(&fingerprint)
             .execute(&mut *tx)
             .await?;
+            // Preserve the previous per-binding re-read semantics even if a future
+            // caller supplies the same cell more than once in one reconciliation.
+            existing_peers.insert(cell_id.clone(), (endpoint.clone(), fingerprint.clone()));
             if endpoint.is_some() && policy.state == "trusted" {
                 crate::federation_delivery::backfill_delivery_target(&mut tx, cell_id).await?;
             }
