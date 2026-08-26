@@ -7,7 +7,9 @@ interface MockOptions {
   hasSubscription?: boolean;
   directMessagesPush?: boolean;
   deleteStatus?: number;
+  authenticated?: boolean;
   onPreferenceWrite?: (enabled: boolean) => void;
+  onPushRead?: (pathname: string) => void;
 }
 
 async function installBrowserPushMock(
@@ -85,6 +87,7 @@ async function installApiMocks(
 ): Promise<void> {
   let directMessagesPush = options.directMessagesPush ?? false;
   const deleteStatus = options.deleteStatus ?? 204;
+  const authenticated = options.authenticated ?? true;
 
   await page.route("**/_app/version.json", (route: Route) =>
     route.fulfill({
@@ -108,6 +111,17 @@ async function installApiMocks(
     }
 
     if (pathname === "/api/auth/me" && method === "GET") {
+      if (!authenticated) {
+        return route.fulfill({
+          status: 401,
+          contentType: "application/json",
+          body: JSON.stringify({
+            authenticated: false,
+            account_id: null,
+            role: "gast",
+          }),
+        });
+      }
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -128,6 +142,7 @@ async function installApiMocks(
     }
 
     if (pathname === "/api/push/config" && method === "GET") {
+      options.onPushRead?.(pathname);
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -139,6 +154,7 @@ async function installApiMocks(
     }
 
     if (pathname === "/api/notifications/preferences" && method === "GET") {
+      options.onPushRead?.(pathname);
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -222,6 +238,28 @@ test.describe("Settings — notifications information architecture", () => {
     await expect(
       page.getByRole("heading", { name: "Benachrichtigungen", level: 2 }),
     ).toBeVisible();
+  });
+
+  test("does not call push APIs for anonymous settings visitors and offers login", async ({
+    page,
+  }) => {
+    let pushReads = 0;
+    await setup(page, {
+      authenticated: false,
+      onPushRead: () => {
+        pushReads += 1;
+      },
+    });
+    await page.goto("/settings#benachrichtigungen");
+
+    const section = page.locator("#benachrichtigungen");
+    await expect(section.getByRole("link", { name: "Anmelden" })).toHaveAttribute(
+      "href",
+      "/login",
+    );
+    await expect(section.getByText(/Sitzung .*abgelaufen/i)).toHaveCount(0);
+    await page.waitForLoadState("networkidle");
+    expect(pushReads).toBe(0);
   });
 
   test("direct settings deep link focuses the notification section", async ({
