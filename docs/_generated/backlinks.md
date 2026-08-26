@@ -954,6 +954,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/blueprints/weltgewebe-os-masterplan.md
 - [relates_to] docs/blueprints/weltgewebe.auth-and-ui-routing.md
 - [relates_to] docs/proofs/basemap-hamburg-artifact-proof.md
+- [relates_to] docs/proofs/weltgewebe-os-v1-t036-documentation-drift-reconciliation.md
 - [relates_to] docs/reports/auth-persistence-runtime-target-reconciliation.md
 
 ## docs/runbook.md
@@ -995,7 +996,6 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
-- [relates_to] docs/runbooks/README.md
 
 ## docs/runbooks/gewebezelle-manual-pilot.md
 
@@ -1030,6 +1030,7 @@ Generated automatically. Do not edit.
 ## docs/runbooks/weltgewebe-ddns-runtime-verification.md
 
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+- [relates_to] docs/runbooks/README.md
 - [relates_to] docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md
 
 ## docs/specs/auth-api.md

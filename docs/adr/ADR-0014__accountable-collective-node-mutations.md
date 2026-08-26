@@ -54,8 +54,7 @@ finaler `committed`- oder `aborted`-Beleg danach geschrieben. Beim Start werden
 liegengebliebene Vorbereitungen anhand der aktuellen Knotenprojektion
 reconciled; ein dritter, nicht erklärbarer Zustand stoppt fail-closed.
 
-Die JSONL-Belegdatei liegt unter `.node-mutation-audit/events.jsonl`, das
-Verzeichnis hat Modus 0700, die Datei 0600. Symlink-Ziele werden abgelehnt.
+Die JSONL-Belegdatei liegt **laufzeitrelativ zum Elternverzeichnis von `GEWEBE_IN_DIR`** unter `.node-mutation-audit/events.jsonl`; das Verzeichnis hat Modus 0700, die Datei 0600. Symlink-Ziele werden abgelehnt.
 
 ### Löschentscheidung
 

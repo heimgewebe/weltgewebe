@@ -197,11 +197,11 @@ Statusmatrix eine operative Orientierung, keine maschinell erzwungene Wahrheit.
 
 **Empfehlung:** Prod- und Dev-PgBouncer-Konfigurationen explizit vergleichen und Abweichungen dokumentieren oder angleichen.
 
-### 3.4 Mittel: Relative Volume-Mounts in Produktion
+### 3.4 Mittel: Relative Volume-Mounts in Produktion — historischer Ausgangsbefund, superseded
 
-**Problem:** `compose.prod.yml` nutzt `../caddy/Caddyfile.prod` — bricht, wenn aus anderem Verzeichnis gestartet.
+**Historischer Befund:** Der ursprüngliche Audittext wertete den Mount `../caddy/Caddyfile.prod` in `infra/compose/compose.prod.yml` als vom Aufrufverzeichnis abhängig. Diese Prämisse ist superseded: Compose löst den Mount relativ zur Compose-Datei auf, und `scripts/guard-compose-no-relative-volumes.sh` führt genau diesen Caddy-Mount als erlaubte Ausnahme. Die reale Caddy-Quelle liegt unter `infra/caddy/Caddyfile.prod`.
 
-**Empfehlung:** Absolute Pfade oder Docker Configs nutzen.
+**Aktueller Status:** Kein offener T036-Dokumentationsfehler aus diesem Altbefund; künftige Änderungen bleiben durch den vorhandenen Compose-Volume-Guard prüfpflichtig.
 
 ### 3.5 Mittel: Kein Secrets-Management
 
@@ -235,11 +235,11 @@ Statusmatrix eine operative Orientierung, keine maschinell erzwungene Wahrheit.
 
 **Empfehlung:** Workflow-Komposition via `workflow_call` (Setup-once, Run-multiple-Gates). `heavy.yml` nur manuell/label-basiert.
 
-### 4.2 Niedrig: Bundle-Budget-Assertion in `web.yml` nicht als eigener Schritt sichtbar
+### 4.2 Niedrig: Bundle-Budget-Assertion — historischer Ausgangsbefund, superseded
 
-**Problem:** `ci/budget.json` definiert JS-Budget, TTI und INP. `assert-web-budget.mjs` ist kein Platzhalter — es prüft konkrete Budgetwerte und ist über `apps/web/package.json` im `ci`-Script eingebunden (`node ../../ci/scripts/assert-web-budget.mjs`). Das Script läuft damit bei `pnpm run ci`, ist aber kein benannter, eigenständiger Schritt in `.github/workflows/web.yml`.
+**Historischer Befund:** Der ursprüngliche Audittext behandelte `ci/budget.json` als aktive Budgetquelle. Dieser Vertrag ist superseded. Die einzige kanonische Performancequelle ist heute `policies/performance.v1.json`; `ci/scripts/assert-web-budget.mjs` verhindert die Rückkehr ersetzter Parallelquellen. `apps/web/scripts/performance-contract.test.mjs` führt `ci/budget.json` ausdrücklich unter `must_not_exist`.
 
-**Empfehlung:** Budget-Assertion als expliziten, benannten Step in `web.yml` sichtbar machen, damit Budget-Überschreitungen im CI-Log klar zuordenbar sind.
+**Aktueller Status:** Die frühere Pfad-/Truth-Annahme ist geschlossen. Sichtbarkeit und Durchsetzung der heutigen Performancegates werden aus `policies/performance.v1.json`, `ci/README.md` und den aktuellen CI-Workflows abgeleitet.
 
 ### 4.3 Mittel: Kein Dependency-Update-Automation
 
