@@ -209,9 +209,9 @@ der direkte Helfer verwendet bei Konkurrenz `EX_TEMPFAIL` 75. Fachliche
 Überholung nach Migration beziehungsweise Volldeploy verwendet intern die
 getrennten Codes 79 und 80. Bei einem geerbten Handoff schreibt der Helfer den
 autoritativen `already_running`-Beleg zunächst aufrufspezifisch nach
-`receipts/contention/<deploy-invocation-id>.json`. Zusätzlich aktualisiert er für
-die unmittelbare Rolling-Kompatibilität den gemeinsamen Diagnosepfad
-`receipts/last-contention.json`. Ein direkter Recovery-Aufruf ohne Aufruf-ID
+den laufzeitrelativen Pfad `$WELTGEWEBE_DEPLOY_STATE_ROOT/receipts/contention/<deploy-invocation-id>.json` (Default-State-Root `/var/lib/weltgewebe-main-reconciler`). Zusätzlich aktualisiert er für
+die unmittelbare Rolling-Kompatibilität den gemeinsamen laufzeitrelativen Diagnosepfad
+`$WELTGEWEBE_DEPLOY_STATE_ROOT/receipts/last-contention.json`. Ein direkter Recovery-Aufruf ohne Aufruf-ID
 schreibt ausschließlich diesen gemeinsamen Pfad. Der Reconciler greift nur dann
 auf den gemeinsamen Beleg zurück, wenn der aufrufspezifische Beleg fehlt; ein
 vorhandener widersprüchlicher Aufrufbeleg bleibt fail-closed. Diese Belege sind

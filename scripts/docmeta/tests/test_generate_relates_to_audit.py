@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from scripts.docmeta import generate_relates_to_audit
 from scripts.docmeta.generate_relates_to_audit import (
+    collect_relations_graph,
     compute_per_doc_type_counts,
     find_supersedes_gaps,
     find_relates_to_clusters,
@@ -37,6 +38,26 @@ class QueueProbe(deque):
 
     def pop(self, *args, **kwargs):
         raise AssertionError("breadth-first queue must not delete from the front with pop")
+
+
+class TestRelationDiscovery(unittest.TestCase):
+    def test_walk_error_fails_closed(self):
+        def failing_walk(*_args, **kwargs):
+            kwargs["onerror"](OSError("discovery denied"))
+            return []
+
+        with patch.object(generate_relates_to_audit.os, "walk", side_effect=failing_walk):
+            with self.assertRaises(OSError):
+                collect_relations_graph()
+
+    def test_markdown_read_error_fails_closed(self):
+        walk = [("/repo/docs", [], ["broken.md"])]
+        with (
+            patch.object(generate_relates_to_audit.os, "walk", return_value=walk),
+            patch("builtins.open", side_effect=OSError("read denied")),
+        ):
+            with self.assertRaises(OSError):
+                collect_relations_graph()
 
 
 class TestPerDocTypeCounts(unittest.TestCase):
