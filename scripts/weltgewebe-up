@@ -2929,7 +2929,7 @@ else
     fi
 
     if ! SCHAUWERK_ASSET_BINDINGS="$(
-      python3 - "$SCHAUWERK_MANIFEST_OUT" <<'PY'
+      python3 - "$SCHAUWERK_MANIFEST_OUT" << 'PY'
 import json
 import sys
 from pathlib import Path
