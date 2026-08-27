@@ -70,6 +70,7 @@
       await loadBrowserSubscription();
       refreshPermission();
     } catch (cause) {
+      config = null;
       error = describeNotificationError(cause, "load");
     } finally {
       loading = false;
