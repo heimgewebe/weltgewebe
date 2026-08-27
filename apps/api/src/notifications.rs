@@ -20,7 +20,10 @@ use async_nats::{
 };
 use axum::{
     extract::State,
-    http::StatusCode,
+    http::{
+        header::{ORIGIN, REFERER},
+        HeaderMap, StatusCode,
+    },
     response::{IntoResponse, Response},
     Extension, Json,
 };
@@ -431,6 +434,60 @@ fn push_service(state: &ApiState) -> Result<&WebPushService, NotificationApiErro
     })
 }
 
+fn push_origin_error() -> NotificationApiError {
+    NotificationApiError::new(
+        StatusCode::FORBIDDEN,
+        "non_canonical_push_origin",
+        "Web Push subscriptions must be registered from the canonical application origin",
+    )
+}
+
+fn http_origin(value: &str) -> Option<String> {
+    let parsed = Url::parse(value).ok()?;
+    if !matches!(parsed.scheme(), "http" | "https") {
+        return None;
+    }
+    Some(parsed.origin().ascii_serialization())
+}
+
+fn require_canonical_push_origin(
+    app_base_url: Option<&str>,
+    headers: &HeaderMap,
+) -> Result<(), NotificationApiError> {
+    let Some(app_base_url) = app_base_url else {
+        return Ok(());
+    };
+    let canonical_origin = http_origin(app_base_url).ok_or_else(|| {
+        tracing::error!(
+            app_base_url,
+            "invalid APP_BASE_URL while validating Web Push origin"
+        );
+        NotificationApiError::new(
+            StatusCode::SERVICE_UNAVAILABLE,
+            "push_origin_configuration_invalid",
+            "Web Push origin configuration is invalid",
+        )
+    })?;
+    let request_origin = if let Some(origin) = headers.get(ORIGIN) {
+        origin.to_str().ok().and_then(http_origin)
+    } else {
+        headers
+            .get(REFERER)
+            .and_then(|referer| referer.to_str().ok())
+            .and_then(http_origin)
+    };
+
+    if request_origin.as_deref() != Some(canonical_origin.as_str()) {
+        tracing::warn!(
+            ?request_origin,
+            %canonical_origin,
+            "rejected Web Push registration from non-canonical origin"
+        );
+        return Err(push_origin_error());
+    }
+    Ok(())
+}
+
 fn database_error(context: &'static str, error: sqlx::Error) -> NotificationApiError {
     tracing::error!(%error, context, "notification database operation failed");
     NotificationApiError::new(
@@ -557,8 +614,10 @@ pub struct PushSubscriptionView {
 pub async fn register_push_subscription(
     State(state): State<ApiState>,
     Extension(auth): Extension<AuthContext>,
+    headers: HeaderMap,
     Json(request): Json<RegisterPushSubscriptionRequest>,
 ) -> Result<(StatusCode, Json<PushSubscriptionView>), NotificationApiError> {
+    require_canonical_push_origin(state.config.app_base_url.as_deref(), &headers)?;
     let account_id = account_id(&auth)?;
     let pool = database_pool(&state)?;
     let service = push_service(&state)?;
@@ -1012,6 +1071,40 @@ mod tests {
             "fcm.googleapis.com,push.services.mozilla.com,web.push.apple.com",
         )
         .expect("valid test Web Push service")
+    }
+
+    #[test]
+    fn canonical_push_origin_guard_rejects_legacy_origin_after_cutover() {
+        let mut headers = HeaderMap::new();
+        headers.insert(ORIGIN, "https://weltgewebe.net".parse().unwrap());
+
+        let error = require_canonical_push_origin(Some("https://commonthing.net"), &headers)
+            .expect_err("legacy origin must be rejected");
+        assert_eq!(error.status, StatusCode::FORBIDDEN);
+        assert_eq!(error.code, "non_canonical_push_origin");
+    }
+
+    #[test]
+    fn canonical_push_origin_guard_accepts_canonical_origin_and_referer() {
+        let mut headers = HeaderMap::new();
+        headers.insert(ORIGIN, "https://commonthing.net:443".parse().unwrap());
+        require_canonical_push_origin(Some("https://commonthing.net"), &headers)
+            .expect("default HTTPS port must normalize to the canonical origin");
+
+        let mut referer_headers = HeaderMap::new();
+        referer_headers.insert(
+            REFERER,
+            "https://commonthing.net/einstellungen".parse().unwrap(),
+        );
+        require_canonical_push_origin(Some("https://commonthing.net"), &referer_headers)
+            .expect("canonical referer fallback must be accepted");
+    }
+
+    #[test]
+    fn canonical_push_origin_guard_is_disabled_without_app_base_url() {
+        let headers = HeaderMap::new();
+        require_canonical_push_origin(None, &headers)
+            .expect("development deployments without APP_BASE_URL keep existing behavior");
     }
 
     #[test]
