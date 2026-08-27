@@ -22,7 +22,7 @@ SCHAUWERK_POLICY = (
 CASES = (
     ("infra/caddy/Caddyfile", None, ["/api/*"]),
     ("infra/caddy/Caddyfile.heim", "weltgewebe.home.arpa", ["/api/*"]),
-    ("infra/caddy/Caddyfile.vps", "weltgewebe.net", ["/api/*", "/health/*"]),
+    ("infra/caddy/Caddyfile.vps", "commonthing.net", ["/api/*", "/health/*"]),
 )
 
 
@@ -134,7 +134,7 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
                 self.assertIn('"status_code": 308', adapted)
 
     def test_vps_schauwerk_redirect_and_prefix_strip_are_semantically_adapted(self) -> None:
-        routes = app_routes(adapt("infra/caddy/Caddyfile.vps"), "weltgewebe.net")
+        routes = app_routes(adapt("infra/caddy/Caddyfile.vps"), "commonthing.net")
 
         redirect = next(
             route
@@ -152,11 +152,12 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
         )
         static_json = json.dumps(static, sort_keys=True)
         self.assertIn('"strip_path_prefix": "/schaubild"', static_json)
-        self.assertIn('"root": "/srv/schauwerk-editor-root/current"', static_json)
+        self.assertIn('"root": "/srv/schauwerk-editor-release"', static_json)
+        self.assertNotIn("/srv/schauwerk-editor-root/current", static_json)
         self.assertIn('"handler": "file_server"', static_json)
 
     def test_vps_legacy_redirect_precedes_catchall_static_handle_after_adapt(self) -> None:
-        routes = app_routes(adapt("infra/caddy/Caddyfile.vps"), "weltgewebe.net")
+        routes = app_routes(adapt("infra/caddy/Caddyfile.vps"), "commonthing.net")
 
         legacy_index = next(
             index
@@ -176,6 +177,39 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
             fallback_index,
             "the catch-all static handle would otherwise serve map.html before the redirect",
         )
+
+    def test_vps_adapts_one_canonical_app_host_and_permanent_legacy_redirects(self) -> None:
+        config = adapt("infra/caddy/Caddyfile.vps")
+        app_routes(config, "commonthing.net")
+
+        adapted = json.dumps(config, sort_keys=True)
+        self.assertEqual(
+            adapted.count(
+                '"host": ["www.commonthing.net", "weltgewebe.net", "www.weltgewebe.net"]'
+            ),
+            2,
+        )
+        self.assertIn(
+            '"Location": ["https://commonthing.net{http.request.uri}"]',
+            adapted,
+        )
+        self.assertGreaterEqual(adapted.count('"status_code": 308'), 4)
+
+        legacy_route = next(
+            route
+            for server in config["apps"]["http"]["servers"].values()
+            if ":443" in server.get("listen", [])
+            for route in server.get("routes", [])
+            if any(
+                matcher.get("host")
+                == ["www.commonthing.net", "weltgewebe.net", "www.weltgewebe.net"]
+                for matcher in route.get("match", [])
+            )
+        )
+        legacy_adapted = json.dumps(legacy_route, sort_keys=True)
+        self.assertIn('"status_code": 308', legacy_adapted)
+        self.assertNotIn('"file_server"', legacy_adapted)
+        self.assertNotIn('"reverse_proxy"', legacy_adapted)
 
     def test_adapted_app_route_has_exact_matchers_and_canonical_edge_csp(self) -> None:
         for relative, host, protected_paths in CASES:

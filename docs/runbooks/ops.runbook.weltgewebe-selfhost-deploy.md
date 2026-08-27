@@ -152,7 +152,7 @@ Grund:
 
 Der HTTP-Host-Header lautet dann `<public-ip>`, während Caddy-vHosts typischerweise nur auf
 
-- `weltgewebe.net`
+- `commonthing.net`
 - `api.weltgewebe.net`
 
 matchen.
@@ -162,13 +162,13 @@ matchen.
 **Option 1 – Domain testen:**
 
 ```bash
-curl -I http://weltgewebe.net
+curl -I http://commonthing.net
 ```
 
 **Option 2 – Host-Header setzen:**
 
 ```bash
-curl -H "Host: weltgewebe.net" http://<public-ip>
+curl -H "Host: commonthing.net" http://<public-ip>
 ```
 
 **Option 3 – extern testen (empfohlen).**
@@ -187,7 +187,7 @@ dig MX weltgewebe.net
 ### HTTP
 
 ```bash
-curl -I http://weltgewebe.net
+curl -I http://commonthing.net
 ```
 
 Expected:
@@ -200,7 +200,7 @@ Server: Caddy
 ### HTTPS
 
 ```bash
-curl -I https://weltgewebe.net
+curl -I https://commonthing.net
 ```
 
 Erwartung:

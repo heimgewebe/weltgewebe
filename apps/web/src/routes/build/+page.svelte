@@ -76,7 +76,7 @@
 </script>
 
 <svelte:head>
-  <title>Build · Weltgewebe</title>
+  <title>Build · commonThing</title>
   <meta name="robots" content="noindex" />
 </svelte:head>
 

@@ -99,7 +99,7 @@ def test_empty_env_file_selects_canonical_source_and_fails_closed(tmp_path: Path
 
 def test_unreadable_canonical_source_fails_with_operator_guidance(tmp_path: Path) -> None:
     canonical = tmp_path / "canonical.env"
-    canonical.write_text("APP_BASE_URL=https://weltgewebe.net\n", encoding="utf-8")
+    canonical.write_text("APP_BASE_URL=https://commonthing.net\n", encoding="utf-8")
     canonical.chmod(0)
     try:
         proc = run_until_env_guard(tmp_path, env_file=None)

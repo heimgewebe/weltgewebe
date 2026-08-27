@@ -1314,6 +1314,7 @@ mod tests {
         let payload: serde_json::Value =
             serde_json::from_slice(&private_message_payload(conversation_id).unwrap()).unwrap();
         assert_eq!(payload["kind"], "direct_message");
+        assert_eq!(payload["title"], "commonThing");
         assert_eq!(payload["body"], "Neue private Nachricht");
         assert_eq!(
             payload["url"],

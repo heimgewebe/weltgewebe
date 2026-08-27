@@ -34,6 +34,10 @@ accepted
 - INWX für Registrar/DNS.
 - mailbox.org für menschliche Mailbox `kontakt@weltgewebe.net`.
 - Brevo für technische Magic-Link-Mail `noreply@login.weltgewebe.net`.
+- `https://commonthing.net` und die Marke commonThing für die öffentliche App.
+- `weltgewebe.net` bleibt Maildomain und wird als Legacy-Webdomain permanent
+  und URI-erhaltend auf `https://commonthing.net` umgeleitet;
+  `api.weltgewebe.net` bleibt der API-Host.
 - App-/Produktionshosting bleibt entkoppelt.
 
 Explizite Rollentrennung:
@@ -59,7 +63,9 @@ Explizite Rollentrennung:
 - `weltweb.net` und `weltweberei.org` sind No-Mail-Domains, sofern nicht neu entschieden.
 - `weltweberei.org`-Web/WordPress ist separat zu behandeln.
 - `kontakt@weltgewebe.net` und `noreply@login.weltgewebe.net` dürfen nicht vermischt werden.
-- `APP_BASE_URL` muss im öffentlichen Betrieb `https://weltgewebe.net` sein.
+- `APP_BASE_URL` muss im öffentlichen Betrieb `https://commonthing.net` sein.
+- Der Produkt-Domain-Cutover ändert weder menschliche noch technische
+  SMTP-/Mailidentitäten.
 - `home.arpa` ist nur Heim-/Entwicklungsziel.
 
 ## Alternativen

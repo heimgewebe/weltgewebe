@@ -13,8 +13,13 @@ assert SPEC and SPEC.loader
 MODULE = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(MODULE)
 
+DEFAULT_RELEASE = "a" * 40
+SECOND_RELEASE = "b" * 40
 
-def _write_release(root: Path, *, release_name: str = "abc123") -> Path:
+
+def _write_release(
+    root: Path, *, release_name: str = DEFAULT_RELEASE, point_current: bool = True
+) -> Path:
     release = root / "releases" / release_name
     release.mkdir(parents=True)
     payloads = {
@@ -33,19 +38,48 @@ def _write_release(root: Path, *, release_name: str = "abc123") -> Path:
                 "schema_version": MODULE.MANIFEST_SCHEMA,
                 "editor_origin": MODULE.EDITOR_ORIGIN,
                 "files": files,
-            }
+            },
+            sort_keys=True,
         ),
         encoding="utf-8",
     )
-    (root / "current").symlink_to(Path("releases") / release_name)
+    if point_current:
+        current = root / "current"
+        if current.exists() or current.is_symlink():
+            current.unlink()
+        current.symlink_to(Path("releases") / release_name)
     return release
+
+
+def _write_lock(root: Path, release: Path, *, path: Path | None = None) -> Path:
+    lock = path or (root.parent / "release-lock.json")
+    lock.write_text(
+        json.dumps(
+            {
+                "schema_version": MODULE.LOCK_SCHEMA,
+                "source_repository": MODULE.SOURCE_REPOSITORY,
+                "source_commit": release.name,
+                "release_id": release.name,
+                "manifest_file_sha256": hashlib.sha256(
+                    (release / "manifest.json").read_bytes()
+                ).hexdigest(),
+            },
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return lock
 
 
 def test_valid_release_passes(tmp_path: Path) -> None:
     root = tmp_path / "editor"
     release = _write_release(root)
-    result = MODULE.verify_release(root)
+    lock = _write_lock(root, release)
+    result = MODULE.verify_release(root, lock)
     assert result["release"] == release.name
+    assert result["release_path"] == str(release.resolve())
+    assert result["source_commit"] == release.name
     assert result["editor_origin"] == MODULE.EDITOR_ORIGIN
 
 
@@ -66,6 +100,7 @@ def test_valid_release_passes(tmp_path: Path) -> None:
 def test_release_failures_are_closed(tmp_path: Path, mutation: str) -> None:
     root = tmp_path / "editor"
     release = _write_release(root)
+    lock = _write_lock(root, release)
     if mutation == "broken-current":
         (root / "current").unlink()
         (root / "current").symlink_to("releases/missing")
@@ -91,7 +126,7 @@ def test_release_failures_are_closed(tmp_path: Path, mutation: str) -> None:
     elif mutation == "digest-drift":
         (release / "app.js").write_text("changed\n", encoding="utf-8")
     with pytest.raises(MODULE.ReleaseContractError):
-        MODULE.verify_release(root)
+        MODULE.verify_release(root, lock)
 
 
 def test_current_must_not_escape_releases(tmp_path: Path) -> None:
@@ -100,47 +135,122 @@ def test_current_must_not_escape_releases(tmp_path: Path) -> None:
     outside.mkdir()
     (root / "releases").mkdir(parents=True)
     (root / "current").symlink_to(outside)
+    lock = tmp_path / "release-lock.json"
+    lock.write_text(
+        json.dumps(
+            {
+                "schema_version": MODULE.LOCK_SCHEMA,
+                "source_repository": MODULE.SOURCE_REPOSITORY,
+                "source_commit": DEFAULT_RELEASE,
+                "release_id": DEFAULT_RELEASE,
+                "manifest_file_sha256": "0" * 64,
+            }
+        ),
+        encoding="utf-8",
+    )
     with pytest.raises(MODULE.ReleaseContractError, match="relative releases/<release> target"):
-        MODULE.verify_release(root)
+        MODULE.verify_release(root, lock)
 
 
-def test_vps_deploy_resolves_and_verifies_configured_editor_mount_before_build() -> None:
+def test_coherent_manifest_and_asset_replacement_fails_external_lock(tmp_path: Path) -> None:
+    root = tmp_path / "editor"
+    release = _write_release(root)
+    lock = _write_lock(root, release)
+    replacement = b"console.log('coherently replaced');\n"
+    (release / "app.js").write_bytes(replacement)
+    manifest_path = release / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    for item in manifest["files"]:
+        if item["path"] == "app.js":
+            item["sha256"] = hashlib.sha256(replacement).hexdigest()
+    manifest_path.write_text(json.dumps(manifest, sort_keys=True), encoding="utf-8")
+    with pytest.raises(MODULE.ReleaseContractError, match="reviewed release lock"):
+        MODULE.verify_release(root, lock)
+
+
+def test_manifest_reformat_fails_raw_byte_lock(tmp_path: Path) -> None:
+    root = tmp_path / "editor"
+    release = _write_release(root)
+    lock = _write_lock(root, release)
+    manifest_path = release / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    manifest_path.write_text(json.dumps(manifest, indent=4) + "\n", encoding="utf-8")
+    with pytest.raises(MODULE.ReleaseContractError, match="reviewed release lock"):
+        MODULE.verify_release(root, lock)
+
+
+def test_current_retarget_to_other_valid_release_fails_lock(tmp_path: Path) -> None:
+    root = tmp_path / "editor"
+    release = _write_release(root)
+    lock = _write_lock(root, release)
+    _write_release(root, release_name=SECOND_RELEASE, point_current=False)
+    (root / "current").unlink()
+    (root / "current").symlink_to(Path("releases") / SECOND_RELEASE)
+    with pytest.raises(MODULE.ReleaseContractError, match="reviewed release lock"):
+        MODULE.verify_release(root, lock)
+
+
+def test_lock_must_live_outside_release_root_and_not_be_symlink(tmp_path: Path) -> None:
+    root = tmp_path / "editor"
+    release = _write_release(root)
+    external = _write_lock(root, release)
+    internal = _write_lock(root, release, path=root / "release-lock.json")
+    with pytest.raises(MODULE.ReleaseContractError, match="outside the release root"):
+        MODULE.verify_release(root, internal)
+    internal.unlink()
+    internal.symlink_to(external)
+    with pytest.raises(MODULE.ReleaseContractError, match="missing or unsafe"):
+        MODULE.verify_release(root, internal)
+
+
+def test_vps_deploy_admits_and_pins_exact_editor_release_before_build() -> None:
     repo = Path(__file__).resolve().parents[3]
     deploy = (repo / "scripts" / "weltgewebe-up").read_text(encoding="utf-8")
+    discovery_override = deploy.index('export SCHAUWERK_EDITOR_RELEASE_DIR=""')
     compose_check = deploy.index('if ! docker compose "${BASE_ARGS[@]}" config > /dev/null; then')
-    full_scope_guard = deploy.index(
-        'if [[ "$DEPLOY_TARGET" == "vps" && "$DEPLOY_SCOPE" == "full" ]]; then',
-        compose_check,
-    )
-    mount_target = deploy.index('v.get("target") == "/srv/schauwerk-editor-root"')
-    mount_contract = deploy.index('mount.get("read_only") is not True')
-    helper_call = deploy.index('python3 scripts/preflight/schauwerk_editor_release.py --root "$SCHAUWERK_EDITOR_HOST_ROOT"')
+    mount_target = deploy.index('v.get("target") == "/srv/schauwerk-editor-release"')
+    pointer_guard = deploy.index('pointer.name != "current"')
+    lock_path = deploy.index('infra/schauwerk-editor/release-lock.json')
+    helper_call = deploy.index('scripts/preflight/schauwerk_editor_release.py')
+    exact_export = deploy.index('export SCHAUWERK_EDITOR_RELEASE_DIR="$SCHAUWERK_EDITOR_RELEASE_PATH"')
+    authoritative_mount = deploy.index('mount.get("source") != expected', exact_export)
     build_decision = deploy.index('# 4. Build Decision')
     deploying = deploy.index('echo ">> Deploying..."', build_decision)
 
-    assert compose_check < full_scope_guard < mount_target < mount_contract < helper_call < build_decision < deploying
-    assert 'bind.get("create_host_path") is not False' in deploy
-    assert 'generate_failure_bundle "$msg"' in deploy[mount_target:build_decision]
+    assert (
+        discovery_override
+        < compose_check
+        < mount_target
+        < pointer_guard
+        < lock_path
+        < helper_call
+        < exact_export
+        < authoritative_mount
+        < build_decision
+        < deploying
+    )
+    assert 'bind.get("create_host_path") is not False' in deploy[mount_target:build_decision]
+    assert '--lock "$SCHAUWERK_EDITOR_LOCK_PATH"' in deploy[mount_target:build_decision]
 
 
 def test_full_vps_deploy_reads_back_editor_through_caddy_before_state_commit() -> None:
     repo = Path(__file__).resolve().parents[3]
     deploy = (repo / "scripts" / "weltgewebe-up").read_text(encoding="utf-8")
 
-    preflight_digest = deploy.index('SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA="${BASH_REMATCH[1]}"')
+    preflight_digest = deploy.index("SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA")
     deploying = deploy.index('echo ">> Deploying..."')
     postflight_scope = deploy.index(
         'if [[ "$DEPLOY_SCOPE" == "full" && "$SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED" == "1" ]]; then',
         deploying,
     )
-    resolve = deploy.index('SCHAUWERK_RESOLVE="weltgewebe.net:443:${CADDY_BIND}"', postflight_scope)
+    resolve = deploy.index('SCHAUWERK_RESOLVE="commonthing.net:443:${CADDY_BIND}"', postflight_scope)
     expected_csp = deploy.index('SCHAUWERK_EXPECTED_CSP="default-src', resolve)
-    index_url = deploy.index('https://weltgewebe.net/schaubild/', expected_csp)
+    index_url = deploy.index('https://commonthing.net/schaubild/', expected_csp)
     csp_compare = deploy.index('if values != [expected]:', index_url)
-    manifest_url = deploy.index('https://weltgewebe.net/schaubild/manifest.json', csp_compare)
+    manifest_url = deploy.index('https://commonthing.net/schaubild/manifest.json', csp_compare)
     digest_compare = deploy.index('SCHAUWERK_LIVE_MANIFEST_SHA', manifest_url)
     asset_bindings = deploy.index('SCHAUWERK_ASSET_BINDINGS', digest_compare)
-    asset_url = deploy.index('https://weltgewebe.net/schaubild/${SCHAUWERK_ASSET_NAME}', asset_bindings)
+    asset_url = deploy.index('https://commonthing.net/schaubild/${SCHAUWERK_ASSET_NAME}', asset_bindings)
     asset_digest = deploy.index('SCHAUWERK_ASSET_LIVE_SHA', asset_url)
     state_commit = deploy.index('# 8. Update State (Post-Health)')
 

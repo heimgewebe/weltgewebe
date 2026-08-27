@@ -141,9 +141,9 @@ fn postgres_passkey_runtime_state(pool: sqlx::PgPool) -> ApiState {
         smtp_pass: None,
         smtp_from: None,
         auth_log_magic_token: true,
-        webauthn_rp_id: Some("example.com".to_string()),
-        webauthn_rp_origin: Some("https://example.com".to_string()),
-        webauthn_rp_name: Some("Weltgewebe Test".to_string()),
+        webauthn_rp_id: Some("commonthing.net".to_string()),
+        webauthn_rp_origin: Some("https://commonthing.net".to_string()),
+        webauthn_rp_name: Some("commonThing Test".to_string()),
     };
     let metrics = Metrics::try_new(BuildInfo {
         version: "test",
@@ -1059,7 +1059,8 @@ async fn passkey_register_reload_auth_route_proof() {
     );
 
     // Step 2b: register/verify with a REAL ES256 attestation.
-    let authenticator = soft_passkey::SoftPasskey::new("example.com", "https://example.com");
+    let authenticator =
+        soft_passkey::SoftPasskey::new("commonthing.net", "https://commonthing.net");
     let (status, headers, verify_body) = post_json(
         &app1,
         "/auth/passkeys/register/verify",

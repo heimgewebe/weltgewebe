@@ -38,7 +38,7 @@ class VpsHttpSmokeCspContractTest(unittest.TestCase):
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
         runtime = "{\n    admin off\n}\n\n" + source.replace(
-            "http://weltgewebe.net", f"http://127.0.0.1:{port}"
+            "http://commonthing.net", f"http://127.0.0.1:{port}"
         )
         with tempfile.TemporaryDirectory() as tmp:
             config = pathlib.Path(tmp) / "Caddyfile"

@@ -97,7 +97,7 @@ caddy_env = require_mapping(caddy.get("environment"), "services.caddy.environmen
 expected = {
     "services.api.environment.APP_BASE_URL": (
         api_env.get("APP_BASE_URL"),
-        "https://weltgewebe.net",
+        "https://commonthing.net",
     ),
     "services.api.environment.AUTH_PUBLIC_LOGIN": (
         api_env.get("AUTH_PUBLIC_LOGIN"),

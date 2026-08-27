@@ -26,12 +26,27 @@ def write_env(path: Path, content: str) -> Path:
     return path
 
 
+def test_production_example_cuts_over_app_and_webauthn_but_preserves_smtp() -> None:
+    values = {}
+    for raw_line in (REPO / ".env.prod.example").read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            values[key] = value
+
+    assert values["APP_BASE_URL"] == "https://commonthing.net"
+    assert values["WEBAUTHN_RP_ID"] == "commonthing.net"
+    assert values["WEBAUTHN_RP_ORIGIN"] == "https://commonthing.net"
+    assert values["WEBAUTHN_RP_NAME"] == "commonThing"
+    assert values["SMTP_FROM"] == "noreply@login.weltgewebe.net"
+
+
 def test_production_public_login_passes_with_authenticated_smtp(tmp_path: Path) -> None:
     module = load_module()
     env = {
         "AUTH_PUBLIC_LOGIN": "1",
         "AUTH_LOG_MAGIC_TOKEN": "0",
-        "APP_BASE_URL": "https://weltgewebe.net",
+        "APP_BASE_URL": "https://commonthing.net",
         "SMTP_HOST": "smtp.example.test",
         "SMTP_PORT": "587",
         "SMTP_AUTH": "on",
@@ -43,7 +58,7 @@ def test_production_public_login_passes_with_authenticated_smtp(tmp_path: Path) 
     results = module.run_checks(
         env,
         production_public_login=True,
-        expected_app_base_url="https://weltgewebe.net",
+        expected_app_base_url="https://commonthing.net",
         allow_unauthenticated_smtp=False,
     )
 
@@ -55,7 +70,7 @@ def test_production_public_login_accepts_authenticated_starttls_on_port_2525() -
     env = {
         "AUTH_PUBLIC_LOGIN": "1",
         "AUTH_LOG_MAGIC_TOKEN": "0",
-        "APP_BASE_URL": "https://weltgewebe.net",
+        "APP_BASE_URL": "https://commonthing.net",
         "SMTP_HOST": "smtp.example.test",
         "SMTP_PORT": "2525",
         "SMTP_AUTH": "on",
@@ -67,7 +82,7 @@ def test_production_public_login_accepts_authenticated_starttls_on_port_2525() -
     results = module.run_checks(
         env,
         production_public_login=True,
-        expected_app_base_url="https://weltgewebe.net",
+        expected_app_base_url="https://commonthing.net",
         allow_unauthenticated_smtp=False,
     )
 
@@ -81,7 +96,7 @@ def test_production_public_login_rejects_plaintext_smtp_ports() -> None:
         env = {
             "AUTH_PUBLIC_LOGIN": "1",
             "AUTH_LOG_MAGIC_TOKEN": "0",
-            "APP_BASE_URL": "https://weltgewebe.net",
+            "APP_BASE_URL": "https://commonthing.net",
             "SMTP_HOST": "smtp.example.test",
             "SMTP_PORT": str(port),
             "SMTP_AUTH": "on",
@@ -94,7 +109,7 @@ def test_production_public_login_rejects_plaintext_smtp_ports() -> None:
             for item in module.run_checks(
                 env,
                 production_public_login=True,
-                expected_app_base_url="https://weltgewebe.net",
+                expected_app_base_url="https://commonthing.net",
                 allow_unauthenticated_smtp=False,
             )
             if item.name == "smtp-port"
@@ -108,7 +123,7 @@ def test_production_public_login_rejects_magic_token_logging(tmp_path: Path) -> 
     env = {
         "AUTH_PUBLIC_LOGIN": "1",
         "AUTH_LOG_MAGIC_TOKEN": "1",
-        "APP_BASE_URL": "https://weltgewebe.net",
+        "APP_BASE_URL": "https://commonthing.net",
         "SMTP_HOST": "smtp.example.test",
         "SMTP_PORT": "587",
         "SMTP_AUTH": "on",
@@ -122,7 +137,7 @@ def test_production_public_login_rejects_magic_token_logging(tmp_path: Path) -> 
         for item in module.run_checks(
             env,
             production_public_login=True,
-            expected_app_base_url="https://weltgewebe.net",
+            expected_app_base_url="https://commonthing.net",
             allow_unauthenticated_smtp=False,
         )
         if item.name == "auth-log-magic-token"
@@ -137,7 +152,7 @@ def test_production_public_login_requires_smtp_credentials_by_default() -> None:
     env = {
         "AUTH_PUBLIC_LOGIN": "1",
         "AUTH_LOG_MAGIC_TOKEN": "0",
-        "APP_BASE_URL": "https://weltgewebe.net",
+        "APP_BASE_URL": "https://commonthing.net",
         "SMTP_HOST": "smtp.example.test",
         "SMTP_PORT": "587",
         "SMTP_FROM": "noreply@weltgewebe.net",
@@ -149,7 +164,7 @@ def test_production_public_login_requires_smtp_credentials_by_default() -> None:
         for item in module.run_checks(
             env,
             production_public_login=True,
-            expected_app_base_url="https://weltgewebe.net",
+            expected_app_base_url="https://commonthing.net",
             allow_unauthenticated_smtp=False,
         )
         if item.name == "smtp-auth"
@@ -164,7 +179,7 @@ def test_production_public_login_rejects_partial_smtp_credentials() -> None:
     env = {
         "AUTH_PUBLIC_LOGIN": "1",
         "AUTH_LOG_MAGIC_TOKEN": "0",
-        "APP_BASE_URL": "https://weltgewebe.net",
+        "APP_BASE_URL": "https://commonthing.net",
         "SMTP_HOST": "smtp.example.test",
         "SMTP_PORT": "587",
         "SMTP_FROM": "noreply@weltgewebe.net",
@@ -177,7 +192,7 @@ def test_production_public_login_rejects_partial_smtp_credentials() -> None:
         for item in module.run_checks(
             env,
             production_public_login=True,
-            expected_app_base_url="https://weltgewebe.net",
+            expected_app_base_url="https://commonthing.net",
             allow_unauthenticated_smtp=False,
         )
         if item.name == "smtp-auth"
@@ -206,7 +221,7 @@ def test_production_public_login_rejects_bad_app_base_url() -> None:
         for item in module.run_checks(
             env,
             production_public_login=True,
-            expected_app_base_url="https://weltgewebe.net",
+            expected_app_base_url="https://commonthing.net",
             allow_unauthenticated_smtp=False,
         )
         if item.name == "app-base-url"
@@ -222,7 +237,7 @@ def test_cli_output_does_not_print_secret_values(tmp_path: Path) -> None:
         """
         AUTH_PUBLIC_LOGIN=1
         AUTH_LOG_MAGIC_TOKEN=0
-        APP_BASE_URL=https://weltgewebe.net
+        APP_BASE_URL=https://commonthing.net
         SMTP_HOST=smtp.example.test
         SMTP_PORT=587
         SMTP_AUTH=on

@@ -232,10 +232,10 @@
 </script>
 
 <svelte:head>
-  <title>Anträge · Weltgewebe</title>
+  <title>Anträge · commonThing</title>
   <meta
     name="description"
-    content="Offene Anträge, Konsentphasen, Vetos, Gespräche und Abstimmungen im Weltgewebe."
+    content="Offene Anträge, Konsentphasen, Vetos, Gespräche und Abstimmungen in commonThing."
   />
 </svelte:head>
 
@@ -297,7 +297,7 @@
                 bind:value={summary}
                 maxlength="2000"
                 rows="5"
-                placeholder="Was möchtest du im Weltgewebe beitragen?"
+                placeholder="Was möchtest du in commonThing beitragen?"
               ></textarea>
             </div>
             <button
@@ -315,7 +315,7 @@
           >
             {leaving
               ? "Gastkonto wird aufgelöst…"
-              : "Weltgewebe vollständig verlassen"}
+              : "commonThing vollständig verlassen"}
           </button>
         </section>
       {/if}

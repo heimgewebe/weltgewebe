@@ -55,7 +55,7 @@ def test_accepts_verify_applied_from_selected_env_file(tmp_path: pathlib.Path) -
         env_file,
         """
         environment:
-          APP_BASE_URL: https://weltgewebe.net
+          APP_BASE_URL: https://commonthing.net
         """,
     )
 
@@ -79,7 +79,7 @@ def test_repo_vps_override_accepts_selected_env_file_without_service_migration_o
         tmp_path / ".env",
         """
         WELTGEWEBE_API_STARTUP_MIGRATIONS=verify-applied
-        APP_BASE_URL=https://weltgewebe.net
+        APP_BASE_URL=https://commonthing.net
         """,
     )
 
@@ -232,13 +232,13 @@ def test_rejects_bare_array_key_with_inline_comment(tmp_path: pathlib.Path) -> N
 
 def test_rejects_missing_effective_env_file_key(tmp_path: pathlib.Path) -> None:
     module = _load_module()
-    env_file = _write(tmp_path / ".env", "APP_BASE_URL=https://weltgewebe.net\n")
+    env_file = _write(tmp_path / ".env", "APP_BASE_URL=https://commonthing.net\n")
     compose = _compose_with_env_file(
         tmp_path,
         env_file,
         """
         environment:
-          APP_BASE_URL: https://weltgewebe.net
+          APP_BASE_URL: https://commonthing.net
         """,
     )
 

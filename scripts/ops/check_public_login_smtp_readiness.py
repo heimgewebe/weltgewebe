@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Mapping, Sequence
 
-EXPECTED_APP_BASE_URL = "https://weltgewebe.net"
+EXPECTED_APP_BASE_URL = "https://commonthing.net"
 SECRET_KEYS = {"SMTP_PASS", "SMTP_USER"}
 REQUIRED_SMTP_KEYS = ("SMTP_HOST", "SMTP_PORT", "SMTP_FROM")
 

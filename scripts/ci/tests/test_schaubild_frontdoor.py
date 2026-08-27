@@ -13,13 +13,14 @@ class SchaubildFrontdoorTest(unittest.TestCase):
         self.compose = (self.repo / "infra/compose/compose.vps.override.yml").read_text(encoding="utf-8")
 
     def test_editor_is_a_separate_read_only_release_mount(self) -> None:
-        self.assertIn("source: ${SCHAUWERK_EDITOR_ROOT:-/opt/schauwerk-editor}", self.compose)
-        self.assertIn("target: /srv/schauwerk-editor-root", self.compose)
+        self.assertIn("source: ${SCHAUWERK_EDITOR_RELEASE_DIR:-${SCHAUWERK_EDITOR_ROOT:-/opt/schauwerk-editor}/current}", self.compose)
+        self.assertIn("target: /srv/schauwerk-editor-release", self.compose)
         self.assertIn("read_only: true", self.compose)
         self.assertIn("create_host_path: false", self.compose)
-        self.assertIn("root * /srv/schauwerk-editor-root/current", self.caddy)
+        self.assertIn("root * /srv/schauwerk-editor-release", self.caddy)
+        self.assertNotIn("/srv/schauwerk-editor-root/current", self.caddy)
         api_common = self.caddy.split("(api_common)", 1)[1].split("# HTTP sites", 1)[0]
-        self.assertNotIn("/srv/schauwerk-editor-root", api_common)
+        self.assertNotIn("/srv/schauwerk-editor-release", api_common)
 
     def test_editor_route_precedes_generic_trailing_slash_and_frontend_routes(self) -> None:
         root_redirect = "@schauwerkRoot path /schaubild"
