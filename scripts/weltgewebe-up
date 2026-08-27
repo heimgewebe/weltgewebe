@@ -895,19 +895,30 @@ generate_failure_bundle() {
   echo
 }
 
+# Never trust an externally supplied exact-release override before admission. The
+# discovery render may resolve only the configured parent root plus /current;
+# the authoritative render below is pinned to the verified releases/<commit> path.
+if [[ "$DEPLOY_TARGET" == "vps" ]]; then
+  export SCHAUWERK_EDITOR_RELEASE_DIR=""
+fi
+
 if ! docker compose "${BASE_ARGS[@]}" config > /dev/null; then
   echo "ERROR: Docker Compose config failed. Please fix your configuration."
   exit 1
 fi
 
 # The public VPS Caddy route for /schaubild/ depends on a separately
-# provisioned Schauwerk release. Resolve the effective bind source from the
-# rendered Compose contract and verify the exact release before any build or
-# container mutation. A partial/broken release must fail closed instead of
-# turning a nominally successful deployment into a public 404. Bounded API
-# and migration deployments intentionally do not own or mutate the public edge.
+# provisioned Schauwerk release. The first Compose render is discovery-only:
+# it exposes the configured parent root through its /current pointer but is
+# never used for a container mutation. Admission then verifies a reviewed
+# repository-owned lock, resolves the exact releases/<commit> directory, pins
+# that directory into SCHAUWERK_EDITOR_RELEASE_DIR, and rerenders Compose before
+# any build or container effect. Bounded API and migration deployments do not
+# own or mutate the public edge.
 SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT=""
 SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA=""
+SCHAUWERK_EDITOR_RELEASE_PATH=""
+SCHAUWERK_EDITOR_SOURCE_COMMIT=""
 SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED="0"
 if [[ "$DEPLOY_TARGET" == "vps" && "$DEPLOY_SCOPE" == "full" ]]; then
   configured_preflight_services="$(docker compose "${BASE_ARGS[@]}" config --services)"
@@ -915,21 +926,26 @@ if [[ "$DEPLOY_TARGET" == "vps" && "$DEPLOY_SCOPE" == "full" ]]; then
     set +e
     SCHAUWERK_EDITOR_HOST_ROOT="$(
       docker compose "${BASE_ARGS[@]}" config --format json 2> /dev/null | python3 -c '
-import json, os, sys
+import json
+from pathlib import Path
+import sys
 try:
     cfg = json.load(sys.stdin)
     volumes = cfg.get("services", {}).get("caddy", {}).get("volumes", [])
-    matches = [v for v in volumes if isinstance(v, dict) and v.get("target") == "/srv/schauwerk-editor-root"]
+    matches = [v for v in volumes if isinstance(v, dict) and v.get("target") == "/srv/schauwerk-editor-release"]
     if len(matches) != 1:
-        raise ValueError("expected exactly one Schauwerk editor mount")
+        raise ValueError("expected exactly one Schauwerk editor release mount")
     mount = matches[0]
     source = mount.get("source")
     bind = mount.get("bind") if isinstance(mount.get("bind"), dict) else {}
     if mount.get("type") != "bind" or mount.get("read_only") is not True or bind.get("create_host_path") is not False:
-        raise ValueError("Schauwerk editor mount is not fail-closed read-only bind")
-    if not isinstance(source, str) or not os.path.isabs(source):
-        raise ValueError("Schauwerk editor mount source must be absolute")
-    print(source)
+        raise ValueError("Schauwerk editor discovery mount is not fail-closed read-only bind")
+    if not isinstance(source, str) or not Path(source).is_absolute():
+        raise ValueError("Schauwerk editor discovery mount source must be absolute")
+    pointer = Path(source)
+    if pointer.name != "current":
+        raise ValueError("Schauwerk editor discovery mount must end in /current")
+    print(pointer.parent)
 except Exception as exc:
     print(f"ERROR: {exc}", file=sys.stderr)
     raise SystemExit(2)
@@ -943,24 +959,90 @@ except Exception as exc:
       generate_failure_bundle "$msg"
       exit 1
     fi
+
+    SCHAUWERK_EDITOR_LOCK_PATH="$PWD/infra/schauwerk-editor/release-lock.json"
     if ! SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT="$(
-      python3 scripts/preflight/schauwerk_editor_release.py --root "$SCHAUWERK_EDITOR_HOST_ROOT"
+      python3 scripts/preflight/schauwerk_editor_release.py \
+        --root "$SCHAUWERK_EDITOR_HOST_ROOT" \
+        --lock "$SCHAUWERK_EDITOR_LOCK_PATH" \
+        --json
     )"; then
-      msg="Schauwerk editor release preflight failed for configured Caddy mount source."
+      msg="Schauwerk editor release preflight failed for the reviewed release lock."
       echo "ERROR: $msg" >&2
       generate_failure_bundle "$msg"
       exit 1
     fi
-    echo "$SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT"
-    if [[ "$SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT" =~ manifest_sha256=([0-9a-f]{64}) ]]; then
-      SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA="${BASH_REMATCH[1]}"
-      SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED="1"
-    else
-      msg="Schauwerk editor release preflight did not return a bound manifest digest."
+
+    if ! SCHAUWERK_EDITOR_BINDINGS="$(
+      python3 -c '
+import json
+import sys
+try:
+    value = json.load(sys.stdin)
+    fields = ("release_path", "manifest_sha256", "source_commit")
+    selected = [value.get(field) for field in fields]
+    if any(not isinstance(item, str) or not item or "\n" in item or "\t" in item for item in selected):
+        raise ValueError("preflight output fields are missing or unsafe")
+    print("\t".join(selected))
+except Exception as exc:
+    print(f"ERROR: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+' <<< "$SCHAUWERK_EDITOR_PREFLIGHT_OUTPUT"
+    )"; then
+      msg="Schauwerk editor release preflight did not return exact admission bindings."
       echo "ERROR: $msg" >&2
       generate_failure_bundle "$msg"
       exit 1
     fi
+    IFS=$'\t' read -r \
+      SCHAUWERK_EDITOR_RELEASE_PATH \
+      SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA \
+      SCHAUWERK_EDITOR_SOURCE_COMMIT <<< "$SCHAUWERK_EDITOR_BINDINGS"
+    if [[ "$SCHAUWERK_EDITOR_RELEASE_PATH" != /* \
+      || ! "$SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA" =~ ^[0-9a-f]{64}$ \
+      || ! "$SCHAUWERK_EDITOR_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+      msg="Schauwerk editor admission bindings are malformed."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      exit 1
+    fi
+
+    export SCHAUWERK_EDITOR_RELEASE_DIR="$SCHAUWERK_EDITOR_RELEASE_PATH"
+    if ! docker compose "${BASE_ARGS[@]}" config > /dev/null; then
+      msg="Docker Compose config failed after pinning the admitted Schauwerk release."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      exit 1
+    fi
+    if ! docker compose "${BASE_ARGS[@]}" config --format json 2> /dev/null | \
+      python3 -c '
+import json
+import sys
+expected = sys.argv[1]
+try:
+    cfg = json.load(sys.stdin)
+    volumes = cfg.get("services", {}).get("caddy", {}).get("volumes", [])
+    matches = [v for v in volumes if isinstance(v, dict) and v.get("target") == "/srv/schauwerk-editor-release"]
+    if len(matches) != 1:
+        raise ValueError("expected exactly one admitted Schauwerk release mount")
+    mount = matches[0]
+    bind = mount.get("bind") if isinstance(mount.get("bind"), dict) else {}
+    if mount.get("source") != expected:
+        raise ValueError("admitted Schauwerk release mount source does not match preflight")
+    if mount.get("type") != "bind" or mount.get("read_only") is not True or bind.get("create_host_path") is not False:
+        raise ValueError("admitted Schauwerk release mount is not fail-closed read-only bind")
+except Exception as exc:
+    print(f"ERROR: {exc}", file=sys.stderr)
+    raise SystemExit(2)
+' "$SCHAUWERK_EDITOR_RELEASE_PATH"; then
+      msg="Schauwerk editor authoritative Compose render is not bound to the admitted release."
+      echo "ERROR: $msg" >&2
+      generate_failure_bundle "$msg"
+      exit 1
+    fi
+
+    SCHAUWERK_EDITOR_POSTFLIGHT_REQUIRED="1"
+    echo "   Schauwerk editor admitted source $SCHAUWERK_EDITOR_SOURCE_COMMIT (manifest $SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA)."
   fi
 fi
 

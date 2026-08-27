@@ -152,7 +152,8 @@ class StaticAppCaddyAdaptedCspTest(unittest.TestCase):
         )
         static_json = json.dumps(static, sort_keys=True)
         self.assertIn('"strip_path_prefix": "/schaubild"', static_json)
-        self.assertIn('"root": "/srv/schauwerk-editor-root/current"', static_json)
+        self.assertIn('"root": "/srv/schauwerk-editor-release"', static_json)
+        self.assertNotIn("/srv/schauwerk-editor-root/current", static_json)
         self.assertIn('"handler": "file_server"', static_json)
 
     def test_vps_legacy_redirect_precedes_catchall_static_handle_after_adapt(self) -> None:
