@@ -4,8 +4,13 @@
 The migration cannot remove every legacy technical identifier at once. This guard
 therefore examines only *added lines* relative to an explicit base revision. It
 blocks new product-name use and new use of the legacy web host unless the line
-is part of the naming-policy documents or is explicitly marked as legacy
-compatibility.
+is part of the naming-policy documents, a derived documentation artifact, or is
+explicitly marked as legacy compatibility.
+
+Derived files under ``docs/_generated/`` are excluded because they are computed
+from source documents that are checked separately. Treating their repeated
+historical labels as new naming would make a correct source change fail merely
+because its indexes were regenerated.
 
 Legacy marker:
     commonthing-naming: legacy
@@ -29,6 +34,7 @@ POLICY_EXEMPT_PATHS = {
     "docs/deploy/commonthing.naming.md",
     "docs/deploy/weltgewebe.naming.md",
 }
+DERIVED_EXEMPT_PREFIXES = ("docs/_generated/",)
 RETIRED_PRODUCT_PATTERN = re.compile(r"\b" + "Welt" + r"gewebe\b")
 LEGACY_WEB_HOST_PATTERN = re.compile(
     r"(?<![@A-Za-z0-9_.-])(?:www\.)?weltgewebe\.net(?=$|[/?:#\s\"'<>`])"
@@ -168,13 +174,17 @@ def _marked_legacy(path: str, line_number: int, text: str, loader: Callable[[str
     return False
 
 
+def _is_exempt_path(path: str) -> bool:
+    return path in POLICY_EXEMPT_PATHS or path.startswith(DERIVED_EXEMPT_PREFIXES)
+
+
 def find_violations(
     diff_text: str,
     loader: Callable[[str], str],
 ) -> list[Violation]:
     violations: list[Violation] = []
     for line in parse_added_lines(diff_text):
-        if line.path in POLICY_EXEMPT_PATHS:
+        if _is_exempt_path(line.path):
             continue
 
         for reason, pattern in FORBIDDEN_PATTERNS:
