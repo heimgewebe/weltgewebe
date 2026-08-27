@@ -14,6 +14,10 @@ GUARD = importlib.util.module_from_spec(SPEC)
 sys.modules[SPEC.name] = GUARD
 SPEC.loader.exec_module(GUARD)
 
+RETIRED_PRODUCT = "Welt" + "gewebe"
+LEGACY_WEB_ORIGIN = "https://welt" + "gewebe.net"
+LEGACY_API_ORIGIN = "https://api.welt" + "gewebe.net"
+
 
 def diff(path: str, line: str, *, line_number: int = 1) -> str:
     return (
@@ -27,17 +31,16 @@ def diff(path: str, line: str, *, line_number: int = 1) -> str:
 
 class CommonThingNamingGuardTests(unittest.TestCase):
     def test_rejects_new_product_name(self) -> None:
-        text = diff("apps/web/src/routes/example/+page.svelte", "<h1>Weltgewebe</h1>")
-        violations = GUARD.find_violations(text, lambda _: "<h1>Weltgewebe</h1>\n")
+        current = f"<h1>{RETIRED_PRODUCT}</h1>\n"
+        text = diff("apps/web/src/routes/example/+page.svelte", current.rstrip())
+        violations = GUARD.find_violations(text, lambda _: current)
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0].reason, "retired product name")
 
     def test_rejects_new_legacy_web_origin(self) -> None:
-        text = diff("docs/deploy/example.md", "curl https://weltgewebe.net/health")
-        violations = GUARD.find_violations(
-            text,
-            lambda _: "curl https://weltgewebe.net/health\n",
-        )
+        current = f"curl {LEGACY_WEB_ORIGIN}/health\n"
+        text = diff("docs/deploy/example.md", current.rstrip())
+        violations = GUARD.find_violations(text, lambda _: current)
         self.assertEqual(len(violations), 1)
         self.assertEqual(violations[0].reason, "legacy public web origin")
 
@@ -49,33 +52,35 @@ class CommonThingNamingGuardTests(unittest.TestCase):
         )
 
     def test_accepts_explicit_legacy_marker_on_previous_line(self) -> None:
+        current = (
+            "# commonthing-naming: legacy\n"
+            f"legacy={LEGACY_WEB_ORIGIN}/path\n"
+        )
         text = (
             "diff --git a/infra/example.conf b/infra/example.conf\n"
             "--- a/infra/example.conf\n"
             "+++ b/infra/example.conf\n"
             "@@ -0,0 +1,2 @@\n"
             "+# commonthing-naming: legacy\n"
-            "+legacy=https://weltgewebe.net/path\n"
+            f"+legacy={LEGACY_WEB_ORIGIN}/path\n"
         )
-        current = "# commonthing-naming: legacy\nlegacy=https://weltgewebe.net/path\n"
         self.assertEqual(GUARD.find_violations(text, lambda _: current), [])
 
     def test_policy_documents_can_explain_legacy_names(self) -> None:
+        current = f"{RETIRED_PRODUCT} -> {LEGACY_WEB_ORIGIN}\n"
         for path in GUARD.POLICY_EXEMPT_PATHS:
             with self.subTest(path=path):
-                text = diff(path, "Weltgewebe -> https://weltgewebe.net")
+                text = diff(path, current.rstrip())
                 self.assertEqual(
-                    GUARD.find_violations(text, lambda _: "Weltgewebe -> https://weltgewebe.net\n"),
+                    GUARD.find_violations(text, lambda _: current),
                     [],
                 )
 
     def test_api_legacy_host_is_not_mistaken_for_legacy_web_origin(self) -> None:
-        text = diff("docs/deploy/example.md", "https://api.weltgewebe.net/health/ready")
+        current = f"{LEGACY_API_ORIGIN}/health/ready\n"
+        text = diff("docs/deploy/example.md", current.rstrip())
         self.assertEqual(
-            GUARD.find_violations(
-                text,
-                lambda _: "https://api.weltgewebe.net/health/ready\n",
-            ),
+            GUARD.find_violations(text, lambda _: current),
             [],
         )
 
