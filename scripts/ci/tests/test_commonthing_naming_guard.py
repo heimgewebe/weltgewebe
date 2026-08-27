@@ -86,6 +86,18 @@ class CommonThingNamingGuardTests(unittest.TestCase):
                     [],
                 )
 
+    def test_derived_documentation_artifacts_are_not_naming_sources(self) -> None:
+        current = f"| old | {RETIRED_PRODUCT} Naming (legacy) | superseded |\n"
+        text = diff("docs/_generated/doc-index.md", current.rstrip())
+        self.assertEqual(GUARD.find_violations(text, lambda _: current), [])
+
+    def test_generated_exemption_does_not_cover_neighboring_source_paths(self) -> None:
+        current = f"{RETIRED_PRODUCT} is the product\n"
+        text = diff("docs/generated-notes.md", current.rstrip())
+        violations = GUARD.find_violations(text, lambda _: current)
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].reason, "retired product name")
+
     def test_api_legacy_host_is_not_mistaken_for_public_web_host(self) -> None:
         current = f"{LEGACY_API_ORIGIN}/health/ready\n"
         text = diff("docs/deploy/example.md", current.rstrip())
