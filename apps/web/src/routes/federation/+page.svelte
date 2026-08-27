@@ -117,10 +117,10 @@
 </script>
 
 <svelte:head>
-  <title>Föderationsdiagnose · Weltgewebe</title>
+  <title>Föderationsdiagnose · commonThing</title>
   <meta
     name="description"
-    content="Öffentliche Diagnose der Weltgewebe-Zellidentität und global freigegebener Föderationsobjekte."
+    content="Öffentliche commonThing-Diagnose der internen Zellidentität und global freigegebener Föderationsobjekte."
   />
   <meta name="robots" content="noindex" />
 </svelte:head>

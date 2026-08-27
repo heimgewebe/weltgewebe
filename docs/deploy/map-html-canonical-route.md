@@ -53,11 +53,11 @@ Ein erfolgreicher Preview-Deploy allein ist kein Produktionsbeweis, da Vercel od
 
 ## Produktionsabnahme
 
-Nach Merge und VPS-Deployment müssen Frontend- und API-Versionsendpunkte denselben exakten Mergecommit melden. Anschließend sind die folgenden Prüfungen gegen `https://weltgewebe.net` erforderlich:
+Nach Merge und VPS-Deployment müssen Frontend- und API-Versionsendpunkte denselben exakten Mergecommit melden. Anschließend sind die folgenden Prüfungen gegen `https://commonthing.net` erforderlich:
 
 ```sh
-curl -sS -D - -o /dev/null https://weltgewebe.net/map.html
-curl -sS -D - -o /dev/null 'https://weltgewebe.net/map.html?node=abc&mode=focus'
+curl -sS -D - -o /dev/null https://commonthing.net/map.html
+curl -sS -D - -o /dev/null 'https://commonthing.net/map.html?node=abc&mode=focus'
 ```
 
 Erwartet werden jeweils genau ein `308` und die oben beschriebenen `Location`-Werte. Danach muss ein frischer Browserlauf belegen:

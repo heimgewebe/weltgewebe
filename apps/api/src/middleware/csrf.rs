@@ -357,15 +357,15 @@ mod tests {
     async fn origin_effective_https_port_is_enforced_under_both_auth_mounts() {
         for path in ["/auth/logout-all", "/api/auth/logout-all"] {
             assert_eq!(
-                csrf_status(path, "weltgewebe.net", "origin", "https://weltgewebe.net").await,
+                csrf_status(path, "commonthing.net", "origin", "https://commonthing.net").await,
                 StatusCode::NO_CONTENT
             );
             assert_eq!(
                 csrf_status(
                     path,
-                    "weltgewebe.net",
+                    "commonthing.net",
                     "origin",
-                    "https://weltgewebe.net:443"
+                    "https://commonthing.net:443"
                 )
                 .await,
                 StatusCode::NO_CONTENT
@@ -373,9 +373,9 @@ mod tests {
             assert_eq!(
                 csrf_status(
                     path,
-                    "weltgewebe.net",
+                    "commonthing.net",
                     "origin",
-                    "https://weltgewebe.net:80"
+                    "https://commonthing.net:80"
                 )
                 .await,
                 StatusCode::FORBIDDEN
@@ -383,9 +383,9 @@ mod tests {
             assert_eq!(
                 csrf_status(
                     path,
-                    "weltgewebe.net",
+                    "commonthing.net",
                     "origin",
-                    "https://weltgewebe.net:8443"
+                    "https://commonthing.net:8443"
                 )
                 .await,
                 StatusCode::FORBIDDEN
@@ -399,9 +399,9 @@ mod tests {
             assert_eq!(
                 csrf_status(
                     path,
-                    "weltgewebe.net",
+                    "commonthing.net",
                     "referer",
-                    "https://weltgewebe.net/account"
+                    "https://commonthing.net/account"
                 )
                 .await,
                 StatusCode::NO_CONTENT
@@ -409,9 +409,9 @@ mod tests {
             assert_eq!(
                 csrf_status(
                     path,
-                    "weltgewebe.net",
+                    "commonthing.net",
                     "referer",
-                    "https://weltgewebe.net:443/account"
+                    "https://commonthing.net:443/account"
                 )
                 .await,
                 StatusCode::NO_CONTENT
@@ -419,9 +419,9 @@ mod tests {
             assert_eq!(
                 csrf_status(
                     path,
-                    "weltgewebe.net",
+                    "commonthing.net",
                     "referer",
-                    "https://weltgewebe.net:80/account"
+                    "https://commonthing.net:80/account"
                 )
                 .await,
                 StatusCode::FORBIDDEN
@@ -429,9 +429,9 @@ mod tests {
             assert_eq!(
                 csrf_status(
                     path,
-                    "weltgewebe.net",
+                    "commonthing.net",
                     "referer",
-                    "https://weltgewebe.net:8443/account"
+                    "https://commonthing.net:8443/account"
                 )
                 .await,
                 StatusCode::FORBIDDEN

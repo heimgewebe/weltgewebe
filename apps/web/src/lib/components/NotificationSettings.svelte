@@ -245,14 +245,14 @@
   </div>
 
   <p class="explanation">
-    Push ist nur ein Hinweis. Die Nachricht selbst bleibt im Weltgewebe und wird
+    Push ist nur ein Hinweis. Die Nachricht selbst bleibt in commonThing und wird
     erst nach dem Öffnen geladen. Auf dem Sperrbildschirm erscheint daher kein
     Nachrichtentext und kein Absendername.
   </p>
 
   <p class="platform-note">
     Auf iPhone und iPad funktioniert Push in der zum Home-Bildschirm
-    hinzugefügten Weltgewebe-Web-App.
+    hinzugefügten commonThing-Web-App.
   </p>
 
   {#if !supported}
@@ -292,7 +292,7 @@
         <strong>Kontoeinstellung</strong>
         <p>
           Push-Hinweise für private Nachrichten. Diese Einstellung legt fest, ob
-          Weltgewebe solche Hinweise für dein Konto senden soll.
+          commonThing solche Hinweise für dein Konto senden soll.
         </p>
       </div>
       <label class="switch-label">
@@ -351,7 +351,7 @@
 
     {#if config && !config.enabled}
       <p class="status warning">
-        Push ist auf diesem Weltgewebe-Server derzeit nicht verfügbar. Deine
+        Push ist auf diesem commonThing-Server derzeit nicht verfügbar. Deine
         Nachrichten bleiben im Postfach.
       </p>
     {/if}

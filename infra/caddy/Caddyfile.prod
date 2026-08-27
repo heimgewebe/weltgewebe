@@ -10,7 +10,7 @@
 	# }
 }
 
-weltgewebe.net {
+commonthing.net {
 	log {
 		output stdout
 		level INFO

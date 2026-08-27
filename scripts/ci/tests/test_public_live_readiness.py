@@ -41,17 +41,27 @@ class FakeWorld:
     ):
         self.requests.append((url, headers))
         FetchResult = self.module.FetchResult
-        if url == "http://weltgewebe.net/":
-            return FetchResult(url, 308, {"Location": "https://weltgewebe.net/"}, b"")
-        if url in {"https://weltgewebe.net/", "https://www.weltgewebe.net/", "https://weltgewebe.net/map"}:
+        redirect_uri = "/cutover-readiness/path?source=public-live"
+        redirects = {
+            f"http://commonthing.net{redirect_uri}": f"https://commonthing.net{redirect_uri}",
+            f"http://www.commonthing.net{redirect_uri}": f"https://commonthing.net{redirect_uri}",
+            f"https://www.commonthing.net{redirect_uri}": f"https://commonthing.net{redirect_uri}",
+            f"http://weltgewebe.net{redirect_uri}": f"https://commonthing.net{redirect_uri}",
+            f"https://weltgewebe.net{redirect_uri}": f"https://commonthing.net{redirect_uri}",
+            f"http://www.weltgewebe.net{redirect_uri}": f"https://commonthing.net{redirect_uri}",
+            f"https://www.weltgewebe.net{redirect_uri}": f"https://commonthing.net{redirect_uri}",
+        }
+        if url in redirects:
+            return FetchResult(url, 308, {"Location": redirects[url]}, b"")
+        if url in {"https://commonthing.net/", "https://commonthing.net/map"}:
             return FetchResult(url, 200, {"Content-Type": "text/html"}, b'<!doctype html><script src="/_app/x.js"></script>')
         if url == "https://api.weltgewebe.net/health/ready":
             body = {"status": "ok", "checks": {"database": True, "nats": True, "policy": True}}
             return FetchResult(url, 200, {"Content-Type": "application/json"}, json.dumps(body).encode())
-        if url == "https://weltgewebe.net/_app/version.json":
+        if url == "https://commonthing.net/_app/version.json":
             body = {"version": self.version, "commit": self.commit, "build_id": f"{self.version}-test"}
             return FetchResult(url, 200, {"Content-Type": "application/json"}, json.dumps(body).encode())
-        if url == "https://weltgewebe.net/local-basemap/style.json":
+        if url == "https://commonthing.net/local-basemap/style.json":
             body = {"glyphs": "/local-basemap/glyphs/{fontstack}/{range}.pbf"}
             return FetchResult(
                 url,
@@ -62,13 +72,13 @@ class FakeWorld:
                 },
                 json.dumps(body).encode(),
             )
-        if url == "https://weltgewebe.net/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf":
+        if url == "https://commonthing.net/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf":
             return FetchResult(url, 200, {}, b"glyph-bytes")
         if url in {
-            "https://weltgewebe.net/local-basemap/basemap-hamburg.pmtiles",
-            "https://weltgewebe.net/local-basemap/basemap-hamburg-v0.1.0.pmtiles",
-            "https://weltgewebe.net/local-basemap/basemap-schleswig-holstein.pmtiles",
-            "https://weltgewebe.net/local-basemap/basemap-schleswig-holstein-v0.1.0.pmtiles",
+            "https://commonthing.net/local-basemap/basemap-hamburg.pmtiles",
+            "https://commonthing.net/local-basemap/basemap-hamburg-v0.1.0.pmtiles",
+            "https://commonthing.net/local-basemap/basemap-schleswig-holstein.pmtiles",
+            "https://commonthing.net/local-basemap/basemap-schleswig-holstein-v0.1.0.pmtiles",
         }:
             if headers and headers.get("Range") == "bytes=0-15":
                 return FetchResult(
@@ -110,12 +120,19 @@ class PublicLiveReadinessTest(unittest.TestCase):
         self.assertEqual(
             names,
             {
+                "dns:commonthing.net",
+                "dns:www.commonthing.net",
                 "dns:weltgewebe.net",
                 "dns:www.weltgewebe.net",
                 "dns:api.weltgewebe.net",
                 "http-redirect",
-                "https-root:weltgewebe.net",
-                "https-root:www.weltgewebe.net",
+                "redirect:http:www.commonthing.net",
+                "redirect:https:www.commonthing.net",
+                "redirect:http:weltgewebe.net",
+                "redirect:https:weltgewebe.net",
+                "redirect:http:www.weltgewebe.net",
+                "redirect:https:www.weltgewebe.net",
+                "https-root:commonthing.net",
                 "map-route",
                 "api-ready",
                 "metrics-private:app",
@@ -142,6 +159,35 @@ class PublicLiveReadinessTest(unittest.TestCase):
                 None,
                 {"Range": "bytes=0-15"},
             ],
+        )
+
+    def test_legacy_redirect_must_preserve_path_and_query_exactly(self) -> None:
+        fake = FakeWorld()
+
+        def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
+            if url == "https://weltgewebe.net/cutover-readiness/path?source=public-live":
+                return fake.module.FetchResult(
+                    url,
+                    308,
+                    {"Location": "https://commonthing.net/"},
+                    b"",
+                )
+            return fake.fetcher(url, headers, timeout)
+
+        checker = fake.module.PublicLiveChecker(
+            resolver=fake.resolver,
+            fetcher=bad_fetcher,
+        )
+        result = [
+            item
+            for item in checker.run()
+            if item.name == "redirect:https:weltgewebe.net"
+        ][0]
+
+        self.assertFalse(result.ok)
+        self.assertEqual(
+            result.data["expected_location"],
+            "https://commonthing.net/cutover-readiness/path?source=public-live",
         )
 
     def test_wrong_dns_ip_fails(self) -> None:
@@ -186,7 +232,7 @@ class PublicLiveReadinessTest(unittest.TestCase):
 
         def exposed_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
             if url in {
-                "https://weltgewebe.net/api/metrics",
+                "https://commonthing.net/api/metrics",
                 "https://api.weltgewebe.net/metrics",
             }:
                 return fake.module.FetchResult(url, 200, {"Content-Type": "text/plain"}, b"secret_metric 1")
@@ -209,7 +255,7 @@ class PublicLiveReadinessTest(unittest.TestCase):
         fake = FakeWorld()
 
         def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
-            if url == "https://weltgewebe.net/local-basemap/style.json":
+            if url == "https://commonthing.net/local-basemap/style.json":
                 body = {"glyphs": "/local-basemap/glyphs/{fontstack}/{range}.pbf"}
                 return fake.module.FetchResult(
                     url,
@@ -315,7 +361,7 @@ class PublicLiveReadinessIPv6Test(unittest.TestCase):
             fake.module.dig_resolve_ipv6 = original
 
         ipv6_results = [result for result in results if result.name.startswith("dns-aaaa:")]
-        self.assertEqual(len(ipv6_results), 3)
+        self.assertEqual(len(ipv6_results), 5)
         self.assertTrue(all(result.ok for result in ipv6_results))
 
     def test_wrong_ipv6_aaaa_fails(self) -> None:
@@ -334,7 +380,7 @@ class PublicLiveReadinessIPv6Test(unittest.TestCase):
             fake.module.dig_resolve_ipv6 = original
 
         ipv6_results = [result for result in results if result.name.startswith("dns-aaaa:")]
-        self.assertEqual(len(ipv6_results), 3)
+        self.assertEqual(len(ipv6_results), 5)
         self.assertTrue(all(not result.ok for result in ipv6_results))
 
 if __name__ == "__main__":

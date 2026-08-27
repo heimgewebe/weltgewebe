@@ -26,12 +26,13 @@
 </script>
 
 <svelte:head>
-  <title>Weltgewebe – Commons gemeinsam verwalten</title>
+  <title>commonThing – Commons gemeinsam verwalten</title>
   <meta
     name="description"
-    content="Das Weltgewebe macht Commons, Knoten, Garnrollen und ihre Beziehungen auf einer gemeinsamen Karte sichtbar und verwaltbar."
+    content="commonThing macht Commons, Knoten, Garnrollen und ihre Beziehungen auf einer gemeinsamen Karte sichtbar und verwaltbar."
   />
-  <meta name="application-name" content="Weltgewebe" />
+  <meta name="application-name" content="commonThing" />
+  <meta property="og:site_name" content="commonThing" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
   {#if data?.canonical}

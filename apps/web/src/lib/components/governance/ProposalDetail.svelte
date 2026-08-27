@@ -215,7 +215,7 @@
   });
 </script>
 
-<svelte:head><title>Antrag · Weltgewebe</title></svelte:head>
+<svelte:head><title>Antrag · commonThing</title></svelte:head>
 
 <main class="page-shell">
   <a class="back-link" href="/antraege">← Alle Anträge</a>

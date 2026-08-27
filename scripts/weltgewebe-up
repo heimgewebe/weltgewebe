@@ -1918,7 +1918,7 @@ if [[ -x "scripts/preflight/csp_contract_static.sh" ]]; then
   # Set the target site for the guard
   if [[ -z "${CADDY_TARGET_SITE:-}" ]]; then
     case "$DEPLOY_TARGET" in
-      vps) export CADDY_TARGET_SITE="weltgewebe.net" ;;
+      vps) export CADDY_TARGET_SITE="commonthing.net" ;;
       *) export CADDY_TARGET_SITE="weltgewebe.home.arpa" ;;
     esac
   else
@@ -2956,12 +2956,12 @@ else
 
     SCHAUWERK_INDEX_HEADERS_OUT="$(mktemp)"
     SCHAUWERK_MANIFEST_OUT="$(mktemp)"
-    SCHAUWERK_RESOLVE="weltgewebe.net:443:${CADDY_BIND}"
+    SCHAUWERK_RESOLVE="commonthing.net:443:${CADDY_BIND}"
     SCHAUWERK_EXPECTED_CSP="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; frame-src https://embed.diagrams.net; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
     if ! SCHAUWERK_INDEX_HTTP_CODE="$(
       curl -sS --noproxy '*' --connect-timeout 5 --max-time 20 --retry 3 --retry-delay 1 --retry-connrefused \
         --resolve "$SCHAUWERK_RESOLVE" -o /dev/null -D "$SCHAUWERK_INDEX_HEADERS_OUT" \
-        -w "%{http_code}" https://weltgewebe.net/schaubild/
+        -w "%{http_code}" https://commonthing.net/schaubild/
     )"; then
       msg="Schauwerk editor postflight failed to reach /schaubild/ through the deployed Caddy listener."
       echo "ERROR: $msg" >&2
@@ -3007,7 +3007,7 @@ PY
     if ! SCHAUWERK_MANIFEST_HTTP_CODE="$(
       curl -sS --noproxy '*' --connect-timeout 5 --max-time 20 --retry 3 --retry-delay 1 --retry-connrefused \
         --resolve "$SCHAUWERK_RESOLVE" -o "$SCHAUWERK_MANIFEST_OUT" \
-        -w "%{http_code}" https://weltgewebe.net/schaubild/manifest.json
+        -w "%{http_code}" https://commonthing.net/schaubild/manifest.json
     )"; then
       msg="Schauwerk editor postflight failed to fetch the deployed manifest through Caddy."
       echo "ERROR: $msg" >&2
@@ -3073,7 +3073,7 @@ PY
       if ! SCHAUWERK_ASSET_HTTP_CODE="$(
         curl -sS --noproxy '*' --connect-timeout 5 --max-time 20 --retry 3 --retry-delay 1 --retry-connrefused \
           --resolve "$SCHAUWERK_RESOLVE" -o "$SCHAUWERK_ASSET_OUT" \
-          -w "%{http_code}" "https://weltgewebe.net/schaubild/${SCHAUWERK_ASSET_NAME}"
+          -w "%{http_code}" "https://commonthing.net/schaubild/${SCHAUWERK_ASSET_NAME}"
       )"; then
         msg="Schauwerk editor postflight failed to fetch manifest asset $SCHAUWERK_ASSET_NAME through Caddy."
         echo "ERROR: $msg" >&2

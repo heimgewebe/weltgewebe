@@ -133,7 +133,7 @@ Der spätere Heimserver-Edge muss folgendes Verhalten herstellen und
 automatisiert prüfen:
 
 - HTTP-Anfragen werden auf das kanonische HTTPS-Ziel umgeleitet.
-- Das endgültige Ziel ist `https://weltgewebe.net`.
+- Das endgültige Ziel ist `https://commonthing.net`.
 - Pfad und Queryparameter bleiben erhalten.
 - Die Umleitung ist permanent.
 - Unter `weltweb.net` wird kein eigener Anwendungsinhalt ausgeliefert.
@@ -150,7 +150,7 @@ automatisiert prüfen:
 - Der vorgesehene Edge-Pfad ist
   `/srv/weltgewebe-web/weltweberei`.
 - Die Wurzelroute liefert die Informationsseite.
-- Anfragen werden weder an die Weltgewebe-App noch an die API
+- Anfragen werden weder an die commonThing-App noch an die API
   weitergereicht.
 - Es werden restriktive Sicherheitsheader gesetzt.
 - Skripte, Formulare, Frames, externe Ressourcen und Tracking bleiben
