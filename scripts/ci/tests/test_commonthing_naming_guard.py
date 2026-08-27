@@ -15,8 +15,10 @@ sys.modules[SPEC.name] = GUARD
 SPEC.loader.exec_module(GUARD)
 
 RETIRED_PRODUCT = "Welt" + "gewebe"
-LEGACY_WEB_ORIGIN = "https://welt" + "gewebe.net"
+LEGACY_WEB_HOST = "welt" + "gewebe.net"
+LEGACY_WEB_ORIGIN = f"https://{LEGACY_WEB_HOST}"
 LEGACY_API_ORIGIN = "https://api.welt" + "gewebe.net"
+LEGACY_CONTACT = "kontakt@welt" + "gewebe.net"
 
 
 def diff(path: str, line: str, *, line_number: int = 1) -> str:
@@ -42,7 +44,14 @@ class CommonThingNamingGuardTests(unittest.TestCase):
         text = diff("docs/deploy/example.md", current.rstrip())
         violations = GUARD.find_violations(text, lambda _: current)
         self.assertEqual(len(violations), 1)
-        self.assertEqual(violations[0].reason, "legacy public web origin")
+        self.assertEqual(violations[0].reason, "legacy public web host")
+
+    def test_rejects_new_bare_legacy_web_host(self) -> None:
+        current = f"public host: {LEGACY_WEB_HOST}\n"
+        text = diff("docs/deploy/example.md", current.rstrip())
+        violations = GUARD.find_violations(text, lambda _: current)
+        self.assertEqual(len(violations), 1)
+        self.assertEqual(violations[0].reason, "legacy public web host")
 
     def test_accepts_commonthing_current_name(self) -> None:
         text = diff("apps/web/src/routes/example/+page.svelte", "<h1>commonThing</h1>")
@@ -76,8 +85,16 @@ class CommonThingNamingGuardTests(unittest.TestCase):
                     [],
                 )
 
-    def test_api_legacy_host_is_not_mistaken_for_legacy_web_origin(self) -> None:
+    def test_api_legacy_host_is_not_mistaken_for_public_web_host(self) -> None:
         current = f"{LEGACY_API_ORIGIN}/health/ready\n"
+        text = diff("docs/deploy/example.md", current.rstrip())
+        self.assertEqual(
+            GUARD.find_violations(text, lambda _: current),
+            [],
+        )
+
+    def test_legacy_mail_address_is_not_mistaken_for_public_web_host(self) -> None:
+        current = f"mail alias: {LEGACY_CONTACT}\n"
         text = diff("docs/deploy/example.md", current.rstrip())
         self.assertEqual(
             GUARD.find_violations(text, lambda _: current),
