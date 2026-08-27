@@ -3,7 +3,7 @@
 
 The migration cannot remove every legacy technical identifier at once. This guard
 therefore examines only *added lines* relative to an explicit base revision. It
-blocks new product-name use and new use of the legacy web origin unless the line
+blocks new product-name use and new use of the legacy web host unless the line
 is part of the naming-policy documents or is explicitly marked as legacy
 compatibility.
 
@@ -30,14 +30,17 @@ POLICY_EXEMPT_PATHS = {
     "docs/deploy/weltgewebe.naming.md",
 }
 RETIRED_PRODUCT_PATTERN = re.compile(r"\b" + "Welt" + r"gewebe\b")
+LEGACY_WEB_HOST_PATTERN = re.compile(
+    r"(?<![@A-Za-z0-9_.-])(?:www\.)?weltgewebe\.net(?=$|[/?:#\s\"'<>`])"
+)
 FORBIDDEN_PATTERNS = (
     (
         "retired product name",
         RETIRED_PRODUCT_PATTERN,
     ),
     (
-        "legacy public web origin",
-        re.compile(r"https?://(?:www\.)?weltgewebe\.net(?=$|[/?:#\s\"'<>])"),
+        "legacy public web host",
+        LEGACY_WEB_HOST_PATTERN,
     ),
 )
 HUNK_RE = re.compile(r"^@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@")
