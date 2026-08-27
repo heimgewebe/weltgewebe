@@ -260,6 +260,38 @@ test.describe("Settings — notifications information architecture", () => {
     ).toBeVisible();
   });
 
+  test("keeps account device recovery available without local Push support", async ({
+    page,
+  }) => {
+    await page.addInitScript(() => {
+      Object.defineProperty(window, "PushManager", {
+        configurable: true,
+        value: undefined,
+      });
+    });
+    await installApiMocks(page);
+    await page.goto("/settings#benachrichtigungen");
+
+    const section = page.locator("#benachrichtigungen");
+    await expect(
+      section.getByText(/Web Push .* nicht verfügbar/),
+    ).toBeVisible();
+    await expect(
+      section.getByRole("heading", {
+        name: "Registrierte Push-Geräte",
+        level: 3,
+      }),
+    ).toBeVisible();
+    await expect(
+      section.getByText(
+        "Für dieses Konto sind keine aktiven Push-Geräte registriert.",
+      ),
+    ).toBeVisible();
+    await expect(
+      section.getByRole("button", { name: "Auf diesem Gerät aktivieren" }),
+    ).toHaveCount(0);
+  });
+
   test("does not call push APIs for anonymous settings visitors and offers login", async ({
     page,
   }) => {
