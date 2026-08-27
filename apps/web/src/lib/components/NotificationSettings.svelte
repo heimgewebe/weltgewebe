@@ -27,6 +27,8 @@
   });
   let browserSubscription: PushSubscription | null = $state(null);
   let currentServerRegistration: boolean | null = $state(null);
+  let localUnsubscribePending = $state(false);
+  let deviceManagerRefreshVersion = $state(0);
   let currentDeviceEnabled = $derived(
     browserSubscription !== null && currentServerRegistration !== false,
   );
@@ -160,7 +162,9 @@
       await registerPushSubscription(createdSubscription);
       preferences = await updateNotificationPreferences(true);
       currentServerRegistration = true;
+      localUnsubscribePending = false;
       browserSubscription = createdSubscription;
+      deviceManagerRefreshVersion += 1;
       notice =
         "Push ist auf diesem Gerät aktiviert. Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet.";
     } catch (cause) {
@@ -168,14 +172,17 @@
         try {
           await deletePushSubscription(cleanupEndpoint);
           currentServerRegistration = false;
+          deviceManagerRefreshVersion += 1;
           await createdSubscription.unsubscribe().catch(() => false);
           await loadBrowserSubscription();
+          localUnsubscribePending = browserSubscription !== null;
           if (browserSubscription) {
             warning =
-              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Push bleibt auf diesem Gerät aus; du kannst die Aktivierung erneut versuchen.";
+              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Push bleibt auf diesem Gerät aus; versuche die lokale Deaktivierung erneut.";
           }
         } catch (cleanupCause) {
           currentServerRegistration = null;
+          localUnsubscribePending = false;
           browserSubscription = createdSubscription;
           warning = `Die Einrichtung ist fehlgeschlagen und konnte nicht vollständig zurückgenommen werden. Das Geräte-Abo bleibt sichtbar, damit du die Deaktivierung erneut versuchen kannst. ${describeNotificationError(
             cleanupCause,
@@ -195,18 +202,23 @@
     clearFeedback();
     const subscription = browserSubscription;
     try {
-      // Server first: if this request fails, keep the browser subscription so
-      // the endpoint remains recoverable after a reload and the user can retry.
-      await deletePushSubscription(subscription.endpoint);
-      currentServerRegistration = false;
+      if (!localUnsubscribePending) {
+        // Server first: if this request fails, keep the browser subscription so
+        // the endpoint remains recoverable after a reload and the user can retry.
+        await deletePushSubscription(subscription.endpoint);
+        currentServerRegistration = false;
+        deviceManagerRefreshVersion += 1;
+      }
 
       await subscription.unsubscribe().catch(() => false);
       await loadBrowserSubscription();
       if (browserSubscription) {
+        localUnsubscribePending = true;
         warning =
-          "Der Geräte-Eintrag ist auf dem Server entfernt, aber das lokale Browser-Abo konnte nicht beendet werden. Versuche die Deaktivierung erneut.";
+          "Der Geräte-Eintrag ist auf dem Server entfernt, aber das lokale Browser-Abo konnte nicht beendet werden. Versuche „Lokales Browser-Abo entfernen“ erneut.";
         return;
       }
+      localUnsubscribePending = false;
       notice = "Push ist auf diesem Gerät deaktiviert.";
     } catch (cause) {
       error = describeNotificationError(cause, "device-disable");
@@ -259,14 +271,14 @@
   </div>
 
   <p class="explanation">
-    Push ist nur ein Hinweis. Die Nachricht selbst bleibt im Weltgewebe und wird
+    Push ist nur ein Hinweis. Die Nachricht selbst bleibt in commonThing und wird
     erst nach dem Öffnen geladen. Auf dem Sperrbildschirm erscheint daher kein
     Nachrichtentext und kein Absendername.
   </p>
 
   <p class="platform-note">
     Auf iPhone und iPad funktioniert Push in der zum Home-Bildschirm
-    hinzugefügten Weltgewebe-Web-App.
+    hinzugefügten commonThing-Web-App.
   </p>
 
   {#if $authStore.state === "checking" || loading}
@@ -308,7 +320,7 @@
         <strong>Kontoeinstellung</strong>
         <p>
           Push-Hinweise für private Nachrichten. Diese Einstellung legt fest, ob
-          Weltgewebe solche Hinweise für dein Konto senden soll.
+          commonThing solche Hinweise für dein Konto senden soll.
         </p>
       </div>
       <label class="switch-label">
@@ -329,6 +341,9 @@
         <p>
           {#if currentDeviceEnabled}
             Push auf diesem Gerät: aktiviert.
+          {:else if localUnsubscribePending}
+            Push auf diesem Gerät: serverseitig deaktiviert. Das lokale
+            Browser-Abo muss noch entfernt werden.
           {:else if permission === "denied"}
             Push auf diesem Gerät: blockiert. Die Freigabe muss im Browser oder
             Betriebssystem geändert werden.
@@ -338,7 +353,7 @@
         </p>
       </div>
 
-      {#if currentDeviceEnabled}
+      {#if currentDeviceEnabled || localUnsubscribePending}
         <button
           class="btn secondary touch-target"
           type="button"
@@ -347,7 +362,9 @@
         >
           {changingDevice
             ? "Wird deaktiviert …"
-            : "Auf diesem Gerät deaktivieren"}
+            : localUnsubscribePending
+              ? "Lokales Browser-Abo entfernen"
+              : "Auf diesem Gerät deaktivieren"}
         </button>
       {:else if permission === "denied"}
         <span class="blocked-action">
@@ -365,14 +382,16 @@
       {/if}
     </div>
 
-    <PushDeviceManager
-      currentEndpoint={browserSubscription?.endpoint ?? null}
-      onCurrentRegistrationChange={handleCurrentRegistrationChange}
-    />
+    {#key deviceManagerRefreshVersion}
+      <PushDeviceManager
+        currentEndpoint={browserSubscription?.endpoint ?? null}
+        onCurrentRegistrationChange={handleCurrentRegistrationChange}
+      />
+    {/key}
 
     {#if config && !config.enabled}
       <p class="status warning">
-        Push ist auf diesem Weltgewebe-Server derzeit nicht verfügbar. Deine
+        Push ist auf diesem commonThing-Server derzeit nicht verfügbar. Deine
         Nachrichten bleiben im Postfach.
       </p>
     {/if}

@@ -6,11 +6,13 @@ interface MockOptions {
   permission?: PermissionState;
   hasSubscription?: boolean;
   registeredCurrentDevice?: boolean;
+  unsubscribeSucceeds?: boolean;
   directMessagesPush?: boolean;
   deleteStatus?: number;
   authenticated?: boolean;
   onPreferenceWrite?: (enabled: boolean) => void;
   onPushRead?: (pathname: string) => void;
+  onPushDelete?: () => void;
 }
 
 async function installBrowserPushMock(
@@ -19,9 +21,10 @@ async function installBrowserPushMock(
 ): Promise<void> {
   const permission = options.permission ?? "default";
   const hasSubscription = options.hasSubscription ?? false;
+  const unsubscribeSucceeds = options.unsubscribeSucceeds ?? true;
 
   await page.addInitScript(
-    ({ initialPermission, initialSubscription }) => {
+    ({ initialPermission, initialSubscription, canUnsubscribe }) => {
       let currentSubscription: {
         endpoint: string;
         toJSON: () => {
@@ -38,6 +41,7 @@ async function installBrowserPushMock(
           keys: { p256dh: "test-p256dh", auth: "test-auth" },
         }),
         unsubscribe: async () => {
+          if (!canUnsubscribe) return false;
           currentSubscription = null;
           return true;
         },
@@ -78,6 +82,7 @@ async function installBrowserPushMock(
     {
       initialPermission: permission,
       initialSubscription: hasSubscription,
+      canUnsubscribe: unsubscribeSucceeds,
     },
   );
 }
@@ -200,6 +205,7 @@ async function installApiMocks(
     }
 
     if (pathname === "/api/push/subscriptions" && method === "DELETE") {
+      options.onPushDelete?.();
       if (deleteStatus >= 400) {
         return route.fulfill({
           status: deleteStatus,
@@ -474,6 +480,47 @@ test.describe("Settings — notifications information architecture", () => {
     await expect(
       section.getByText("Push auf diesem Gerät: aktiviert."),
     ).toBeVisible();
+    await expect(
+      section.getByLabel("1 von 20 Push-Geräten belegt"),
+    ).toBeVisible();
+  });
+
+  test("keeps a local unsubscribe retry after the server entry was removed", async ({
+    page,
+  }) => {
+    let deleteWrites = 0;
+    await setup(page, {
+      permission: "granted",
+      hasSubscription: true,
+      registeredCurrentDevice: true,
+      unsubscribeSucceeds: false,
+      onPushDelete: () => {
+        deleteWrites += 1;
+      },
+    });
+    await page.goto("/settings#benachrichtigungen");
+
+    const section = page.locator("#benachrichtigungen");
+    await section
+      .getByRole("button", { name: "Auf diesem Gerät deaktivieren" })
+      .click();
+
+    await expect(
+      section.getByText(/Push auf diesem Gerät: serverseitig deaktiviert\./),
+    ).toBeVisible();
+    const retry = section.getByRole("button", {
+      name: "Lokales Browser-Abo entfernen",
+    });
+    await expect(retry).toBeVisible();
+    expect(deleteWrites).toBe(1);
+
+    await retry.click();
+
+    await expect(retry).toBeVisible();
+    await expect(section).toContainText(
+      "das lokale Browser-Abo konnte nicht beendet werden",
+    );
+    expect(deleteWrites).toBe(1);
   });
 
   test("mobile layout keeps notification actions touch-sized", async ({
