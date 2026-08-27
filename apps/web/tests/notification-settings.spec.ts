@@ -254,7 +254,9 @@ test.describe("Settings — notifications information architecture", () => {
       }),
     ).toBeVisible();
     await expect(
-      page.getByText("Für dieses Konto sind keine aktiven Push-Geräte registriert."),
+      page.getByText(
+        "Für dieses Konto sind keine aktiven Push-Geräte registriert.",
+      ),
     ).toBeVisible();
   });
 
