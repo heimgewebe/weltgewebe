@@ -12,7 +12,7 @@ Generated automatically. Do not edit.
 
 > This report is metadata-based. It does not infer semantic staleness from prose.
 
-Explicitly stale documents: **46**
+Explicitly stale documents: **47**
 
 | Document | status | lifecycle_state |
 | --- | --- | --- |
@@ -30,6 +30,7 @@ Explicitly stale documents: **46**
 | `docs/blueprints/weltgewebe.deploy.plan.md` | deprecated | — |
 | `docs/deploy/heimserver.deployment.md` | deprecated | — |
 | `docs/deploy/heimserver.integration.md` | deprecated | — |
+| `docs/deploy/weltgewebe.naming.md` | superseded | — |
 | `docs/geist-und-plan.md` | deprecated | — |
 | `docs/inhalt.md` | deprecated | — |
 | `docs/konzepte/garnrolle-und-verortung.md` | deprecated | — |
