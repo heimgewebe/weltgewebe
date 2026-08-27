@@ -99,6 +99,18 @@ implementations:
       - scripts/tests/test_compose_volumes_guard.sh
       - scripts/guard-compose-no-relative-volumes.sh
 
+  - id: impl.infra.schauwerk-editor-release-lock
+    path: infra/schauwerk-editor/
+    impl_type: config
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/schauwerk-editor-frontdoor.md
+    verified_by:
+      - scripts/ci/tests/test_schauwerk_editor_release_preflight.py
+      - scripts/ci/tests/test_schaubild_frontdoor.py
+
   - id: impl.contracts
     path: contracts/domain/
     impl_type: schema

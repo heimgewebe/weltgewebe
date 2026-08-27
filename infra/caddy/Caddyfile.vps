@@ -88,7 +88,7 @@
 	}
 
 	handle_path /schaubild/* {
-		root * /srv/schauwerk-editor-root/current
+		root * /srv/schauwerk-editor-release
 		header Cache-Control "no-store"
 		file_server
 	}
