@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import sys
 import unittest
 from pathlib import Path
 
@@ -10,6 +11,7 @@ MODULE_PATH = REPO / "scripts" / "guard" / "commonthing_naming_guard.py"
 SPEC = importlib.util.spec_from_file_location("commonthing_naming_guard", MODULE_PATH)
 assert SPEC is not None and SPEC.loader is not None
 GUARD = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = GUARD
 SPEC.loader.exec_module(GUARD)
 
 
