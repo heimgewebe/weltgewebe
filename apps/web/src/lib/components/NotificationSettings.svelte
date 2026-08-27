@@ -254,7 +254,11 @@
       typeof window.Notification !== "undefined";
     permission = supported ? Notification.permission : "unsupported";
     void authStore.checkAuth().then((status) => {
-      if (status.state === "authenticated" && status.authenticated && supported) {
+      if (
+        status.state === "authenticated" &&
+        status.authenticated &&
+        supported
+      ) {
         void load();
       } else {
         loading = false;
@@ -291,9 +295,9 @@
   </div>
 
   <p class="explanation">
-    Push ist nur ein Hinweis. Die Nachricht selbst bleibt in commonThing und wird
-    erst nach dem Öffnen geladen. Auf dem Sperrbildschirm erscheint daher kein
-    Nachrichtentext und kein Absendername.
+    Push ist nur ein Hinweis. Die Nachricht selbst bleibt in commonThing und
+    wird erst nach dem Öffnen geladen. Auf dem Sperrbildschirm erscheint daher
+    kein Nachrichtentext und kein Absendername.
   </p>
 
   <p class="platform-note">
