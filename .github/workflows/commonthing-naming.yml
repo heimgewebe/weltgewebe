@@ -33,7 +33,10 @@ jobs:
 
       - name: Reject new unclassified legacy naming
         env:
-          COMMONTHING_NAMING_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          COMMONTHING_NAMING_BASE: >-
+            ${{ github.event_name == 'pull_request'
+                && github.event.pull_request.base.sha
+                || github.event.before }}
         run: |
           set -euo pipefail
           base="${COMMONTHING_NAMING_BASE:-}"
