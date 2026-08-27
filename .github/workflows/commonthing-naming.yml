@@ -1,0 +1,43 @@
+---
+name: commonThing Naming Guard
+
+permissions:
+  contents: read
+
+"on":
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  naming-contract:
+    name: commonThing naming contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Check guard syntax
+        run: python3 -m py_compile scripts/guard/commonthing_naming_guard.py
+
+      - name: Run naming guard tests
+        run: python3 -m unittest scripts.ci.tests.test_commonthing_naming_guard -v
+
+      - name: Reject new unclassified Weltgewebe naming
+        env:
+          COMMONTHING_NAMING_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          set -euo pipefail
+          base="${COMMONTHING_NAMING_BASE:-}"
+          if [[ -z "${base}" || "${base}" =~ ^0+$ ]]; then
+            base="HEAD^"
+          fi
+          python3 scripts/guard/commonthing_naming_guard.py --base "${base}"
