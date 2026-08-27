@@ -31,7 +31,7 @@ jobs:
       - name: Run naming guard tests
         run: python3 -m unittest scripts.ci.tests.test_commonthing_naming_guard -v
 
-      - name: Reject new unclassified Weltgewebe naming
+      - name: Reject new unclassified legacy naming
         env:
           COMMONTHING_NAMING_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
         run: |
