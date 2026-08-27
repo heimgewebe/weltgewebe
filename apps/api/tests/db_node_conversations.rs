@@ -404,6 +404,13 @@ async fn set_account_disabled(pool: &sqlx::PgPool, id: &str, disabled: bool) {
 #[serial]
 #[ignore = "requires direct PostgreSQL"]
 async fn private_message_push_preference_cancels_queued_delivery() {
+    if std::env::var_os("NATS_URL").is_none() {
+        eprintln!(
+            "skipping Web Push device recovery proof: NATS_URL is provided by the dedicated PostgreSQL integration lane"
+        );
+        return;
+    }
+
     let database = pool().await;
     let pool = database.app_pool();
     seed_account(&pool, AUTHOR_ID, "Autorin", "weber").await;
