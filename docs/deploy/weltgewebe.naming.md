@@ -5,7 +5,7 @@ doc_type: reference
 status: superseded
 summary: Historischer Einstiegspunkt zur früheren Weltgewebe-Namenskonvention.
 relations:
-  - type: superseded_by
+  - type: relates_to
     target: docs/deploy/commonthing.naming.md
 ---
 # Weltgewebe Naming (legacy)
