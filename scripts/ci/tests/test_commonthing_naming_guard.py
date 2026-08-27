@@ -4,6 +4,7 @@ import importlib.util
 import sys
 import unittest
 from pathlib import Path
+from unittest import mock
 
 
 REPO = Path(__file__).resolve().parents[3]
@@ -100,6 +101,15 @@ class CommonThingNamingGuardTests(unittest.TestCase):
             GUARD.find_violations(text, lambda _: current),
             [],
         )
+
+    def test_explicit_missing_base_fails_closed(self) -> None:
+        with mock.patch.object(GUARD, "_revision_exists", return_value=False):
+            with self.assertRaisesRegex(RuntimeError, "explicit comparison base is unavailable"):
+                GUARD.resolve_base(REPO, "deadbeef")
+
+    def test_explicit_base_is_used_when_available(self) -> None:
+        with mock.patch.object(GUARD, "_revision_exists", return_value=True):
+            self.assertEqual(GUARD.resolve_base(REPO, "abc123"), "abc123")
 
 
 if __name__ == "__main__":
