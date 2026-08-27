@@ -473,6 +473,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/datenmodell.md
 - [relates_to] docs/deploy/CHANGELOG.md
 - [relates_to] docs/deploy/DRIFT_POLICY.md
+- [relates_to] docs/deploy/commonthing.naming.md
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/deploy/heim-first-phase0.md
 - [relates_to] docs/deploy/heimserver.deployment.md
@@ -480,11 +481,14 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/deploy/security.md
 - [relates_to] docs/deploy/vps.md
-- [relates_to] docs/deploy/weltgewebe.naming.md
 - [relates_to] docs/deployment.md
 - [relates_to] docs/deployment_governance.md
 - [relates_to] docs/edge/systemd/README.md
 - [relates_to] docs/runbook.md
+
+## docs/deploy/commonthing.naming.md
+
+- [relates_to] docs/deploy/weltgewebe.naming.md
 
 ## docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 
@@ -560,6 +564,10 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/schauwerk-editor-frontdoor.md
 - [relates_to] docs/deploy/vps-http-smoke.md
 - [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
+
+## docs/deploy/weltgewebe.naming.md
+
+- [supersedes] docs/deploy/commonthing.naming.md
 
 ## docs/deployment.md
 
