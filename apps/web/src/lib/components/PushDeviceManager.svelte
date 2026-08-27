@@ -9,9 +9,10 @@
 
   interface Props {
     currentEndpoint?: string | null;
+    onCurrentRegistrationChange?: (registered: boolean | null) => void;
   }
 
-  let { currentEndpoint = null }: Props = $props();
+  let { currentEndpoint = null, onCurrentRegistrationChange }: Props = $props();
   let subscriptions: ManagedPushSubscription[] = $state([]);
   let limit = $state(20);
   let loading = $state(true);
@@ -50,9 +51,13 @@
       if (version !== requestVersion) return false;
       subscriptions = view.items;
       limit = view.limit;
+      onCurrentRegistrationChange?.(
+        endpoint ? view.items.some((item) => item.current) : null,
+      );
       return true;
     } catch (cause) {
       if (version !== requestVersion) return false;
+      onCurrentRegistrationChange?.(null);
       error = describeNotificationError(cause, "device-list");
       return false;
     } finally {

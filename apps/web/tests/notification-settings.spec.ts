@@ -5,6 +5,7 @@ type PermissionState = "default" | "granted" | "denied";
 interface MockOptions {
   permission?: PermissionState;
   hasSubscription?: boolean;
+  registeredCurrentDevice?: boolean;
   directMessagesPush?: boolean;
   deleteStatus?: number;
   authenticated?: boolean;
@@ -88,6 +89,8 @@ async function installApiMocks(
   let directMessagesPush = options.directMessagesPush ?? false;
   const deleteStatus = options.deleteStatus ?? 204;
   const authenticated = options.authenticated ?? true;
+  let registeredCurrentDevice =
+    options.registeredCurrentDevice ?? options.hasSubscription ?? false;
 
   await page.route("**/_app/version.json", (route: Route) =>
     route.fulfill({
@@ -180,7 +183,19 @@ async function installApiMocks(
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ items: [], limit: 20 }),
+        body: JSON.stringify({
+          items: registeredCurrentDevice
+            ? [
+                {
+                  id: "push-subscription-current",
+                  created_at: "2026-08-27T06:00:00Z",
+                  updated_at: "2026-08-27T06:00:00Z",
+                  current: true,
+                },
+              ]
+            : [],
+          limit: 20,
+        }),
       });
     }
 
@@ -195,10 +210,12 @@ async function installApiMocks(
           }),
         });
       }
+      registeredCurrentDevice = false;
       return route.fulfill({ status: 204 });
     }
 
     if (pathname === "/api/push/subscriptions" && method === "POST") {
+      registeredCurrentDevice = true;
       return route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -273,9 +290,9 @@ test.describe("Settings — notifications information architecture", () => {
     await page.goto("/settings#benachrichtigungen");
 
     const section = page.locator("#benachrichtigungen");
-    await expect(
-      section.getByText(/Web Push .* nicht verfügbar/),
-    ).toBeVisible();
+    await expect(section).toContainText(
+      "Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht verfügbar.",
+    );
     await expect(
       section.getByRole("heading", {
         name: "Registrierte Push-Geräte",
@@ -428,6 +445,32 @@ test.describe("Settings — notifications information architecture", () => {
       "raw backend detail",
     );
     await expect(deactivate).toBeVisible();
+    await expect(
+      section.getByText("Push auf diesem Gerät: aktiviert."),
+    ).toBeVisible();
+  });
+
+  test("reconciles a stale local subscription that was removed on another device", async ({
+    page,
+  }) => {
+    await setup(page, {
+      permission: "granted",
+      hasSubscription: true,
+      registeredCurrentDevice: false,
+    });
+    await page.goto("/settings#benachrichtigungen");
+
+    const section = page.locator("#benachrichtigungen");
+    await expect(
+      section.getByText("Push auf diesem Gerät: nicht aktiviert."),
+    ).toBeVisible();
+    await expect(
+      section.getByRole("button", { name: "Auf diesem Gerät deaktivieren" }),
+    ).toHaveCount(0);
+
+    await section
+      .getByRole("button", { name: "Auf diesem Gerät aktivieren" })
+      .click();
     await expect(
       section.getByText("Push auf diesem Gerät: aktiviert."),
     ).toBeVisible();

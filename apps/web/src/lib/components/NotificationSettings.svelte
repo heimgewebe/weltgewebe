@@ -26,6 +26,10 @@
     direct_messages_push: false,
   });
   let browserSubscription: PushSubscription | null = $state(null);
+  let currentServerRegistration: boolean | null = $state(null);
+  let currentDeviceEnabled = $derived(
+    browserSubscription !== null && currentServerRegistration !== false,
+  );
   let permission: NotificationPermission | "unsupported" =
     $state("unsupported");
   let error = $state("");
@@ -50,6 +54,10 @@
   function focusDeepLink(): void {
     if (window.location.hash !== "#benachrichtigungen") return;
     sectionElement?.focus({ preventScroll: true });
+  }
+
+  function handleCurrentRegistrationChange(registered: boolean | null): void {
+    currentServerRegistration = registered;
   }
 
   async function loadBrowserSubscription(): Promise<void> {
@@ -151,6 +159,7 @@
       cleanupEndpoint = createdSubscription.endpoint;
       await registerPushSubscription(createdSubscription);
       preferences = await updateNotificationPreferences(true);
+      currentServerRegistration = true;
       browserSubscription = createdSubscription;
       notice =
         "Push ist auf diesem Gerät aktiviert. Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet.";
@@ -158,13 +167,15 @@
       if (createdSubscription && cleanupEndpoint) {
         try {
           await deletePushSubscription(cleanupEndpoint);
+          currentServerRegistration = false;
           await createdSubscription.unsubscribe().catch(() => false);
           await loadBrowserSubscription();
           if (browserSubscription) {
             warning =
-              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Du kannst die Deaktivierung erneut versuchen.";
+              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Push bleibt auf diesem Gerät aus; du kannst die Aktivierung erneut versuchen.";
           }
         } catch (cleanupCause) {
+          currentServerRegistration = null;
           browserSubscription = createdSubscription;
           warning = `Die Einrichtung ist fehlgeschlagen und konnte nicht vollständig zurückgenommen werden. Das Geräte-Abo bleibt sichtbar, damit du die Deaktivierung erneut versuchen kannst. ${describeNotificationError(
             cleanupCause,
@@ -187,6 +198,7 @@
       // Server first: if this request fails, keep the browser subscription so
       // the endpoint remains recoverable after a reload and the user can retry.
       await deletePushSubscription(subscription.endpoint);
+      currentServerRegistration = false;
 
       await subscription.unsubscribe().catch(() => false);
       await loadBrowserSubscription();
@@ -315,7 +327,7 @@
       <div>
         <strong>Geräteeinstellung</strong>
         <p>
-          {#if browserSubscription}
+          {#if currentDeviceEnabled}
             Push auf diesem Gerät: aktiviert.
           {:else if permission === "denied"}
             Push auf diesem Gerät: blockiert. Die Freigabe muss im Browser oder
@@ -326,7 +338,7 @@
         </p>
       </div>
 
-      {#if browserSubscription}
+      {#if currentDeviceEnabled}
         <button
           class="btn secondary touch-target"
           type="button"
@@ -353,7 +365,10 @@
       {/if}
     </div>
 
-    <PushDeviceManager currentEndpoint={browserSubscription?.endpoint ?? null} />
+    <PushDeviceManager
+      currentEndpoint={browserSubscription?.endpoint ?? null}
+      onCurrentRegistrationChange={handleCurrentRegistrationChange}
+    />
 
     {#if config && !config.enabled}
       <p class="status warning">
