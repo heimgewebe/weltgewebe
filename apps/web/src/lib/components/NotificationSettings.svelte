@@ -27,10 +27,12 @@
   });
   let browserSubscription: PushSubscription | null = $state(null);
   let currentServerRegistration: boolean | null = $state(null);
-  let localUnsubscribePending = $state(false);
   let deviceManagerRefreshVersion = $state(0);
   let currentDeviceEnabled = $derived(
     browserSubscription !== null && currentServerRegistration !== false,
+  );
+  let localCleanupAvailable = $derived(
+    browserSubscription !== null && currentServerRegistration === false,
   );
   let permission: NotificationPermission | "unsupported" =
     $state("unsupported");
@@ -162,7 +164,6 @@
       await registerPushSubscription(createdSubscription);
       preferences = await updateNotificationPreferences(true);
       currentServerRegistration = true;
-      localUnsubscribePending = false;
       browserSubscription = createdSubscription;
       deviceManagerRefreshVersion += 1;
       notice =
@@ -175,14 +176,12 @@
           deviceManagerRefreshVersion += 1;
           await createdSubscription.unsubscribe().catch(() => false);
           await loadBrowserSubscription();
-          localUnsubscribePending = browserSubscription !== null;
           if (browserSubscription) {
             warning =
               "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Push bleibt auf diesem Gerät aus; versuche die lokale Deaktivierung erneut.";
           }
         } catch (cleanupCause) {
           currentServerRegistration = null;
-          localUnsubscribePending = false;
           browserSubscription = createdSubscription;
           warning = `Die Einrichtung ist fehlgeschlagen und konnte nicht vollständig zurückgenommen werden. Das Geräte-Abo bleibt sichtbar, damit du die Deaktivierung erneut versuchen kannst. ${describeNotificationError(
             cleanupCause,
@@ -202,24 +201,45 @@
     clearFeedback();
     const subscription = browserSubscription;
     try {
-      if (!localUnsubscribePending) {
-        // Server first: if this request fails, keep the browser subscription so
-        // the endpoint remains recoverable after a reload and the user can retry.
-        await deletePushSubscription(subscription.endpoint);
-        currentServerRegistration = false;
-        deviceManagerRefreshVersion += 1;
-      }
+      // Server first: if this request fails, keep the browser subscription so
+      // the endpoint remains recoverable after a reload and the user can retry.
+      await deletePushSubscription(subscription.endpoint);
+      currentServerRegistration = false;
+      deviceManagerRefreshVersion += 1;
 
       await subscription.unsubscribe().catch(() => false);
       await loadBrowserSubscription();
       if (browserSubscription) {
-        localUnsubscribePending = true;
         warning =
           "Der Geräte-Eintrag ist auf dem Server entfernt, aber das lokale Browser-Abo konnte nicht beendet werden. Versuche „Lokales Browser-Abo entfernen“ erneut.";
         return;
       }
-      localUnsubscribePending = false;
       notice = "Push ist auf diesem Gerät deaktiviert.";
+    } catch (cause) {
+      error = describeNotificationError(cause, "device-disable");
+    } finally {
+      changingDevice = false;
+    }
+  }
+
+  async function cleanupLocalSubscription(): Promise<void> {
+    if (
+      changingDevice ||
+      !browserSubscription ||
+      currentServerRegistration !== false
+    )
+      return;
+    changingDevice = true;
+    clearFeedback();
+    try {
+      await browserSubscription.unsubscribe().catch(() => false);
+      await loadBrowserSubscription();
+      if (browserSubscription) {
+        warning =
+          "Das lokale Browser-Abo konnte nicht beendet werden. Versuche „Lokales Browser-Abo entfernen“ erneut.";
+        return;
+      }
+      notice = "Das lokale Browser-Abo wurde entfernt.";
     } catch (cause) {
       error = describeNotificationError(cause, "device-disable");
     } finally {
@@ -341,7 +361,7 @@
         <p>
           {#if currentDeviceEnabled}
             Push auf diesem Gerät: aktiviert.
-          {:else if localUnsubscribePending}
+          {:else if localCleanupAvailable}
             Push auf diesem Gerät: serverseitig deaktiviert. Das lokale
             Browser-Abo muss noch entfernt werden.
           {:else if permission === "denied"}
@@ -353,7 +373,7 @@
         </p>
       </div>
 
-      {#if currentDeviceEnabled || localUnsubscribePending}
+      {#if currentDeviceEnabled}
         <button
           class="btn secondary touch-target"
           type="button"
@@ -362,10 +382,37 @@
         >
           {changingDevice
             ? "Wird deaktiviert …"
-            : localUnsubscribePending
-              ? "Lokales Browser-Abo entfernen"
-              : "Auf diesem Gerät deaktivieren"}
+            : "Auf diesem Gerät deaktivieren"}
         </button>
+      {:else if localCleanupAvailable}
+        <div class="device-actions">
+          <button
+            class="btn secondary touch-target"
+            type="button"
+            disabled={changingDevice}
+            onclick={cleanupLocalSubscription}
+          >
+            {changingDevice
+              ? "Wird entfernt …"
+              : "Lokales Browser-Abo entfernen"}
+          </button>
+          {#if permission === "denied"}
+            <span class="blocked-action">
+              In Browser- oder Systemeinstellungen freigeben
+            </span>
+          {:else}
+            <button
+              class="btn primary touch-target"
+              type="button"
+              disabled={changingDevice || !config?.enabled}
+              onclick={enableCurrentDevice}
+            >
+              {changingDevice
+                ? "Wird aktiviert …"
+                : "Auf diesem Gerät aktivieren"}
+            </button>
+          {/if}
+        </div>
       {:else if permission === "denied"}
         <span class="blocked-action">
           In Browser- oder Systemeinstellungen freigeben
@@ -421,6 +468,7 @@
   .section-heading,
   .preference-row,
   .device-card,
+  .device-actions,
   .status-with-action {
     display: flex;
     justify-content: space-between;
@@ -501,6 +549,7 @@
     .section-heading,
     .preference-row,
     .device-card,
+    .device-actions,
     .status-with-action {
       align-items: stretch;
       flex-direction: column;
@@ -508,6 +557,7 @@
 
     .section-heading .inbox-link,
     .device-card button,
+    .device-actions,
     .status-with-action button,
     .status-with-action a {
       width: 100%;

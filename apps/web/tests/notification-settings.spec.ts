@@ -6,7 +6,7 @@ interface MockOptions {
   permission?: PermissionState;
   hasSubscription?: boolean;
   registeredCurrentDevice?: boolean;
-  unsubscribeSucceeds?: boolean;
+  unsubscribeFailuresBeforeSuccess?: number;
   directMessagesPush?: boolean;
   deleteStatus?: number;
   authenticated?: boolean;
@@ -21,10 +21,13 @@ async function installBrowserPushMock(
 ): Promise<void> {
   const permission = options.permission ?? "default";
   const hasSubscription = options.hasSubscription ?? false;
-  const unsubscribeSucceeds = options.unsubscribeSucceeds ?? true;
+  const unsubscribeFailuresBeforeSuccess =
+    options.unsubscribeFailuresBeforeSuccess ?? 0;
 
   await page.addInitScript(
-    ({ initialPermission, initialSubscription, canUnsubscribe }) => {
+    ({ initialPermission, initialSubscription, failuresBeforeSuccess }) => {
+      const unsubscribeAttemptsKey =
+        "notification-settings-test-unsubscribe-attempts";
       let currentSubscription: {
         endpoint: string;
         toJSON: () => {
@@ -41,7 +44,11 @@ async function installBrowserPushMock(
           keys: { p256dh: "test-p256dh", auth: "test-auth" },
         }),
         unsubscribe: async () => {
-          if (!canUnsubscribe) return false;
+          const attempts = Number(
+            sessionStorage.getItem(unsubscribeAttemptsKey) ?? "0",
+          );
+          sessionStorage.setItem(unsubscribeAttemptsKey, String(attempts + 1));
+          if (attempts < failuresBeforeSuccess) return false;
           currentSubscription = null;
           return true;
         },
@@ -82,7 +89,7 @@ async function installBrowserPushMock(
     {
       initialPermission: permission,
       initialSubscription: hasSubscription,
-      canUnsubscribe: unsubscribeSucceeds,
+      failuresBeforeSuccess: unsubscribeFailuresBeforeSuccess,
     },
   );
 }
@@ -424,6 +431,37 @@ test.describe("Settings — notifications information architecture", () => {
     ).toHaveCount(0);
   });
 
+  test("allows local cleanup but not reactivation when browser permission is denied", async ({
+    page,
+  }) => {
+    let deleteWrites = 0;
+    await setup(page, {
+      permission: "denied",
+      hasSubscription: true,
+      registeredCurrentDevice: false,
+      onPushDelete: () => {
+        deleteWrites += 1;
+      },
+    });
+    await page.goto("/settings#benachrichtigungen");
+
+    const section = page.locator("#benachrichtigungen");
+    const cleanup = section.getByRole("button", {
+      name: "Lokales Browser-Abo entfernen",
+    });
+    await expect(cleanup).toBeVisible();
+    await expect(
+      section.getByRole("button", { name: "Auf diesem Gerät aktivieren" }),
+    ).toHaveCount(0);
+
+    await cleanup.click();
+
+    await expect(
+      section.getByText("Das lokale Browser-Abo wurde entfernt."),
+    ).toBeVisible();
+    expect(deleteWrites).toBe(0);
+  });
+
   test("keeps the remote cleanup retry path visible after a server deletion failure", async ({
     page,
   }) => {
@@ -468,7 +506,7 @@ test.describe("Settings — notifications information architecture", () => {
 
     const section = page.locator("#benachrichtigungen");
     await expect(
-      section.getByText("Push auf diesem Gerät: nicht aktiviert."),
+      section.getByText(/Push auf diesem Gerät: serverseitig deaktiviert\./),
     ).toBeVisible();
     await expect(
       section.getByRole("button", { name: "Auf diesem Gerät deaktivieren" }),
@@ -485,7 +523,7 @@ test.describe("Settings — notifications information architecture", () => {
     ).toBeVisible();
   });
 
-  test("keeps a local unsubscribe retry after the server entry was removed", async ({
+  test("retries only local cleanup after reload when server deletion already succeeded", async ({
     page,
   }) => {
     let deleteWrites = 0;
@@ -493,7 +531,7 @@ test.describe("Settings — notifications information architecture", () => {
       permission: "granted",
       hasSubscription: true,
       registeredCurrentDevice: true,
-      unsubscribeSucceeds: false,
+      unsubscribeFailuresBeforeSuccess: 1,
       onPushDelete: () => {
         deleteWrites += 1;
       },
@@ -514,12 +552,20 @@ test.describe("Settings — notifications information architecture", () => {
     await expect(retry).toBeVisible();
     expect(deleteWrites).toBe(1);
 
-    await retry.click();
+    await page.reload();
 
     await expect(retry).toBeVisible();
-    await expect(section).toContainText(
-      "das lokale Browser-Abo konnte nicht beendet werden",
-    );
+    await expect(
+      section.getByRole("button", { name: "Auf diesem Gerät aktivieren" }),
+    ).toBeVisible();
+    expect(deleteWrites).toBe(1);
+
+    await retry.click();
+
+    await expect(retry).toHaveCount(0);
+    await expect(
+      section.getByText("Das lokale Browser-Abo wurde entfernt."),
+    ).toBeVisible();
     expect(deleteWrites).toBe(1);
   });
 
