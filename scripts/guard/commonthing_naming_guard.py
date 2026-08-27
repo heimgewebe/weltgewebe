@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Reject new unclassified uses of the retired Weltgewebe product identity.
+"""Reject new unclassified uses of the retired legacy product identity.
 
 The migration cannot remove every legacy technical identifier at once. This guard
 therefore examines only *added lines* relative to an explicit base revision. It
@@ -29,10 +29,11 @@ POLICY_EXEMPT_PATHS = {
     "docs/deploy/commonthing.naming.md",
     "docs/deploy/weltgewebe.naming.md",
 }
+RETIRED_PRODUCT_PATTERN = re.compile(r"\b" + "Welt" + r"gewebe\b")
 FORBIDDEN_PATTERNS = (
     (
         "retired product name",
-        re.compile(r"\bWeltgewebe\b"),
+        RETIRED_PRODUCT_PATTERN,
     ),
     (
         "legacy public web origin",
