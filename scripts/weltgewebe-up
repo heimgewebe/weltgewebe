@@ -998,9 +998,9 @@ except Exception as exc:
       SCHAUWERK_EDITOR_RELEASE_PATH \
       SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA \
       SCHAUWERK_EDITOR_SOURCE_COMMIT <<< "$SCHAUWERK_EDITOR_BINDINGS"
-    if [[ "$SCHAUWERK_EDITOR_RELEASE_PATH" != /* \
-      || ! "$SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA" =~ ^[0-9a-f]{64}$ \
-      || ! "$SCHAUWERK_EDITOR_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
+    if [[ "$SCHAUWERK_EDITOR_RELEASE_PATH" != /* ||
+      ! "$SCHAUWERK_EDITOR_EXPECTED_MANIFEST_SHA" =~ ^[0-9a-f]{64}$ ||
+      ! "$SCHAUWERK_EDITOR_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]; then
       msg="Schauwerk editor admission bindings are malformed."
       echo "ERROR: $msg" >&2
       generate_failure_bundle "$msg"
@@ -1014,7 +1014,7 @@ except Exception as exc:
       generate_failure_bundle "$msg"
       exit 1
     fi
-    if ! docker compose "${BASE_ARGS[@]}" config --format json 2> /dev/null | \
+    if ! docker compose "${BASE_ARGS[@]}" config --format json 2> /dev/null |
       python3 -c '
 import json
 import sys
