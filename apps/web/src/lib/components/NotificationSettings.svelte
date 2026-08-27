@@ -82,7 +82,11 @@
     loading = true;
     const status = await authStore.checkAuth({ force: true });
     if (status.state === "authenticated" && status.authenticated) {
-      await load();
+      if (supported) {
+        await load();
+        return;
+      }
+      loading = false;
       return;
     }
     loading = false;
@@ -201,21 +205,17 @@
 
   onMount(() => {
     supported =
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window;
+      typeof navigator.serviceWorker !== "undefined" &&
+      typeof window.PushManager !== "undefined" &&
+      typeof window.Notification !== "undefined";
     permission = supported ? Notification.permission : "unsupported";
-    if (supported) {
-      void authStore.checkAuth().then((status) => {
-        if (status.state === "authenticated" && status.authenticated) {
-          void load();
-        } else {
-          loading = false;
-        }
-      });
-    } else {
-      loading = false;
-    }
+    void authStore.checkAuth().then((status) => {
+      if (status.state === "authenticated" && status.authenticated && supported) {
+        void load();
+      } else {
+        loading = false;
+      }
+    });
 
     const handleVisibilityChange = () => refreshPermission();
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -257,12 +257,7 @@
     hinzugefügten Weltgewebe-Web-App.
   </p>
 
-  {#if !supported}
-    <p class="status warning">
-      Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
-      verfügbar. Das Nachrichtenpostfach bleibt vollständig nutzbar.
-    </p>
-  {:else if $authStore.state === "checking" || loading}
+  {#if $authStore.state === "checking" || loading}
     <p class="status">Benachrichtigungseinstellungen werden geladen …</p>
   {:else if $authStore.state === "degraded"}
     <div class="status error status-with-action" role="alert">
@@ -281,6 +276,13 @@
       <p>Melde dich an, um Push-Hinweise und Gerätefreigaben zu verwalten.</p>
       <a class="btn secondary touch-target" href="/login">Anmelden</a>
     </div>
+  {:else if !supported}
+    <p class="status warning">
+      Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
+      verfügbar. Registrierte Push-Geräte des Kontos kannst du unten trotzdem
+      verwalten.
+    </p>
+    <PushDeviceManager currentEndpoint={null} />
   {:else if error && !config}
     <div class="status error status-with-action" role="alert">
       <p>{error}</p>
