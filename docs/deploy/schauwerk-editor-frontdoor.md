@@ -14,7 +14,7 @@ relations:
 ---
 # Schauwerk editor frontdoor
 
-The public product entry point is `https://weltgewebe.net/schaubild/`. Weltgewebe
+The public product entry point is `https://commonthing.net/schaubild/`. Weltgewebe
 provides only the shared HTTPS frontdoor. The editor itself remains a separately
 versioned Schauwerk static release and is not copied into the Weltgewebe web build.
 
@@ -94,7 +94,7 @@ shortcut. Public delivery belongs at this explicit HTTPS edge boundary.
 The normal full VPS deployment must not record its source state until it has read
 `/schaubild/` and `manifest.json` back through the freshly deployed Caddy listener.
 That bounded local-direct readback bypasses proxy environment variables, resolves
-`weltgewebe.net` to the selected `CADDY_BIND`, requires `200` plus `no-store` for
+`commonthing.net` to the selected `CADDY_BIND`, requires `200` plus `no-store` for
 the editor index, and requires the served manifest SHA-256 to equal the lock-bound
 preflight digest. The running Caddy mount must resolve to the same exact admitted
 release directory; retargeting host `current` after admission cannot change the
@@ -104,10 +104,10 @@ After that exact-commit deployment succeeds, read back the public edge as well:
 
 ```bash
 curl -sS -o /dev/null -w '%{http_code} %{redirect_url}\n' \
-  https://weltgewebe.net/schaubild
-curl -fsSI https://weltgewebe.net/schaubild/
-curl -fsS https://weltgewebe.net/schaubild/manifest.json
-curl -fsS https://weltgewebe.net/health/proxy
+  https://commonthing.net/schaubild
+curl -fsSI https://commonthing.net/schaubild/
+curl -fsS https://commonthing.net/schaubild/manifest.json
+curl -fsS https://api.weltgewebe.net/health/proxy
 ```
 
 Expected evidence:
@@ -117,7 +117,7 @@ Expected evidence:
 - its CSP contains exactly the intended diagrams.net `frame-src` allowance and
   does not add that allowance to ordinary Weltgewebe frontend responses;
 - the public manifest matches the pre-provisioned Schauwerk release identity;
-- existing Weltgewebe health and representative frontend/API routes remain healthy.
+- the canonical commonThing frontend and the preserved Weltgewebe API host remain healthy.
 
 A successful HTTP readback proves delivery of the static shell and edge policy. It
 does **not** by itself prove Safari touch behavior, diagrams.net interaction,

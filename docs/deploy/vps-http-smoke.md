@@ -31,7 +31,7 @@ The VPS target keeps `infra/caddy/Caddyfile.vps` as the production default. For 
 
 The smoke file intentionally exposes only an HTTP listener and contains no TLS site blocks. This keeps the first
 pre-cutover test away from automatic certificate issuance while still allowing local Host-header checks through Caddy.
-It uses an explicit `http://weltgewebe.net` site address so the static CSP preflight validates the same host target
+It uses an explicit `http://commonthing.net` site address so the static CSP preflight validates the same host target
 as the VPS deploy wrapper without enabling automatic HTTPS.
 
 ## Scope
@@ -69,7 +69,7 @@ A request with a trailing slash is canonicalized only if removing that slash rev
 
 Hash-named files below `/_app/immutable/` receive `Cache-Control: public, max-age=31536000, immutable` only after Caddy has confirmed that the requested path is an existing regular asset. Missing paths and directories must keep their error or redirect response without that positive long-lived cache policy. `scripts/ci/tests/test_immutable_asset_cache_contract.py` proves the 200, 404 and directory cases against both production-relevant Caddyfiles. HTML remains revalidation-bound and `/_app/version.json` remains `no-store`.
 
-The web application uses `adapter-static`; no SvelteKit server runs behind Caddy. Therefore `robots.txt` and `sitemap.xml` are emitted during the Vite build by the tested plugin in `apps/web/scripts/generate-public-web-assets.mjs`, not by runtime `+server.ts` routes. `PUBLIC_APP_BASE_URL` selects the public origin for staging or another explicitly configured artifact target. If it is absent, the generator uses the canonical production origin `https://weltgewebe.net`. The generator rejects origins containing paths, credentials, queries or fragments.
+The web application uses `adapter-static`; no SvelteKit server runs behind Caddy. Therefore `robots.txt` and `sitemap.xml` are emitted during the Vite build by the tested plugin in `apps/web/scripts/generate-public-web-assets.mjs`, not by runtime `+server.ts` routes. `PUBLIC_APP_BASE_URL` selects the public origin for staging or another explicitly configured artifact target. If it is absent, the generator uses the canonical production origin `https://commonthing.net`. The generator rejects origins containing paths, credentials, queries or fragments.
 
 `robots.txt` excludes `/api/` and the `noinert` debug-query variant from crawler discovery. `sitemap.xml` and the sitemap declaration in `robots.txt` are produced from the same normalized origin so they cannot diverge.
 

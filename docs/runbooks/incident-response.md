@@ -86,7 +86,7 @@ Erste Sichtprüfung:
 
 ```bash
 docker compose -f infra/compose/compose.prod.yml ps
-curl -fsS https://weltgewebe.net/api/health/live
+curl -fsS https://commonthing.net/api/health/live
 docker compose -f infra/compose/compose.prod.yml logs -n 200 api
 ```
 
@@ -160,7 +160,7 @@ Abschluss erst nach erfolgreicher Verifikation (siehe
 [DB Recovery §8](db-recovery.md) und [§2 Erkennung](#2-erkennung)):
 
 ```bash
-curl -fsS https://weltgewebe.net/api/health/live
+curl -fsS https://commonthing.net/api/health/live
 just smoke-seed
 ```
 

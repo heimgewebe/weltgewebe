@@ -271,10 +271,10 @@
 </script>
 
 <svelte:head>
-  <title>Nachrichten · Weltgewebe</title>
+  <title>Nachrichten · commonThing</title>
   <meta
     name="description"
-    content="Private Nachrichten zwischen zwei angemeldeten Weltgewebe-Konten."
+    content="Private Nachrichten zwischen zwei angemeldeten commonThing-Konten."
   />
 </svelte:head>
 

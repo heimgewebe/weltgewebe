@@ -22,7 +22,7 @@ host, so this scrape path does not require public Internet exposure.
 
 The production VPS edge keeps operational metrics private:
 
-- `https://weltgewebe.net/api/metrics` and descendants return HTTP `404`;
+- `https://commonthing.net/api/metrics` and descendants return HTTP `404`;
 - `https://api.weltgewebe.net/metrics` and descendants return HTTP `404`.
 
 `infra/caddy/Caddyfile.vps` enforces this boundary before the generic API reverse
@@ -34,7 +34,7 @@ After a production deployment, the canonical read-only public readiness checker
 verifies both public metrics routes automatically. They can also be checked directly:
 
 ```bash
-curl -sS -o /dev/null -w '%{http_code}\n' https://weltgewebe.net/api/metrics
+curl -sS -o /dev/null -w '%{http_code}\n' https://commonthing.net/api/metrics
 curl -sS -o /dev/null -w '%{http_code}\n' https://api.weltgewebe.net/metrics
 ```
 

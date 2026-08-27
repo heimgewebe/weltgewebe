@@ -1,4 +1,4 @@
-export const DEFAULT_PUBLIC_ORIGIN = "https://weltgewebe.net";
+export const DEFAULT_PUBLIC_ORIGIN = "https://commonthing.net";
 
 const PUBLIC_PATHS = ["/map", "/login", "/impressum", "/datenschutz"];
 

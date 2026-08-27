@@ -31,7 +31,7 @@ The route-only smoke is different. Under a strict `no database migration` bounda
 A route-only pass may claim only:
 
 - the intended HTTP-only smoke Caddyfile is the selected route surface
-- the Caddyfile uses an explicit `http://weltgewebe.net` site address
+- the Caddyfile uses an explicit `http://commonthing.net` site address
 - automatic HTTPS or ACME issuance is not requested by that smoke Caddyfile
 - `/health/proxy` is locally handled by Caddy
 - `/api/*` and `/health/*` are routed toward the API upstream by configuration
@@ -85,7 +85,7 @@ A route-only smoke succeeds only if all of these conditions hold:
 
 - the selected Caddyfile is `infra/caddy/Caddyfile.http-smoke`
 - the compose/config surface selects that file explicitly through `WELTGEWEBE_CADDYFILE=../caddy/Caddyfile.http-smoke` or an equivalent non-secret path override
-- the Caddyfile keeps an explicit `http://weltgewebe.net` site address
+- the Caddyfile keeps an explicit `http://commonthing.net` site address
 - `/health/proxy`, `/api/*`, and `/health/*` have the expected route declarations
 - the Caddyfile contains no TLS, HTTPS, ACME, frontend `file_server`, or SPA fallback surface
 - no production API process is started and no production `.env` is loaded just to prove routes

@@ -11,7 +11,7 @@
 <div
   style="padding: 2rem; font-family: sans-serif; max-width: 600px; margin: 0 auto;"
 >
-  <h1>Weltgewebe Dev Root</h1>
+  <h1>commonThing Dev Root</h1>
   <p>Der Dev-Server läuft erfolgreich.</p>
 
   <p>

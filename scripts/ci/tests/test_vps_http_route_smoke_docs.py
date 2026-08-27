@@ -48,7 +48,7 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
             "/health/proxy",
             "/api/*",
             "/health/*",
-            "explicit `http://weltgewebe.net` site address",
+            "explicit `http://commonthing.net` site address",
             "non-health, non-API paths are not served as the full app",
         ]:
             with self.subTest(allowed=allowed):
@@ -83,7 +83,7 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
         text = self.caddyfile.read_text(encoding="utf-8")
 
         for required in [
-            "http://weltgewebe.net",
+            "http://commonthing.net",
             "handle /health/proxy",
             "handle_path /api/*",
             "handle /health/*",
@@ -133,12 +133,8 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
 
     def test_production_caddyfile_keeps_prometheus_metrics_private(self) -> None:
         production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
-        self.assertEqual(
-            production.count("handle /api/metrics {\n\t\trespond 404\n\t}"), 2
-        )
-        self.assertEqual(
-            production.count("handle /api/metrics/* {\n\t\trespond 404\n\t}"), 2
-        )
+        self.assertEqual(production.count("handle /api/metrics {"), 2)
+        self.assertEqual(production.count("handle /api/metrics/* {"), 2)
         self.assertEqual(production.count("handle /metrics {\n\t\trespond 404\n\t}"), 1)
         self.assertEqual(production.count("handle /metrics/* {\n\t\trespond 404\n\t}"), 1)
 

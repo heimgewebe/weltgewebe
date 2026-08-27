@@ -76,11 +76,11 @@
   <title
     >{archive
       ? `${archive.conversation.node_title_snapshot} · Gesprächsarchiv`
-      : "Archiv · Weltgewebe"}</title
+      : "Archiv · commonThing"}</title
   >
   <meta
     name="description"
-    content="Übersichten und schreibgeschützte öffentliche Gesprächsarchive im Weltgewebe."
+    content="Übersichten und schreibgeschützte öffentliche Gesprächsarchive in commonThing."
   />
 </svelte:head>
 

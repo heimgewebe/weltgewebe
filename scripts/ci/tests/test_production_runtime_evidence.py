@@ -111,7 +111,7 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             )
 
         result = evidence.collect_public_evidence(
-            domain="weltgewebe.net",
+            domain="commonthing.net",
             api_domain="api.weltgewebe.net",
             timeout=1.0,
             fetcher=fetcher,
@@ -132,7 +132,7 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             return FetchResult(url, 200, {"X-Weltgewebe-Build": "b" * 40}, json.dumps(payload).encode())
 
         result = evidence.collect_public_evidence(
-            domain="weltgewebe.net",
+            domain="commonthing.net",
             api_domain="api.weltgewebe.net",
             timeout=1.0,
             fetcher=fetcher,
@@ -155,7 +155,7 @@ class ProductionRuntimeEvidenceTest(unittest.TestCase):
             return FetchResult(url, 200, {"X-Weltgewebe-Build": "b" * 8}, json.dumps(payload).encode())
 
         result = evidence.collect_public_evidence(
-            domain="weltgewebe.net",
+            domain="commonthing.net",
             api_domain="api.weltgewebe.net",
             timeout=1.0,
             fetcher=fetcher,
