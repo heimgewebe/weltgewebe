@@ -102,9 +102,9 @@ URL in geänderten Zeilen.
 
 Eine technisch notwendige Legacy-Erwähnung muss in derselben Zeile mit
 `commonthing-naming: legacy` gekennzeichnet sein oder in einem ausdrücklich vom
-Guard ausgenommenen Naming-Policy-/Historienpfad liegen. Die Kennzeichnung ist
-kein dauerhafter Freibrief; sie macht verbleibende Kompatibilität lediglich
-maschinenlesbar und auffindbar.
+Guard ausgenommenen Naming-Policy- oder abgeleiteten Dokumentationspfad liegen.
+Die Kennzeichnung ist kein dauerhafter Freibrief; sie macht verbleibende
+Kompatibilität lediglich maschinenlesbar und auffindbar.
 
 ## 7. Abschlusskriterium
 
