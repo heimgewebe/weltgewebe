@@ -84,22 +84,28 @@ def _revision_exists(repo: Path, revision: str) -> bool:
     return completed.returncode == 0
 
 
+def _require_revision(repo: Path, revision: str, source: str) -> str:
+    if not revision or set(revision) == {"0"}:
+        raise RuntimeError(f"{source} comparison base is empty or invalid")
+    if not _revision_exists(repo, revision):
+        raise RuntimeError(f"{source} comparison base is unavailable: {revision}")
+    return revision
+
+
 def resolve_base(repo: Path, explicit: str | None) -> str:
-    candidates: list[str] = []
-    if explicit:
-        candidates.append(explicit)
+    if explicit is not None:
+        return _require_revision(repo, explicit.strip(), "explicit")
 
     env_base = os.environ.get("COMMONTHING_NAMING_BASE", "").strip()
-    if env_base and env_base not in candidates:
-        candidates.append(env_base)
+    if env_base:
+        return _require_revision(repo, env_base, "environment")
 
     github_base_ref = os.environ.get("GITHUB_BASE_REF", "").strip()
     if github_base_ref:
-        candidates.append(f"origin/{github_base_ref}")
-
-    for candidate in candidates:
-        if candidate and set(candidate) != {"0"} and _revision_exists(repo, candidate):
+        candidate = f"origin/{github_base_ref}"
+        if _revision_exists(repo, candidate):
             return candidate
+        raise RuntimeError(f"GitHub base ref is unavailable: {candidate}")
 
     if _revision_exists(repo, "HEAD^"):
         return "HEAD^"
