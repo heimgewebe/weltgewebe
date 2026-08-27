@@ -34,17 +34,22 @@ The VPS stores Schauwerk releases below `/opt/schauwerk-editor` by default:
         └── styles.css
 ```
 
-`infra/compose/compose.vps.override.yml` binds the host root into Caddy at
-`/srv/schauwerk-editor-root` read-only. `SCHAUWERK_EDITOR_ROOT` may override the
-host root deliberately. The bind uses `create_host_path: false`: a missing release
-root must fail the deployment instead of silently creating an empty directory.
+`infra/compose/compose.vps.override.yml` uses a two-phase bind contract. The
+first, discovery-only Compose render resolves `${SCHAUWERK_EDITOR_ROOT}/current`;
+no container effect may use that render. `scripts/weltgewebe-up` then verifies the
+repository-owned release lock, resolves the canonical `releases/<schauwerk-commit>`
+directory and exports that exact path as `SCHAUWERK_EDITOR_RELEASE_DIR`. Every
+subsequent Compose render binds only that admitted directory at
+`/srv/schauwerk-editor-release` read-only. The bind uses `create_host_path: false`,
+so a missing admitted release fails instead of creating an empty directory.
 
 The production Caddy contract is intentionally narrow:
 
 - `/schaubild` redirects once to `/schaubild/`;
-- `/schaubild/*` is served only from `/srv/schauwerk-editor-root/current`;
-- responses use `Cache-Control: no-store` so switching `current` cannot leave a
-  stale product shell in browser or intermediary caches;
+- `/schaubild/*` is served only from `/srv/schauwerk-editor-release`; Caddy has
+  no live `/current` reference after admission;
+- responses use `Cache-Control: no-store` so a release cutover cannot leave a stale
+  product shell in browser or intermediary caches;
 - the path-specific CSP allows local shell assets and exactly
   `frame-src https://embed.diagrams.net`; the ordinary Weltgewebe frontend CSP
   remains responsible for every other non-API route.
@@ -61,18 +66,25 @@ revision that contains this bind mount. The normal full VPS path in
 mutation; bounded `api` and `migration` deployments intentionally do not own this
 edge dependency. At minimum, verify all of the following:
 
-1. the release directory is a real directory, not a symlink;
-2. `current` is a relative symlink of the form `releases/<schauwerk-commit>`;
-   absolute host paths are rejected because the release tree is mounted at a
-   different path inside Caddy;
-3. the release directory contains exactly `manifest.json`, `app.js`,
+1. `infra/schauwerk-editor/release-lock.json` is a regular file outside the
+   release tree and binds `heimgewebe/schauwerk`, the exact 40-hex source commit,
+   the identical release-directory id and the SHA-256 of the raw `manifest.json`
+   bytes;
+2. the release directory is a real direct child of the configured release collection, not a symlink;
+3. `current` is a relative symlink of the form `releases/<schauwerk-commit>` and
+   names exactly the commit in the reviewed lock;
+4. the raw `manifest.json` SHA-256 equals the independent lock before its JSON is
+   trusted; a coherently replaced manifest plus assets or a formatting-only
+   manifest rewrite therefore requires a reviewed lock update;
+5. the release directory contains exactly `manifest.json`, `app.js`,
    `canvas-import.js`, `index.html` and `styles.css`, all as regular files; extra
-   files, directories or symlinks are rejected because Caddy would otherwise be
-   able to publish unverified content;
-4. `manifest.json` uses `schauwerk-standalone-editor-manifest.v1`;
-5. the manifest `editor_origin` equals the Caddy CSP origin;
-6. every asset digest listed in the manifest matches the installed file;
-7. the transport artifact digest is checked before extraction.
+   files, directories or symlinks are rejected;
+6. `manifest.json` uses `schauwerk-standalone-editor-manifest.v1`, its
+   `editor_origin` equals the Caddy CSP origin, and every listed asset digest
+   matches the installed file;
+7. the provisioning path still verifies the transport artifact digest before
+   extraction. The repository lock does not replace transport integrity; it binds
+   the admitted bytes to reviewed source identity.
 
 Do not weaken the Schauwerk development server from loopback-only as a deployment
 shortcut. Public delivery belongs at this explicit HTTPS edge boundary.
@@ -83,8 +95,10 @@ The normal full VPS deployment must not record its source state until it has rea
 `/schaubild/` and `manifest.json` back through the freshly deployed Caddy listener.
 That bounded local-direct readback bypasses proxy environment variables, resolves
 `weltgewebe.net` to the selected `CADDY_BIND`, requires `200` plus `no-store` for
-the editor index, and requires the served manifest SHA-256 to equal the preflight
-digest. This proves that the admitted host release is actually visible inside Caddy.
+the editor index, and requires the served manifest SHA-256 to equal the lock-bound
+preflight digest. The running Caddy mount must resolve to the same exact admitted
+release directory; retargeting host `current` after admission cannot change the
+bytes served by that container.
 
 After that exact-commit deployment succeeds, read back the public edge as well:
 
@@ -119,7 +133,10 @@ exact-revision production rollback/deployment path to restore the prior Weltgewe
 revision; the separate `/opt/schauwerk-editor` tree may remain in place because an
 older edge revision does not reference it.
 
-If only the Schauwerk release must be rolled back and a verified previous release is
-present, atomically repoint `current` to that exact release and repeat the public
-manifest, CSP and route readback. Never repoint `current` to an unverified working
-directory or mutable checkout.
+If only the Schauwerk release must be rolled back, a `current` relink alone is no
+longer a live cutover mechanism. Select a verified previous release, update
+`infra/schauwerk-editor/release-lock.json` to its reviewed source commit and raw
+manifest SHA-256, atomically repoint `current` to the same release, and run the
+normal full exact-revision deployment so Caddy is recreated with that exact bind.
+Then repeat manifest, asset, CSP and route readback. Never point the lock or
+`current` at an unverified working directory or mutable checkout.
