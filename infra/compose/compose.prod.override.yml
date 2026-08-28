@@ -10,6 +10,9 @@ services:
     environment:
       POLICY_LIMITS_PATH: /app/policies/limits.yaml
       APP_BASE_URL: https://commonthing.net
+      WEBAUTHN_RP_ID: commonthing.net
+      WEBAUTHN_RP_ORIGIN: https://commonthing.net
+      WEBAUTHN_RP_NAME: commonThing
       AUTH_PUBLIC_LOGIN: '1'
       AUTH_LOG_MAGIC_TOKEN: '0'
       AUTH_AUTO_PROVISION: '1'

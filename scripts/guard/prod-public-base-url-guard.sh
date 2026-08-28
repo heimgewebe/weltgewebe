@@ -99,6 +99,18 @@ expected = {
         api_env.get("APP_BASE_URL"),
         "https://commonthing.net",
     ),
+    "services.api.environment.WEBAUTHN_RP_ID": (
+        api_env.get("WEBAUTHN_RP_ID"),
+        "commonthing.net",
+    ),
+    "services.api.environment.WEBAUTHN_RP_ORIGIN": (
+        api_env.get("WEBAUTHN_RP_ORIGIN"),
+        "https://commonthing.net",
+    ),
+    "services.api.environment.WEBAUTHN_RP_NAME": (
+        api_env.get("WEBAUTHN_RP_NAME"),
+        "commonThing",
+    ),
     "services.api.environment.AUTH_PUBLIC_LOGIN": (
         api_env.get("AUTH_PUBLIC_LOGIN"),
         "1",
