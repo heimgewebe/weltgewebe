@@ -15,6 +15,7 @@ Generated automatically. Do not edit.
 - docs/blueprints/ui-blaupause.md → superseded by → docs/specs/ui-interaction.md
 - docs/blueprints/ui-interaction-doctrine.md → superseded by → docs/specs/ui-interaction.md
 - docs/blueprints/ui-state-machine.md → superseded by → docs/specs/ui-state-machine.md
+- docs/deploy/weltgewebe.naming.md → superseded by → docs/deploy/commonthing.naming.md
 - docs/konzepte/garnrolle-und-verortung.md → superseded by → docs/specs/garnrolle-knoten-faden.md
 - docs/konzepte/garnrolle.md → superseded by → docs/konzepte/garnrolle-und-verortung.md
 - docs/reports/auth-persistence-readiness.md → superseded by → docs/reports/auth-persistence-next-step.md

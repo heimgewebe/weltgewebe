@@ -44,6 +44,7 @@ Generated automatically. Do not edit.
 | deploy.CHANGELOG | Deploy Changelog | reference | active | docs/deploy/CHANGELOG.md |
 | deploy.DRIFT_POLICY | Drift Policy | reference | active | docs/deploy/DRIFT_POLICY.md |
 | deploy.README | Deployment-Übersicht | reference | active | docs/deploy/README.md |
+| deploy.commonthing.naming | commonThing Naming Policy | reference | active | docs/deploy/commonthing.naming.md |
 | deploy.domain-mail-migration-ionos-inwx-mailbox-brevo | Architektur & Historie: Domain-/Mail-Migration IONOS zu INWX | reference | active | docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md |
 | deploy.germany-basemap-rollout | Deutschlandweite PMTiles-Basemap ausrollen | runbook | active | docs/deploy/germany-basemap-rollout.md |
 | deploy.heim-first-phase0 | Heim-First Phase 0 | reference | active | docs/deploy/heim-first-phase0.md |
@@ -61,7 +62,7 @@ Generated automatically. Do not edit.
 | deploy.vps-http-route-smoke-risks | VPS HTTP Route Smoke Risks | note | draft | docs/deploy/vps-http-route-smoke-risks.md |
 | deploy.vps-http-smoke | VPS HTTP Smoke Preflight | runbook | draft | docs/deploy/vps-http-smoke.md |
 | deploy.vps-migration-safe-runtime-smoke | VPS Migration-Safe Runtime Smoke | runbook | draft | docs/deploy/vps-migration-safe-runtime-smoke.md |
-| deploy.weltgewebe.naming | Weltgewebe Naming | reference | active | docs/deploy/weltgewebe.naming.md |
+| deploy.weltgewebe.naming | Weltgewebe Naming (legacy) | reference | superseded | docs/deploy/weltgewebe.naming.md |
 | deployment-contract | Deployment Contract and Preflight Guard | guide | active | docs/deployment.md |
 | deployment_governance | Deployment Governance | reference | active | docs/deployment_governance.md |
 | dev.codespaces | Codespaces | reference | active | docs/dev/codespaces.md |
