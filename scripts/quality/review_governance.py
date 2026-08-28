@@ -23,14 +23,16 @@ from typing import Any, Iterable, Sequence
 if __package__:
     from .attention_impact_contract import (
         attention_impact_decision,
+        canonical_product_docs_from_manifest_text,
         product_logic_changes,
-        validate_attention_impact_markers,
+        validate_attention_impact_contract_binding,
     )
 else:
     from attention_impact_contract import (
         attention_impact_decision,
+        canonical_product_docs_from_manifest_text,
         product_logic_changes,
-        validate_attention_impact_markers,
+        validate_attention_impact_contract_binding,
     )
 
 SCHEMA_VERSION = 1
@@ -936,6 +938,7 @@ def evaluate_evidence(
     allowed_attesters: frozenset[str],
     reviews: Sequence[dict[str, Any]] = (),
     pr_body: str | None = None,
+    canonical_product_docs: frozenset[str] | None = None,
 ) -> dict[str, Any]:
     if not allowed_attesters or any(
         not isinstance(login, str) or not GITHUB_LOGIN_RE.fullmatch(login)
@@ -951,12 +954,19 @@ def evaluate_evidence(
     if pr_body is not None:
         attention_impact_required = bool(product_logic_changes(bundle.stats.changed_files))
         attention_impact_value = attention_impact_decision(pr_body)
-        reasons.extend(
-            f"Attention impact: {reason}"
-            for reason in validate_attention_impact_markers(
-                pr_body=pr_body, changed_files=bundle.stats.changed_files
+        if attention_impact_required and canonical_product_docs is None:
+            reasons.append(
+                "Attention impact: trusted canonical product docs are unavailable"
             )
-        )
+        else:
+            reasons.extend(
+                f"Attention impact: {reason}"
+                for reason in validate_attention_impact_contract_binding(
+                    pr_body=pr_body,
+                    changed_files=bundle.stats.changed_files,
+                    canonical_product_docs=canonical_product_docs or (),
+                )
+            )
     if risk_class is None:
         reasons.append(
             "PR body must contain exactly one risk marker: <!-- weltgewebe-risk: R0|R1|R2|R3 -->"
@@ -1448,6 +1458,12 @@ def _evaluate_and_write(
     raw_comments = _load_json(comments_file)
     comments = _flatten_comments(raw_comments)
     reviews = _flatten_reviews(_load_json(reviews_file)) if reviews_file else []
+    trusted_manifest = (
+        Path(__file__).resolve().parents[2] / "manifest" / "repo-index.yaml"
+    ).read_text(encoding="utf-8")
+    trusted_product_docs = frozenset(
+        canonical_product_docs_from_manifest_text(trusted_manifest)
+    )
     evaluation = evaluate_evidence(
         bundle=bundle,
         risk_class=risk_class,
@@ -1455,6 +1471,7 @@ def _evaluate_and_write(
         reviews=reviews,
         allowed_attesters=load_allowed_attesters(authorities_file),
         pr_body=pr_body,
+        canonical_product_docs=trusted_product_docs,
     )
     (output_dir / "evaluation.json").write_bytes(_canonical_json(evaluation))
     print(json.dumps(evaluation, sort_keys=True))

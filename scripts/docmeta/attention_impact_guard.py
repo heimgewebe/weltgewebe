@@ -11,9 +11,8 @@ import yaml
 
 from scripts.docmeta.docmeta import REPO_ROOT
 from scripts.quality.attention_impact_contract import (
-    attention_impact_decision,
     product_logic_changes,
-    validate_attention_impact_markers,
+    validate_attention_impact_contract_binding,
 )
 
 
@@ -44,20 +43,11 @@ def evaluate_attention_impact(
     changed_files: list[str],
     product_docs: set[str],
 ) -> list[str]:
-    errors = validate_attention_impact_markers(
-        pr_body=pr_body, changed_files=changed_files
+    return validate_attention_impact_contract_binding(
+        pr_body=pr_body,
+        changed_files=changed_files,
+        canonical_product_docs=product_docs,
     )
-    if errors or not product_logic_changes(changed_files):
-        return errors
-
-    if attention_impact_decision(pr_body) == "contract":
-        changed_product_docs = sorted(set(changed_files) & product_docs)
-        if not changed_product_docs:
-            errors.append(
-                "Attention impact=contract requires at least one changed canonical "
-                "product contract from manifest zone product"
-            )
-    return errors
 
 
 def changed_files_between(

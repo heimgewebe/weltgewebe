@@ -15,6 +15,7 @@ from scripts.quality.review_governance import (
     Bundle,
     DiffStats,
     GovernanceError,
+    canonical_product_docs_from_manifest_text,
     evaluate_evidence,
     generate_bundle,
     generate_materialized_bundle,
@@ -101,6 +102,7 @@ def _forwarded_comment(
 
 
 ALLOWED_ATTESTERS = frozenset({"alex"})
+TRUSTED_PRODUCT_DOCS = frozenset({"docs/specs/ui-interaction.md"})
 
 
 def _review(
@@ -131,6 +133,7 @@ def _evaluate(
     comments: list[dict],
     reviews: list[dict] | None = None,
     pr_body: str | None = None,
+    canonical_product_docs: frozenset[str] | None = TRUSTED_PRODUCT_DOCS,
 ) -> dict:
     return evaluate_evidence(
         bundle=bundle,
@@ -139,6 +142,7 @@ def _evaluate(
         reviews=reviews or [],
         allowed_attesters=ALLOWED_ATTESTERS,
         pr_body=pr_body,
+        canonical_product_docs=canonical_product_docs,
     )
 
 
@@ -219,6 +223,32 @@ class AttentionImpactReviewGateTests(unittest.TestCase):
         self.assertTrue(result["pass"], result["reasons"])
         self.assertEqual(result["attention_impact_decision"], "contract")
 
+    def test_contract_marker_cannot_be_swapped_in_after_none_pass(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        none_body = (
+            "<!-- weltgewebe-attention-impact: none -->\n"
+            "<!-- weltgewebe-attention-rationale: Pure refactor with no personal domain semantics change. -->"
+        )
+        initial = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body=none_body,
+        )
+        self.assertTrue(initial["pass"], initial["reasons"])
+
+        edited = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="<!-- weltgewebe-attention-impact: contract -->",
+        )
+        self.assertFalse(edited["pass"])
+        self.assertTrue(
+            any("canonical product contract" in reason for reason in edited["reasons"]),
+            edited["reasons"],
+        )
+
     def test_none_marker_requires_concrete_rationale(self) -> None:
         bundle = _bundle(paths=("contracts/domain/message.schema.json",))
         result = _evaluate(
@@ -253,6 +283,39 @@ class AttentionImpactReviewGateTests(unittest.TestCase):
         self.assertTrue(result["pass"], result["reasons"])
         self.assertFalse(result["attention_impact_required"])
 
+
+
+class TrustedProductManifestTests(unittest.TestCase):
+    def test_extracts_product_docs_from_trusted_manifest(self) -> None:
+        manifest = (
+            "zones:\n"
+            "  product:\n"
+            "    path: docs/specs/\n"
+            "    canonical_docs:\n"
+            "      - alpha.md\n"
+            "      - beta.md\n"
+            "  reality:\n"
+            "    path: runtime/\n"
+        )
+        self.assertEqual(
+            canonical_product_docs_from_manifest_text(manifest),
+            {"docs/specs/alpha.md", "docs/specs/beta.md"},
+        )
+
+    def test_manifest_parser_fails_closed_on_duplicate_product_zone(self) -> None:
+        manifest = (
+            "zones:\n"
+            "  product:\n"
+            "    path: docs/specs/\n"
+            "    canonical_docs:\n"
+            "      - alpha.md\n"
+            "  product:\n"
+            "    path: docs/other/\n"
+            "    canonical_docs:\n"
+            "      - beta.md\n"
+        )
+        with self.assertRaises(ValueError):
+            canonical_product_docs_from_manifest_text(manifest)
 
 
 class RiskParsingTests(unittest.TestCase):
