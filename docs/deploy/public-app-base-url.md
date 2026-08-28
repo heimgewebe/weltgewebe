@@ -12,7 +12,7 @@ relations:
 ---
 # Öffentliche APP_BASE_URL im Produktionsbetrieb
 
-Stand: 2026-08-26
+Stand: 2026-08-28
 
 ## Abgrenzung zum Migrationsplan
 
@@ -30,6 +30,19 @@ Die produktive `APP_BASE_URL` ist `https://commonthing.net`. Sie wird für
 öffentlich klickbare URLs verwendet, insbesondere für Magic Links. Die
 SMTP-Absenderidentitäten bleiben davon unberührt.
 
+Die produktive WebAuthn-/Passkey-Identität folgt derselben kanonischen öffentlichen
+Origin:
+
+- `WEBAUTHN_RP_ID=commonthing.net`
+- `WEBAUTHN_RP_ORIGIN=https://commonthing.net`
+- `WEBAUTHN_RP_NAME=commonThing`
+
+Diese Werte werden im Produktions-Compose explizit gesetzt. Eine spätere Änderung
+der RP-ID oder Origin erfordert erneut eine Prüfung des vorhandenen
+Passkey-Credential-Bestands, weil WebAuthn-Credentials an diese Identität gebunden
+sind. Beim Cutover auf diesen Vertrag waren in der produktiven Datenbank keine
+Passkey-Credentials vorhanden.
+
 Die internen Proxy-Ziele bleiben davon getrennt:
 
 - `WEB_UPSTREAM_HOST=weltgewebe.home.arpa`
@@ -42,6 +55,7 @@ Diese Trennung ist absichtlich. `APP_BASE_URL` beschreibt die öffentliche Adres
 `scripts/guard/prod-public-base-url-guard.sh` rendert `compose.prod.yml` und `compose.prod.override.yml` mit einer synthetischen Env-Datei und prüft:
 
 - öffentliche `APP_BASE_URL` im API-Service;
+- kanonische `WEBAUTHN_RP_ID`, `WEBAUTHN_RP_ORIGIN` und `WEBAUTHN_RP_NAME`;
 - aktivierten öffentlichen Login;
 - deaktiviertes Magic-Token-Logging;
 - interne `WEB_UPSTREAM_*`-Werte im API- und Caddy-Service.
