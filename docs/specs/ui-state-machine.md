@@ -19,6 +19,8 @@ verifies_with:
   - apps/web/src/lib/stores/uiView.ts
   - apps/web/src/lib/stores/uiInvariants.ts
   - apps/web/src/lib/stores/uiInvariants.test.ts
+attention_source_status: none
+attention_source_rationale: "Beschreibt UI-Zustände und Navigation, erzeugt aber keine kanonischen persönlichen Fachfakten."
 ---
 # UI-Zustandsmaschine
 

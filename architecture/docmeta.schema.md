@@ -57,6 +57,16 @@ Ein Blueprint kann deshalb `doc_type: blueprint`, `canonicality: supporting` und
 * **relations** und **audit_gaps**: typisierte Beziehungen beziehungsweise bekannte Lücken.
 * **scope** und **description**: zusätzliche Policy-Beschreibung, soweit nötig.
 
+## Attention-Quellenentscheidung für kanonische Produktverträge
+
+Jedes im Manifest unter der Zone `product` registrierte Dokument muss eine maschinenlesbare Quellenentscheidung tragen. Sie beantwortet nicht, ob das Dokument Attention erwähnt, sondern ob sein Fachvertrag kanonische persönliche Fakten erzeugt, aus denen Attention projiziert werden darf.
+
+* `attention_source_status: source` verlangt `attention_source_facts`, `attention_projection` und `attention_transition_tests` als nicht-leere Listen. Projektions- und Testpfade müssen im Repository existieren.
+* `attention_source_status: none` verlangt eine nicht-leere `attention_source_rationale` und darf keine Source- oder Blockerfelder mitschleppen.
+* `attention_source_status: blocked` verlangt konkrete `attention_missing_facts` und `attention_followup_task: BUREAU-*`. Ohne den fehlenden Fachfakt darf Attention keine persönliche Behauptung erzeugen.
+
+Diese Metadaten sind Architekturvertrag, **keine zweite Attention-Datenbank** und kein persistenter Nutzerzustand. Ein allgemeines PR-Kästchen ist ausdrücklich nicht Teil des Vertrags; der Guard greift gezielt an kanonischen Produktverträgen.
+
 ## Abhängigkeiten (`depends_on`)
 
 `depends_on` ist das **kanonische, direkte Frontmatter-Feld** für Dokumentabhängigkeiten.
