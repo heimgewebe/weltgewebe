@@ -55,7 +55,10 @@ class FakeWorld:
             return FetchResult(url, 308, {"Location": redirects[url]}, b"")
         if url in {"https://commonthing.net/", "https://commonthing.net/map"}:
             return FetchResult(url, 200, {"Content-Type": "text/html"}, b'<!doctype html><script src="/_app/x.js"></script>')
-        if url == "https://api.weltgewebe.net/health/ready":
+        if url in {
+            "https://api.commonthing.net/health/ready",
+            "https://api.weltgewebe.net/health/ready",
+        }:
             body = {"status": "ok", "checks": {"database": True, "nats": True, "policy": True}}
             return FetchResult(url, 200, {"Content-Type": "application/json"}, json.dumps(body).encode())
         if url == "https://commonthing.net/_app/version.json":
@@ -124,6 +127,7 @@ class PublicLiveReadinessTest(unittest.TestCase):
                 "dns:www.commonthing.net",
                 "dns:weltgewebe.net",
                 "dns:www.weltgewebe.net",
+                "dns:api.commonthing.net",
                 "dns:api.weltgewebe.net",
                 "http-redirect",
                 "redirect:http:www.commonthing.net",
@@ -135,8 +139,10 @@ class PublicLiveReadinessTest(unittest.TestCase):
                 "https-root:commonthing.net",
                 "map-route",
                 "api-ready",
+                "api-ready:legacy",
                 "metrics-private:app",
                 "metrics-private:api",
+                "metrics-private:legacy-api",
                 "version-json",
                 "basemap-style",
                 "glyph-range",
@@ -216,7 +222,7 @@ class PublicLiveReadinessTest(unittest.TestCase):
         fake = FakeWorld()
 
         def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
-            if url == "https://api.weltgewebe.net/health/ready":
+            if url == "https://api.commonthing.net/health/ready":
                 body = {"status": "ok", "checks": {"database": True, "nats": False, "policy": True}}
                 return fake.module.FetchResult(url, 200, {}, json.dumps(body).encode())
             return fake.fetcher(url, headers, timeout)
@@ -227,12 +233,31 @@ class PublicLiveReadinessTest(unittest.TestCase):
         self.assertFalse(api_result.ok)
         self.assertEqual(api_result.data["missing"], ["nats"])
 
+    def test_legacy_api_ready_remains_required(self) -> None:
+        fake = FakeWorld()
+
+        def bad_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
+            # commonthing-naming: legacy
+            if url == "https://api.weltgewebe.net/health/ready":
+                return fake.module.FetchResult(url, 503, {}, b"{}")
+            return fake.fetcher(url, headers, timeout)
+
+        checker = fake.module.PublicLiveChecker(
+            resolver=fake.resolver,
+            fetcher=bad_fetcher,
+        )
+        result = [item for item in checker.run() if item.name == "api-ready:legacy"][0]
+
+        self.assertFalse(result.ok)
+        self.assertEqual(result.data["status"], 503)
+
     def test_public_metrics_routes_must_return_404(self) -> None:
         fake = FakeWorld()
 
         def exposed_fetcher(url: str, headers: Mapping[str, str] | None, timeout: float):
             if url in {
                 "https://commonthing.net/api/metrics",
+                "https://api.commonthing.net/metrics",
                 "https://api.weltgewebe.net/metrics",
             }:
                 return fake.module.FetchResult(url, 200, {"Content-Type": "text/plain"}, b"secret_metric 1")
@@ -246,7 +271,7 @@ class PublicLiveReadinessTest(unittest.TestCase):
             result for result in checker.run() if result.name.startswith("metrics-private:")
         ]
 
-        self.assertEqual(len(metrics_results), 2)
+        self.assertEqual(len(metrics_results), 3)
         self.assertTrue(all(not result.ok for result in metrics_results))
         self.assertTrue(all(result.data["status"] == 200 for result in metrics_results))
         self.assertTrue(all("body" not in result.data for result in metrics_results))
@@ -361,7 +386,7 @@ class PublicLiveReadinessIPv6Test(unittest.TestCase):
             fake.module.dig_resolve_ipv6 = original
 
         ipv6_results = [result for result in results if result.name.startswith("dns-aaaa:")]
-        self.assertEqual(len(ipv6_results), 5)
+        self.assertEqual(len(ipv6_results), 6)
         self.assertTrue(all(result.ok for result in ipv6_results))
 
     def test_wrong_ipv6_aaaa_fails(self) -> None:
@@ -380,7 +405,7 @@ class PublicLiveReadinessIPv6Test(unittest.TestCase):
             fake.module.dig_resolve_ipv6 = original
 
         ipv6_results = [result for result in results if result.name.startswith("dns-aaaa:")]
-        self.assertEqual(len(ipv6_results), 5)
+        self.assertEqual(len(ipv6_results), 6)
         self.assertTrue(all(not result.ok for result in ipv6_results))
 
 if __name__ == "__main__":

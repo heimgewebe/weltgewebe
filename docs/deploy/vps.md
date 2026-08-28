@@ -393,15 +393,28 @@ geprüft werden, ohne öffentliche DNS-Records umzubiegen:
 ```bash
 curl -H 'Host: commonthing.net' http://127.0.0.1/health/proxy
 curl -H 'Host: commonthing.net' http://127.0.0.1/api/health/ready
+curl -sS -o /dev/null -D - -H 'Host: api.commonthing.net' \
+  http://127.0.0.1/health/ready
 ```
+
+Der letzte Request muss bereits vor dem DNS-Wechsel mit HTTP `308` exakt auf
+`https://api.commonthing.net/health/ready` zeigen. Das beweist die neue
+Host-Routing-Regel, aber noch kein öffentlich gültiges TLS-Zertifikat.
 
 Nach dem DNS-Cutover sind zusätzlich die öffentlichen HTTPS-Pfade zu prüfen:
 
 ```bash
 curl -fsS https://commonthing.net/api/health/ready
+curl -fsS https://api.commonthing.net/health/ready
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.commonthing.net/metrics
+# commonthing-naming: legacy
 curl -fsS https://api.weltgewebe.net/health/ready
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.weltgewebe.net/metrics
 curl -sS -o /dev/null -D - 'https://weltgewebe.net/map?from=legacy'
 ```
+
+Beide Metrics-Requests müssen `404` liefern. Der neue Host ist damit kanonisch
+belegt, während der alte Host ausdrücklich als Kompatibilitätsweg weiterläuft.
 
 ### Public live readiness receipt
 
@@ -411,8 +424,11 @@ Operator-Check reproduzierbar geprüft werden:
 ```bash
 DEPLOY_COMMIT="<ausgelieferter-commit-sha>"
 
+# commonthing-naming: legacy
 python3 scripts/ops/check_public_live_readiness.py \
+  --legacy-api-domain api.weltgewebe.net \
   --expected-ip 94.16.121.119 \
+  --api-domain api.commonthing.net \
   --expected-version "${DEPLOY_COMMIT:0:8}" \
   --expected-commit "${DEPLOY_COMMIT}" \
   --authoritative-server ns.inwx.de \
@@ -436,9 +452,11 @@ IPv6-DNS-Erwartung geprüft:
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
 prüft DNS-A-Records, den kanonischen commonThing-HTTPS-Apex, permanente und
 URI-erhaltende Redirects von `www.commonthing.net`, `weltgewebe.net` und
-`www.weltgewebe.net`, `/map`,
-`api.weltgewebe.net/health/ready`, die privaten öffentlichen Metrics-Grenzen
-`/api/metrics` und `api.weltgewebe.net/metrics` auf HTTP `404`, `/_app/version.json`,
+`www.weltgewebe.net`, `/map`, den kanonischen API-Host
+`api.commonthing.net/health/ready` sowie den Legacy-API-Host
+`api.weltgewebe.net/health/ready`. Die privaten öffentlichen Metrics-Grenzen
+`/api/metrics`, `api.commonthing.net/metrics` und `api.weltgewebe.net/metrics`
+müssen jeweils HTTP `404` liefern; zusätzlich prüft der Receipt `/_app/version.json`,
 lokale Basemap-Style-, Glyph- und PMTiles-Auslieferung. Ein PASS ist ein
 Public-HTTP(S)-/Basemap-Receipt,
 aber kein Beweis für IPv6, Mail/SMTP oder Public Login. Der
