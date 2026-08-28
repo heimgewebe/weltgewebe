@@ -19,6 +19,12 @@ ATTENTION_BLOCKED_ONLY_FIELDS = (
     "attention_missing_facts",
     "attention_followup_task",
 )
+ATTENTION_METADATA_FIELDS = (
+    "attention_source_status",
+    "attention_source_rationale",
+    *ATTENTION_SOURCE_ONLY_FIELDS,
+    *ATTENTION_BLOCKED_ONLY_FIELDS,
+)
 ATTENTION_FOLLOWUP_TASK_RE = re.compile(r"BUREAU-[A-Za-z0-9._:-]+")
 
 
@@ -82,6 +88,18 @@ def validate_attention_source_semantics(frontmatter):
                 )
 
     return errors
+
+
+def validate_attention_source_zone(frontmatter, zone_name):
+    if zone_name == "product":
+        return []
+    present = sorted(field for field in ATTENTION_METADATA_FIELDS if field in frontmatter)
+    if not present:
+        return []
+    return [
+        "attention metadata is only allowed in manifest zone product; "
+        f"found in zone {zone_name}: {', '.join(present)}"
+    ]
 
 
 def validate_attention_source_paths(frontmatter, repo_root=REPO_ROOT):
@@ -223,6 +241,10 @@ def main():
     errors = []
 
     zones = repo_index.get('zones', {})
+    if "product" not in zones:
+        errors.append(
+            "Manifest must define zone 'product' for the Attention source contract."
+        )
 
     for zone_name, zone_data in zones.items():
         rel_zone_path = zone_data.get('path', '')
@@ -246,6 +268,14 @@ def main():
 
             for semantic_error in validate_canonical_semantics(frontmatter):
                 errors.append(f"Canonical semantics violation in '{rel_file_path}': {semantic_error}")
+
+            for attention_error in validate_attention_source_zone(
+                frontmatter, zone_name
+            ):
+                errors.append(
+                    f"Attention source violation in '{rel_file_path}': "
+                    f"{attention_error}"
+                )
 
             if zone_name == "product":
                 for attention_error in validate_attention_source_semantics(frontmatter):

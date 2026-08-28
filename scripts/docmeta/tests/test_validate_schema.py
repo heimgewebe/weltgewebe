@@ -9,6 +9,7 @@ from scripts.docmeta.validate_schema import (
     parse_frontmatter_with_pyyaml,
     validate_attention_source_paths,
     validate_attention_source_semantics,
+    validate_attention_source_zone,
     validate_canonical_semantics,
     validate_data_against_schema,
 )
@@ -424,6 +425,22 @@ class TestAttentionSourceContract(unittest.TestCase):
             any("attention_followup_task" in error for error in errors), errors
         )
 
+    def test_attention_metadata_is_rejected_outside_product_zone(self):
+        errors = validate_attention_source_zone(
+            {
+                "attention_source_status": "none",
+                "attention_source_rationale": "Not a personal source.",
+            },
+            "norm",
+        )
+        self.assertTrue(any("only allowed" in error for error in errors), errors)
+        self.assertEqual(
+            validate_attention_source_zone(
+                {"attention_source_status": "none"}, "product"
+            ),
+            [],
+        )
+
     def test_source_paths_fail_closed(self):
         with tempfile.TemporaryDirectory() as tmp:
             apps = os.path.join(tmp, "apps")
@@ -442,6 +459,36 @@ class TestAttentionSourceContract(unittest.TestCase):
             self.assertTrue(
                 any("repository-relative" in error for error in errors), errors
             )
+
+    def test_source_paths_reject_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            errors = validate_attention_source_paths(
+                {
+                    "attention_source_status": "source",
+                    "attention_projection": ["apps/missing.ts"],
+                    "attention_transition_tests": ["tests/missing.test.ts"],
+                },
+                repo_root=tmp,
+            )
+            self.assertEqual(len(errors), 2, errors)
+            self.assertTrue(all("does not exist" in error for error in errors), errors)
+
+    def test_source_paths_reject_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
+            outside_file = os.path.join(outside, "projection.ts")
+            with open(outside_file, "w", encoding="utf-8"):
+                pass
+            os.symlink(outside_file, os.path.join(tmp, "escape.ts"))
+            errors = validate_attention_source_paths(
+                {
+                    "attention_source_status": "source",
+                    "attention_projection": ["escape.ts"],
+                    "attention_transition_tests": ["escape.ts"],
+                },
+                repo_root=tmp,
+            )
+            self.assertEqual(len(errors), 2, errors)
+            self.assertTrue(all("escapes repository" in error for error in errors), errors)
 
     def test_parser_supports_attention_lists_with_yaml_parity(self):
         body = (
