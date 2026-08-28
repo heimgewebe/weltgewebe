@@ -451,6 +451,7 @@ IPv6-DNS-Erwartung geprüft:
 
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
 prüft DNS-A-Records, den kanonischen commonThing-HTTPS-Apex, permanente und
+<!-- commonthing-naming: legacy -->
 URI-erhaltende Redirects von `www.commonthing.net`, `weltgewebe.net` und
 `www.weltgewebe.net`, `/map`, den kanonischen API-Host
 `api.commonthing.net/health/ready` sowie den Legacy-API-Host
