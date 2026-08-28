@@ -121,7 +121,7 @@ describe("notification API", () => {
       expect.objectContaining({
         credentials: "include",
         headers: {
-          "X-Weltgewebe-Push-Endpoint-Hash": "ab".repeat(32),
+          "x-weltgewebe-push-endpoint-hash": "ab".repeat(32),
         },
       }),
     );
@@ -149,7 +149,7 @@ describe("notification API", () => {
         method: "DELETE",
         credentials: "include",
         headers: {
-          "X-Weltgewebe-Push-Endpoint-Hash": "ab".repeat(32),
+          "x-weltgewebe-push-endpoint-hash": "ab".repeat(32),
         },
       }),
     );

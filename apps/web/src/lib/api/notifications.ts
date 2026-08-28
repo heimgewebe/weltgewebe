@@ -28,7 +28,7 @@ interface ErrorPayload {
   message?: unknown;
 }
 
-const PUSH_ENDPOINT_HASH_HEADER = "X-Weltgewebe-Push-Endpoint-Hash";
+const PUSH_ENDPOINT_HASH_HEADER = "x-weltgewebe-push-endpoint-hash";
 
 export class NotificationsApiError extends Error {
   constructor(
