@@ -39,13 +39,23 @@ Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 * **A-Record**: `www.commonthing.net` -> `<VPS_IPV4_ADRESSE>`
 * **Legacy-A-Record**: `weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
 * **Legacy-A-Record**: `www.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
-* **A-Record**: `api.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
+* **A-Record**: `api.commonthing.net` -> `<VPS_IPV4_ADRESSE>`
+* **Legacy-A-Record**: `api.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
 * **AAAA-Record** (nur falls IPv6 geprüft und freigegeben ist): entsprechende Hostnamen -> `<VPS_IPV6_ADRESSE>`
 
-Die Subdomain `api.weltgewebe.net` bleibt der API-Host und muss auf dieselbe
-VPS-IPv4 zeigen wie die commonThing- und Legacy-Webhosts. Caddy liefert die App
-nur unter `commonthing.net`; `www.commonthing.net`, `weltgewebe.net` und
+`api.commonthing.net` ist der kanonische API-Host. `api.weltgewebe.net` bleibt
+als Kompatibilitätsname auf demselben API-Edge erhalten, bis seine spätere
+Entfernung separat belegt ist. Caddy liefert die App nur unter
+`commonthing.net`; `www.commonthing.net`, `weltgewebe.net` und
 `www.weltgewebe.net` leiten permanent und URI-erhaltend auf den Apex um.
+
+**API-Domain-Cutover:** Die Produktions-Caddy-Konfiguration für
+`api.commonthing.net` muss zuerst gemergt, deployt und per Host-Routing-Smoke
+belegt sein. Erst danach darf der DNS-Record von `api.commonthing.net` auf die
+freigegebene VPS-Adresse umgestellt werden. Nach dem autoritativen DNS-Readback
+werden öffentliches TLS, `/health/ready`, die private `/metrics`-Grenze und der
+Legacy-Host erneut geprüft. Ein DNS-Wechsel vor dem Edge-Deploy oder die
+vorzeitige Entfernung von `api.weltgewebe.net` ist nicht Teil dieses Ablaufs.
 
 **Erster Domain-Cutover:** Nach dem Merge zuerst die A-Records von
 `commonthing.net` und `www.commonthing.net` auf die ausgewählte VPS-Adresse
