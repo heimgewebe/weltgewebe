@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount } from "svelte";
+  import PushDeviceManager from "$lib/components/PushDeviceManager.svelte";
   import { authStore } from "$lib/auth/store";
   import {
     applicationServerKey,
@@ -25,6 +26,14 @@
     direct_messages_push: false,
   });
   let browserSubscription: PushSubscription | null = $state(null);
+  let currentServerRegistration: boolean | null = $state(null);
+  let deviceManagerRefreshVersion = $state(0);
+  let currentDeviceEnabled = $derived(
+    browserSubscription !== null && currentServerRegistration !== false,
+  );
+  let localCleanupAvailable = $derived(
+    browserSubscription !== null && currentServerRegistration === false,
+  );
   let permission: NotificationPermission | "unsupported" =
     $state("unsupported");
   let error = $state("");
@@ -51,6 +60,10 @@
     sectionElement?.focus({ preventScroll: true });
   }
 
+  function handleCurrentRegistrationChange(registered: boolean | null): void {
+    currentServerRegistration = registered;
+  }
+
   async function loadBrowserSubscription(): Promise<void> {
     const registration = await navigator.serviceWorker.getRegistration("/");
     browserSubscription =
@@ -69,6 +82,7 @@
       await loadBrowserSubscription();
       refreshPermission();
     } catch (cause) {
+      config = null;
       error = describeNotificationError(cause, "load");
     } finally {
       loading = false;
@@ -80,7 +94,11 @@
     loading = true;
     const status = await authStore.checkAuth({ force: true });
     if (status.state === "authenticated" && status.authenticated) {
-      await load();
+      if (supported) {
+        await load();
+        return;
+      }
+      loading = false;
       return;
     }
     loading = false;
@@ -145,20 +163,25 @@
       cleanupEndpoint = createdSubscription.endpoint;
       await registerPushSubscription(createdSubscription);
       preferences = await updateNotificationPreferences(true);
+      currentServerRegistration = true;
       browserSubscription = createdSubscription;
+      deviceManagerRefreshVersion += 1;
       notice =
         "Push ist auf diesem Gerät aktiviert. Push-Hinweise für private Nachrichten sind für dein Konto eingeschaltet.";
     } catch (cause) {
       if (createdSubscription && cleanupEndpoint) {
         try {
           await deletePushSubscription(cleanupEndpoint);
+          currentServerRegistration = false;
+          deviceManagerRefreshVersion += 1;
           await createdSubscription.unsubscribe().catch(() => false);
           await loadBrowserSubscription();
           if (browserSubscription) {
             warning =
-              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Du kannst die Deaktivierung erneut versuchen.";
+              "Die fehlgeschlagene Einrichtung wurde auf dem Server zurückgenommen, aber das lokale Browser-Abo konnte nicht beendet werden. Push bleibt auf diesem Gerät aus; versuche die lokale Deaktivierung erneut.";
           }
         } catch (cleanupCause) {
+          currentServerRegistration = null;
           browserSubscription = createdSubscription;
           warning = `Die Einrichtung ist fehlgeschlagen und konnte nicht vollständig zurückgenommen werden. Das Geräte-Abo bleibt sichtbar, damit du die Deaktivierung erneut versuchen kannst. ${describeNotificationError(
             cleanupCause,
@@ -181,12 +204,14 @@
       // Server first: if this request fails, keep the browser subscription so
       // the endpoint remains recoverable after a reload and the user can retry.
       await deletePushSubscription(subscription.endpoint);
+      currentServerRegistration = false;
+      deviceManagerRefreshVersion += 1;
 
       await subscription.unsubscribe().catch(() => false);
       await loadBrowserSubscription();
       if (browserSubscription) {
         warning =
-          "Der Geräte-Eintrag ist auf dem Server entfernt, aber das lokale Browser-Abo konnte nicht beendet werden. Versuche die Deaktivierung erneut.";
+          "Der Geräte-Eintrag ist auf dem Server entfernt, aber das lokale Browser-Abo konnte nicht beendet werden. Versuche „Lokales Browser-Abo entfernen“ erneut.";
         return;
       }
       notice = "Push ist auf diesem Gerät deaktiviert.";
@@ -197,23 +222,48 @@
     }
   }
 
+  async function cleanupLocalSubscription(): Promise<void> {
+    if (
+      changingDevice ||
+      !browserSubscription ||
+      currentServerRegistration !== false
+    )
+      return;
+    changingDevice = true;
+    clearFeedback();
+    try {
+      await browserSubscription.unsubscribe().catch(() => false);
+      await loadBrowserSubscription();
+      if (browserSubscription) {
+        warning =
+          "Das lokale Browser-Abo konnte nicht beendet werden. Versuche „Lokales Browser-Abo entfernen“ erneut.";
+        return;
+      }
+      notice = "Das lokale Browser-Abo wurde entfernt.";
+    } catch (cause) {
+      error = describeNotificationError(cause, "device-disable");
+    } finally {
+      changingDevice = false;
+    }
+  }
+
   onMount(() => {
     supported =
-      "serviceWorker" in navigator &&
-      "PushManager" in window &&
-      "Notification" in window;
+      typeof navigator.serviceWorker !== "undefined" &&
+      typeof window.PushManager !== "undefined" &&
+      typeof window.Notification !== "undefined";
     permission = supported ? Notification.permission : "unsupported";
-    if (supported) {
-      void authStore.checkAuth().then((status) => {
-        if (status.state === "authenticated" && status.authenticated) {
-          void load();
-        } else {
-          loading = false;
-        }
-      });
-    } else {
-      loading = false;
-    }
+    void authStore.checkAuth().then((status) => {
+      if (
+        status.state === "authenticated" &&
+        status.authenticated &&
+        supported
+      ) {
+        void load();
+      } else {
+        loading = false;
+      }
+    });
 
     const handleVisibilityChange = () => refreshPermission();
     document.addEventListener("visibilitychange", handleVisibilityChange);
@@ -245,9 +295,9 @@
   </div>
 
   <p class="explanation">
-    Push ist nur ein Hinweis. Die Nachricht selbst bleibt in commonThing und wird
-    erst nach dem Öffnen geladen. Auf dem Sperrbildschirm erscheint daher kein
-    Nachrichtentext und kein Absendername.
+    Push ist nur ein Hinweis. Die Nachricht selbst bleibt in commonThing und
+    wird erst nach dem Öffnen geladen. Auf dem Sperrbildschirm erscheint daher
+    kein Nachrichtentext und kein Absendername.
   </p>
 
   <p class="platform-note">
@@ -255,12 +305,7 @@
     hinzugefügten commonThing-Web-App.
   </p>
 
-  {#if !supported}
-    <p class="status warning">
-      Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
-      verfügbar. Das Nachrichtenpostfach bleibt vollständig nutzbar.
-    </p>
-  {:else if $authStore.state === "checking" || loading}
+  {#if $authStore.state === "checking" || loading}
     <p class="status">Benachrichtigungseinstellungen werden geladen …</p>
   {:else if $authStore.state === "degraded"}
     <div class="status error status-with-action" role="alert">
@@ -279,6 +324,13 @@
       <p>Melde dich an, um Push-Hinweise und Gerätefreigaben zu verwalten.</p>
       <a class="btn secondary touch-target" href="/login">Anmelden</a>
     </div>
+  {:else if !supported}
+    <p class="status warning">
+      Web Push ist in diesem Browser oder in dieser Browser-Ansicht nicht
+      verfügbar. Registrierte Push-Geräte des Kontos kannst du unten trotzdem
+      verwalten.
+    </p>
+    <PushDeviceManager currentEndpoint={null} />
   {:else if error && !config}
     <div class="status error status-with-action" role="alert">
       <p>{error}</p>
@@ -311,8 +363,11 @@
       <div>
         <strong>Geräteeinstellung</strong>
         <p>
-          {#if browserSubscription}
+          {#if currentDeviceEnabled}
             Push auf diesem Gerät: aktiviert.
+          {:else if localCleanupAvailable}
+            Push auf diesem Gerät: serverseitig deaktiviert. Das lokale
+            Browser-Abo muss noch entfernt werden.
           {:else if permission === "denied"}
             Push auf diesem Gerät: blockiert. Die Freigabe muss im Browser oder
             Betriebssystem geändert werden.
@@ -322,7 +377,7 @@
         </p>
       </div>
 
-      {#if browserSubscription}
+      {#if currentDeviceEnabled}
         <button
           class="btn secondary touch-target"
           type="button"
@@ -333,6 +388,35 @@
             ? "Wird deaktiviert …"
             : "Auf diesem Gerät deaktivieren"}
         </button>
+      {:else if localCleanupAvailable}
+        <div class="device-actions">
+          <button
+            class="btn secondary touch-target"
+            type="button"
+            disabled={changingDevice}
+            onclick={cleanupLocalSubscription}
+          >
+            {changingDevice
+              ? "Wird entfernt …"
+              : "Lokales Browser-Abo entfernen"}
+          </button>
+          {#if permission === "denied"}
+            <span class="blocked-action">
+              In Browser- oder Systemeinstellungen freigeben
+            </span>
+          {:else}
+            <button
+              class="btn primary touch-target"
+              type="button"
+              disabled={changingDevice || !config?.enabled}
+              onclick={enableCurrentDevice}
+            >
+              {changingDevice
+                ? "Wird aktiviert …"
+                : "Auf diesem Gerät aktivieren"}
+            </button>
+          {/if}
+        </div>
       {:else if permission === "denied"}
         <span class="blocked-action">
           In Browser- oder Systemeinstellungen freigeben
@@ -348,6 +432,13 @@
         </button>
       {/if}
     </div>
+
+    {#key deviceManagerRefreshVersion}
+      <PushDeviceManager
+        currentEndpoint={browserSubscription?.endpoint ?? null}
+        onCurrentRegistrationChange={handleCurrentRegistrationChange}
+      />
+    {/key}
 
     {#if config && !config.enabled}
       <p class="status warning">
@@ -381,6 +472,7 @@
   .section-heading,
   .preference-row,
   .device-card,
+  .device-actions,
   .status-with-action {
     display: flex;
     justify-content: space-between;
@@ -461,6 +553,7 @@
     .section-heading,
     .preference-row,
     .device-card,
+    .device-actions,
     .status-with-action {
       align-items: stretch;
       flex-direction: column;
@@ -468,6 +561,7 @@
 
     .section-heading .inbox-link,
     .device-card button,
+    .device-actions,
     .status-with-action button,
     .status-with-action a {
       width: 100%;

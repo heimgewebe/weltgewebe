@@ -11,10 +11,24 @@ export interface StoredPushSubscription {
   id: string;
 }
 
+export interface ManagedPushSubscription {
+  id: string;
+  created_at: string;
+  updated_at: string;
+  current: boolean;
+}
+
+export interface PushSubscriptionsView {
+  items: ManagedPushSubscription[];
+  limit: number;
+}
+
 interface ErrorPayload {
   code?: unknown;
   message?: unknown;
 }
+
+const PUSH_ENDPOINT_HASH_HEADER = "x-weltgewebe-push-endpoint-hash";
 
 export class NotificationsApiError extends Error {
   constructor(
@@ -50,6 +64,25 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+async function currentPushHeaders(
+  endpoint?: string | null,
+): Promise<Record<string, string>> {
+  if (!endpoint) return {};
+  if (!globalThis.crypto?.subtle) {
+    throw new Error(
+      "Der aktuelle Push-Browser kann nicht sicher zugeordnet werden.",
+    );
+  }
+  const digest = await globalThis.crypto.subtle.digest(
+    "SHA-256",
+    new TextEncoder().encode(endpoint),
+  );
+  const hash = Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("");
+  return { [PUSH_ENDPOINT_HASH_HEADER]: hash };
+}
+
 export function getNotificationPreferences(
   signal?: AbortSignal,
 ): Promise<NotificationPreferences> {
@@ -69,6 +102,16 @@ export function updateNotificationPreferences(
 
 export function getPushConfig(signal?: AbortSignal): Promise<PushConfig> {
   return request<PushConfig>("/api/push/config", { signal });
+}
+
+export async function listPushSubscriptions(
+  currentEndpoint?: string | null,
+  signal?: AbortSignal,
+): Promise<PushSubscriptionsView> {
+  return request<PushSubscriptionsView>("/api/push/subscriptions", {
+    signal,
+    headers: await currentPushHeaders(currentEndpoint),
+  });
 }
 
 export function registerPushSubscription(
@@ -93,6 +136,16 @@ export function deletePushSubscription(endpoint: string): Promise<void> {
   return request<void>("/api/push/subscriptions", {
     method: "DELETE",
     body: JSON.stringify({ endpoint }),
+  });
+}
+
+export async function deleteManagedPushSubscription(
+  id: string,
+  currentEndpoint?: string | null,
+): Promise<void> {
+  return request<void>(`/api/push/subscriptions/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: await currentPushHeaders(currentEndpoint),
   });
 }
 

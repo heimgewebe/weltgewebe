@@ -21,8 +21,9 @@ use axum::{
 
 use crate::middleware::authz::{require_admin, require_authenticated, require_write};
 use crate::notifications::{
-    delete_push_subscription, get_notification_preferences, get_push_config,
-    register_push_subscription, update_notification_preferences,
+    delete_push_subscription, disable_push_subscription_by_id, get_notification_preferences,
+    get_push_config, list_push_subscriptions, register_push_subscription,
+    update_notification_preferences,
 };
 use crate::state::ApiState;
 
@@ -100,8 +101,14 @@ pub fn api_router() -> Router<ApiState> {
         )
         .route(
             "/push/subscriptions",
-            post(register_push_subscription)
+            get(list_push_subscriptions)
+                .merge(post(register_push_subscription))
                 .delete(delete_push_subscription)
+                .route_layer(from_fn(require_authenticated)),
+        )
+        .route(
+            "/push/subscriptions/{id}",
+            axum::routing::delete(disable_push_subscription_by_id)
                 .route_layer(from_fn(require_authenticated)),
         )
         .route(

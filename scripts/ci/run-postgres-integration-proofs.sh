@@ -387,3 +387,13 @@ for target in "${targets[@]}"; do
   reset_database
   cargo test --locked -p weltgewebe-api --test "$target" -- --include-ignored --test-threads=1
 done
+
+# The required all-target CI lane also executes the existing conversation Push proof.
+# Targeted proof workflows set POSTGRES_PROOF_TARGETS and intentionally stay scoped.
+if [[ -z "${POSTGRES_PROOF_TARGETS:-}" ]]; then
+  printf '=== PostgreSQL proof: push_device_limit_recovery ===\n'
+  reset_database
+  cargo test --locked -p weltgewebe-api --test db_node_conversations \
+    private_message_push_preference_cancels_queued_delivery \
+    -- --include-ignored --test-threads=1
+fi
