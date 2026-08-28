@@ -20,6 +20,19 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+if __package__:
+    from .attention_impact_contract import (
+        attention_impact_decision,
+        product_logic_changes,
+        validate_attention_impact_markers,
+    )
+else:
+    from attention_impact_contract import (
+        attention_impact_decision,
+        product_logic_changes,
+        validate_attention_impact_markers,
+    )
+
 SCHEMA_VERSION = 1
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
 MAX_EVIDENCE_PAYLOAD_BYTES = 20 * 1024
@@ -922,6 +935,7 @@ def evaluate_evidence(
     comments: Sequence[dict[str, Any]],
     allowed_attesters: frozenset[str],
     reviews: Sequence[dict[str, Any]] = (),
+    pr_body: str | None = None,
 ) -> dict[str, Any]:
     if not allowed_attesters or any(
         not isinstance(login, str) or not GITHUB_LOGIN_RE.fullmatch(login)
@@ -932,6 +946,17 @@ def evaluate_evidence(
         )
     normalized_attesters = frozenset(login.casefold() for login in allowed_attesters)
     reasons: list[str] = []
+    attention_impact_required = False
+    attention_impact_value = None
+    if pr_body is not None:
+        attention_impact_required = bool(product_logic_changes(bundle.stats.changed_files))
+        attention_impact_value = attention_impact_decision(pr_body)
+        reasons.extend(
+            f"Attention impact: {reason}"
+            for reason in validate_attention_impact_markers(
+                pr_body=pr_body, changed_files=bundle.stats.changed_files
+            )
+        )
     if risk_class is None:
         reasons.append(
             "PR body must contain exactly one risk marker: <!-- weltgewebe-risk: R0|R1|R2|R3 -->"
@@ -1335,6 +1360,8 @@ def evaluate_evidence(
         "pass": not reasons,
         "risk_class": risk_class,
         "minimum_risk_class": minimum_risk,
+        "attention_impact_required": attention_impact_required,
+        "attention_impact_decision": attention_impact_value,
         "binding": {
             "pr_number": bundle.pr_number,
             "base_sha": bundle.base_sha,
@@ -1413,6 +1440,7 @@ def _evaluate_and_write(
     output_dir: Path,
     bundle: Bundle,
     risk_class: str | None,
+    pr_body: str,
     comments_file: Path,
     reviews_file: Path | None,
     authorities_file: Path,
@@ -1426,6 +1454,7 @@ def _evaluate_and_write(
         comments=comments,
         reviews=reviews,
         allowed_attesters=load_allowed_attesters(authorities_file),
+        pr_body=pr_body,
     )
     (output_dir / "evaluation.json").write_bytes(_canonical_json(evaluation))
     print(json.dumps(evaluation, sort_keys=True))
@@ -1449,6 +1478,7 @@ def _command_evaluate(args: argparse.Namespace) -> int:
             output_dir=output_dir,
             bundle=bundle,
             risk_class=risk_class,
+            pr_body=body,
             comments_file=Path(args.comments_file),
             reviews_file=Path(args.reviews_file) if args.reviews_file else None,
             authorities_file=Path(args.authorities_file),
@@ -1475,6 +1505,7 @@ def _command_evaluate_materialized(args: argparse.Namespace) -> int:
             output_dir=output_dir,
             bundle=bundle,
             risk_class=risk_class,
+            pr_body=body,
             comments_file=Path(args.comments_file),
             reviews_file=Path(args.reviews_file) if args.reviews_file else None,
             authorities_file=Path(args.authorities_file),

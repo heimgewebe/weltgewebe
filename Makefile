@@ -74,6 +74,7 @@ check-system-map-drift: generate-system-map
 	git diff --exit-code HEAD -- docs/_generated/system-map.md
 
 validate-guards: check-system-map-drift
+	$(UV_RUN) python -m scripts.docmeta.attention_impact_guard
 	bash scripts/docmeta/repo-structure-guard.sh
 	bash scripts/docmeta/docs-relations-guard.sh
 	bash scripts/docmeta/generated-files-guard.sh

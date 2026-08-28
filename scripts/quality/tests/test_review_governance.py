@@ -130,6 +130,7 @@ def _evaluate(
     risk_class: str,
     comments: list[dict],
     reviews: list[dict] | None = None,
+    pr_body: str | None = None,
 ) -> dict:
     return evaluate_evidence(
         bundle=bundle,
@@ -137,6 +138,7 @@ def _evaluate(
         comments=comments,
         reviews=reviews or [],
         allowed_attesters=ALLOWED_ATTESTERS,
+        pr_body=pr_body,
     )
 
 
@@ -175,6 +177,82 @@ def _record(
         "verdict": verdict,
         "findings_resolved": verdict == "PASS",
     }
+
+
+class AttentionImpactReviewGateTests(unittest.TestCase):
+    def _r2_comments(self, bundle: Bundle) -> list[dict]:
+        return [
+            _comment(
+                _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R2"),
+                comment_id=1,
+            ),
+            _comment(
+                _record(bundle, reviewer="Reviewer B", axis="testing", risk="R2"),
+                comment_id=2,
+            ),
+        ]
+
+    def test_product_logic_requires_attention_marker(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="",
+        )
+        self.assertFalse(result["pass"])
+        self.assertTrue(result["attention_impact_required"])
+        self.assertIsNone(result["attention_impact_decision"])
+        self.assertTrue(
+            any("Attention impact:" in reason for reason in result["reasons"]),
+            result["reasons"],
+        )
+
+    def test_contract_marker_satisfies_edit_sensitive_meta_gate(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts", "docs/specs/ui-interaction.md"))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="<!-- weltgewebe-attention-impact: contract -->",
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["attention_impact_decision"], "contract")
+
+    def test_none_marker_requires_concrete_rationale(self) -> None:
+        bundle = _bundle(paths=("contracts/domain/message.schema.json",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="<!-- weltgewebe-attention-impact: none -->",
+        )
+        self.assertFalse(result["pass"])
+        self.assertTrue(any("rationale" in reason for reason in result["reasons"]))
+
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body=(
+                "<!-- weltgewebe-attention-impact: none -->\n"
+                "<!-- weltgewebe-attention-rationale: Schema-only compatibility refactor; no personal domain semantics change. -->"
+            ),
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["attention_impact_decision"], "none")
+
+    def test_non_product_diff_does_not_require_marker(self) -> None:
+        bundle = _bundle(paths=("docs/example.md",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R0",
+            comments=[],
+            pr_body="",
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertFalse(result["attention_impact_required"])
+
 
 
 class RiskParsingTests(unittest.TestCase):
@@ -1194,6 +1272,10 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_privileged_workflow_executes_only_literal_main_code(self) -> None:
         self.assertIn("pull_request_target:", self.workflow)
+        self.assertIn(
+            "types: [opened, synchronize, reopened, edited, ready_for_review]",
+            self.workflow,
+        )
         self.assertIn("issue_comment:", self.workflow)
         self.assertIn("pull_request_review:", self.workflow)
         self.assertIn("ref: main", self.workflow)
