@@ -188,10 +188,12 @@ implementations:
       - docs/blueprints/map-blaupause.md
       - docs/deployment.md
       - docs/deploy/schauwerk-editor-frontdoor.md
+      - docs/deploy/vps.md
     verified_by:
       - scripts/guard/caddy-basemap-route-guard.sh
       - scripts/ci/tests/test_regional_basemap_style.py
       - scripts/ci/tests/test_public_live_readiness.py
+      - scripts/ci/tests/test_vps_http_route_smoke_docs.py
       - scripts/ci/tests/test_schaubild_frontdoor.py
       - scripts/ci/tests/test_static_app_caddy_csp_adapted_contract.py
 

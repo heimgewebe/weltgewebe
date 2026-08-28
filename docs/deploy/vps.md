@@ -39,13 +39,24 @@ Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 * **A-Record**: `www.commonthing.net` -> `<VPS_IPV4_ADRESSE>`
 * **Legacy-A-Record**: `weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
 * **Legacy-A-Record**: `www.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
-* **A-Record**: `api.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
+* **A-Record**: `api.commonthing.net` -> `<VPS_IPV4_ADRESSE>`
+* **Legacy-A-Record**: `api.weltgewebe.net` -> `<VPS_IPV4_ADRESSE>`
 * **AAAA-Record** (nur falls IPv6 geprüft und freigegeben ist): entsprechende Hostnamen -> `<VPS_IPV6_ADRESSE>`
 
-Die Subdomain `api.weltgewebe.net` bleibt der API-Host und muss auf dieselbe
-VPS-IPv4 zeigen wie die commonThing- und Legacy-Webhosts. Caddy liefert die App
+`api.commonthing.net` ist der kanonische API-Host. `api.weltgewebe.net` bleibt
+als Kompatibilitätsname auf demselben API-Edge erhalten, bis seine spätere
+Entfernung separat belegt ist. Caddy liefert die App
+<!-- commonthing-naming: legacy -->
 nur unter `commonthing.net`; `www.commonthing.net`, `weltgewebe.net` und
 `www.weltgewebe.net` leiten permanent und URI-erhaltend auf den Apex um.
+
+**API-Domain-Cutover:** Die Produktions-Caddy-Konfiguration für
+`api.commonthing.net` muss zuerst gemergt, deployt und per Host-Routing-Smoke
+belegt sein. Erst danach darf der DNS-Record von `api.commonthing.net` auf die
+freigegebene VPS-Adresse umgestellt werden. Nach dem autoritativen DNS-Readback
+werden öffentliches TLS, `/health/ready`, die private `/metrics`-Grenze und der
+Legacy-Host erneut geprüft. Ein DNS-Wechsel vor dem Edge-Deploy oder die
+vorzeitige Entfernung von `api.weltgewebe.net` ist nicht Teil dieses Ablaufs.
 
 **Erster Domain-Cutover:** Nach dem Merge zuerst die A-Records von
 `commonthing.net` und `www.commonthing.net` auf die ausgewählte VPS-Adresse
@@ -382,15 +393,28 @@ geprüft werden, ohne öffentliche DNS-Records umzubiegen:
 ```bash
 curl -H 'Host: commonthing.net' http://127.0.0.1/health/proxy
 curl -H 'Host: commonthing.net' http://127.0.0.1/api/health/ready
+curl -sS -o /dev/null -D - -H 'Host: api.commonthing.net' \
+  http://127.0.0.1/health/ready
 ```
+
+Der letzte Request muss bereits vor dem DNS-Wechsel mit HTTP `308` exakt auf
+`https://api.commonthing.net/health/ready` zeigen. Das beweist die neue
+Host-Routing-Regel, aber noch kein öffentlich gültiges TLS-Zertifikat.
 
 Nach dem DNS-Cutover sind zusätzlich die öffentlichen HTTPS-Pfade zu prüfen:
 
 ```bash
 curl -fsS https://commonthing.net/api/health/ready
+curl -fsS https://api.commonthing.net/health/ready
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.commonthing.net/metrics
+# commonthing-naming: legacy
 curl -fsS https://api.weltgewebe.net/health/ready
+curl -sS -o /dev/null -w '%{http_code}\n' https://api.weltgewebe.net/metrics
 curl -sS -o /dev/null -D - 'https://weltgewebe.net/map?from=legacy'
 ```
+
+Beide Metrics-Requests müssen `404` liefern. Der neue Host ist damit kanonisch
+belegt, während der alte Host ausdrücklich als Kompatibilitätsweg weiterläuft.
 
 ### Public live readiness receipt
 
@@ -400,8 +424,11 @@ Operator-Check reproduzierbar geprüft werden:
 ```bash
 DEPLOY_COMMIT="<ausgelieferter-commit-sha>"
 
+# commonthing-naming: legacy
 python3 scripts/ops/check_public_live_readiness.py \
+  --legacy-api-domain api.weltgewebe.net \
   --expected-ip 94.16.121.119 \
+  --api-domain api.commonthing.net \
   --expected-version "${DEPLOY_COMMIT:0:8}" \
   --expected-commit "${DEPLOY_COMMIT}" \
   --authoritative-server ns.inwx.de \
@@ -424,10 +451,13 @@ IPv6-DNS-Erwartung geprüft:
 
 Der Check liest keine Runtime-Secrets und verändert keinen Serverzustand. Er
 prüft DNS-A-Records, den kanonischen commonThing-HTTPS-Apex, permanente und
+<!-- commonthing-naming: legacy -->
 URI-erhaltende Redirects von `www.commonthing.net`, `weltgewebe.net` und
-`www.weltgewebe.net`, `/map`,
-`api.weltgewebe.net/health/ready`, die privaten öffentlichen Metrics-Grenzen
-`/api/metrics` und `api.weltgewebe.net/metrics` auf HTTP `404`, `/_app/version.json`,
+`www.weltgewebe.net`, `/map`, den kanonischen API-Host
+`api.commonthing.net/health/ready` sowie den Legacy-API-Host
+`api.weltgewebe.net/health/ready`. Die privaten öffentlichen Metrics-Grenzen
+`/api/metrics`, `api.commonthing.net/metrics` und `api.weltgewebe.net/metrics`
+müssen jeweils HTTP `404` liefern; zusätzlich prüft der Receipt `/_app/version.json`,
 lokale Basemap-Style-, Glyph- und PMTiles-Auslieferung. Ein PASS ist ein
 Public-HTTP(S)-/Basemap-Receipt,
 aber kein Beweis für IPv6, Mail/SMTP oder Public Login. Der

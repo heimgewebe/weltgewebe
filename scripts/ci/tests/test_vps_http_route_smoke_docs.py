@@ -103,6 +103,18 @@ class VpsHttpRouteSmokeDocsTest(unittest.TestCase):
             with self.subTest(forbidden=forbidden):
                 self.assertNotIn(forbidden, text)
 
+    def test_production_caddyfile_adds_commonthing_api_without_dropping_legacy_alias(self) -> None:
+        production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
+
+        self.assertIn(
+            "http://api.commonthing.net, http://api.weltgewebe.net {", production
+        )
+        self.assertIn(
+            "https://api.commonthing.net, https://api.weltgewebe.net {", production
+        )
+        self.assertEqual(production.count("import api_common"), 1)
+        self.assertIn("redir https://{host}{uri} 308", production)
+
     def test_production_caddyfile_preserves_real_404_semantics(self) -> None:
         production = (self.repo / "infra" / "caddy" / "Caddyfile.vps").read_text(encoding="utf-8")
         self.assertIn("try_files {path} {path}.html {path}/index.html", production)

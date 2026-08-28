@@ -237,7 +237,9 @@ http://www.commonthing.net, http://weltgewebe.net, http://www.weltgewebe.net {
 	redir https://commonthing.net{uri} 308
 }
 
-http://api.weltgewebe.net {
+# The commonThing API hostname is added before its DNS cutover. Keep the legacy
+# hostname on the same route until compatibility retirement is separately proven.
+http://api.commonthing.net, http://api.weltgewebe.net {
 	header Content-Security-Policy "default-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none';"
 	header X-Content-Type-Options "nosniff"
 
@@ -265,6 +267,6 @@ https://www.commonthing.net, https://weltgewebe.net, https://www.weltgewebe.net 
 	redir https://commonthing.net{uri} 308
 }
 
-https://api.weltgewebe.net {
+https://api.commonthing.net, https://api.weltgewebe.net {
 	import api_common
 }

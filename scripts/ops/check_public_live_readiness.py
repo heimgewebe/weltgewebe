@@ -22,7 +22,9 @@ DEFAULT_DOMAIN = "commonthing.net"
 DEFAULT_WWW_DOMAIN = "www.commonthing.net"
 DEFAULT_LEGACY_DOMAIN = "weltgewebe.net"
 DEFAULT_LEGACY_WWW_DOMAIN = "www.weltgewebe.net"
-DEFAULT_API_DOMAIN = "api.weltgewebe.net"
+DEFAULT_API_DOMAIN = "api.commonthing.net"
+# commonthing-naming: legacy
+DEFAULT_LEGACY_API_DOMAIN = "api.weltgewebe.net"
 DEFAULT_EXPECTED_IP = "94.16.121.119"
 REDIRECT_PROOF_URI = "/cutover-readiness/path?source=public-live"
 DEFAULT_GLYPH_PATH = "/local-basemap/glyphs/Noto%20Sans%20Regular/0-255.pbf"
@@ -172,6 +174,7 @@ class PublicLiveChecker:
     legacy_domain: str = DEFAULT_LEGACY_DOMAIN
     legacy_www_domain: str = DEFAULT_LEGACY_WWW_DOMAIN
     api_domain: str = DEFAULT_API_DOMAIN
+    legacy_api_domain: str = DEFAULT_LEGACY_API_DOMAIN
     expected_ip: str = DEFAULT_EXPECTED_IP
     expected_ipv6: str | None = None
     expected_version: str | None = None
@@ -224,7 +227,8 @@ class PublicLiveChecker:
             ),
             self.check_https_root(self.domain),
             self.check_map_route(),
-            self.check_api_ready(),
+            self.check_api_ready("api-ready", self.api_domain),
+            self.check_api_ready("api-ready:legacy", self.legacy_api_domain),
             self.check_public_metrics_private(
                 "metrics-private:app",
                 f"https://{self.domain}/api/metrics",
@@ -232,6 +236,10 @@ class PublicLiveChecker:
             self.check_public_metrics_private(
                 "metrics-private:api",
                 f"https://{self.api_domain}/metrics",
+            ),
+            self.check_public_metrics_private(
+                "metrics-private:legacy-api",
+                f"https://{self.legacy_api_domain}/metrics",
             ),
             self.check_version_json(),
             self.check_basemap_style(),
@@ -296,6 +304,7 @@ class PublicLiveChecker:
             self.legacy_domain,
             self.legacy_www_domain,
             self.api_domain,
+            self.legacy_api_domain,
         )
 
     def check_redirect(self, name: str, url: str, expected_location: str) -> CheckResult:
@@ -339,20 +348,20 @@ class PublicLiveChecker:
             return pass_result("map-route", "Map route serves the app shell", status=result.status)
         return fail_result("map-route", "Map route did not serve the app shell", status=result.status)
 
-    def check_api_ready(self) -> CheckResult:
-        url = f"https://{self.api_domain}/health/ready"
+    def check_api_ready(self, name: str, host: str) -> CheckResult:
+        url = f"https://{host}/health/ready"
         try:
             result = self.fetcher(url, None, self.timeout)
             payload = json.loads(result.body.decode("utf-8"))
         except Exception as exc:
-            return fail_result("api-ready", str(exc), url=url)
+            return fail_result(name, str(exc), url=url)
         checks = payload.get("checks") if isinstance(payload, dict) else None
         if result.status == 200 and payload.get("status") == "ok" and isinstance(checks, dict):
             missing = [key for key in API_REQUIRED_CHECKS if checks.get(key) is not True]
             if not missing:
-                return pass_result("api-ready", "API ready endpoint reports database/nats/policy true", status=result.status)
-            return fail_result("api-ready", "API ready endpoint has failed checks", missing=missing, checks=checks)
-        return fail_result("api-ready", "API ready endpoint did not report ok", status=result.status, payload=payload)
+                return pass_result(name, "API ready endpoint reports database/nats/policy true", status=result.status, host=host)
+            return fail_result(name, "API ready endpoint has failed checks", missing=missing, checks=checks, host=host)
+        return fail_result(name, "API ready endpoint did not report ok", status=result.status, payload=payload, host=host)
 
     def check_public_metrics_private(self, name: str, url: str) -> CheckResult:
         try:
@@ -503,6 +512,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--legacy-domain", default=DEFAULT_LEGACY_DOMAIN)
     parser.add_argument("--legacy-www-domain", default=DEFAULT_LEGACY_WWW_DOMAIN)
     parser.add_argument("--api-domain", default=DEFAULT_API_DOMAIN)
+    parser.add_argument("--legacy-api-domain", default=DEFAULT_LEGACY_API_DOMAIN)
     parser.add_argument("--expected-ip", default=DEFAULT_EXPECTED_IP)
     parser.add_argument("--expected-ipv6")
     parser.add_argument("--expected-version")
@@ -521,6 +531,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         legacy_domain=args.legacy_domain,
         legacy_www_domain=args.legacy_www_domain,
         api_domain=args.api_domain,
+        legacy_api_domain=args.legacy_api_domain,
         expected_ip=args.expected_ip,
         expected_ipv6=args.expected_ipv6,
         expected_version=args.expected_version,
