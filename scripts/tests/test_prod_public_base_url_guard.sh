@@ -39,12 +39,18 @@ write_override() {
   local caddy_web_url="$5"
   local auth_login="$6"
   local auth_token="$7"
+  local webauthn_rp_id="${TEST_WEBAUTHN_RP_ID:-commonthing.net}"
+  local webauthn_rp_origin="${TEST_WEBAUTHN_RP_ORIGIN:-https://commonthing.net}"
+  local webauthn_rp_name="${TEST_WEBAUTHN_RP_NAME:-commonThing}"
 
   cat > "$TEST_TMP/infra/compose/compose.prod.override.yml" << EOF_OVERRIDE
 services:
   api:
     environment:
       APP_BASE_URL: $app_base
+      WEBAUTHN_RP_ID: $webauthn_rp_id
+      WEBAUTHN_RP_ORIGIN: $webauthn_rp_origin
+      WEBAUTHN_RP_NAME: $webauthn_rp_name
       AUTH_PUBLIC_LOGIN: '$auth_login'
       AUTH_LOG_MAGIC_TOKEN: '$auth_token'
       WEB_UPSTREAM_HOST: $api_web_host
@@ -192,6 +198,42 @@ run_case \
   "__absent__" \
   "1" "1" \
   1 "services.api.environment.AUTH_LOG_MAGIC_TOKEN"
+
+TEST_WEBAUTHN_RP_ID=wrong.example
+run_case \
+  "non-canonical WebAuthn RP ID is rejected" \
+  "https://commonthing.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
+  "1" "0" \
+  1 "services.api.environment.WEBAUTHN_RP_ID"
+unset TEST_WEBAUTHN_RP_ID
+
+TEST_WEBAUTHN_RP_ORIGIN=https://example.invalid
+run_case \
+  "non-canonical WebAuthn RP origin is rejected" \
+  "https://commonthing.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
+  "1" "0" \
+  1 "services.api.environment.WEBAUTHN_RP_ORIGIN"
+unset TEST_WEBAUTHN_RP_ORIGIN
+
+TEST_WEBAUTHN_RP_NAME=wrongName
+run_case \
+  "non-canonical WebAuthn RP name is rejected" \
+  "https://commonthing.net" \
+  "weltgewebe.home.arpa" \
+  "https://weltgewebe.home.arpa" \
+  "__absent__" \
+  "__absent__" \
+  "1" "0" \
+  1 "services.api.environment.WEBAUTHN_RP_NAME"
+unset TEST_WEBAUTHN_RP_NAME
 
 rm "$TEST_TMP/infra/compose/compose.prod.yml"
 run_guard
