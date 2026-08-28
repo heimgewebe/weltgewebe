@@ -45,8 +45,9 @@ Richte folgende DNS-Records ein, damit die Domain auf deinen VPS zeigt:
 
 `api.commonthing.net` ist der kanonische API-Host. `api.weltgewebe.net` bleibt
 als Kompatibilitätsname auf demselben API-Edge erhalten, bis seine spätere
-Entfernung separat belegt ist. Caddy liefert die App nur unter
-`commonthing.net`; `www.commonthing.net`, `weltgewebe.net` und
+Entfernung separat belegt ist. Caddy liefert die App
+<!-- commonthing-naming: legacy -->
+nur unter `commonthing.net`; `www.commonthing.net`, `weltgewebe.net` und
 `www.weltgewebe.net` leiten permanent und URI-erhaltend auf den Apex um.
 
 **API-Domain-Cutover:** Die Produktions-Caddy-Konfiguration für
