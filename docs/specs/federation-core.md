@@ -21,6 +21,8 @@ relations:
     target: docs/adr/ADR-0012__ereignisrueckgrat-transactional-outbox.md
   - type: relates_to
     target: docs/specs/garnrolle-knoten-faden.md
+attention_source_status: none
+attention_source_rationale: "Definiert zellübergreifende Fachinvarianten und Objektursprung, keine betrachterbezogene Attention-Wahrheit."
 ---
 
 # Föderationskern

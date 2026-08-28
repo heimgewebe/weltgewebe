@@ -30,6 +30,8 @@ verifies_with:
   - apps/web/src/lib/map/overlay/edges.test.ts
   - apps/web/tests/woven-node-visualization.spec.ts
   - apps/web/tests/garnrolle-marker-rendering.spec.ts
+attention_source_status: none
+attention_source_rationale: "Definiert ausschließlich die visuelle Projektion von Knoten und Fäden, keine persönliche Attention-Wahrheit."
 ---
 
 # Knoten-Gewebevisualisierung

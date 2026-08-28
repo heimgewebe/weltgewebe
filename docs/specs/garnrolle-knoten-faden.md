@@ -37,6 +37,8 @@ verifies_with:
   - apps/web/tests/garnrolle-self-service.spec.ts
   - apps/web/tests/garnrolle-relations.spec.ts
   - apps/web/tests/komposition.spec.ts
+attention_source_status: none
+attention_source_rationale: "Definiert langlebige Identitäten und Gewebebeziehungen, derzeit jedoch keinen persönlichen offenen Vorgang oder Beteiligungsfakt für Attention."
 ---
 # Garnrolle, Knoten und Faden
 

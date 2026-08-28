@@ -39,6 +39,8 @@ verifies_with:
   - apps/web/tests/tool-fan-layout.spec.ts
   - apps/web/tests/context-panel-sheet.spec.ts
   - apps/web/tests/theme.spec.ts
+attention_source_status: none
+attention_source_rationale: "Definiert die Attention-Darstellung und Projektion selbst, ist aber keine Quelle kanonischer persönlicher Fachfakten."
 ---
 
 # UI-Interaktionsvertrag
@@ -119,6 +121,12 @@ Weitere Antragstypen dürfen erst erscheinen, wenn ihr Serververtrag tatsächlic
 Der Werkzeugfächer schließt durch erneutes Betätigen, Escape, Fokuswechsel nach außen oder Auswahl außerhalb. Er ist kein modaler Dialog und hält den Tastaturfokus daher nicht gefangen. Beim Schließen per Escape kehrt der Fokus zum Wurzelknopf zurück. Animationen verwenden Transformation und Deckkraft und entfallen bei reduzierter Bewegung.
 
 ## Aufmerksamkeit und Governance
+
+### Zukunftsregel für neue Fachfunktionen
+
+Jede neue oder wesentlich erweiterte kanonische Fachfunktion muss ihre persönliche Attention-Relevanz entscheiden, sobald sie für einen Account eine notwendige Handlung, neue persönliche Information, eine konkrete Beteiligungsmöglichkeit oder einen eigenen laufenden Vorgang erzeugen kann. Diese Prüfung findet beim Fachvertrag statt, nicht in einem separaten Attention-Register und nicht als pauschales Kästchen für jeden Pull Request.
+
+Kanonische Produktverträge tragen dafür `attention_source_status: source | none | blocked` plus eine Begründung. `source` benennt die kanonischen persönlichen Fakten, die Projektionsstelle und Übergangstests. `blocked` ist nur zulässig, wenn der fehlende kanonische Fachfakt und ein konkreter Bureau-Folgetask benannt sind; solange bleibt die Projektion fail-closed. `none` bedeutet eine bewusste Entscheidung, dass der Vertrag selbst keine persönliche Attention-Wahrheit erzeugt. Die Metadaten beschreiben die Architektur und sind niemals Laufzeit- oder Nutzerzustand.
 
 Die Kartenleiste zeigt oben links kleine Aufmerksamkeitsblasen für aktuell offene, für den angemeldeten Account relevante Sachverhalte. Diese Blasen sind keine Ereignishistorie, kein Benachrichtigungsarchiv und keine zweite Fachwahrheit. Sie werden aus den kanonischen Fach-APIs abgeleitet; ein Invalidierungssignal fordert lediglich eine erneute Lesung dieser Wahrheit an.
 
