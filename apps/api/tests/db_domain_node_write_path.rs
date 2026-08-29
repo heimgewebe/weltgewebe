@@ -1947,8 +1947,57 @@ async fn postgres_guest_exit_completes_under_projection_middleware() -> Result<(
     let exit_response =
         tokio::time::timeout(Duration::from_secs(5), app.clone().oneshot(exit_request))
             .await
-            .context("guest exit must not deadlock under projection middleware")??;
-    assert_eq!(exit_response.status(), StatusCode::OK);
+            .context("guest exit challenge must not deadlock under projection middleware")??;
+    assert_eq!(exit_response.status(), StatusCode::FORBIDDEN);
+    let exit_body = body::to_bytes(exit_response.into_body(), usize::MAX).await?;
+    let exit_payload: serde_json::Value = serde_json::from_slice(&exit_body)?;
+    assert_eq!(exit_payload["error"], "STEP_UP_REQUIRED");
+    let challenge_id = exit_payload["challenge_id"]
+        .as_str()
+        .context("guest exit must return challenge_id")?;
+
+    let still_exists: bool =
+        sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")
+            .bind(ACTOR_ID)
+            .fetch_one(&pool)
+            .await?;
+    assert!(
+        still_exists,
+        "a normal authenticated session must not delete the guest account"
+    );
+
+    let challenge = state
+        .challenges
+        .get(challenge_id)
+        .context("guest exit challenge must exist before confirmation")?;
+    assert_eq!(challenge.account_id, ACTOR_ID);
+    assert_eq!(
+        challenge.intent,
+        weltgewebe_api::auth::challenges::ChallengeIntent::ExitGuestAccount
+    );
+    let step_up_token = state.step_up_tokens.create(
+        challenge.id.clone(),
+        ACTOR_ID.to_string(),
+        challenge.device_id.clone(),
+    );
+
+    let confirm_request = Request::post("/auth/step-up/magic-link/consume")
+        .header("Content-Type", "application/json")
+        .header("Host", "localhost")
+        .header("Origin", "http://localhost")
+        .header("Cookie", &cookie)
+        .body(body::Body::from(
+            serde_json::json!({
+                "token": step_up_token,
+                "challenge_id": challenge.id,
+            })
+            .to_string(),
+        ))?;
+    let confirm_response =
+        tokio::time::timeout(Duration::from_secs(5), app.clone().oneshot(confirm_request))
+            .await
+            .context("confirmed guest exit must not deadlock under projection middleware")??;
+    assert_eq!(confirm_response.status(), StatusCode::NO_CONTENT);
 
     let exists: bool =
         sqlx::query_scalar("SELECT EXISTS (SELECT 1 FROM domain_accounts WHERE id = $1)")
