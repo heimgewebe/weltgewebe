@@ -14,10 +14,10 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Relationen gesamt | 718 |
+| Relationen gesamt | 723 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 662 |
+| — relates_to | 667 |
 | — supersedes | 13 |
 | — verifies | 9 |
 | relates_to Anteil | 92% |
@@ -32,7 +32,7 @@ _Keine Lücken erkannt._
 
 > Zusammenhängende Gruppen im relates_to-Graphen.
 
-**Cluster 1** (282 Dokumente):
+**Cluster 1** (283 Dokumente):
 
 - `.github/workflows/api.yml`
 - `.github/workflows/basemap-runtime-proof.yml`
@@ -229,6 +229,7 @@ _Keine Lücken erkannt._
 - `docs/runbook.observability.md`
 - `docs/runbooks/README.md`
 - `docs/runbooks/codespaces-recovery.md`
+- `docs/runbooks/commonthing-mail-identity-cutover.md`
 - `docs/runbooks/db-recovery.md`
 - `docs/runbooks/domain-mail-cutover.md`
 - `docs/runbooks/gewebezelle-manual-pilot.md`
@@ -373,17 +374,18 @@ _Keine Lücken erkannt._
 - relates_to → `scripts/guard/domain-multi-instance-guard.sh`
 - relates_to → `scripts/tests/test_domain_multi_instance_guard.sh`
 
-**`docs/blueprints/blueprint-agent-safety-control-layer.md`**:
+**`docs/runbooks/README.md`**:
 
-- relates_to → `AGENTS.md`
-- relates_to → `agent-policy.yaml`
-- relates_to → `audit/impl-registry.yaml`
-- relates_to → `docs/blueprints/agent-operability-blaupause.md`
-- relates_to → `docs/policies/agent-reading-protocol.md`
-- relates_to → `docs/reports/agent-readiness-audit.md`
-- relates_to → `docs/roadmap.md`
-- relates_to → `docs/tasks/index.json`
-- relates_to → `repo.meta.yaml`
+- relates_to → `docs/runbook.md`
+- relates_to → `docs/runbooks/codespaces-recovery.md`
+- relates_to → `docs/runbooks/commonthing-mail-identity-cutover.md`
+- relates_to → `docs/runbooks/db-recovery.md`
+- relates_to → `docs/runbooks/gewebezelle-manual-pilot.md`
+- relates_to → `docs/runbooks/gewebezelle-two-operator-pilot-v1.md`
+- relates_to → `docs/runbooks/incident-response.md`
+- relates_to → `docs/runbooks/ops.runbook.weltgewebe-selfhost-deploy.md`
+- relates_to → `docs/runbooks/uv-tooling.md`
+- relates_to → `docs/runbooks/weltgewebe-ddns-runtime-verification.md`
 
 ### Hinweise
 

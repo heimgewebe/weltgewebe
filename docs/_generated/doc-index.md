@@ -178,6 +178,7 @@ Generated automatically. Do not edit.
 | runbook.kubernetes-ha-recovery-proof | Kubernetes-HA- und Recovery-Beweis | runbook | active | docs/runbooks/kubernetes-ha-recovery-proof.md |
 | runbooks.README | Runbooks-Übersicht | reference | active | docs/runbooks/README.md |
 | runbooks.codespaces-recovery | Codespaces Recovery | reference | active | docs/runbooks/codespaces-recovery.md |
+| runbooks.commonthing-mail-identity-cutover | Runbook — commonThing-Mailidentität umstellen | runbook | active | docs/runbooks/commonthing-mail-identity-cutover.md |
 | runbooks.db-recovery | DB Recovery Runbook | runbook | active | docs/runbooks/db-recovery.md |
 | runbooks.domain-mail-cutover | Runbook — Domain-, Mail- und SMTP-Cutover | runbook | deprecated | docs/runbooks/domain-mail-cutover.md |
 | runbooks.incident-response | Incident Response Runbook | reference | active | docs/runbooks/incident-response.md |
