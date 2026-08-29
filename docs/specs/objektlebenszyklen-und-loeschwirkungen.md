@@ -25,6 +25,8 @@ verifies_with:
   - contracts/domain/conversation.schema.json
   - contracts/domain/message.schema.json
   - apps/api/tests/db_node_conversations.rs
+attention_source_status: none
+attention_source_rationale: "Definiert Lebenszykluswirkungen, aber derzeit keinen persönlichen ausstehenden Handlungs-, Neuheits-, Beteiligungs- oder Wartezustand."
 ---
 
 # Objektlebenszyklen und Löschwirkungen

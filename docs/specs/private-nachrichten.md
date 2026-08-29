@@ -30,6 +30,17 @@ verifies_with:
   - apps/web/src/lib/components/NotificationSettings.svelte
   - apps/web/static/sw.js
   - apps/web/src/routes/nachrichten/+page.svelte
+attention_source_status: source
+attention_source_rationale: "Ungelesene Direktunterhaltungen liefern kanonische persönliche Neuheit, ohne daraus eine Antwortpflicht abzuleiten."
+attention_source_facts:
+  - direct conversation participant relation
+  - direct conversation unread_count
+  - direct conversation last_message_at beziehungsweise updated_at
+attention_projection:
+  - apps/web/src/lib/components/topBarAttentionState.ts
+attention_transition_tests:
+  - apps/web/src/lib/components/topBarAttentionState.test.ts
+  - apps/web/tests/attention-bubbles.spec.ts
 ---
 
 # Private Nachrichten zwischen Konten
