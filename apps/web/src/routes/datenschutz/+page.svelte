@@ -11,7 +11,7 @@
   <p>
     <strong>Verantwortlicher:</strong> Alexander Mohr, Huskoppelallee 13, 23795
     Klein Rönnau,
-    <a href="mailto:kontakt@weltgewebe.net">kontakt@weltgewebe.net</a>.
+    <a href="mailto:kontakt@commonthing.net">kontakt@commonthing.net</a>.
   </p>
 
   <h2>Grundsatz</h2>
@@ -63,8 +63,8 @@
 
   <h2>Kontakt</h2>
   <p>
-    Datenschutzanfragen können an <a href="mailto:kontakt@weltgewebe.net"
-      >kontakt@weltgewebe.net</a
+    Datenschutzanfragen können an <a href="mailto:kontakt@commonthing.net"
+      >kontakt@commonthing.net</a
     > gerichtet werden.
   </p>
 

@@ -396,15 +396,22 @@ SMTP_PORT=587
 SMTP_AUTH=on
 SMTP_USER=<secret>
 SMTP_PASS=<secret>
-SMTP_FROM=noreply@login.weltgewebe.net
+SMTP_FROM=noreply@login.commonthing.net
 ```
+
+`SMTP_FROM=noreply@login.commonthing.net` ist der kanonische Zielwert. Er darf
+erst in die Produktions-Runtime übernommen werden, nachdem mailbox.org und Brevo
+die neuen commonThing-Mailidentitäten angenommen haben und ihre exakt geforderten
+DNS-Records autoritativ nachgewiesen sind. Bis dahin bleibt der belegte Legacy-
+Absender in der laufenden Runtime unverändert.
 
 Vor einem Rollout wird die vorbereitete Runtime-Secret-Quelle read-only geprüft:
 
 ```bash
 python3 scripts/ops/check_public_login_smtp_readiness.py \
   --env-file /etc/weltgewebe/weltgewebe.env \
-  --production-public-login
+  --production-public-login \
+  --expected-smtp-from noreply@login.commonthing.net
 ```
 
 Der Check gibt nur Status- und Presence-Metadaten aus, keine SMTP-Werte.
