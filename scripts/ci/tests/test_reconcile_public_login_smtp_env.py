@@ -33,6 +33,8 @@ def valid_source(
     smtp_auth: str = "on",
     port: str = "2525",
     password: str = SECRET_SENTINEL,
+    smtp_from: str = "noreply@example.test",
+    app_base_url: str = "https://weltgewebe.net",
 ) -> str:
     return "\n".join(
         (
@@ -43,7 +45,8 @@ def valid_source(
             f"SMTP_AUTH={smtp_auth}",
             "SMTP_USER=test-user",
             f"SMTP_PASS={password}",
-            "SMTP_FROM=noreply@example.test",
+            f"SMTP_FROM={smtp_from}",
+            f"APP_BASE_URL={app_base_url}",
             "UNRELATED_SOURCE=must-not-copy",
             "",
         )
@@ -66,24 +69,46 @@ def create_runtime_files(
     return source, destination, backup_dir
 
 
-def preview(module, source: Path, destination: Path, backup_dir: Path):
+def preview(
+    module,
+    source: Path,
+    destination: Path,
+    backup_dir: Path,
+    *,
+    smtp_from_override: str | None = None,
+):
     return module.reconcile(
         source_path=source,
         destination_path=destination,
         backup_dir=backup_dir,
         apply=False,
+        smtp_from_override=smtp_from_override,
         require_root=False,
     )
 
 
-def apply_preview(module, source: Path, destination: Path, backup_dir: Path):
-    dry_run = preview(module, source, destination, backup_dir)
+def apply_preview(
+    module,
+    source: Path,
+    destination: Path,
+    backup_dir: Path,
+    *,
+    smtp_from_override: str | None = None,
+):
+    dry_run = preview(
+        module,
+        source,
+        destination,
+        backup_dir,
+        smtp_from_override=smtp_from_override,
+    )
     applied = module.reconcile(
         source_path=source,
         destination_path=destination,
         backup_dir=backup_dir,
         apply=True,
         expected_plan_sha256=dry_run["plan_sha256"],
+        smtp_from_override=smtp_from_override,
         require_root=False,
     )
     return dry_run, applied
@@ -953,3 +978,129 @@ def test_documented_workflow_relates_script_test_and_ci() -> None:
     assert "scripts/ops/reconcile_public_login_smtp_env.py" in workflow
     assert "scripts/ci/tests/test_reconcile_public_login_smtp_env.py" in workflow
     assert "test_reconcile_public_login_smtp_env.py" in workflow
+
+
+def test_app_base_url_is_canonical_independent_of_source_value() -> None:
+    module = load_module()
+    values = module.parse_env(
+        valid_source(app_base_url="https://weltgewebe.net"), label="source"
+    ).values
+
+    selected = module.validate_source(values)
+
+    assert selected["APP_BASE_URL"] == "https://commonthing.net"
+
+
+def test_reconcile_replaces_only_legacy_app_base_url_and_is_idempotent(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    selected = module.validate_source(
+        module.parse_env(valid_source(), label="source").values
+    )
+    destination_text = "DATABASE_URL=postgres://preserve\n" + "\n".join(
+        f"{key}={value}" for key, value in selected.items()
+    )
+    destination_text = destination_text.replace(
+        "APP_BASE_URL=https://commonthing.net",
+        "APP_BASE_URL=https://weltgewebe.net",
+    ) + "\n"
+    source, destination, backup_dir = create_runtime_files(
+        tmp_path, destination_text=destination_text
+    )
+
+    dry_run, applied = apply_preview(module, source, destination, backup_dir)
+    second = preview(module, source, destination, backup_dir)
+
+    assert dry_run["updated_keys"] == ["APP_BASE_URL"]
+    assert applied["updated_keys"] == ["APP_BASE_URL"]
+    assert module.parse_env(destination.read_text(encoding="utf-8"), label="result").values[
+        "APP_BASE_URL"
+    ] == "https://commonthing.net"
+    assert second["status"] == "already_reconciled"
+    assert second["updated_keys"] == []
+
+
+@pytest.mark.parametrize(
+    "sender",
+    ["noreply@login.commonthing.net", "noreply@login.weltgewebe.net"],
+)
+def test_smtp_from_override_accepts_declared_cutover_senders(
+    tmp_path: Path, sender: str
+) -> None:
+    module = load_module()
+    source, destination, backup_dir = create_runtime_files(
+        tmp_path,
+        source_text=valid_source(smtp_from="noreply@login.weltgewebe.net"),
+    )
+
+    _, applied = apply_preview(
+        module,
+        source,
+        destination,
+        backup_dir,
+        smtp_from_override=sender,
+    )
+    values = module.parse_env(destination.read_text(encoding="utf-8"), label="result").values
+
+    assert applied["status"] == "reconciled"
+    assert values["SMTP_FROM"] == sender
+    assert values["APP_BASE_URL"] == "https://commonthing.net"
+
+
+def test_smtp_from_override_rejects_unknown_sender_without_secret_output(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    source, destination, backup_dir = create_runtime_files(tmp_path)
+
+    with pytest.raises(module.ReconcileError, match="not an approved sender") as exc_info:
+        preview(
+            module,
+            source,
+            destination,
+            backup_dir,
+            smtp_from_override="noreply@untrusted.example",
+        )
+
+    assert SECRET_SENTINEL not in str(exc_info.value)
+    assert list(backup_dir.iterdir()) == []
+
+
+def test_plan_hash_binds_smtp_from_override_and_rejects_mismatched_apply(
+    tmp_path: Path,
+) -> None:
+    module = load_module()
+    source, destination, backup_dir = create_runtime_files(
+        tmp_path,
+        source_text=valid_source(smtp_from="noreply@login.weltgewebe.net"),
+    )
+    commonthing = preview(
+        module,
+        source,
+        destination,
+        backup_dir,
+        smtp_from_override="noreply@login.commonthing.net",
+    )
+    legacy = preview(
+        module,
+        source,
+        destination,
+        backup_dir,
+        smtp_from_override="noreply@login.weltgewebe.net",
+    )
+
+    assert commonthing["plan_sha256"] != legacy["plan_sha256"]
+
+    with pytest.raises(module.ReconcileError, match="does not match current inputs"):
+        module.reconcile(
+            source_path=source,
+            destination_path=destination,
+            backup_dir=backup_dir,
+            apply=True,
+            expected_plan_sha256=commonthing["plan_sha256"],
+            smtp_from_override="noreply@login.weltgewebe.net",
+            require_root=False,
+        )
+
+    assert list(backup_dir.iterdir()) == []

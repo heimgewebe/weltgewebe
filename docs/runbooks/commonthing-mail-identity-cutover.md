@@ -144,11 +144,53 @@ Erst wenn alle vier Gates positiv belegt sind, darf der PR gemergt und der
 Produktions-Cutover gestartet werden. Ohne kontrollierten Testempfänger wird kein
 externer Testversand improvisiert.
 
-## 7. Repository und Runtime umschalten
+## 7. Repository, kanonische Env und Runtime umschalten
 
-Der Phase-3-PR setzt die öffentlichen Kontaktflächen und den kanonischen
-`SMTP_FROM`-Zielwert auf commonThing. Vor Produktionsaktivierung muss der
-Readiness-Check mit dem exakten Zielwert bestehen:
+Sind alle vier Vorab-Zustellgates aus Schritt 6 positiv belegt, wird zuerst der
+finale PR-Head vollständig reviewed und durch CI geprüft. Erst danach wird der PR
+über den kanonischen Captain-Pfad gemergt. Der Merge allein ändert die produktive
+Env-Datei noch nicht.
+
+Nach autoritativ bestätigtem Merge wird `/etc/weltgewebe/weltgewebe.env` mit dem
+bestehenden Reconciler auf die gemeinsame kanonische Wahrheit gebracht. Dabei wird
+`APP_BASE_URL` **nicht** aus `/opt/weltgewebe/.env` übernommen, sondern immer auf
+`https://commonthing.net` kanonisiert. Der explizite Mail-Cutover erlaubt nur den
+neuen oder den Legacy-Absender.
+
+Zuerst das `0700`-Backup-Verzeichnis sicherstellen und einen Dry-run mit dem
+commonThing-Absender erzeugen:
+
+```bash
+sudo -n install -d -m 0700 -o root -g root /var/backups/weltgewebe/env
+cd /opt/weltgewebe
+PREVIEW="$(sudo -n python3 scripts/ops/reconcile_public_login_smtp_env.py \
+  --source /opt/weltgewebe/.env \
+  --destination /etc/weltgewebe/weltgewebe.env \
+  --backup-dir /var/backups/weltgewebe/env \
+  --smtp-from-override noreply@login.commonthing.net \
+  --json)"
+printf '%s\n' "$PREVIEW"
+PLAN_SHA256="$(printf '%s\n' "$PREVIEW" | python3 -c \
+  'import json,sys; print(json.load(sys.stdin)["plan_sha256"])')"
+```
+
+Dann ausschließlich exakt diesen Plan anwenden; derselbe Override gehört zum
+Planvertrag und muss beim Apply erneut angegeben werden:
+
+```bash
+sudo -n python3 scripts/ops/reconcile_public_login_smtp_env.py \
+  --source /opt/weltgewebe/.env \
+  --destination /etc/weltgewebe/weltgewebe.env \
+  --backup-dir /var/backups/weltgewebe/env \
+  --smtp-from-override noreply@login.commonthing.net \
+  --apply \
+  --expected-plan-sha256 "$PLAN_SHA256" \
+  --json
+```
+
+Danach geheimnisarm zurücklesen: `APP_BASE_URL=https://commonthing.net` und
+`SMTP_FROM=noreply@login.commonthing.net`; SMTP-Credentials werden nicht ausgegeben.
+Erst dann muss der Readiness-Check gegen die kanonische VPS-Env bestehen:
 
 ```bash
 python3 scripts/ops/check_public_login_smtp_readiness.py \
@@ -157,10 +199,11 @@ python3 scripts/ops/check_public_login_smtp_readiness.py \
   --expected-smtp-from noreply@login.commonthing.net
 ```
 
-Beim Runtime-Cutover wird nur der notwendige Absenderwert geändert; bestehende
-SMTP-Credentials werden nicht unnötig rotiert oder offengelegt. Der Runtimewechsel
-muss rollback-fähig bleiben und darf die in Schritt 6 gewonnenen Zustellbeweise
-nicht als Ersatz für den anschließenden Produktions-Readback behandeln.
+Nur bei PASS wird der exakte Merge-Commit über den kanonischen
+Produktions-Reconciler/Deploypfad ausgerollt. Nach dem Deployment werden aktive
+Revision, API-Gesundheit, `APP_BASE_URL`, `SMTP_FROM`, Public-Login und
+Runtimeintegrität frisch zurückgelesen. SMTP-Credentials müssen vorhanden sein,
+werden aber niemals ausgegeben.
 
 ## 8. Produktionsakzeptanz nach dem Cutover
 
@@ -182,10 +225,18 @@ Post-Cutover-Abnahme.
 
 ## 9. Rollback
 
-Wenn der technische Absender nach der Umschaltung nicht zuverlässig zustellt, wird
-`SMTP_FROM` auf den zuletzt belegten Legacy-Absender zurückgesetzt und der
-Runtimezustand erneut gelesen. Provider- und DNS-Neueinträge müssen für die Diagnose
-nicht vorschnell gelöscht werden.
+Wenn nach dem Cutover ein **belegter technischer Mailfehler** auftritt, werden die
+neuen DNS- oder Provider-Einträge nicht gelöscht. Stattdessen wird ausschließlich
+`SMTP_FROM` über denselben revisionssicheren Reconciler auf
+`noreply@login.weltgewebe.net` zurückgestellt. `APP_BASE_URL` bleibt dabei
+kanonisch `https://commonthing.net`; die abgeschlossene Webidentität darf durch
+einen Mail-Rollback nicht zurückgedreht werden.
+
+Der Rollback verwendet erneut Dry-run → exakten `plan_sha256` → Apply, diesmal mit
+`--smtp-from-override noreply@login.weltgewebe.net`. Danach werden die kanonische
+Env-Datei und die tatsächlich aktive Runtime frisch zurückgelesen und über den
+normalen Produktionspfad wiederhergestellt. Ein Rollback wird nur aufgrund eines
+konkret belegten Fehlers ausgelöst, nicht vorsorglich.
 
 Die öffentliche Kontaktadresse wird nur dann live geschaltet, wenn ihr menschlicher
 Inbound- **und Outbound-Pfad** vorher nach Schritt 6 belegt wurden. Dadurch ist die
