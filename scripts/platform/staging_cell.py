@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import argparse
+import base64
 import hashlib
+import hmac
 import json
 import os
 import secrets
@@ -166,6 +168,50 @@ def require_clean_commit(source_commit: str | None) -> str:
     return head
 
 
+def require_singleton_cluster(cluster: str) -> None:
+    if cluster != DEFAULT_CLUSTER:
+        raise StagingCellError(
+            f"staging persistent state is singleton; cluster must be exactly {DEFAULT_CLUSTER!r}"
+        )
+
+
+def load_cell_receipt(root: Path) -> dict[str, Any]:
+    path = root / "receipts/cell-bootstrap.json"
+    if not path.exists():
+        raise StagingCellError("cell bootstrap receipt is missing; refusing unbound operation")
+    linked = path.lstat()
+    if stat.S_ISLNK(linked.st_mode) or not stat.S_ISREG(linked.st_mode):
+        raise StagingCellError("cell bootstrap receipt must be a regular file")
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise StagingCellError("cell bootstrap receipt is malformed")
+    return payload
+
+
+def require_receipt_cluster(cell: dict[str, Any], cluster: str) -> None:
+    recorded = cell.get("cluster")
+    if recorded != cluster:
+        raise StagingCellError(
+            f"--cluster {cluster!r} does not match persisted cluster {recorded!r}"
+        )
+
+
+def recorded_secret_source_sha(root: Path) -> str | None:
+    receipt_path = root / "receipts/cell-bootstrap.json"
+    if not receipt_path.exists():
+        return None
+    cell = load_cell_receipt(root)
+    external = cell.get("external_secret")
+    source_sha = external.get("source_sha256") if isinstance(external, dict) else None
+    if (
+        not isinstance(source_sha, str)
+        or len(source_sha) != 64
+        or any(ch not in "0123456789abcdef" for ch in source_sha)
+    ):
+        raise StagingCellError("cell bootstrap receipt has no canonical external-secret source hash")
+    return source_sha
+
+
 def retained_postgres_state_exists(root: Path) -> bool:
     if (root / "receipts/cell-bootstrap.json").is_file():
         return True
@@ -238,7 +284,114 @@ def load_or_create_secret_material(root: Path) -> tuple[dict[str, str], str]:
         not isinstance(payload.get(key), str) or not payload[key] for key in required
     ):
         raise StagingCellError("staging secret source is malformed")
-    return {key: str(payload[key]) for key in required}, sha256_file(path)
+    source_sha = sha256_file(path)
+    recorded_sha = recorded_secret_source_sha(root)
+    if recorded_sha is not None and not hmac.compare_digest(source_sha, recorded_sha):
+        raise StagingCellError(
+            "staging secret source differs from the bootstrap receipt while retained PostgreSQL "
+            "state exists; restore the original source or use an explicit credential-rotation recovery"
+        )
+    return {key: str(payload[key]) for key in required}, source_sha
+
+
+def database_url(material: dict[str, str]) -> str:
+    encoded_user = urllib.parse.quote(material["database_user"], safe="")
+    encoded_password = urllib.parse.quote(material["database_password"], safe="")
+    encoded_db = urllib.parse.quote(material["database_name"], safe="")
+    return (
+        f"postgres://{encoded_user}:{encoded_password}@postgres.{DATA_NAMESPACE}.svc.cluster.local:5432/"
+        f"{encoded_db}?sslmode=disable"
+    )
+
+
+def secret_document_matches(
+    document: dict[str, Any],
+    *,
+    name: str,
+    namespace_name: str,
+    source_sha: str,
+    expected_values: dict[str, str],
+) -> bool:
+    metadata = document.get("metadata") if isinstance(document, dict) else None
+    if not isinstance(metadata, dict):
+        return False
+    annotations = metadata.get("annotations")
+    if (
+        metadata.get("name") != name
+        or metadata.get("namespace") != namespace_name
+        or not isinstance(annotations, dict)
+        or annotations.get("commonthing.net/external-secret-source-sha256") != source_sha
+    ):
+        return False
+    data = document.get("data")
+    if not isinstance(data, dict):
+        return False
+    for key, expected in expected_values.items():
+        encoded = data.get(key)
+        if not isinstance(encoded, str):
+            return False
+        try:
+            observed = base64.b64decode(encoded, validate=True)
+        except (ValueError, TypeError):
+            return False
+        if not hmac.compare_digest(observed, expected.encode("utf-8")):
+            return False
+    return True
+
+
+def verify_external_secret_binding(kubectl: str, root: Path) -> dict[str, Any]:
+    material, source_sha = load_or_create_secret_material(root)
+    expected = {
+        "database": (
+            DATA_NAMESPACE,
+            DATABASE_SECRET,
+            {
+                "username": material["database_user"],
+                "password": material["database_password"],
+                "database": material["database_name"],
+            },
+        ),
+        "runtime": (
+            APP_NAMESPACE,
+            RUNTIME_SECRET,
+            {"database-url": database_url(material)},
+        ),
+    }
+    matches: dict[str, bool] = {}
+    for label, (namespace_name, name, expected_values) in expected.items():
+        document = json.loads(
+            output(
+                [
+                    kubectl,
+                    "-n",
+                    namespace_name,
+                    "get",
+                    "secret",
+                    name,
+                    "-o",
+                    "json",
+                ]
+            )
+        )
+        matches[label] = secret_document_matches(
+            document,
+            name=name,
+            namespace_name=namespace_name,
+            source_sha=source_sha,
+            expected_values=expected_values,
+        )
+    return {
+        "source_sha256": source_sha,
+        "database": matches.get("database", False),
+        "runtime": matches.get("runtime", False),
+        "ready": bool(matches) and all(matches.values()),
+    }
+
+
+def flux_revision_matches_commit(revision: str, commit: str) -> bool:
+    if len(commit) != 40 or any(ch not in "0123456789abcdef" for ch in commit):
+        return False
+    return revision in {commit, f"sha1:{commit}"} or revision.endswith(f"@sha1:{commit}")
 
 
 def apply_yaml(kubectl: str, documents: list[dict[str, Any]] | dict[str, Any]) -> None:
@@ -263,13 +416,7 @@ def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
     username = material["database_user"]
     password = material["database_password"]
     database = material["database_name"]
-    encoded_user = urllib.parse.quote(username, safe="")
-    encoded_password = urllib.parse.quote(password, safe="")
-    encoded_db = urllib.parse.quote(database, safe="")
-    database_url = (
-        f"postgres://{encoded_user}:{encoded_password}@postgres.{DATA_NAMESPACE}.svc.cluster.local:5432/"
-        f"{encoded_db}?sslmode=disable"
-    )
+    runtime_database_url = database_url(material)
     annotations = {"commonthing.net/external-secret-source-sha256": source_sha}
     apply_yaml(kubectl, [namespace(DATA_NAMESPACE), namespace(APP_NAMESPACE, data_client=True)])
     apply_yaml(
@@ -287,7 +434,7 @@ def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
                 "kind": "Secret",
                 "metadata": {"name": RUNTIME_SECRET, "namespace": APP_NAMESPACE, "annotations": annotations},
                 "type": "Opaque",
-                "stringData": {"database-url": database_url},
+                "stringData": {"database-url": runtime_database_url},
             },
         ],
     )
@@ -363,6 +510,7 @@ def write_cell_receipt(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
+    require_singleton_cluster(args.cluster)
     root = state_root(args.state_root)
     root.mkdir(parents=True, exist_ok=True)
     os.chmod(root, 0o700)
@@ -382,6 +530,10 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     owner_id = args.owner_id
     if not owner_id:
         raise StagingCellError("--owner-id is required for real staging ownership")
+
+    secret_path = root / "secrets/staging-runtime.json"
+    if secret_path.exists() or retained_postgres_state_exists(root):
+        load_or_create_secret_material(root)
 
     rendered_kind_config = render_kind_config(root)
 
@@ -443,15 +595,17 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
+    require_singleton_cluster(args.cluster)
     root = state_root(args.state_root)
     configure_reference_paths(root)
     receipt = load_tool_receipt(root)
     kind = receipt["tools"]["kind"]
     kubectl = receipt["tools"]["kubectl"]
     owner_path = root / "receipts/cell-bootstrap.json"
-    if not owner_path.is_file():
+    if not owner_path.exists():
         return {"schema_version": 1, "status": "not-bootstrapped", "cluster": args.cluster}
-    owner = json.loads(owner_path.read_text(encoding="utf-8"))
+    owner = load_cell_receipt(root)
+    require_receipt_cluster(owner, args.cluster)
     commit = str(owner.get("bootstrap_commit") or "")
     owner_id = str(owner.get("owner_id") or "")
     reference.require_owned_cluster(
@@ -463,6 +617,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     source_revision = output(
         [kubectl, "-n", "flux-system", "get", "gitrepository", SOURCE_NAME, "-o", "jsonpath={.status.artifact.revision}"]
     )
+    source_matches_commit = flux_revision_matches_commit(source_revision, commit)
     data_ready = output(
         [kubectl, "-n", "flux-system", "get", "kustomization", DATA_KUSTOMIZATION, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}"]
     )
@@ -470,15 +625,24 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         pvc: output([kubectl, "-n", DATA_NAMESPACE, "get", "pvc", pvc, "-o", "jsonpath={.status.phase}"])
         for pvc in ("postgres-data", "nats-data")
     }
+    external_secret = verify_external_secret_binding(kubectl, root)
+    ready = (
+        source_matches_commit
+        and data_ready == "True"
+        and all(v == "Bound" for v in pvcs.values())
+        and external_secret["ready"]
+    )
     return {
         "schema_version": 1,
-        "status": "ready" if data_ready == "True" and all(v == "Bound" for v in pvcs.values()) else "degraded",
+        "status": "ready" if ready else "degraded",
         "cluster": args.cluster,
         "owner_id": owner_id,
         "bootstrap_commit": commit,
         "source_revision": source_revision,
+        "source_matches_commit": source_matches_commit,
         "data_ready": data_ready,
         "pvcs": pvcs,
+        "external_secret": external_secret,
         "image_promotion": image_promotion_state(),
         "app_activation": False,
         "production_changed": False,
@@ -486,13 +650,12 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
+    require_singleton_cluster(args.cluster)
     root = state_root(args.state_root)
     configure_reference_paths(root)
     receipt = load_tool_receipt(root)
-    cell_path = root / "receipts/cell-bootstrap.json"
-    if not cell_path.is_file():
-        raise StagingCellError("cell bootstrap receipt is missing; refusing unbound deletion")
-    cell = json.loads(cell_path.read_text(encoding="utf-8"))
+    cell = load_cell_receipt(root)
+    require_receipt_cluster(cell, args.cluster)
     commit = str(cell.get("bootstrap_commit") or "")
     owner_id = str(cell.get("owner_id") or "")
     if args.owner_id != owner_id:
@@ -518,6 +681,23 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def command_self_check() -> dict[str, Any]:
+    require_singleton_cluster(DEFAULT_CLUSTER)
+    try:
+        require_singleton_cluster(f"{DEFAULT_CLUSTER}-other")
+    except StagingCellError:
+        pass
+    else:
+        raise StagingCellError("self-check accepted a second cluster over singleton persistent state")
+
+    commit = "a" * 40
+    if not (
+        flux_revision_matches_commit(commit, commit)
+        and flux_revision_matches_commit(f"sha1:{commit}", commit)
+        and flux_revision_matches_commit(f"main@sha1:{commit}", commit)
+        and not flux_revision_matches_commit(f"sha1:{'b' * 40}", commit)
+    ):
+        raise StagingCellError("self-check Flux revision binding is invalid")
+
     with tempfile.TemporaryDirectory(prefix="commonthing-staging-cell-self-check-") as tmp_name:
         root = Path(tmp_name)
         (root / "data/postgres").mkdir(parents=True)
@@ -527,6 +707,69 @@ def command_self_check() -> dict[str, Any]:
             raise StagingCellError("self-check secret source permissions are invalid")
         if len(source_sha) != 64 or not material.get("database_password"):
             raise StagingCellError("self-check secret source binding is invalid")
+
+        annotations = {"commonthing.net/external-secret-source-sha256": source_sha}
+        database_document = {
+            "metadata": {"name": DATABASE_SECRET, "namespace": DATA_NAMESPACE, "annotations": annotations},
+            "data": {
+                key: base64.b64encode(value.encode("utf-8")).decode("ascii")
+                for key, value in {
+                    "username": material["database_user"],
+                    "password": material["database_password"],
+                    "database": material["database_name"],
+                }.items()
+            },
+        }
+        if not secret_document_matches(
+            database_document,
+            name=DATABASE_SECRET,
+            namespace_name=DATA_NAMESPACE,
+            source_sha=source_sha,
+            expected_values={
+                "username": material["database_user"],
+                "password": material["database_password"],
+                "database": material["database_name"],
+            },
+        ):
+            raise StagingCellError("self-check rejected a valid injected database Secret")
+        database_document["data"]["password"] = base64.b64encode(b"wrong").decode("ascii")
+        if secret_document_matches(
+            database_document,
+            name=DATABASE_SECRET,
+            namespace_name=DATA_NAMESPACE,
+            source_sha=source_sha,
+            expected_values={
+                "username": material["database_user"],
+                "password": material["database_password"],
+                "database": material["database_name"],
+            },
+        ):
+            raise StagingCellError("self-check accepted changed injected Secret data")
+
+        atomic_json(
+            root / "receipts/cell-bootstrap.json",
+            {
+                "schema_version": 1,
+                "cluster": DEFAULT_CLUSTER,
+                "external_secret": {"source_sha256": source_sha},
+            },
+        )
+        changed = dict(material)
+        changed["schema_version"] = 1
+        changed["database_password"] = "replacement-password"
+        atomic_json(secret_path, changed)
+        try:
+            load_or_create_secret_material(root)
+        except StagingCellError as error:
+            if "differs from the bootstrap receipt" not in str(error):
+                raise
+        else:
+            raise StagingCellError("self-check accepted credential rotation over retained PostgreSQL state")
+
+        atomic_json(
+            secret_path,
+            {"schema_version": 1, **material},
+        )
         secret_path.unlink()
         (root / "data/postgres/PG_VERSION").write_text("16\n", encoding="utf-8")
         try:
@@ -550,7 +793,14 @@ def command_self_check() -> dict[str, Any]:
     return {
         "schema_version": 1,
         "status": "pass",
-        "checks": ["retained-secret-fail-closed", "state-root-kind-render"],
+        "checks": [
+            "singleton-cluster",
+            "flux-source-exact-commit",
+            "retained-secret-fail-closed",
+            "retained-secret-rotation-fail-closed",
+            "injected-secret-integrity",
+            "state-root-kind-render",
+        ],
     }
 
 

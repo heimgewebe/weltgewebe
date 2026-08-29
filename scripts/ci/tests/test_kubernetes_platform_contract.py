@@ -60,6 +60,10 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "weltgewebe_oci_proof_mirror",
             ROOT / "scripts/platform/oci_proof_mirror.py",
         )
+        cls.staging_cell = load_module(
+            "weltgewebe_staging_cell",
+            ROOT / "scripts/platform/staging_cell.py",
+        )
 
     def test_tool_bootstrap_selection_is_exact_and_deduplicated(self) -> None:
         lock = {"tools": {"kustomize": {"version": "x"}, "trivy": {"version": "y"}}}
@@ -387,6 +391,91 @@ class KubernetesPlatformContractTests(unittest.TestCase):
     def test_static_platform_contract_passes(self) -> None:
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
+
+    def test_staging_cell_singleton_cluster_and_receipt_binding(self) -> None:
+        self.staging_cell.require_singleton_cluster(self.staging_cell.DEFAULT_CLUSTER)
+        with self.assertRaisesRegex(self.staging_cell.StagingCellError, "singleton"):
+            self.staging_cell.require_singleton_cluster("other-staging")
+        self.staging_cell.require_receipt_cluster(
+            {"cluster": self.staging_cell.DEFAULT_CLUSTER},
+            self.staging_cell.DEFAULT_CLUSTER,
+        )
+        with self.assertRaisesRegex(self.staging_cell.StagingCellError, "persisted cluster"):
+            self.staging_cell.require_receipt_cluster(
+                {"cluster": self.staging_cell.DEFAULT_CLUSTER},
+                "other-staging",
+            )
+
+    def test_staging_cell_flux_revision_requires_exact_commit(self) -> None:
+        commit = "a" * 40
+        for revision in (commit, f"sha1:{commit}", f"main@sha1:{commit}"):
+            with self.subTest(revision=revision):
+                self.assertTrue(
+                    self.staging_cell.flux_revision_matches_commit(revision, commit)
+                )
+        self.assertFalse(
+            self.staging_cell.flux_revision_matches_commit(f"sha1:{'b' * 40}", commit)
+        )
+
+    def test_staging_cell_rejects_secret_rotation_over_retained_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_name:
+            root = Path(tmp_name)
+            material, source_sha = self.staging_cell.load_or_create_secret_material(root)
+            self.staging_cell.atomic_json(
+                root / "receipts/cell-bootstrap.json",
+                {
+                    "schema_version": 1,
+                    "cluster": self.staging_cell.DEFAULT_CLUSTER,
+                    "external_secret": {"source_sha256": source_sha},
+                },
+            )
+            changed = {"schema_version": 1, **material}
+            changed["database_password"] = "replacement"
+            self.staging_cell.atomic_json(
+                root / "secrets/staging-runtime.json", changed
+            )
+            with self.assertRaisesRegex(
+                self.staging_cell.StagingCellError, "differs from the bootstrap receipt"
+            ):
+                self.staging_cell.load_or_create_secret_material(root)
+
+    def test_staging_cell_secret_integrity_rejects_changed_values(self) -> None:
+        source_sha = "a" * 64
+        expected = {"username": "weltgewebe", "password": "secret"}
+        document = {
+            "metadata": {
+                "name": "database",
+                "namespace": "data",
+                "annotations": {
+                    "commonthing.net/external-secret-source-sha256": source_sha
+                },
+            },
+            "data": {
+                key: self.staging_cell.base64.b64encode(value.encode()).decode()
+                for key, value in expected.items()
+            },
+        }
+        self.assertTrue(
+            self.staging_cell.secret_document_matches(
+                document,
+                name="database",
+                namespace_name="data",
+                source_sha=source_sha,
+                expected_values=expected,
+            )
+        )
+        document["data"]["password"] = self.staging_cell.base64.b64encode(
+            b"changed"
+        ).decode()
+        self.assertFalse(
+            self.staging_cell.secret_document_matches(
+                document,
+                name="database",
+                namespace_name="data",
+                source_sha=source_sha,
+                expected_values=expected,
+            )
+        )
 
     def test_oci_proof_mirror_contract_is_private_digest_bound_and_budgeted(self) -> None:
         result = self.oci_mirror.validate_contract()

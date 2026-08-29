@@ -663,7 +663,12 @@ def _assert_staging_cell_contract() -> None:
     if set(deployments) != {"postgres", "nats"}:
         raise ContractError(f"unexpected staging data deployments: {sorted(deployments)}")
     for name, claim in (("postgres", "postgres-data"), ("nats", "nats-data")):
-        volumes = deployments[name].get("spec", {}).get("template", {}).get("spec", {}).get("volumes", [])
+        deployment_spec = deployments[name].get("spec", {})
+        if deployment_spec.get("strategy") != {"type": "Recreate"}:
+            raise ContractError(
+                f"staging {name} must use Recreate to prevent concurrent writers on retained host storage"
+            )
+        volumes = deployment_spec.get("template", {}).get("spec", {}).get("volumes", [])
         data = next((item for item in volumes if item.get("name") == "data"), None)
         if not isinstance(data, dict) or data.get("persistentVolumeClaim", {}).get("claimName") != claim:
             raise ContractError(f"staging {name} data volume must use PVC {claim}")
