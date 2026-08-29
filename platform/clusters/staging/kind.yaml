@@ -8,16 +8,16 @@ networking:
 nodes:
   - role: control-plane
     extraMounts:
-      - hostPath: /home/alex/.local/state/weltgewebe/staging-cell/data
+      - hostPath: __COMMONTHING_STAGING_DATA_ROOT__
         containerPath: /var/local/weltgewebe-staging
         readOnly: false
   - role: worker
     extraMounts:
-      - hostPath: /home/alex/.local/state/weltgewebe/staging-cell/data
+      - hostPath: __COMMONTHING_STAGING_DATA_ROOT__
         containerPath: /var/local/weltgewebe-staging
         readOnly: false
   - role: worker
     extraMounts:
-      - hostPath: /home/alex/.local/state/weltgewebe/staging-cell/data
+      - hostPath: __COMMONTHING_STAGING_DATA_ROOT__
         containerPath: /var/local/weltgewebe-staging
         readOnly: false

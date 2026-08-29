@@ -91,6 +91,22 @@ def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> No
         tmp.unlink(missing_ok=True)
 
 
+def atomic_text(path: Path, text: str, *, mode: int = 0o600) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    tmp = Path(tmp_name)
+    try:
+        os.fchmod(fd, mode)
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write(text)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(tmp, path)
+        os.chmod(path, mode)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
 def state_root(value: str | None) -> Path:
     resolved = Path(value).expanduser().resolve() if value else DEFAULT_STATE_ROOT.resolve()
     expected = DEFAULT_STATE_ROOT.resolve()
@@ -150,6 +166,51 @@ def require_clean_commit(source_commit: str | None) -> str:
     return head
 
 
+def retained_postgres_state_exists(root: Path) -> bool:
+    if (root / "receipts/cell-bootstrap.json").is_file():
+        return True
+    pgdata = root / "data/postgres"
+    if not pgdata.exists():
+        return False
+    linked = pgdata.lstat()
+    if stat.S_ISLNK(linked.st_mode) or not stat.S_ISDIR(linked.st_mode):
+        raise StagingCellError("staging PostgreSQL data path must be a regular directory")
+    try:
+        with os.scandir(pgdata) as entries:
+            return next(entries, None) is not None
+    except PermissionError:
+        # A retained database directory may intentionally be 0700 and owned by
+        # the container UID. Inability to inspect it is evidence to preserve,
+        # never permission to mint replacement credentials.
+        return True
+
+
+def render_kind_config(root: Path) -> Path:
+    template_path = ROOT / "platform/clusters/staging/kind.yaml"
+    document = yaml.safe_load(template_path.read_text(encoding="utf-8"))
+    if not isinstance(document, dict) or document.get("kind") != "Cluster":
+        raise StagingCellError("staging kind template is malformed")
+    nodes = document.get("nodes")
+    if not isinstance(nodes, list) or len(nodes) != 3:
+        raise StagingCellError("staging kind template must contain exactly three nodes")
+    data_root = str((root / "data").resolve())
+    placeholder = "__COMMONTHING_STAGING_DATA_ROOT__"
+    for index, node in enumerate(nodes):
+        mounts = node.get("extraMounts") if isinstance(node, dict) else None
+        if not isinstance(mounts, list) or len(mounts) != 1:
+            raise StagingCellError(f"staging kind node {index} mount contract is invalid")
+        mount = mounts[0]
+        if mount.get("hostPath") != placeholder:
+            raise StagingCellError(f"staging kind node {index} hostPath template drift")
+        if mount.get("containerPath") != "/var/local/weltgewebe-staging":
+            raise StagingCellError(f"staging kind node {index} containerPath drift")
+        mount["hostPath"] = data_root
+    rendered = yaml.safe_dump(document, sort_keys=False)
+    path = root / "generated/kind.yaml"
+    atomic_text(path, rendered, mode=0o600)
+    return path
+
+
 def load_or_create_secret_material(root: Path) -> tuple[dict[str, str], str]:
     path = root / "secrets/staging-runtime.json"
     if path.exists():
@@ -160,6 +221,11 @@ def load_or_create_secret_material(root: Path) -> tuple[dict[str, str], str]:
             raise StagingCellError("staging secret source must not be group/world accessible")
         payload = json.loads(path.read_text(encoding="utf-8"))
     else:
+        if retained_postgres_state_exists(root):
+            raise StagingCellError(
+                "staging secret source is missing while retained PostgreSQL state exists; "
+                "restore the original secret source or perform an explicit backup/restore recovery"
+            )
         payload = {
             "schema_version": 1,
             "database_user": "weltgewebe",
@@ -317,6 +383,8 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     if not owner_id:
         raise StagingCellError("--owner-id is required for real staging ownership")
 
+    rendered_kind_config = render_kind_config(root)
+
     if args.cluster in reference.clusters(kind):
         reference.require_owned_cluster(
             kind,
@@ -330,7 +398,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             kind,
             args.cluster,
             receipt["kubernetes"]["kind_node_image"],
-            "platform/clusters/staging/kind.yaml",
+            str(rendered_kind_config),
             commit,
             owner_id,
             timeout=900,
@@ -449,6 +517,43 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
     return {**result, "receipt_path": str(path), "receipt_sha256": sha256_file(path)}
 
 
+def command_self_check() -> dict[str, Any]:
+    with tempfile.TemporaryDirectory(prefix="commonthing-staging-cell-self-check-") as tmp_name:
+        root = Path(tmp_name)
+        (root / "data/postgres").mkdir(parents=True)
+        material, source_sha = load_or_create_secret_material(root)
+        secret_path = root / "secrets/staging-runtime.json"
+        if not secret_path.is_file() or stat.S_IMODE(secret_path.stat().st_mode) != 0o600:
+            raise StagingCellError("self-check secret source permissions are invalid")
+        if len(source_sha) != 64 or not material.get("database_password"):
+            raise StagingCellError("self-check secret source binding is invalid")
+        secret_path.unlink()
+        (root / "data/postgres/PG_VERSION").write_text("16\n", encoding="utf-8")
+        try:
+            load_or_create_secret_material(root)
+        except StagingCellError as error:
+            if "retained PostgreSQL state exists" not in str(error):
+                raise
+        else:
+            raise StagingCellError("self-check regenerated credentials over retained PostgreSQL state")
+
+        rendered_path = render_kind_config(root)
+        rendered = yaml.safe_load(rendered_path.read_text(encoding="utf-8"))
+        expected = str((root / "data").resolve())
+        observed = [
+            mount.get("hostPath")
+            for node in rendered.get("nodes", [])
+            for mount in node.get("extraMounts", [])
+        ]
+        if observed != [expected, expected, expected]:
+            raise StagingCellError("self-check rendered kind host mounts do not bind the state root")
+    return {
+        "schema_version": 1,
+        "status": "pass",
+        "checks": ["retained-secret-fail-closed", "state-root-kind-render"],
+    }
+
+
 def parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Persistent owner-bound T084 staging GewebeZelle controller")
     sub = p.add_subparsers(dest="command", required=True)
@@ -464,6 +569,7 @@ def parser() -> argparse.ArgumentParser:
     down.add_argument("--state-root")
     down.add_argument("--cluster", default=DEFAULT_CLUSTER)
     down.add_argument("--owner-id", required=True)
+    sub.add_parser("self-check")
     return p
 
 
@@ -474,8 +580,10 @@ def main() -> int:
             result = command_up(args)
         elif args.command == "status":
             result = command_status(args)
-        else:
+        elif args.command == "down":
             result = command_down(args)
+        else:
+            result = command_self_check()
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
     except (StagingCellError, reference.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:

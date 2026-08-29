@@ -627,7 +627,7 @@ def _assert_staging_cell_contract() -> None:
     nodes = cluster.get("nodes")
     if not isinstance(nodes, list) or len(nodes) != 3:
         raise ContractError("staging kind cluster must have one control-plane and two workers")
-    expected_host = "/home/alex/.local/state/weltgewebe/staging-cell/data"
+    expected_host = "__COMMONTHING_STAGING_DATA_ROOT__"
     expected_container = "/var/local/weltgewebe-staging"
     for index, node in enumerate(nodes):
         mounts = node.get("extraMounts") if isinstance(node, dict) else None
@@ -680,6 +680,8 @@ def _assert_staging_cell_contract() -> None:
     secret_contract = json.loads((PLATFORM / "apps/weltgewebe/secret-contract.json").read_text(encoding="utf-8"))
     if secret_contract.get("required_keys") != ["database-url"]:
         raise ContractError("staging controller assumes the canonical single required database-url secret key")
+
+    _run([sys.executable, "scripts/platform/staging_cell.py", "self-check"])
 
 
 def validate(render: bool) -> dict[str, Any]:
