@@ -34,6 +34,7 @@ def valid_source(
     port: str = "2525",
     password: str = SECRET_SENTINEL,
     smtp_from: str = "noreply@example.test",
+    # commonthing-naming: legacy
     app_base_url: str = "https://weltgewebe.net",
 ) -> str:
     return "\n".join(
@@ -983,6 +984,7 @@ def test_documented_workflow_relates_script_test_and_ci() -> None:
 def test_app_base_url_is_canonical_independent_of_source_value() -> None:
     module = load_module()
     values = module.parse_env(
+        # commonthing-naming: legacy
         valid_source(app_base_url="https://weltgewebe.net"), label="source"
     ).values
 
@@ -1003,6 +1005,7 @@ def test_reconcile_replaces_only_legacy_app_base_url_and_is_idempotent(
     )
     destination_text = destination_text.replace(
         "APP_BASE_URL=https://commonthing.net",
+        # commonthing-naming: legacy
         "APP_BASE_URL=https://weltgewebe.net",
     ) + "\n"
     source, destination, backup_dir = create_runtime_files(
