@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Mapping, Sequence
 
 EXPECTED_APP_BASE_URL = "https://commonthing.net"
+EXPECTED_SMTP_FROM = "noreply@login.commonthing.net"
 SECRET_KEYS = {"SMTP_PASS", "SMTP_USER"}
 REQUIRED_SMTP_KEYS = ("SMTP_HOST", "SMTP_PORT", "SMTP_FROM")
 
@@ -131,6 +132,23 @@ def check_smtp_presence(env: Mapping[str, str]) -> CheckResult:
     )
 
 
+def check_smtp_from(env: Mapping[str, str], *, expected: str) -> CheckResult:
+    value = env.get("SMTP_FROM", "").strip()
+    if value == expected:
+        return pass_result(
+            "smtp-from",
+            "SMTP_FROM matches the canonical commonThing technical sender",
+            status="configured",
+        )
+    if not value:
+        return fail_result("smtp-from", "SMTP_FROM is missing", status="absent")
+    return fail_result(
+        "smtp-from",
+        "SMTP_FROM does not match the expected technical sender",
+        status="mismatch",
+    )
+
+
 def check_smtp_port(env: Mapping[str, str]) -> CheckResult:
     raw = env.get("SMTP_PORT", "").strip()
     try:
@@ -201,6 +219,7 @@ def run_checks(
     production_public_login: bool,
     expected_app_base_url: str,
     allow_unauthenticated_smtp: bool,
+    expected_smtp_from: str | None = None,
 ) -> list[CheckResult]:
     results = [
         check_public_login(env, require_enabled=production_public_login),
@@ -208,6 +227,8 @@ def run_checks(
         check_app_base_url(env, expected=expected_app_base_url),
         check_smtp_presence(env),
     ]
+    if expected_smtp_from is not None:
+        results.append(check_smtp_from(env, expected=expected_smtp_from))
     if present(env, "SMTP_PORT"):
         results.append(check_smtp_port(env))
     else:
@@ -222,6 +243,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--env-file", action="append", type=Path, required=True)
     parser.add_argument("--production-public-login", action="store_true")
     parser.add_argument("--expected-app-base-url", default=EXPECTED_APP_BASE_URL)
+    parser.add_argument("--expected-smtp-from", default=EXPECTED_SMTP_FROM)
     parser.add_argument("--allow-unauthenticated-smtp", action="store_true")
     parser.add_argument("--json", action="store_true")
     return parser
@@ -244,6 +266,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         production_public_login=args.production_public_login,
         expected_app_base_url=args.expected_app_base_url,
         allow_unauthenticated_smtp=args.allow_unauthenticated_smtp,
+        expected_smtp_from=args.expected_smtp_from,
     )
     ok = all(result.ok for result in results)
     payload = {"status": "pass" if ok else "fail", "checks": [result.payload() for result in results]}

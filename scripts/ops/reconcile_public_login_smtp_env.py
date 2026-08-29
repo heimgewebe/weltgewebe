@@ -3,8 +3,10 @@
 
 The command is fail-closed and value-redacting:
 
-* only an explicit allowlist of keys is copied;
-* source values are canonicalized to the exact runtime vocabulary;
+* only an explicit allowlist of runtime keys is reconciled;
+* APP_BASE_URL is fixed to the canonical commonThing web identity;
+* an explicit SMTP_FROM cutover override is restricted to approved senders;
+* source-derived values are canonicalized to the exact runtime vocabulary;
 * dry-run is the default and performs the same trust checks as apply;
 * apply requires the exact plan hash emitted by dry-run;
 * source, destination, lock and backup paths are opened without following symlinks;
@@ -30,6 +32,7 @@ from typing import Mapping, Protocol, Sequence
 
 
 APPROVED_KEYS: tuple[str, ...] = (
+    "APP_BASE_URL",
     "AUTH_PUBLIC_LOGIN",
     "AUTH_LOG_MAGIC_TOKEN",
     "SMTP_HOST",
@@ -49,10 +52,17 @@ REQUIRED_SOURCE_KEYS: tuple[str, ...] = (
     "SMTP_FROM",
 )
 TLS_PORTS = {465, 587, 2525}
-RECONCILE_MARKER = (
-    "# Reconciled public-login and SMTP keys from the approved legacy runtime source."
+CANONICAL_APP_BASE_URL = "https://commonthing.net"
+ALLOWED_SMTP_FROM_OVERRIDES = frozenset(
+    {
+        "noreply@login.commonthing.net",
+        "noreply@login.weltgewebe.net",
+    }
 )
-PLAN_DOMAIN = b"weltgewebe-public-login-smtp-env-plan-v1\0"
+RECONCILE_MARKER = (
+    "# Reconciled canonical app-base, public-login and SMTP keys."
+)
+PLAN_DOMAIN = b"weltgewebe-public-login-smtp-env-plan-v2\0"
 PLAN_SHA256_RE = re.compile(r"[0-9a-f]{64}")
 ASCII_PORT_RE = re.compile(r"[0-9]{1,5}")
 INVALID_LINE_CHARS = frozenset("\r\x0b\x0c\x1c\x1d\x1e\x85\u2028\u2029")
@@ -123,7 +133,9 @@ def _logical_scalar(raw: str, *, key: str) -> str:
     return value
 
 
-def validate_source(values: Mapping[str, str]) -> dict[str, str]:
+def validate_source(
+    values: Mapping[str, str], *, smtp_from_override: str | None = None
+) -> dict[str, str]:
     missing = [key for key in REQUIRED_SOURCE_KEYS if key not in values]
     if missing:
         raise ReconcileError(
@@ -163,6 +175,13 @@ def validate_source(values: Mapping[str, str]) -> dict[str, str]:
         if not _logical_scalar(raw_value, key=key):
             raise ReconcileError(f"{key} is empty in the source")
         selected[key] = raw_value
+
+    if smtp_from_override is not None:
+        if smtp_from_override not in ALLOWED_SMTP_FROM_OVERRIDES:
+            raise ReconcileError("SMTP_FROM override is not an approved sender")
+        selected["SMTP_FROM"] = smtp_from_override
+
+    selected["APP_BASE_URL"] = CANONICAL_APP_BASE_URL
 
     return {key: selected[key] for key in APPROVED_KEYS}
 
@@ -436,6 +455,7 @@ def reconcile(
     backup_dir: Path,
     apply: bool,
     expected_plan_sha256: str | None = None,
+    smtp_from_override: str | None = None,
     require_root: bool = True,
 ) -> dict[str, object]:
     source = _normalize_absolute_path(source_path, label="source")
@@ -481,7 +501,8 @@ def reconcile(
         backup_dir_stat = os.fstat(backup_dir_fd)
 
         selected = validate_source(
-            parse_env(initial_source.text, label="source").values
+            parse_env(initial_source.text, label="source").values,
+            smtp_from_override=smtp_from_override,
         )
         destination_document = parse_env(initial_destination.text, label="destination")
         planned_content = build_reconciled_content(initial_destination.text, selected)
@@ -552,7 +573,8 @@ def reconcile(
             raise ReconcileError("destination content changed during reconciliation")
 
         selected = validate_source(
-            parse_env(current_source.text, label="source").values
+            parse_env(current_source.text, label="source").values,
+            smtp_from_override=smtp_from_override,
         )
         current_destination_document = parse_env(
             current_destination.text, label="destination"
@@ -687,6 +709,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="plan_sha256 from the immediately preceding dry-run; required with --apply",
     )
     parser.add_argument(
+        "--smtp-from-override",
+        help=(
+            "optional cutover/rollback sender override; only the two approved "
+            "commonThing/Legacy senders are accepted"
+        ),
+    )
+    parser.add_argument(
         "--json", action="store_true", help="emit a value-redacted JSON receipt"
     )
     return parser
@@ -701,6 +730,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             backup_dir=args.backup_dir,
             apply=args.apply,
             expected_plan_sha256=args.expected_plan_sha256,
+            smtp_from_override=args.smtp_from_override,
         )
     except (OSError, ReconcileError) as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
