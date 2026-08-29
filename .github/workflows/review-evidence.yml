@@ -187,8 +187,16 @@ jobs:
           [[ "${diff_file_count}" == "${expected_files}" ]]
           jq -e 'all(.[]; (.filename | type == "string") and (.filename | length > 0))' \
             "${RUNNER_TEMP}/files.json" >/dev/null
-          jq -e 'all(.[]; if .status == "renamed" then ((.previous_filename | type) == "string" and (.previous_filename | length) > 0) else true end)' \
-            "${RUNNER_TEMP}/files.json" >/dev/null
+          jq -e '
+            all(.[];
+              if .status == "renamed" then
+                ((.previous_filename | type) == "string") and
+                ((.previous_filename | length) > 0)
+              else
+                true
+              end
+            )
+          ' "${RUNNER_TEMP}/files.json" >/dev/null
 
           gh api -H "${api_header}" "${pr_api}" > "${RUNNER_TEMP}/pr-after.json"
           jq -e --arg base "${base_sha}" --arg head "${head_sha}" '
