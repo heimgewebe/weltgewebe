@@ -5,7 +5,7 @@ doc_type: reference
 status: accepted
 summary: >
   Kanonisiert die Trennung von Domain/DNS, menschlicher Mailbox und technischer
-  Magic-Link-Mail für Weltgewebe.
+  Magic-Link-Mail für commonThing einschließlich der Legacy-Kompatibilität.
 relations:
   - type: relates_to
     target: docs/adr/ADR-0006__auth-magic-link-session-passkey.md
@@ -14,7 +14,7 @@ relations:
   - type: relates_to
     target: docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
   - type: relates_to
-    target: docs/runbooks/domain-mail-cutover.md
+    target: docs/runbooks/commonthing-mail-identity-cutover.md
 ---
 
 # ADR-0008 — Domain-, Mail- und SMTP-Providergrenzen
@@ -25,55 +25,71 @@ accepted
 
 ## Kontext
 
-- IONOS liefert aktuell DNS/Mailbox und SMTP.
-- Public Login/Magic Link hängt an SMTP.
-- Heimserver ist Entwicklung/Heimruntime, nicht langfristige Produktionsplattform.
+- INWX ist Registrar und autoritativer DNS-Provider.
+- commonThing ist die kanonische öffentliche Produktidentität.
+- Public Login/Magic Link hängt an einem verifizierten technischen SMTP-Absender.
+- Menschliche Kontaktmail und technische Login-Mail besitzen getrennte Providerrollen.
 
 ## Entscheidung
 
-- INWX für Registrar/DNS.
-- mailbox.org für menschliche Mailbox `kontakt@weltgewebe.net`.
-- Brevo für technische Magic-Link-Mail `noreply@login.weltgewebe.net`.
-- `https://commonthing.net` und die Marke commonThing für die öffentliche App.
-- `weltgewebe.net` bleibt Maildomain und wird als Legacy-Webdomain permanent
-  und URI-erhaltend auf `https://commonthing.net` umgeleitet;
-  `api.weltgewebe.net` bleibt der API-Host.
-- App-/Produktionshosting bleibt entkoppelt.
+- INWX bleibt für Registrar/DNS zuständig.
+- mailbox.org trägt die kanonische menschliche Mailbox `kontakt@commonthing.net`.
+- Brevo trägt den kanonischen technischen Magic-Link-Absender
+  `noreply@login.commonthing.net`.
+- Die früheren Mailidentitäten bleiben während der Migration als
+  Kompatibilitätsweg erhalten und werden nicht im selben Schritt entfernt.
+<!-- commonthing-naming: legacy -->
+- `kontakt@weltgewebe.net` bleibt Alias bzw. Zustellweg zur menschlichen Mailbox.
+<!-- commonthing-naming: legacy -->
+- `noreply@login.weltgewebe.net` bleibt Legacy-Absender, bis der neue Brevo-Pfad
+  Ende-zu-Ende belegt ist, und danach nur solange der Kompatibilitätsvertrag gilt.
+- App-/Produktionshosting bleibt von beiden Mailprovidern entkoppelt.
 
-Explizite Rollentrennung:
+## Explizite Rollentrennung
 
-- `kontakt@weltgewebe.net` = menschliche Kontakt-/Adminadresse bei mailbox.org.
-- `noreply@login.weltgewebe.net` = technischer Magic-Link-Absender über Brevo.
+- `kontakt@commonthing.net` = menschliche Kontakt-/Adminadresse bei mailbox.org.
+- `noreply@login.commonthing.net` = technischer Magic-Link-Absender über Brevo.
+- Ein menschliches Postfach darf nicht als automatischer Login-Absender verwendet
+  werden; der technische Absender ist kein Support-Postfach.
 
-## Operativer Zwischenstand
+## Cutover-Vertrag
 
-- Mail ist von IONOS entkoppelt (via mailbox.org und Brevo).
-- IONOS bleibt aktuell Registrar und DNS-Provider.
-- IONOS kann nicht durch Mail-Gates allein gekündigt werden.
+Die Reihenfolge ist fail-closed:
+
+1. neue Identität beim jeweiligen Provider anlegen,
+2. nur die vom Provider tatsächlich ausgegebenen DNS-Records bei INWX ergänzen,
+3. autoritative DNS-Antworten und Provider-Verifikation zurücklesen,
+4. technische Zustellung bzw. menschliche Inbound/Outbound-Mail beweisen,
+5. erst danach Repository, Runtime und öffentliche Kontaktflächen kanonisch umschalten,
+6. Legacy-Adressen beobachten und erst in einer separaten späteren Entscheidung abbauen.
+
+Repository-Konfiguration oder DNS-Einträge allein beweisen keine Zustellbarkeit.
 
 ## Nicht-Ziele
 
-- keine Secrets im Repo.
-- kein Live-Cutover durch diesen PR.
-- keine Terraform-/Provider-Automation.
+- keine Secrets im Repo,
+- keine erfundenen DKIM-, SPF- oder Provider-Verifikationswerte,
+- keine Entfernung der Legacy-Adressen im Phase-3-Cutover,
+- keine Kopplung von Webhosting und Mailprovider.
 
 ## Konsequenzen
 
-- IONOS-Kündigung ist erst nach INWX-Registrar/DNS-Cutover und Webhosting-/Redirect-Entscheidung zulässig.
-- `weltweb.net` und `weltweberei.org` sind No-Mail-Domains, sofern nicht neu entschieden.
-- `weltweberei.org`-Web/WordPress ist separat zu behandeln.
-- `kontakt@weltgewebe.net` und `noreply@login.weltgewebe.net` dürfen nicht vermischt werden.
-- `APP_BASE_URL` muss im öffentlichen Betrieb `https://commonthing.net` sein.
-- Der Produkt-Domain-Cutover ändert weder menschliche noch technische
-  SMTP-/Mailidentitäten.
-- `home.arpa` ist nur Heim-/Entwicklungsziel.
+- `SMTP_FROM` muss nach dem technischen Cutover exakt
+  `noreply@login.commonthing.net` sein.
+- `APP_BASE_URL` bleibt im öffentlichen Betrieb `https://commonthing.net`.
+- Impressum und Datenschutz dürfen `kontakt@commonthing.net` erst live ausweisen,
+  wenn die Adresse bei mailbox.org nachweislich zustellbar ist.
+- Ein fehlgeschlagener Provider- oder DNS-Readback stoppt den Cutover; er wird nicht
+  durch einen Repository-Merge überstimmt.
 
 ## Alternativen
 
-- netcup All-in-one: verworfen als Ideallösung wegen enger Kopplung von Domain/Mail/Web/Auth-Mail.
-- Cloudflare + Mailprovider.
-- IONOS reduziert behalten.
+- ein einzelner All-in-one-Provider: verworfen wegen unnötiger Kopplung der
+  Lebenszyklen von Domainbesitz, menschlicher Mail, Login-Mail und App-Hosting.
+- Weiterbetrieb ausschließlich unter der früheren Produktidentität: verworfen,
+  weil commonThing bereits die kanonische Web- und API-Identität ist.
 
 ## Begründung
 
-- Trennung der Lebenszyklen: Domainbesitz, menschliche Mail, technische Login-Mail, App-Hosting.
+Die Trennung hält Domainbesitz, menschliche Kommunikation, technische
+Authentifizierung und App-Hosting unabhängig migrierbar und rückrollbar.

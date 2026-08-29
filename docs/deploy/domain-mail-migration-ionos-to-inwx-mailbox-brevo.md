@@ -4,9 +4,8 @@ title: "Architektur & Historie: Domain-/Mail-Migration IONOS zu INWX"
 doc_type: reference
 status: active
 summary: >
-  Aktuelle Providerarchitektur sowie historische Referenz des abgeschlossenen
-  IONOS-zu-INWX-Cutovers für die erhaltenen weltgewebe.net-Mailidentitäten und
-  den commonThing-Webcutover.
+  Aktuelle Providerarchitektur, historische IONOS-zu-INWX-Referenz und
+  Beweisgrenzen für den commonThing-Mailidentitäts-Cutover.
 relations:
   - type: relates_to
     target: docs/deploy/README.md
@@ -83,10 +82,26 @@ Runtime- und DNS-Readback beschreiben sie **keinen bereits erreichten Livezustan
 - **Autoritative DNS-Verwaltung:** Die Domain ist weiterhin an alte UI-DNS-/IONOS-Nameserver delegiert. INWX ist für diese Domain noch nicht autoritativ. Es existiert noch kein belegter öffentlicher Zielzustand.
 - **Ziel:** INWX-Delegation; eigenständige Informationsseite; defensive No-Mail-Records; HTTPS-Nachweis. Die frühere WordPress-/IONOS-Fläche ist kein zu erhaltender Zielzustand.
 
-## 3. Mailrollen
+## 3. Mailrollen und commonThing-Cutover
 
-- **mailbox.org:** `kontakt@weltgewebe.net` (menschliche Inbound/Outbound-Mail). Betriebsfähig und belegt.
-- **Brevo:** `noreply@login.weltgewebe.net` (technische Magic-Link-Mail). Betriebsfähig und belegt.
+Normativer Zielzustand:
+
+- **mailbox.org:** `kontakt@commonthing.net` als kanonische menschliche Inbound-/Outbound-Adresse.
+- **Brevo:** `noreply@login.commonthing.net` als kanonischer technischer Magic-Link-Absender.
+
+Zeitgebundener Live-Readback vom 29. August 2026 vor dem Provider-Cutover:
+
+<!-- commonthing-naming: legacy -->
+- `kontakt@weltgewebe.net` ist weiterhin die belegte menschliche Mailidentität; die alte Domain besitzt die mailbox.org-MX-Records.
+<!-- commonthing-naming: legacy -->
+- `noreply@login.weltgewebe.net` ist weiterhin der aktive Produktions-Absender über Brevo.
+- `commonthing.net` besitzt zu diesem Zeitpunkt noch keine Mail-MX-/TXT-Records.
+- `login.commonthing.net` besitzt zu diesem Zeitpunkt noch keine Brevo-Verifikations-/Authentifizierungsrecords.
+
+Damit ist die commonThing-Mailidentität **noch kein Livezustand**. Provider-Anlage,
+exakte DNS-Werte, autoritativer Readback, Provider-Verifikation und reale Zustellung
+sind harte Gates vor Runtime- und Public-Surface-Cutover. Der Ablauf steht in
+`docs/runbooks/commonthing-mail-identity-cutover.md`.
 
 ## 4. DNS- und historischer DDNS-Pfad
 
