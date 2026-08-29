@@ -82,6 +82,21 @@ Repository-Konfiguration oder DNS-Einträge allein beweisen keine Zustellbarkeit
 - Ein fehlgeschlagener Provider- oder DNS-Readback stoppt den Cutover; er wird nicht
   durch einen Repository-Merge überstimmt.
 
+## Weitergeltende angrenzende Domainverträge
+
+Die Identitätsmigration ändert nicht automatisch die Rollen anderer Domains:
+
+- `weltweb.net` und `weltweberei.org` bleiben No-Mail-Domains, sofern das nicht in
+  einer separaten Entscheidung geändert wird.
+- Die Web-/WordPress-Nutzung von `weltweberei.org` bleibt ein eigener Fall und wird
+  nicht durch diesen Mail-Cutover mitverändert.
+- `home.arpa` bleibt ausschließlich Heim-/Entwicklungsziel und ist keine öffentliche
+  Produktions- oder Mailidentität.
+
+Damit werden weiterhin gültige Grenzen aus der früheren Fassung dieser ADR bewahrt,
+ohne deren inzwischen überholten IONOS-Betriebszustand als aktuelle Wahrheit
+fortzuschreiben.
+
 ## Alternativen
 
 - ein einzelner All-in-one-Provider: verworfen wegen unnötiger Kopplung der
