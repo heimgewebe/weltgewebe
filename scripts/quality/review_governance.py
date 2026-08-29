@@ -114,10 +114,15 @@ class DiffStats:
     deletions: int
     binary_files: tuple[str, ...]
     opaque_files: tuple[str, ...] = ()
+    attention_changed_files: tuple[str, ...] = ()
 
     @property
     def changed_lines(self) -> int:
         return self.additions + self.deletions
+
+    @property
+    def attention_files(self) -> tuple[str, ...]:
+        return self.attention_changed_files or self.changed_files
 
 
 @dataclass(frozen=True)
@@ -246,6 +251,17 @@ def _diff_stats(repo: Path, base_sha: str, head_sha: str) -> DiffStats:
     names_raw = _git(repo, ["diff", "--name-only", "-z", "--find-renames", range_spec])
     assert isinstance(names_raw, bytes)
     names = tuple(_decode_git_path(part) for part in names_raw.split(b"\0") if part)
+    attention_names_raw = _git(
+        repo, ["diff", "--name-only", "-z", "--no-renames", range_spec]
+    )
+    assert isinstance(attention_names_raw, bytes)
+    attention_names = tuple(
+        dict.fromkeys(
+            _decode_git_path(part)
+            for part in attention_names_raw.split(b"\0")
+            if part
+        )
+    )
 
     numstat_raw = _git(repo, ["diff", "--numstat", "-z", "--find-renames", range_spec])
     assert isinstance(numstat_raw, bytes)
@@ -256,6 +272,7 @@ def _diff_stats(repo: Path, base_sha: str, head_sha: str) -> DiffStats:
         deletions,
         binary_files,
         binary_files,
+        attention_names,
     )
 
 
@@ -376,20 +393,26 @@ def _validate_stats(stats: DiffStats) -> None:
         raise GovernanceError("binary_files must not contain duplicates")
     if len(set(stats.opaque_files)) != len(stats.opaque_files):
         raise GovernanceError("opaque_files must not contain duplicates")
+    if len(set(stats.attention_files)) != len(stats.attention_files):
+        raise GovernanceError("attention_changed_files must not contain duplicates")
     if not set(stats.binary_files).issubset(stats.changed_files):
         raise GovernanceError("binary_files must be a subset of changed_files")
     if not set(stats.opaque_files).issubset(stats.changed_files):
         raise GovernanceError("opaque_files must be a subset of changed_files")
-    for file_path in stats.changed_files:
-        if (
-            not isinstance(file_path, str)
-            or not file_path
-            or file_path != file_path.strip()
-            or file_path.startswith("/")
-            or any(part in {"", ".", ".."} for part in file_path.split("/"))
-            or any(unicodedata.category(char).startswith("C") for char in file_path)
-        ):
-            raise GovernanceError("changed_files contains an invalid path")
+    for field_name, paths in (
+        ("changed_files", stats.changed_files),
+        ("attention_changed_files", stats.attention_files),
+    ):
+        for file_path in paths:
+            if (
+                not isinstance(file_path, str)
+                or not file_path
+                or file_path != file_path.strip()
+                or file_path.startswith("/")
+                or any(part in {"", ".", ".."} for part in file_path.split("/"))
+                or any(unicodedata.category(char).startswith("C") for char in file_path)
+            ):
+                raise GovernanceError(f"{field_name} contains an invalid path")
 
 
 def _build_bundle(
@@ -457,6 +480,7 @@ def _build_bundle(
         "binding": binding,
         "stats": {
             "changed_files": list(stats.changed_files),
+            "attention_changed_files": list(stats.attention_files),
             "changed_file_count": len(stats.changed_files),
             "additions": stats.additions,
             "deletions": stats.deletions,
@@ -633,9 +657,10 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         "deletions",
         "opaque_files",
     }
-    if set(raw) != required:
+    optional = {"attention_changed_files"}
+    if not required.issubset(raw) or not set(raw).issubset(required | optional):
         missing = sorted(required - set(raw))
-        extra = sorted(set(raw) - required)
+        extra = sorted(set(raw) - required - optional)
         raise GovernanceError(
             f"materialized metadata keys mismatch; missing={missing}, extra={extra}"
         )
@@ -651,6 +676,7 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
     deletions = raw["deletions"]
     changed_file_count = raw["changed_file_count"]
     changed_files = raw["changed_files"]
+    attention_changed_files = raw.get("attention_changed_files", changed_files)
     opaque_files = raw["opaque_files"]
     if not isinstance(pr_number, int) or isinstance(pr_number, bool):
         raise GovernanceError("materialized pr_number must be an integer")
@@ -665,6 +691,12 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         isinstance(item, str) for item in changed_files
     ):
         raise GovernanceError("materialized changed_files must be a string list")
+    if not isinstance(attention_changed_files, list) or not all(
+        isinstance(item, str) for item in attention_changed_files
+    ):
+        raise GovernanceError(
+            "materialized attention_changed_files must be a string list"
+        )
     if not isinstance(opaque_files, list) or not all(
         isinstance(item, str) for item in opaque_files
     ):
@@ -679,6 +711,7 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         deletions,
         (),
         tuple(opaque_files),
+        tuple(attention_changed_files),
     )
     base_sha = raw["base_sha"]
     head_sha = raw["head_sha"]
@@ -952,7 +985,7 @@ def evaluate_evidence(
     attention_impact_required = False
     attention_impact_value = None
     if pr_body is not None:
-        attention_impact_required = bool(product_logic_changes(bundle.stats.changed_files))
+        attention_impact_required = bool(product_logic_changes(bundle.stats.attention_files))
         attention_impact_value = attention_impact_decision(pr_body)
         if attention_impact_required and canonical_product_docs is None:
             reasons.append(
@@ -963,7 +996,7 @@ def evaluate_evidence(
                 f"Attention impact: {reason}"
                 for reason in validate_attention_impact_contract_binding(
                     pr_body=pr_body,
-                    changed_files=bundle.stats.changed_files,
+                    changed_files=bundle.stats.attention_files,
                     canonical_product_docs=canonical_product_docs or (),
                 )
             )

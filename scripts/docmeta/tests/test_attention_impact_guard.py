@@ -7,6 +7,7 @@ from unittest.mock import patch
 
 from scripts.docmeta.attention_impact_guard import (
     canonical_product_docs,
+    changed_files_between,
     evaluate_attention_impact,
     product_logic_changes,
     pull_request_context_from_environment,
@@ -44,6 +45,13 @@ class AttentionImpactGuardTests(unittest.TestCase):
                 "contracts/domain/message.schema.json",
             ],
         )
+
+    def test_changed_files_between_disables_rename_collapsing(self):
+        with patch("scripts.docmeta.attention_impact_guard.subprocess.run") as run:
+            run.return_value.stdout = "apps/web/src/old.ts\ndocs/old.ts\n"
+            files = changed_files_between("a" * 40, "b" * 40, repo_root="/tmp/repo")
+        self.assertEqual(files, ["apps/web/src/old.ts", "docs/old.ts"])
+        self.assertIn("--no-renames", run.call_args.args[0])
 
     def test_product_change_without_marker_fails(self):
         errors = evaluate_attention_impact(

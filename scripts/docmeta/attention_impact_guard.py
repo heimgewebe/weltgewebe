@@ -56,7 +56,7 @@ def changed_files_between(
     repo_root: str | Path = REPO_ROOT,
 ) -> list[str]:
     result = subprocess.run(
-        ["git", "diff", "--name-only", f"{base_sha}...{head_sha}"],
+        ["git", "diff", "--name-only", "--no-renames", f"{base_sha}...{head_sha}"],
         cwd=repo_root,
         check=True,
         text=True,

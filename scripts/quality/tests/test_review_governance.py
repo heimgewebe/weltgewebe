@@ -147,7 +147,10 @@ def _evaluate(
 
 
 def _bundle(
-    *, paths: tuple[str, ...] = ("docs/example.md",), changed_lines: int = 2
+    *,
+    paths: tuple[str, ...] = ("docs/example.md",),
+    changed_lines: int = 2,
+    attention_paths: tuple[str, ...] = (),
 ) -> Bundle:
     additions = changed_lines // 2
     deletions = changed_lines - additions
@@ -162,7 +165,7 @@ def _bundle(
         diff_path=Path("change.diff"),
         patch_path=Path("change.patch"),
         request_path=Path("request.md"),
-        stats=DiffStats(paths, additions, deletions, ()),
+        stats=DiffStats(paths, additions, deletions, (), (), attention_paths),
     )
 
 
@@ -222,6 +225,24 @@ class AttentionImpactReviewGateTests(unittest.TestCase):
         )
         self.assertTrue(result["pass"], result["reasons"])
         self.assertEqual(result["attention_impact_decision"], "contract")
+
+    def test_rename_out_of_product_logic_still_requires_attention_marker(self) -> None:
+        bundle = _bundle(
+            paths=("docs/old.ts",),
+            attention_paths=("apps/web/src/old.ts", "docs/old.ts"),
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="",
+        )
+        self.assertFalse(result["pass"])
+        self.assertTrue(result["attention_impact_required"])
+        self.assertTrue(
+            any("Attention impact:" in reason for reason in result["reasons"]),
+            result["reasons"],
+        )
 
     def test_contract_marker_cannot_be_swapped_in_after_none_pass(self) -> None:
         bundle = _bundle(paths=("apps/web/src/app.ts",))
@@ -471,6 +492,9 @@ class BundleTests(unittest.TestCase):
                 risk_class="R1",
             )
             self.assertEqual(bundle.stats.changed_files, ("docs/new.png",))
+            self.assertEqual(
+                set(bundle.stats.attention_files), {"old.png", "docs/new.png"}
+            )
             self.assertEqual(bundle.stats.binary_files, ("docs/new.png",))
 
     def test_local_multiple_text_and_binary_renames_are_parsed(self) -> None:
@@ -505,6 +529,10 @@ class BundleTests(unittest.TestCase):
                 ("docs/new.png", "docs/new.txt"),
             )
             self.assertEqual(bundle.stats.binary_files, ("docs/new.png",))
+            self.assertEqual(
+                set(bundle.stats.attention_files),
+                {"old.txt", "old.png", "docs/new.txt", "docs/new.png"},
+            )
             self.assertEqual(bundle.stats.changed_lines, 0)
 
     def test_materialized_github_bundle_is_hash_bound_and_validated(self) -> None:
@@ -1339,6 +1367,8 @@ class WorkflowContractTests(unittest.TestCase):
             "types: [opened, synchronize, reopened, edited, ready_for_review]",
             self.workflow,
         )
+        self.assertIn("attention_changed_files", self.workflow)
+        self.assertIn("previous_filename", self.workflow)
         self.assertIn("issue_comment:", self.workflow)
         self.assertIn("pull_request_review:", self.workflow)
         self.assertIn("ref: main", self.workflow)
