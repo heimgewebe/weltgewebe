@@ -112,13 +112,39 @@ Provider- und DNS-Vorbereitung sind abgeschlossen:
 - Brevo-Code, beide DKIM-CNAMEs und `_dmarc.login.commonthing.net` sind autoritativ
   und über öffentliche Resolver verifiziert;
 - ein isolierter SMTP-Preflight mit den bestehenden produktiven Brevo-Credentials
-  wurde mit `From: noreply@login.commonthing.net` vom Relay akzeptiert.
+  wurde mit `From: noreply@login.commonthing.net` vom Relay akzeptiert und die
+  kontrollierte Nachricht ist im Postfach hinter `kontakt@commonthing.net`
+  angekommen.
 
-Der letzte Punkt beweist **Relay-Akzeptanz, nicht endgültige Zustellung im Postfach**.
-Die produktive Runtime verwendet daher weiterhin den Legacy-Absender, bis Inbox-
-und Magic-Link-Ende-zu-Ende-Beweise vorliegen.
+Damit sind Brevo-Relay und der menschliche Inbound-Pfad belegt. Das ersetzt weder
+den menschlichen Outbound-Beweis noch den anwendungsseitigen Magic-Link-Beweis.
+Die produktive Runtime verwendet daher weiterhin den Legacy-Absender.
 
-## 6. Repository und Runtime umschalten
+## 6. Zustellung vor dem Cutover beweisen
+
+Der in ADR-0008 festgelegte Zustellbeweis ist ein **Vorgänger** des Repository-,
+Runtime- und Public-Surface-Cutovers. Die folgenden Gates müssen deshalb vor
+Schritt 7 abgeschlossen sein:
+
+1. Eine kontrollierte Nachricht an `kontakt@commonthing.net` kommt in der
+   vorgesehenen mailbox.org-Mailbox an.
+2. Eine kontrollierte Nachricht wird aus mailbox.org **mit**
+   `From: kontakt@commonthing.net` an einen unabhängigen kontrollierten Empfänger
+   gesendet und dort empfangen. Ein bloßer Alias-Eintrag oder lokaler
+   mailbox.org-zu-mailbox.org-Test reicht dafür nicht aus.
+3. Der aktuelle Release-Kandidat erzeugt außerhalb der produktiven Runtime einen
+   echten Magic-Link mit `APP_BASE_URL=https://commonthing.net` und
+   `SMTP_FROM=noreply@login.commonthing.net`. Dafür dürfen die bestehenden
+   Brevo-Credentials verwendet werden, aber keine produktive Runtime-Konfiguration
+   und kein produktiver Persistenzzustand verändert werden.
+4. Der kontrollierte Empfänger erhält diese Magic-Link-Mail; sichtbarer Absender
+   und Link-Host stimmen mit den commonThing-Zielwerten überein.
+
+Erst wenn alle vier Gates positiv belegt sind, darf der PR gemergt und der
+Produktions-Cutover gestartet werden. Ohne kontrollierten Testempfänger wird kein
+externer Testversand improvisiert.
+
+## 7. Repository und Runtime umschalten
 
 Der Phase-3-PR setzt die öffentlichen Kontaktflächen und den kanonischen
 `SMTP_FROM`-Zielwert auf commonThing. Vor Produktionsaktivierung muss der
@@ -132,38 +158,42 @@ python3 scripts/ops/check_public_login_smtp_readiness.py \
 ```
 
 Beim Runtime-Cutover wird nur der notwendige Absenderwert geändert; bestehende
-SMTP-Credentials werden nicht unnötig rotiert oder offengelegt.
+SMTP-Credentials werden nicht unnötig rotiert oder offengelegt. Der Runtimewechsel
+muss rollback-fähig bleiben und darf die in Schritt 6 gewonnenen Zustellbeweise
+nicht als Ersatz für den anschließenden Produktions-Readback behandeln.
 
-## 7. Ende-zu-Ende-Beweis
+## 8. Produktionsakzeptanz nach dem Cutover
 
-Nach dem Deployment:
+Nach Deployment und Runtime-Umschaltung werden die kritischen Beweise nochmals am
+tatsächlich aktiven Produktionspfad wiederholt:
 
 1. Runtime-Readback zeigt `SMTP_FROM=noreply@login.commonthing.net`.
-2. Ein Magic-Link wird an einen ausdrücklich kontrollierten Testempfänger gesendet.
+2. Ein realer Produktions-Magic-Link wird an einen ausdrücklich kontrollierten
+   Testempfänger gesendet.
 3. Der empfangene Absender ist die commonThing-Adresse und der Link zeigt auf
    `https://commonthing.net`.
-4. `kontakt@commonthing.net` wird durch kontrollierten Inbound- und Outbound-Test
-   belegt.
-5. Impressum und Datenschutz zeigen die neue Kontaktadresse.
+4. Impressum und Datenschutz zeigen `kontakt@commonthing.net`.
+5. Der zuvor belegte menschliche Inbound-/Outbound-Pfad bleibt erreichbar.
 6. Die Legacy-Adressen bleiben weiterhin erreichbar bzw. als definierter
    Kompatibilitätsweg verfügbar.
 
-Ohne kontrollierten Testempfänger wird kein externer Testversand improvisiert.
+Ein erfolgreicher Vorabtest aus Schritt 6 erlaubt keinen Verzicht auf diese
+Post-Cutover-Abnahme.
 
-## 8. Rollback
+## 9. Rollback
 
 Wenn der technische Absender nach der Umschaltung nicht zuverlässig zustellt, wird
 `SMTP_FROM` auf den zuletzt belegten Legacy-Absender zurückgesetzt und der
 Runtimezustand erneut gelesen. Provider- und DNS-Neueinträge müssen für die Diagnose
 nicht vorschnell gelöscht werden.
 
-Die öffentliche Kontaktadresse wird nur dann live geschaltet, wenn mailbox.org sie
-vorher nachweislich angenommen hat; dadurch soll für den menschlichen Kontakt kein
-DNS-bedingter Rollback nötig werden.
+Die öffentliche Kontaktadresse wird nur dann live geschaltet, wenn ihr menschlicher
+Inbound- **und Outbound-Pfad** vorher nach Schritt 6 belegt wurden. Dadurch ist die
+öffentliche Rechts-/Kontaktfläche nicht von einem ungeprüften Mailpfad abhängig.
 
-## 9. Abschlusskriterium
+## 10. Abschlusskriterium
 
-Phase 3 ist erst terminal, wenn Providerstatus, autoritatives DNS, Runtime-Absender,
-realer Magic-Link-Mailpfad, menschliche Kontaktmail und öffentliche Kontaktflächen
-übereinstimmen. Die Entfernung der Legacy-Identitäten gehört ausdrücklich nicht zu
-dieser Phase.
+Phase 3 ist erst terminal, wenn Providerstatus, autoritatives DNS, Vorabzustellung,
+Runtime-Absender, realer Produktions-Magic-Link-Mailpfad, menschliche Kontaktmail
+und öffentliche Kontaktflächen übereinstimmen. Die Entfernung der
+Legacy-Identitäten gehört ausdrücklich nicht zu dieser Phase.
