@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -26,74 +27,73 @@ spec:
         seccompProfile:
           type: RuntimeDefault
       containers:
-      - name: postgres
-        image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
-        imagePullPolicy: IfNotPresent
-        env:
-        - name: POSTGRES_USER
-          valueFrom:
-            secretKeyRef:
-              name: weltgewebe-staging-database
-              key: username
-        - name: POSTGRES_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: weltgewebe-staging-database
-              key: password
-        - name: POSTGRES_DB
-          valueFrom:
-            secretKeyRef:
-              name: weltgewebe-staging-database
-              key: database
-        - name: PGDATA
-          value: /var/lib/postgresql/data/pgdata
-        ports:
         - name: postgres
-          containerPort: 5432
-        readinessProbe:
-          exec:
-            command:
-            - /bin/sh
-            - -c
-            - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
-          periodSeconds: 3
-          timeoutSeconds: 2
-          failureThreshold: 20
-        livenessProbe:
-          tcpSocket:
-            port: postgres
-          periodSeconds: 10
-          timeoutSeconds: 2
-          failureThreshold: 3
-        resources:
-          requests:
-            cpu: 100m
-            memory: 128Mi
-          limits:
-            cpu: '1'
-            memory: 512Mi
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
-          privileged: false
-          readOnlyRootFilesystem: true
-        volumeMounts:
-        - name: data
-          mountPath: /var/lib/postgresql/data
-        - name: run
-          mountPath: /var/run/postgresql
-        - name: tmp
-          mountPath: /tmp
+          image: postgres:16@sha256:be01cf82fc7dbba824acf0a82e150b4b360f3ff93c6631d7844af431e841a95c
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef:
+                  name: weltgewebe-staging-database
+                  key: username
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: weltgewebe-staging-database
+                  key: password
+            - name: POSTGRES_DB
+              valueFrom:
+                secretKeyRef:
+                  name: weltgewebe-staging-database
+                  key: database
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          ports:
+            - name: postgres
+              containerPort: 5432
+          readinessProbe:
+            exec:
+              command:
+                - /bin/sh
+                - -c
+                - pg_isready -U "$POSTGRES_USER" -d "$POSTGRES_DB"
+            periodSeconds: 3
+            timeoutSeconds: 2
+            failureThreshold: 20
+          livenessProbe:
+            tcpSocket:
+              port: postgres
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: "1"
+              memory: 512Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+            privileged: false
+            readOnlyRootFilesystem: true
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+            - name: run
+              mountPath: /var/run/postgresql
+            - name: tmp
+              mountPath: /tmp
       volumes:
-      - name: data
-        persistentVolumeClaim:
-          claimName: postgres-data
-      - name: run
-        emptyDir: {}
-      - name: tmp
-        emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: postgres-data
+        - name: run
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
@@ -104,6 +104,6 @@ spec:
   selector:
     app.kubernetes.io/name: postgres
   ports:
-  - name: postgres
-    port: 5432
-    targetPort: postgres
+    - name: postgres
+      port: 5432
+      targetPort: postgres
