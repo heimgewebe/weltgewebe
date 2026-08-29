@@ -18,7 +18,7 @@
 
   <h2>Kontakt</h2>
   <p>
-    E-Mail: <a href="mailto:kontakt@weltgewebe.net">kontakt@weltgewebe.net</a
+    E-Mail: <a href="mailto:kontakt@commonthing.net">kontakt@commonthing.net</a
     ><br />
     Telefon: <a href="tel:+4915563658682">+49 155 63658682</a>
   </p>

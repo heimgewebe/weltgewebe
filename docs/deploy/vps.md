@@ -317,6 +317,7 @@ PREVIEW="$(sudo -n python3 scripts/ops/reconcile_public_login_smtp_env.py \
   --source /opt/weltgewebe/.env \
   --destination /etc/weltgewebe/weltgewebe.env \
   --backup-dir /var/backups/weltgewebe/env \
+  --smtp-from-override noreply@login.commonthing.net \
   --json)"
 printf '%s\n' "$PREVIEW"
 PLAN_SHA256="$(printf '%s\n' "$PREVIEW" | python3 -c \
@@ -332,20 +333,27 @@ sudo -n python3 scripts/ops/reconcile_public_login_smtp_env.py \
   --source /opt/weltgewebe/.env \
   --destination /etc/weltgewebe/weltgewebe.env \
   --backup-dir /var/backups/weltgewebe/env \
+  --smtp-from-override noreply@login.commonthing.net \
   --apply \
   --expected-plan-sha256 "$PLAN_SHA256" \
   --json
 ```
 
-Die Operation übernimmt ausschließlich die dokumentierten Auth-/SMTP-Schlüssel,
-kanonisiert die Runtime-Schalter auf die von API und Mailer tatsächlich
-verstandenen Werte, legt vor dem atomischen Austausch ein bytegenaues
-`0600`-Backup an, liest dieses vor dem Austausch bytegenau zurück und gibt
-keine Secret-Werte aus. Der ausgegebene `plan_sha256` bindet Quell-, Ziel- und
-Backup-Pfad, Geräte- und Inode-Identitäten, Eigentümer, Modi, vollständigen
-Quelltext, bisherigen Zielinhalt und geplanten Zielinhalt. Dadurch kann die
-Vorschau weder auf eine andere Datei noch auf ein ausgetauschtes
-gleichlautendes File angewendet werden. Einzelne Wert-Hashes werden nicht ausgegeben. Ein bereits gehaltener
+Die Operation übernimmt ausschließlich die dokumentierten Auth-/SMTP-Schlüssel aus
+der Quelle und setzt zusätzlich `APP_BASE_URL` unabhängig vom Quellwert exakt auf
+`https://commonthing.net`. `--smtp-from-override` akzeptiert nur
+`noreply@login.commonthing.net` oder `noreply@login.weltgewebe.net`; damit kann ein
+Mail-Rollback die bereits abgeschlossene Webidentität nicht zurückdrehen. Derselbe
+Override muss bei Dry-run und Apply verwendet werden, weil sein geplanter Zielinhalt
+im `plan_sha256` gebunden ist.
+
+Vor dem atomischen Austausch legt das Werkzeug ein bytegenaues `0600`-Backup an,
+liest dieses vor dem Austausch bytegenau zurück und gibt keine Secret-Werte aus.
+Der `plan_sha256` bindet Quell-, Ziel- und Backup-Pfad, Geräte- und
+Inode-Identitäten, Eigentümer, Modi, vollständigen Quelltext, bisherigen
+Zielinhalt und geplanten Zielinhalt. Dadurch kann die Vorschau weder auf eine
+andere Datei noch auf ein ausgetauschtes gleichlautendes File angewendet werden.
+Einzelne Wert-Hashes werden nicht ausgegeben. Ein bereits gehaltener
 Reconcile-Lock führt nach spätestens 15 Sekunden zu einem Fehler statt zu
 unbegrenztem Warten.
 

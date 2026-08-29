@@ -23,6 +23,8 @@ relations:
     target: docs/runbooks/gewebezelle-manual-pilot.md
   - type: relates_to
     target: docs/runbooks/gewebezelle-two-operator-pilot-v1.md
+  - type: relates_to
+    target: docs/runbooks/commonthing-mail-identity-cutover.md
 ---
 # Runbooks
 
@@ -35,6 +37,7 @@ Anleitungen für wiederkehrende Aufgaben.
 - [Manuelles GewebeZelle-Pilotprofil](gewebezelle-manual-pilot.md)
 - [Zwei-Betreiber-GewebeZelle-Pilotvertrag v1](gewebezelle-two-operator-pilot-v1.md)
 - [Codespaces Recovery](codespaces-recovery.md)
+- [commonThing-Mailidentität umstellen](commonthing-mail-identity-cutover.md)
 - [Zurück zum Doku-Index](../index.md)
 
 ## Historische Runbooks
