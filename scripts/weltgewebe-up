@@ -1127,14 +1127,6 @@ except Exception as e:
   fi
 fi
 
-if ((${#ZOMBIE_CONTAINER_IDS_TO_PURGE[@]} > 0)); then
-  echo
-  echo "WARNING: All deployment preflights passed. Purging the previously bound container identities as requested..."
-  echo "Purging containers: ${ZOMBIE_CONTAINER_NAMES_TO_PURGE[*]}"
-  docker rm -f "${ZOMBIE_CONTAINER_IDS_TO_PURGE[@]}"
-  echo "Purged."
-fi
-
 echo "OK"
 
 # 4. Build Decision
@@ -1985,6 +1977,19 @@ except Exception:
   fi
 else
   echo "WARNING: Preflight script scripts/preflight/csp_contract_static.sh not found or not executable. Skipping." >&2
+fi
+
+# Explicit compose-leak cleanup is destructive and therefore stays behind the
+# complete deployment-admission chain. Zombie identities were bound read-only
+# above; delete only those exact immutable IDs after every fail-closed preflight
+# has passed and immediately before the actual deployment section can mutate
+# containers.
+if ((${#ZOMBIE_CONTAINER_IDS_TO_PURGE[@]} > 0)); then
+  echo
+  echo "WARNING: All deployment preflights passed. Purging the previously bound container identities as requested..."
+  echo "Purging containers: ${ZOMBIE_CONTAINER_NAMES_TO_PURGE[*]}"
+  docker rm -f "${ZOMBIE_CONTAINER_IDS_TO_PURGE[@]}"
+  echo "Purged."
 fi
 
 echo ">> Deploying..."

@@ -379,6 +379,23 @@ implementations:
       - scripts/tests/test_weltgewebe_up_deploy_scope.sh
       - .github/workflows/production-live-contract.yml
 
+  - id: impl.workflow.weltgewebe-up
+    path: scripts/weltgewebe-up
+    impl_type: workflow
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/README.md
+      - docs/deploy/vps.md
+      - docs/deployment.md
+      - docs/deploy/schauwerk-editor-frontdoor.md
+    verified_by:
+      - scripts/ci/tests/test_schauwerk_editor_release_preflight.py
+      - scripts/tests/test_verify_deployment.sh
+      - scripts/tests/test_weltgewebe_up_deploy_scope.sh
+      - .github/workflows/ci.yml
+
   - id: impl.guard.secure-receipt-io
     path: scripts/ops/weltgewebe_secure_receipt_io.py
     impl_type: guard
