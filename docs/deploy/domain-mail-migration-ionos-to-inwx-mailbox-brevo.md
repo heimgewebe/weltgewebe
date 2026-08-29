@@ -89,19 +89,30 @@ Normativer Zielzustand:
 - **mailbox.org:** `kontakt@commonthing.net` als kanonische menschliche Inbound-/Outbound-Adresse.
 - **Brevo:** `noreply@login.commonthing.net` als kanonischer technischer Magic-Link-Absender.
 
-Zeitgebundener Live-Readback vom 29. August 2026 vor dem Provider-Cutover:
+Belegter Phase-3-Stand vom 29. August 2026 vor dem **Runtime-Cutover**:
 
+- `kontakt@commonthing.net` ist bei mailbox.org parallel zum Legacy-Alias eingerichtet;
+  ein realer Inbound an diese Adresse wurde empfangen.
+- `commonthing.net` liefert die mailbox.org-MX-Records, SPF, DKIM-Verweise und DMARC.
+  Ein frischer Abschluss-Readback bestätigte die MX-Ziele auf allen drei autoritativen
+  INWX-Nameservern und über einen öffentlichen Resolver sowie SPF und DMARC.
+- `login.commonthing.net` ist bei Brevo als Senderdomain vorbereitet; Brevos
+  Verifikationsrecord und Subdomain-DMARC sind weiterhin autoritativ sichtbar. Ein
+  isolierter Versand mit `From: noreply@login.commonthing.net` wurde vom bestehenden
+  Brevo-Relay akzeptiert.
 <!-- commonthing-naming: legacy -->
-- `kontakt@weltgewebe.net` ist weiterhin die belegte menschliche Mailidentität; die alte Domain besitzt die mailbox.org-MX-Records.
+- `kontakt@weltgewebe.net` bleibt als menschlicher Legacy-Zustellweg erhalten.
 <!-- commonthing-naming: legacy -->
-- `noreply@login.weltgewebe.net` ist weiterhin der aktive Produktions-Absender über Brevo.
-- `commonthing.net` besitzt zu diesem Zeitpunkt noch keine Mail-MX-/TXT-Records.
-- `login.commonthing.net` besitzt zu diesem Zeitpunkt noch keine Brevo-Verifikations-/Authentifizierungsrecords.
+- `noreply@login.weltgewebe.net` bleibt bis zum Runtime-Cutover der aktive
+  Produktions-Absender.
 
-Damit ist die commonThing-Mailidentität **noch kein Livezustand**. Provider-Anlage,
-exakte DNS-Werte, autoritativer Readback, Provider-Verifikation und reale Zustellung
-sind harte Gates vor Runtime- und Public-Surface-Cutover. Der Ablauf steht in
-`docs/runbooks/commonthing-mail-identity-cutover.md`.
+Die Provider-/DNS-Seite der commonThing-Mailidentität ist damit vorbereitet und
+teilweise bereits real zustellbar; die **Produktionsruntime ist noch nicht auf den
+technischen commonThing-Absender umgestellt**. Vor Ready/Merge bleiben deshalb die
+noch fehlenden Ende-zu-Ende-Beweise aus
+`docs/runbooks/commonthing-mail-identity-cutover.md` bindend: sichtbarer Eingang der
+anwendungsseitig erzeugten Magic-Link-Mail sowie menschlicher Outbound von
+`kontakt@commonthing.net` an einen unabhängigen kontrollierten Empfänger.
 
 ## 4. DNS- und historischer DDNS-Pfad
 
