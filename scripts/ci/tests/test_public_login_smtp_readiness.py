@@ -26,7 +26,7 @@ def write_env(path: Path, content: str) -> Path:
     return path
 
 
-def test_production_example_cuts_over_app_and_webauthn_but_preserves_smtp() -> None:
+def test_production_example_uses_canonical_commonthing_mail_identity() -> None:
     values = {}
     for raw_line in (REPO / ".env.prod.example").read_text(encoding="utf-8").splitlines():
         line = raw_line.strip()
@@ -38,7 +38,29 @@ def test_production_example_cuts_over_app_and_webauthn_but_preserves_smtp() -> N
     assert values["WEBAUTHN_RP_ID"] == "commonthing.net"
     assert values["WEBAUTHN_RP_ORIGIN"] == "https://commonthing.net"
     assert values["WEBAUTHN_RP_NAME"] == "commonThing"
-    assert values["SMTP_FROM"] == "noreply@login.weltgewebe.net"
+    assert values["SMTP_FROM"] == "noreply@login.commonthing.net"
+
+
+def test_smtp_sender_identity_matches_canonical_target() -> None:
+    module = load_module()
+    result = module.check_smtp_from(
+        {"SMTP_FROM": "noreply@login.commonthing.net"},
+        expected="noreply@login.commonthing.net",
+    )
+    assert result.ok
+    assert result.data["status"] == "configured"
+
+
+def test_smtp_sender_identity_rejects_legacy_sender_without_echoing_it() -> None:
+    module = load_module()
+    legacy_sender = "noreply@login." + "welt" + "gewebe.net"
+    result = module.check_smtp_from(
+        {"SMTP_FROM": legacy_sender},
+        expected="noreply@login.commonthing.net",
+    )
+    assert not result.ok
+    assert result.data["status"] == "mismatch"
+    assert legacy_sender not in json.dumps(result.payload())
 
 
 def test_production_public_login_passes_with_authenticated_smtp(tmp_path: Path) -> None:
@@ -52,7 +74,7 @@ def test_production_public_login_passes_with_authenticated_smtp(tmp_path: Path) 
         "SMTP_AUTH": "on",
         "SMTP_USER": "user-secret",
         "SMTP_PASS": "pass-secret",
-        "SMTP_FROM": "noreply@weltgewebe.net",
+        "SMTP_FROM": "noreply@login.commonthing.net",
     }
 
     results = module.run_checks(
@@ -60,6 +82,7 @@ def test_production_public_login_passes_with_authenticated_smtp(tmp_path: Path) 
         production_public_login=True,
         expected_app_base_url="https://commonthing.net",
         allow_unauthenticated_smtp=False,
+        expected_smtp_from="noreply@login.commonthing.net",
     )
 
     assert all(result.ok for result in results), [result.payload() for result in results]
@@ -243,7 +266,7 @@ def test_cli_output_does_not_print_secret_values(tmp_path: Path) -> None:
         SMTP_AUTH=on
         SMTP_USER=very-sensitive-user
         SMTP_PASS=very-sensitive-pass
-        SMTP_FROM=noreply@weltgewebe.net
+        SMTP_FROM=noreply@login.commonthing.net
         """,
     )
 

@@ -14,13 +14,13 @@ Generated automatically. Do not edit.
 
 | Metrik | Wert |
 | --- | --- |
-| Dokumente gesamt | 201 |
-| Dokumente mit ausgehenden Relationen | 200 |
-| Dokumente als Ziel referenziert | 151 |
-| Relationen gesamt | 718 |
+| Dokumente gesamt | 202 |
+| Dokumente mit ausgehenden Relationen | 201 |
+| Dokumente als Ziel referenziert | 152 |
+| Relationen gesamt | 723 |
 | — depends_on | 33 |
 | — implements | 1 |
-| — relates_to | 662 |
+| — relates_to | 667 |
 | — supersedes | 13 |
 | — verifies | 9 |
 | Isolierte Dokumente | 0 |
@@ -33,8 +33,8 @@ Generated automatically. Do not edit.
 - ⚠️ High outbound count (15): `docs/roadmap.md` — possible over-linking
 - ⚠️ High outbound count (13): `docs/blueprints/domain-data-postgres-cutover.md` — possible over-linking
 - ⚠️ High outbound count (10): `docs/reports/domain-postgres-instance-coherence-decision.md` — possible over-linking
+- ⚠️ High outbound count (10): `docs/runbooks/README.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/blueprints/blueprint-agent-safety-control-layer.md` — possible over-linking
-- ⚠️ High outbound count (9): `docs/runbooks/README.md` — possible over-linking
 - ⚠️ High outbound count (9): `docs/runbooks/db-recovery.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reference/agent-operability-fixture-matrix.md` — possible over-linking
 - ⚠️ High outbound count (8): `docs/reports/domain-edge-write-path-proof.md` — possible over-linking
@@ -49,6 +49,7 @@ Generated automatically. Do not edit.
 - ⚠️ High inbound count (12): `docs/roadmap.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/blueprints/auth-roadmap.md` — central dependency, review carefully
 - ⚠️ High inbound count (11): `docs/datenmodell.md` — central dependency, review carefully
+- ⚠️ High inbound count (10): `docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md` — central dependency, review carefully
 
 ### Zyklen (depends_on)
 
@@ -61,8 +62,8 @@ _Keine Zyklen gefunden._
 - `docs/roadmap.md` — 15 ausgehende Relationen
 - `docs/blueprints/domain-data-postgres-cutover.md` — 13 ausgehende Relationen
 - `docs/reports/domain-postgres-instance-coherence-decision.md` — 10 ausgehende Relationen
+- `docs/runbooks/README.md` — 10 ausgehende Relationen
 - `docs/blueprints/blueprint-agent-safety-control-layer.md` — 9 ausgehende Relationen
-- `docs/runbooks/README.md` — 9 ausgehende Relationen
 - `docs/runbooks/db-recovery.md` — 9 ausgehende Relationen
 - `docs/reference/agent-operability-fixture-matrix.md` — 8 ausgehende Relationen
 - `docs/reports/domain-edge-write-path-proof.md` — 8 ausgehende Relationen
@@ -80,6 +81,7 @@ _Keine Zyklen gefunden._
 - `docs/roadmap.md` — 12 eingehende Relationen
 - `docs/blueprints/auth-roadmap.md` — 11 eingehende Relationen
 - `docs/datenmodell.md` — 11 eingehende Relationen
+- `docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md` — 10 eingehende Relationen
 
 ### Isolierte Dokumente
 

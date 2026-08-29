@@ -261,6 +261,7 @@ Generated automatically. Do not edit.
 ## docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
+- [relates_to] docs/runbooks/commonthing-mail-identity-cutover.md
 - [relates_to] docs/runbooks/domain-mail-cutover.md
 
 ## docs/adr/ADR-0009__garnrolle-verortung-sichtbarkeit.md
@@ -489,6 +490,7 @@ Generated automatically. Do not edit.
 ## docs/deploy/commonthing.naming.md
 
 - [relates_to] docs/deploy/weltgewebe.naming.md
+- [relates_to] docs/runbooks/commonthing-mail-identity-cutover.md
 
 ## docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 
@@ -498,6 +500,7 @@ Generated automatically. Do not edit.
 - [relates_to] docs/deploy/secondary-domain-web-surfaces.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md
+- [relates_to] docs/runbooks/commonthing-mail-identity-cutover.md
 - [relates_to] docs/runbooks/domain-mail-cutover.md
 - [relates_to] docs/runbooks/weltgewebe-ddns-runtime-verification.md
 - [relates_to] docs/tasks/DEPLOY-DNS-001B.md
@@ -981,6 +984,7 @@ Generated automatically. Do not edit.
 ## docs/runbooks/README.md
 
 - [relates_to] docs/runbooks/codespaces-recovery.md
+- [relates_to] docs/runbooks/commonthing-mail-identity-cutover.md
 - [relates_to] docs/runbooks/db-recovery.md
 - [relates_to] docs/runbooks/domain-mail-cutover.md
 - [relates_to] docs/runbooks/incident-response.md
@@ -993,6 +997,11 @@ Generated automatically. Do not edit.
 - [relates_to] docs/dev/codespaces.md
 - [relates_to] docs/runbooks/README.md
 
+## docs/runbooks/commonthing-mail-identity-cutover.md
+
+- [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
+- [relates_to] docs/runbooks/README.md
+
 ## docs/runbooks/db-recovery.md
 
 - [relates_to] docs/runbooks/README.md
@@ -1000,7 +1009,6 @@ Generated automatically. Do not edit.
 
 ## docs/runbooks/domain-mail-cutover.md
 
-- [relates_to] docs/adr/ADR-0008__domain-mail-provider-boundaries.md
 - [relates_to] docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md
 - [relates_to] docs/reports/domain-provider-role-finding.md
 - [relates_to] docs/reports/inwx-zone-reconciliation-plan.md

@@ -31,7 +31,7 @@ test.describe("public web truth", () => {
     ).toBeVisible();
     await expect(page.getByText("Alexander Mohr")).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "kontakt@weltgewebe.net" }),
+      page.getByRole("link", { name: "kontakt@commonthing.net" }),
     ).toBeVisible();
     await expect(page).toHaveTitle("Impressum – commonThing");
   });
@@ -43,7 +43,7 @@ test.describe("public web truth", () => {
     ).toBeVisible();
     await expect(page.getByText(/kein.*Werbung/i)).toBeVisible();
     await expect(
-      page.getByRole("link", { name: "kontakt@weltgewebe.net" }).first(),
+      page.getByRole("link", { name: "kontakt@commonthing.net" }).first(),
     ).toBeVisible();
     await expect(page).toHaveTitle("Datenschutz – commonThing");
   });
