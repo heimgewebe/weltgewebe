@@ -31,6 +31,8 @@ verifies_with:
   - apps/web/tests/map-url-state.spec.ts
   - apps/web/tests/webgemeindezentrum-hammer-park.spec.ts
   - apps/web/tests/edge-visibility.spec.ts
+attention_source_status: none
+attention_source_rationale: "Definiert Kartenwahrheit und Kartenerlebnis, keine persönliche Attention-Quelle."
 ---
 # Kartenerlebnis
 

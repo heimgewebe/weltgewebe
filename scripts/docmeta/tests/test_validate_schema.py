@@ -7,6 +7,9 @@ from scripts.docmeta.docmeta import REPO_ROOT, parse_frontmatter
 from scripts.docmeta.validate_schema import (
     parser_parity_errors,
     parse_frontmatter_with_pyyaml,
+    validate_attention_source_paths,
+    validate_attention_source_semantics,
+    validate_attention_source_zone,
     validate_canonical_semantics,
     validate_data_against_schema,
 )
@@ -358,5 +361,165 @@ class TestParserParity(unittest.TestCase):
         self.assertTrue(any("summary" in error for error in errors), errors)
 
 
-if __name__ == '__main__':
+class TestAttentionSourceContract(unittest.TestCase):
+    def test_missing_decision_fails(self):
+        errors = validate_attention_source_semantics({})
+        self.assertTrue(any("attention_source_status" in error for error in errors))
+
+    def test_none_rejects_source_payload(self):
+        frontmatter = {
+            "attention_source_status": "none",
+            "attention_source_rationale": "No personal facts.",
+        }
+        self.assertEqual(validate_attention_source_semantics(frontmatter), [])
+
+        frontmatter["attention_source_facts"] = ["stale"]
+        errors = validate_attention_source_semantics(frontmatter)
+        self.assertTrue(any("must be absent" in error for error in errors), errors)
+
+    def test_source_requires_evidence_projection_and_transitions(self):
+        errors = validate_attention_source_semantics(
+            {
+                "attention_source_status": "source",
+                "attention_source_rationale": "Personal facts exist.",
+            }
+        )
+        for field in (
+            "attention_source_facts",
+            "attention_projection",
+            "attention_transition_tests",
+        ):
+            self.assertTrue(any(field in error for error in errors), errors)
+
+    def test_blocked_requires_missing_fact_and_bureau_task(self):
+        errors = validate_attention_source_semantics(
+            {
+                "attention_source_status": "blocked",
+                "attention_source_rationale": "Truth incomplete.",
+            }
+        )
+        self.assertTrue(
+            any("attention_missing_facts" in error for error in errors), errors
+        )
+        self.assertTrue(
+            any("attention_followup_task" in error for error in errors), errors
+        )
+
+        valid = {
+            "attention_source_status": "blocked",
+            "attention_source_rationale": "Truth incomplete.",
+            "attention_missing_facts": ["applicant_action_required"],
+            "attention_followup_task": "BUREAU-ATTENTION-T001",
+        }
+        self.assertEqual(validate_attention_source_semantics(valid), [])
+
+    def test_blocked_rejects_prefix_only_bureau_task(self):
+        invalid = {
+            "attention_source_status": "blocked",
+            "attention_source_rationale": "Truth incomplete.",
+            "attention_missing_facts": ["applicant_action_required"],
+            "attention_followup_task": "BUREAU-T001 invalid suffix",
+        }
+        errors = validate_attention_source_semantics(invalid)
+        self.assertTrue(
+            any("attention_followup_task" in error for error in errors), errors
+        )
+
+    def test_attention_metadata_is_rejected_outside_product_zone(self):
+        errors = validate_attention_source_zone(
+            {
+                "attention_source_status": "none",
+                "attention_source_rationale": "Not a personal source.",
+            },
+            "norm",
+        )
+        self.assertTrue(any("only allowed" in error for error in errors), errors)
+        self.assertEqual(
+            validate_attention_source_zone(
+                {"attention_source_status": "none"}, "product"
+            ),
+            [],
+        )
+
+    def test_source_paths_fail_closed(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            apps = os.path.join(tmp, "apps")
+            os.makedirs(apps)
+            projection = os.path.join(apps, "projection.ts")
+            with open(projection, "w", encoding="utf-8"):
+                pass
+            errors = validate_attention_source_paths(
+                {
+                    "attention_source_status": "source",
+                    "attention_projection": ["apps/projection.ts"],
+                    "attention_transition_tests": ["../escape.test.ts"],
+                },
+                repo_root=tmp,
+            )
+            self.assertTrue(
+                any("repository-relative" in error for error in errors), errors
+            )
+
+    def test_source_paths_reject_missing_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            errors = validate_attention_source_paths(
+                {
+                    "attention_source_status": "source",
+                    "attention_projection": ["apps/missing.ts"],
+                    "attention_transition_tests": ["tests/missing.test.ts"],
+                },
+                repo_root=tmp,
+            )
+            self.assertEqual(len(errors), 2, errors)
+            self.assertTrue(all("does not exist" in error for error in errors), errors)
+
+    def test_source_paths_reject_symlink_escape(self):
+        with tempfile.TemporaryDirectory() as tmp, tempfile.TemporaryDirectory() as outside:
+            outside_file = os.path.join(outside, "projection.ts")
+            with open(outside_file, "w", encoding="utf-8"):
+                pass
+            os.symlink(outside_file, os.path.join(tmp, "escape.ts"))
+            errors = validate_attention_source_paths(
+                {
+                    "attention_source_status": "source",
+                    "attention_projection": ["escape.ts"],
+                    "attention_transition_tests": ["escape.ts"],
+                },
+                repo_root=tmp,
+            )
+            self.assertEqual(len(errors), 2, errors)
+            self.assertTrue(all("escapes repository" in error for error in errors), errors)
+
+    def test_parser_supports_attention_lists_with_yaml_parity(self):
+        body = (
+            "---\n"
+            "id: x\n"
+            "attention_source_facts:\n"
+            "  - fact-a\n"
+            "attention_projection:\n"
+            "  - apps/a.ts\n"
+            "attention_transition_tests:\n"
+            "  - apps/a.test.ts\n"
+            "attention_missing_facts: []\n"
+            "---\n"
+        )
+        with tempfile.NamedTemporaryFile(
+            mode="w", delete=False, suffix=".md", encoding="utf-8"
+        ) as handle:
+            handle.write(body)
+            path = handle.name
+        try:
+            parsed = parse_frontmatter(path)
+            self.assertEqual(parsed["attention_source_facts"], ["fact-a"])
+            self.assertEqual(parsed["attention_projection"], ["apps/a.ts"])
+            self.assertEqual(
+                parsed["attention_transition_tests"], ["apps/a.test.ts"]
+            )
+            self.assertEqual(parsed["attention_missing_facts"], [])
+            self.assertEqual(parser_parity_errors(path, parsed), [])
+        finally:
+            os.remove(path)
+
+
+if __name__ == "__main__":
     unittest.main()

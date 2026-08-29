@@ -19,6 +19,8 @@ relations:
     target: docs/specs/federation-core.md
   - type: relates_to
     target: docs/adr/ADR-0011__foederierte-gewebezellen.md
+attention_source_status: none
+attention_source_rationale: "Definiert den Zellen-Drahtvertrag und transportiert keine eigenständige persönliche Attention-Semantik."
 ---
 
 # Föderations-Drahtvertrag v1

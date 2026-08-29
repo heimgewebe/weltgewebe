@@ -20,6 +20,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterable, Sequence
 
+if __package__:
+    from .attention_impact_contract import (
+        attention_impact_decision,
+        canonical_product_docs_from_manifest_text,
+        product_logic_changes,
+        validate_attention_impact_contract_binding,
+    )
+else:
+    from attention_impact_contract import (
+        attention_impact_decision,
+        canonical_product_docs_from_manifest_text,
+        product_logic_changes,
+        validate_attention_impact_contract_binding,
+    )
+
 SCHEMA_VERSION = 1
 MAX_ARTIFACT_BYTES = 100 * 1024 * 1024
 MAX_EVIDENCE_PAYLOAD_BYTES = 20 * 1024
@@ -99,10 +114,15 @@ class DiffStats:
     deletions: int
     binary_files: tuple[str, ...]
     opaque_files: tuple[str, ...] = ()
+    attention_changed_files: tuple[str, ...] = ()
 
     @property
     def changed_lines(self) -> int:
         return self.additions + self.deletions
+
+    @property
+    def attention_files(self) -> tuple[str, ...]:
+        return self.attention_changed_files or self.changed_files
 
 
 @dataclass(frozen=True)
@@ -231,6 +251,17 @@ def _diff_stats(repo: Path, base_sha: str, head_sha: str) -> DiffStats:
     names_raw = _git(repo, ["diff", "--name-only", "-z", "--find-renames", range_spec])
     assert isinstance(names_raw, bytes)
     names = tuple(_decode_git_path(part) for part in names_raw.split(b"\0") if part)
+    attention_names_raw = _git(
+        repo, ["diff", "--name-only", "-z", "--no-renames", range_spec]
+    )
+    assert isinstance(attention_names_raw, bytes)
+    attention_names = tuple(
+        dict.fromkeys(
+            _decode_git_path(part)
+            for part in attention_names_raw.split(b"\0")
+            if part
+        )
+    )
 
     numstat_raw = _git(repo, ["diff", "--numstat", "-z", "--find-renames", range_spec])
     assert isinstance(numstat_raw, bytes)
@@ -241,6 +272,7 @@ def _diff_stats(repo: Path, base_sha: str, head_sha: str) -> DiffStats:
         deletions,
         binary_files,
         binary_files,
+        attention_names,
     )
 
 
@@ -361,20 +393,26 @@ def _validate_stats(stats: DiffStats) -> None:
         raise GovernanceError("binary_files must not contain duplicates")
     if len(set(stats.opaque_files)) != len(stats.opaque_files):
         raise GovernanceError("opaque_files must not contain duplicates")
+    if len(set(stats.attention_files)) != len(stats.attention_files):
+        raise GovernanceError("attention_changed_files must not contain duplicates")
     if not set(stats.binary_files).issubset(stats.changed_files):
         raise GovernanceError("binary_files must be a subset of changed_files")
     if not set(stats.opaque_files).issubset(stats.changed_files):
         raise GovernanceError("opaque_files must be a subset of changed_files")
-    for file_path in stats.changed_files:
-        if (
-            not isinstance(file_path, str)
-            or not file_path
-            or file_path != file_path.strip()
-            or file_path.startswith("/")
-            or any(part in {"", ".", ".."} for part in file_path.split("/"))
-            or any(unicodedata.category(char).startswith("C") for char in file_path)
-        ):
-            raise GovernanceError("changed_files contains an invalid path")
+    for field_name, paths in (
+        ("changed_files", stats.changed_files),
+        ("attention_changed_files", stats.attention_files),
+    ):
+        for file_path in paths:
+            if (
+                not isinstance(file_path, str)
+                or not file_path
+                or file_path != file_path.strip()
+                or file_path.startswith("/")
+                or any(part in {"", ".", ".."} for part in file_path.split("/"))
+                or any(unicodedata.category(char).startswith("C") for char in file_path)
+            ):
+                raise GovernanceError(f"{field_name} contains an invalid path")
 
 
 def _build_bundle(
@@ -442,6 +480,7 @@ def _build_bundle(
         "binding": binding,
         "stats": {
             "changed_files": list(stats.changed_files),
+            "attention_changed_files": list(stats.attention_files),
             "changed_file_count": len(stats.changed_files),
             "additions": stats.additions,
             "deletions": stats.deletions,
@@ -618,9 +657,10 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         "deletions",
         "opaque_files",
     }
-    if set(raw) != required:
+    optional = {"attention_changed_files"}
+    if not required.issubset(raw) or not set(raw).issubset(required | optional):
         missing = sorted(required - set(raw))
-        extra = sorted(set(raw) - required)
+        extra = sorted(set(raw) - required - optional)
         raise GovernanceError(
             f"materialized metadata keys mismatch; missing={missing}, extra={extra}"
         )
@@ -636,6 +676,7 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
     deletions = raw["deletions"]
     changed_file_count = raw["changed_file_count"]
     changed_files = raw["changed_files"]
+    attention_changed_files = raw.get("attention_changed_files", changed_files)
     opaque_files = raw["opaque_files"]
     if not isinstance(pr_number, int) or isinstance(pr_number, bool):
         raise GovernanceError("materialized pr_number must be an integer")
@@ -650,6 +691,12 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         isinstance(item, str) for item in changed_files
     ):
         raise GovernanceError("materialized changed_files must be a string list")
+    if not isinstance(attention_changed_files, list) or not all(
+        isinstance(item, str) for item in attention_changed_files
+    ):
+        raise GovernanceError(
+            "materialized attention_changed_files must be a string list"
+        )
     if not isinstance(opaque_files, list) or not all(
         isinstance(item, str) for item in opaque_files
     ):
@@ -664,6 +711,7 @@ def _materialized_metadata(path: Path) -> tuple[int, str, str, str, DiffStats]:
         deletions,
         (),
         tuple(opaque_files),
+        tuple(attention_changed_files),
     )
     base_sha = raw["base_sha"]
     head_sha = raw["head_sha"]
@@ -922,6 +970,8 @@ def evaluate_evidence(
     comments: Sequence[dict[str, Any]],
     allowed_attesters: frozenset[str],
     reviews: Sequence[dict[str, Any]] = (),
+    pr_body: str | None = None,
+    canonical_product_docs: frozenset[str] | None = None,
 ) -> dict[str, Any]:
     if not allowed_attesters or any(
         not isinstance(login, str) or not GITHUB_LOGIN_RE.fullmatch(login)
@@ -932,6 +982,24 @@ def evaluate_evidence(
         )
     normalized_attesters = frozenset(login.casefold() for login in allowed_attesters)
     reasons: list[str] = []
+    attention_impact_required = False
+    attention_impact_value = None
+    if pr_body is not None:
+        attention_impact_required = bool(product_logic_changes(bundle.stats.attention_files))
+        attention_impact_value = attention_impact_decision(pr_body)
+        if attention_impact_required and canonical_product_docs is None:
+            reasons.append(
+                "Attention impact: trusted canonical product docs are unavailable"
+            )
+        else:
+            reasons.extend(
+                f"Attention impact: {reason}"
+                for reason in validate_attention_impact_contract_binding(
+                    pr_body=pr_body,
+                    changed_files=bundle.stats.attention_files,
+                    canonical_product_docs=canonical_product_docs or (),
+                )
+            )
     if risk_class is None:
         reasons.append(
             "PR body must contain exactly one risk marker: <!-- weltgewebe-risk: R0|R1|R2|R3 -->"
@@ -1335,6 +1403,8 @@ def evaluate_evidence(
         "pass": not reasons,
         "risk_class": risk_class,
         "minimum_risk_class": minimum_risk,
+        "attention_impact_required": attention_impact_required,
+        "attention_impact_decision": attention_impact_value,
         "binding": {
             "pr_number": bundle.pr_number,
             "base_sha": bundle.base_sha,
@@ -1413,6 +1483,7 @@ def _evaluate_and_write(
     output_dir: Path,
     bundle: Bundle,
     risk_class: str | None,
+    pr_body: str,
     comments_file: Path,
     reviews_file: Path | None,
     authorities_file: Path,
@@ -1420,12 +1491,20 @@ def _evaluate_and_write(
     raw_comments = _load_json(comments_file)
     comments = _flatten_comments(raw_comments)
     reviews = _flatten_reviews(_load_json(reviews_file)) if reviews_file else []
+    trusted_manifest = (
+        Path(__file__).resolve().parents[2] / "manifest" / "repo-index.yaml"
+    ).read_text(encoding="utf-8")
+    trusted_product_docs = frozenset(
+        canonical_product_docs_from_manifest_text(trusted_manifest)
+    )
     evaluation = evaluate_evidence(
         bundle=bundle,
         risk_class=risk_class,
         comments=comments,
         reviews=reviews,
         allowed_attesters=load_allowed_attesters(authorities_file),
+        pr_body=pr_body,
+        canonical_product_docs=trusted_product_docs,
     )
     (output_dir / "evaluation.json").write_bytes(_canonical_json(evaluation))
     print(json.dumps(evaluation, sort_keys=True))
@@ -1449,6 +1528,7 @@ def _command_evaluate(args: argparse.Namespace) -> int:
             output_dir=output_dir,
             bundle=bundle,
             risk_class=risk_class,
+            pr_body=body,
             comments_file=Path(args.comments_file),
             reviews_file=Path(args.reviews_file) if args.reviews_file else None,
             authorities_file=Path(args.authorities_file),
@@ -1475,6 +1555,7 @@ def _command_evaluate_materialized(args: argparse.Namespace) -> int:
             output_dir=output_dir,
             bundle=bundle,
             risk_class=risk_class,
+            pr_body=body,
             comments_file=Path(args.comments_file),
             reviews_file=Path(args.reviews_file) if args.reviews_file else None,
             authorities_file=Path(args.authorities_file),

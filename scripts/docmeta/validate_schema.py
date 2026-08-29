@@ -9,6 +9,133 @@ from scripts.docmeta.docmeta import REPO_ROOT, parse_repo_index, parse_frontmatt
 
 FRONTMATTER_RE = re.compile(r"^---\r?\n(.*?)(?:\r?\n---\r?\n|\r?\n---$)", re.DOTALL)
 CANONICAL_CANONICALITIES = {"normative", "reality", "operational"}
+ATTENTION_SOURCE_STATUSES = {"source", "none", "blocked"}
+ATTENTION_SOURCE_ONLY_FIELDS = (
+    "attention_source_facts",
+    "attention_projection",
+    "attention_transition_tests",
+)
+ATTENTION_BLOCKED_ONLY_FIELDS = (
+    "attention_missing_facts",
+    "attention_followup_task",
+)
+ATTENTION_METADATA_FIELDS = (
+    "attention_source_status",
+    "attention_source_rationale",
+    *ATTENTION_SOURCE_ONLY_FIELDS,
+    *ATTENTION_BLOCKED_ONLY_FIELDS,
+)
+ATTENTION_FOLLOWUP_TASK_RE = re.compile(r"BUREAU-[A-Za-z0-9._:-]+")
+
+
+def _is_nonempty_string_list(value):
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(item, str) and item.strip() for item in value)
+    )
+
+
+def validate_attention_source_semantics(frontmatter):
+    errors = []
+    status = frontmatter.get("attention_source_status")
+    rationale = frontmatter.get("attention_source_rationale")
+
+    if status not in ATTENTION_SOURCE_STATUSES:
+        return ["attention_source_status must be one of: source, none, blocked"]
+    if not isinstance(rationale, str) or not rationale.strip():
+        errors.append("attention_source_rationale must be a non-empty string")
+
+    if status == "source":
+        for field in ATTENTION_SOURCE_ONLY_FIELDS:
+            if not _is_nonempty_string_list(frontmatter.get(field)):
+                errors.append(
+                    f"{field} must be a non-empty string list "
+                    "when attention_source_status=source"
+                )
+        for field in ATTENTION_BLOCKED_ONLY_FIELDS:
+            if field in frontmatter:
+                errors.append(
+                    f"{field} is only allowed "
+                    "when attention_source_status=blocked"
+                )
+    elif status == "blocked":
+        if not _is_nonempty_string_list(frontmatter.get("attention_missing_facts")):
+            errors.append(
+                "attention_missing_facts must be a non-empty string list "
+                "when attention_source_status=blocked"
+            )
+        followup = frontmatter.get("attention_followup_task")
+        if not (
+            isinstance(followup, str)
+            and ATTENTION_FOLLOWUP_TASK_RE.fullmatch(followup)
+        ):
+            errors.append(
+                "attention_followup_task must name a concrete BUREAU-* task "
+                "when attention_source_status=blocked"
+            )
+        for field in ATTENTION_SOURCE_ONLY_FIELDS:
+            if field in frontmatter:
+                errors.append(
+                    f"{field} is only allowed "
+                    "when attention_source_status=source"
+                )
+    else:
+        for field in (*ATTENTION_SOURCE_ONLY_FIELDS, *ATTENTION_BLOCKED_ONLY_FIELDS):
+            if field in frontmatter:
+                errors.append(
+                    f"{field} must be absent when attention_source_status=none"
+                )
+
+    return errors
+
+
+def validate_attention_source_zone(frontmatter, zone_name):
+    if zone_name == "product":
+        return []
+    present = sorted(field for field in ATTENTION_METADATA_FIELDS if field in frontmatter)
+    if not present:
+        return []
+    return [
+        "attention metadata is only allowed in manifest zone product; "
+        f"found in zone {zone_name}: {', '.join(present)}"
+    ]
+
+
+def validate_attention_source_paths(frontmatter, repo_root=REPO_ROOT):
+    if frontmatter.get("attention_source_status") != "source":
+        return []
+
+    errors = []
+    repo_real = os.path.realpath(repo_root)
+    for field in ("attention_projection", "attention_transition_tests"):
+        value = frontmatter.get(field)
+        if not isinstance(value, list):
+            continue
+        for relpath in value:
+            if not isinstance(relpath, str):
+                continue
+            normalized = os.path.normpath(relpath)
+            if (
+                os.path.isabs(relpath)
+                or normalized == ".."
+                or normalized.startswith(".." + os.sep)
+            ):
+                errors.append(
+                    f"{field} path must be repository-relative: {relpath}"
+                )
+                continue
+            candidate = os.path.join(repo_root, normalized)
+            candidate_real = os.path.realpath(candidate)
+            try:
+                inside_repo = os.path.commonpath([repo_real, candidate_real]) == repo_real
+            except ValueError:
+                inside_repo = False
+            if not inside_repo:
+                errors.append(f"{field} path escapes repository: {relpath}")
+            elif not os.path.isfile(candidate):
+                errors.append(f"{field} path does not exist: {relpath}")
+    return errors
 
 
 def validate_canonical_semantics(frontmatter):
@@ -114,6 +241,10 @@ def main():
     errors = []
 
     zones = repo_index.get('zones', {})
+    if "product" not in zones:
+        errors.append(
+            "Manifest must define zone 'product' for the Attention source contract."
+        )
 
     for zone_name, zone_data in zones.items():
         rel_zone_path = zone_data.get('path', '')
@@ -137,6 +268,26 @@ def main():
 
             for semantic_error in validate_canonical_semantics(frontmatter):
                 errors.append(f"Canonical semantics violation in '{rel_file_path}': {semantic_error}")
+
+            for attention_error in validate_attention_source_zone(
+                frontmatter, zone_name
+            ):
+                errors.append(
+                    f"Attention source violation in '{rel_file_path}': "
+                    f"{attention_error}"
+                )
+
+            if zone_name == "product":
+                for attention_error in validate_attention_source_semantics(frontmatter):
+                    errors.append(
+                        f"Attention source violation in '{rel_file_path}': "
+                        f"{attention_error}"
+                    )
+                for attention_error in validate_attention_source_paths(frontmatter):
+                    errors.append(
+                        f"Attention source violation in '{rel_file_path}': "
+                        f"{attention_error}"
+                    )
 
             # ensure arrays are properly formatted lists if possible.
             # `relations` and `verifies_with` could be string parsed as strings by the basic yaml parser

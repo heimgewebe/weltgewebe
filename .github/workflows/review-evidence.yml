@@ -187,6 +187,16 @@ jobs:
           [[ "${diff_file_count}" == "${expected_files}" ]]
           jq -e 'all(.[]; (.filename | type == "string") and (.filename | length > 0))' \
             "${RUNNER_TEMP}/files.json" >/dev/null
+          jq -e '
+            all(.[];
+              if .status == "renamed" then
+                ((.previous_filename | type) == "string") and
+                ((.previous_filename | length) > 0)
+              else
+                true
+              end
+            )
+          ' "${RUNNER_TEMP}/files.json" >/dev/null
 
           gh api -H "${api_header}" "${pr_api}" > "${RUNNER_TEMP}/pr-after.json"
           jq -e --arg base "${base_sha}" --arg head "${head_sha}" '
@@ -208,6 +218,11 @@ jobs:
               merge_base_sha: $compare[0].merge_base_commit.sha,
               changed_file_count: ($files[0] | length),
               changed_files: [$files[0][].filename],
+              attention_changed_files: ([
+                $files[0][] |
+                .filename,
+                (select(.status == "renamed") | .previous_filename)
+              ] | map(select(type == "string" and length > 0)) | unique),
               additions: $pr[0].additions,
               deletions: $pr[0].deletions,
               opaque_files: [

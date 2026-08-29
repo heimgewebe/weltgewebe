@@ -28,6 +28,8 @@ verifies_with:
   - apps/web/src/lib/map/scene.ts
   - apps/web/src/lib/components/panels/WebgemeindezentrumPanel.svelte
   - apps/web/tests/webgemeindezentrum-hammer-park.spec.ts
+attention_source_status: none
+attention_source_rationale: "Ordnet lokale Gemeinschaft und Webrat; persönliche Antrags- und Beteiligungsfakten bleiben kanonisch beim Governance-Vertrag."
 ---
 
 # Ortsweberei und Webgemeindezentrum

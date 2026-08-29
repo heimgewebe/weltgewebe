@@ -15,6 +15,7 @@ from scripts.quality.review_governance import (
     Bundle,
     DiffStats,
     GovernanceError,
+    canonical_product_docs_from_manifest_text,
     evaluate_evidence,
     generate_bundle,
     generate_materialized_bundle,
@@ -101,6 +102,7 @@ def _forwarded_comment(
 
 
 ALLOWED_ATTESTERS = frozenset({"alex"})
+TRUSTED_PRODUCT_DOCS = frozenset({"docs/specs/ui-interaction.md"})
 
 
 def _review(
@@ -130,6 +132,8 @@ def _evaluate(
     risk_class: str,
     comments: list[dict],
     reviews: list[dict] | None = None,
+    pr_body: str | None = None,
+    canonical_product_docs: frozenset[str] | None = TRUSTED_PRODUCT_DOCS,
 ) -> dict:
     return evaluate_evidence(
         bundle=bundle,
@@ -137,11 +141,16 @@ def _evaluate(
         comments=comments,
         reviews=reviews or [],
         allowed_attesters=ALLOWED_ATTESTERS,
+        pr_body=pr_body,
+        canonical_product_docs=canonical_product_docs,
     )
 
 
 def _bundle(
-    *, paths: tuple[str, ...] = ("docs/example.md",), changed_lines: int = 2
+    *,
+    paths: tuple[str, ...] = ("docs/example.md",),
+    changed_lines: int = 2,
+    attention_paths: tuple[str, ...] = (),
 ) -> Bundle:
     additions = changed_lines // 2
     deletions = changed_lines - additions
@@ -156,7 +165,7 @@ def _bundle(
         diff_path=Path("change.diff"),
         patch_path=Path("change.patch"),
         request_path=Path("request.md"),
-        stats=DiffStats(paths, additions, deletions, ()),
+        stats=DiffStats(paths, additions, deletions, (), (), attention_paths),
     )
 
 
@@ -175,6 +184,159 @@ def _record(
         "verdict": verdict,
         "findings_resolved": verdict == "PASS",
     }
+
+
+class AttentionImpactReviewGateTests(unittest.TestCase):
+    def _r2_comments(self, bundle: Bundle) -> list[dict]:
+        return [
+            _comment(
+                _record(bundle, reviewer="Reviewer A", axis="correctness", risk="R2"),
+                comment_id=1,
+            ),
+            _comment(
+                _record(bundle, reviewer="Reviewer B", axis="testing", risk="R2"),
+                comment_id=2,
+            ),
+        ]
+
+    def test_product_logic_requires_attention_marker(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="",
+        )
+        self.assertFalse(result["pass"])
+        self.assertTrue(result["attention_impact_required"])
+        self.assertIsNone(result["attention_impact_decision"])
+        self.assertTrue(
+            any("Attention impact:" in reason for reason in result["reasons"]),
+            result["reasons"],
+        )
+
+    def test_contract_marker_satisfies_edit_sensitive_meta_gate(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts", "docs/specs/ui-interaction.md"))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="<!-- weltgewebe-attention-impact: contract -->",
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["attention_impact_decision"], "contract")
+
+    def test_rename_out_of_product_logic_still_requires_attention_marker(self) -> None:
+        bundle = _bundle(
+            paths=("docs/old.ts",),
+            attention_paths=("apps/web/src/old.ts", "docs/old.ts"),
+        )
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="",
+        )
+        self.assertFalse(result["pass"])
+        self.assertTrue(result["attention_impact_required"])
+        self.assertTrue(
+            any("Attention impact:" in reason for reason in result["reasons"]),
+            result["reasons"],
+        )
+
+    def test_contract_marker_cannot_be_swapped_in_after_none_pass(self) -> None:
+        bundle = _bundle(paths=("apps/web/src/app.ts",))
+        none_body = (
+            "<!-- weltgewebe-attention-impact: none -->\n"
+            "<!-- weltgewebe-attention-rationale: Pure refactor with no personal domain semantics change. -->"
+        )
+        initial = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body=none_body,
+        )
+        self.assertTrue(initial["pass"], initial["reasons"])
+
+        edited = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="<!-- weltgewebe-attention-impact: contract -->",
+        )
+        self.assertFalse(edited["pass"])
+        self.assertTrue(
+            any("canonical product contract" in reason for reason in edited["reasons"]),
+            edited["reasons"],
+        )
+
+    def test_none_marker_requires_concrete_rationale(self) -> None:
+        bundle = _bundle(paths=("contracts/domain/message.schema.json",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body="<!-- weltgewebe-attention-impact: none -->",
+        )
+        self.assertFalse(result["pass"])
+        self.assertTrue(any("rationale" in reason for reason in result["reasons"]))
+
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R2",
+            comments=self._r2_comments(bundle),
+            pr_body=(
+                "<!-- weltgewebe-attention-impact: none -->\n"
+                "<!-- weltgewebe-attention-rationale: Schema-only compatibility refactor; no personal domain semantics change. -->"
+            ),
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertEqual(result["attention_impact_decision"], "none")
+
+    def test_non_product_diff_does_not_require_marker(self) -> None:
+        bundle = _bundle(paths=("docs/example.md",))
+        result = _evaluate(
+            bundle=bundle,
+            risk_class="R0",
+            comments=[],
+            pr_body="",
+        )
+        self.assertTrue(result["pass"], result["reasons"])
+        self.assertFalse(result["attention_impact_required"])
+
+
+
+class TrustedProductManifestTests(unittest.TestCase):
+    def test_extracts_product_docs_from_trusted_manifest(self) -> None:
+        manifest = (
+            "zones:\n"
+            "  product:\n"
+            "    path: docs/specs/\n"
+            "    canonical_docs:\n"
+            "      - alpha.md\n"
+            "      - beta.md\n"
+            "  reality:\n"
+            "    path: runtime/\n"
+        )
+        self.assertEqual(
+            canonical_product_docs_from_manifest_text(manifest),
+            {"docs/specs/alpha.md", "docs/specs/beta.md"},
+        )
+
+    def test_manifest_parser_fails_closed_on_duplicate_product_zone(self) -> None:
+        manifest = (
+            "zones:\n"
+            "  product:\n"
+            "    path: docs/specs/\n"
+            "    canonical_docs:\n"
+            "      - alpha.md\n"
+            "  product:\n"
+            "    path: docs/other/\n"
+            "    canonical_docs:\n"
+            "      - beta.md\n"
+        )
+        with self.assertRaises(ValueError):
+            canonical_product_docs_from_manifest_text(manifest)
 
 
 class RiskParsingTests(unittest.TestCase):
@@ -330,6 +492,9 @@ class BundleTests(unittest.TestCase):
                 risk_class="R1",
             )
             self.assertEqual(bundle.stats.changed_files, ("docs/new.png",))
+            self.assertEqual(
+                set(bundle.stats.attention_files), {"old.png", "docs/new.png"}
+            )
             self.assertEqual(bundle.stats.binary_files, ("docs/new.png",))
 
     def test_local_multiple_text_and_binary_renames_are_parsed(self) -> None:
@@ -364,6 +529,10 @@ class BundleTests(unittest.TestCase):
                 ("docs/new.png", "docs/new.txt"),
             )
             self.assertEqual(bundle.stats.binary_files, ("docs/new.png",))
+            self.assertEqual(
+                set(bundle.stats.attention_files),
+                {"old.txt", "old.png", "docs/new.txt", "docs/new.png"},
+            )
             self.assertEqual(bundle.stats.changed_lines, 0)
 
     def test_materialized_github_bundle_is_hash_bound_and_validated(self) -> None:
@@ -1194,6 +1363,12 @@ class WorkflowContractTests(unittest.TestCase):
 
     def test_privileged_workflow_executes_only_literal_main_code(self) -> None:
         self.assertIn("pull_request_target:", self.workflow)
+        self.assertIn(
+            "types: [opened, synchronize, reopened, edited, ready_for_review]",
+            self.workflow,
+        )
+        self.assertIn("attention_changed_files", self.workflow)
+        self.assertIn("previous_filename", self.workflow)
         self.assertIn("issue_comment:", self.workflow)
         self.assertIn("pull_request_review:", self.workflow)
         self.assertIn("ref: main", self.workflow)

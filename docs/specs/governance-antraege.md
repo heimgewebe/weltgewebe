@@ -24,6 +24,17 @@ verifies_with:
   - apps/web/src/lib/api/governance.test.ts
   - apps/web/tests/governance.spec.ts
   - apps/web/tests/proofs/governance-full-flow.proof.ts
+attention_source_status: source
+attention_source_rationale: "Eigene offene Anträge und betrachterbezogene Governance-Beteiligung liefern kanonische persönliche Fakten für WARTET und MITWIRKEN."
+attention_source_facts:
+  - proposal.applicant_account_id zusammen mit offenem Verfahrensstatus
+  - proposal.viewer_participation mit may_vote, may_veto, vote_choice und has_veto
+  - proposal.last_activity_at und serverkalibriertes remaining_seconds
+attention_projection:
+  - apps/web/src/lib/components/topBarAttentionState.ts
+attention_transition_tests:
+  - apps/web/src/lib/components/topBarAttentionState.test.ts
+  - apps/web/tests/attention-bubbles.spec.ts
 ---
 
 # Anträge, Konsent, Veto und Abstimmung

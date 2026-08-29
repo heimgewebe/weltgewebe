@@ -57,6 +57,18 @@ Ein Blueprint kann deshalb `doc_type: blueprint`, `canonicality: supporting` und
 * **relations** und **audit_gaps**: typisierte Beziehungen beziehungsweise bekannte Lücken.
 * **scope** und **description**: zusätzliche Policy-Beschreibung, soweit nötig.
 
+## Attention-Quellenentscheidung für kanonische Produktverträge
+
+Jedes im Manifest unter der Zone `product` registrierte Dokument muss eine maschinenlesbare Quellenentscheidung tragen. Sie beantwortet nicht, ob das Dokument Attention erwähnt, sondern ob sein Fachvertrag kanonische persönliche Fakten erzeugt, aus denen Attention projiziert werden darf.
+
+Jeder Status verlangt zusätzlich eine nicht-leere `attention_source_rationale`, damit die Entscheidung prüfbar bleibt.
+
+* `attention_source_status: source` verlangt `attention_source_facts`, `attention_projection` und `attention_transition_tests` als nicht-leere Listen. Projektions- und Testpfade müssen im Repository existieren.
+* `attention_source_status: none` darf keine Source- oder Blockerfelder mitschleppen.
+* `attention_source_status: blocked` verlangt konkrete `attention_missing_facts` und `attention_followup_task: BUREAU-*`. Ohne den fehlenden Fachfakt darf Attention keine persönliche Behauptung erzeugen.
+
+Diese Metadaten sind Architekturvertrag, **keine zweite Attention-Datenbank** und kein persistenter Nutzerzustand. Ein allgemeines Kästchen für jeden Pull Request ist ausdrücklich nicht Teil des Vertrags. Zusätzlich läuft in Pull Requests ein gezielter Change-Impact-Guard nur dann, wenn sich Produktlogik unter `apps/` oder `contracts/domain/` ändert. Dann muss der PR genau eine Entscheidung tragen: `<!-- weltgewebe-attention-impact: contract -->` verlangt die gleichzeitige Änderung mindestens eines kanonischen Produktvertrags; `<!-- weltgewebe-attention-impact: none -->` verlangt zusätzlich eine konkrete Begründung über `<!-- weltgewebe-attention-rationale: ... -->`. Diese PR-Angabe ist ausschließlich Reviewevidenz und niemals Fach- oder Nutzerzustand. Das edit-sensitive Review-Gate prüft `contract` zusätzlich gegen die Produktverträge des vertrauenswürdigen `main`-Manifests. Ein völlig neuer kanonischer Produktvertrag wird deshalb zuerst auf `main` registriert und erst danach zusammen mit Produktcode als Attention-Quelle verwendet; diese zweistufige Bootstrap-Regel verhindert, dass ein PR sich seine eigene Prüfgrundlage selbst erklärt.
+
 ## Abhängigkeiten (`depends_on`)
 
 `depends_on` ist das **kanonische, direkte Frontmatter-Feld** für Dokumentabhängigkeiten.

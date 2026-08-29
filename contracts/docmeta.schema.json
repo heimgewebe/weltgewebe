@@ -138,6 +138,53 @@
     "description": {
       "type": "string",
       "minLength": 1
+    },
+    "attention_source_status": {
+      "type": "string",
+      "enum": [
+        "source",
+        "none",
+        "blocked"
+      ],
+      "description": "Whether this canonical product contract provides personal facts that may source Attention."
+    },
+    "attention_source_rationale": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Why this contract is, is not, or cannot yet be an Attention source."
+    },
+    "attention_source_facts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "attention_projection": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "attention_transition_tests": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "attention_missing_facts": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "attention_followup_task": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^BUREAU-[A-Za-z0-9._:-]+$"
     }
   },
   "required": [
