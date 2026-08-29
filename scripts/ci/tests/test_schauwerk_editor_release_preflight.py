@@ -214,6 +214,7 @@ def test_vps_deploy_admits_and_pins_exact_editor_release_before_build() -> None:
     helper_call = deploy.index('scripts/preflight/schauwerk_editor_release.py')
     exact_export = deploy.index('export SCHAUWERK_EDITOR_RELEASE_DIR="$SCHAUWERK_EDITOR_RELEASE_PATH"')
     authoritative_mount = deploy.index('mount.get("source") != expected', exact_export)
+    deferred_purge = deploy.index('docker rm -f "${ZOMBIE_CONTAINER_IDS_TO_PURGE[@]}"')
     build_decision = deploy.index('# 4. Build Decision')
     deploying = deploy.index('echo ">> Deploying..."', build_decision)
 
@@ -226,6 +227,7 @@ def test_vps_deploy_admits_and_pins_exact_editor_release_before_build() -> None:
         < helper_call
         < exact_export
         < authoritative_mount
+        < deferred_purge
         < build_decision
         < deploying
     )
