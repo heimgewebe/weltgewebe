@@ -193,7 +193,7 @@ Danach geheimnisarm zurücklesen: `APP_BASE_URL=https://commonthing.net` und
 Erst dann muss der Readiness-Check gegen die kanonische VPS-Env bestehen:
 
 ```bash
-python3 scripts/ops/check_public_login_smtp_readiness.py \
+sudo -n python3 scripts/ops/check_public_login_smtp_readiness.py \
   --env-file /etc/weltgewebe/weltgewebe.env \
   --production-public-login \
   --expected-smtp-from noreply@login.commonthing.net
