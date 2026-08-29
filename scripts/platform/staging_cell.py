@@ -188,7 +188,7 @@ def namespace(name: str, *, data_client: bool = False) -> dict[str, Any]:
         "pod-security.kubernetes.io/warn": "restricted",
     }
     if data_client:
-        labels["weltgewebe.net/data-client"] = "true"
+        labels["commonthing.net/data-client"] = "true"
     return {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name, "labels": labels}}
 
 
@@ -204,7 +204,7 @@ def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
         f"postgres://{encoded_user}:{encoded_password}@postgres.{DATA_NAMESPACE}.svc.cluster.local:5432/"
         f"{encoded_db}?sslmode=disable"
     )
-    annotations = {"weltgewebe.net/external-secret-source-sha256": source_sha}
+    annotations = {"commonthing.net/external-secret-source-sha256": source_sha}
     apply_yaml(kubectl, [namespace(DATA_NAMESPACE), namespace(APP_NAMESPACE, data_client=True)])
     apply_yaml(
         kubectl,

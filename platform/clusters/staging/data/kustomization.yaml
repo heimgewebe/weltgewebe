@@ -11,4 +11,4 @@ labels:
   - pairs:
       app.kubernetes.io/part-of: weltgewebe
       app.kubernetes.io/managed-by: flux
-      weltgewebe.net/environment: staging
+      commonthing.net/environment: staging

@@ -24,7 +24,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              weltgewebe.net/data-client: "true"
+              commonthing.net/data-client: "true"
       ports:
         - port: 5432
           protocol: TCP
