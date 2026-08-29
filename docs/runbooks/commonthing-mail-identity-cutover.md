@@ -98,6 +98,26 @@ Erst fortfahren, wenn beide Provider den neuen Zustand positiv bestätigen:
 - Brevo akzeptiert `login.commonthing.net` und den neuen technischen Absender,
 - DKIM/SPF/weitere geforderte Authentifizierungsrecords sind beim Provider grün.
 
+### Belegter Zwischenstand — 29. August 2026
+
+Provider- und DNS-Vorbereitung sind abgeschlossen:
+
+- mailbox.org führt `kontakt@commonthing.net` als externen Alias; der Legacy-Alias
+  bleibt parallel bestehen;
+- `commonthing.net` liefert die mailbox.org-MX-Records, SPF, vier DKIM-CNAMEs und
+  DMARC auf allen drei autoritativen INWX-Nameservern sowie über öffentliche
+  Resolver;
+- Brevo führt `login.commonthing.net` als **Authentifiziert**; die Legacy-Senderdomain
+  bleibt parallel authentifiziert;
+- Brevo-Code, beide DKIM-CNAMEs und `_dmarc.login.commonthing.net` sind autoritativ
+  und über öffentliche Resolver verifiziert;
+- ein isolierter SMTP-Preflight mit den bestehenden produktiven Brevo-Credentials
+  wurde mit `From: noreply@login.commonthing.net` vom Relay akzeptiert.
+
+Der letzte Punkt beweist **Relay-Akzeptanz, nicht endgültige Zustellung im Postfach**.
+Die produktive Runtime verwendet daher weiterhin den Legacy-Absender, bis Inbox-
+und Magic-Link-Ende-zu-Ende-Beweise vorliegen.
+
 ## 6. Repository und Runtime umschalten
 
 Der Phase-3-PR setzt die öffentlichen Kontaktflächen und den kanonischen
