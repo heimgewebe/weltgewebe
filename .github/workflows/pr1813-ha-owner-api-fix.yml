@@ -18,14 +18,16 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: 0
           ref: bureau/weltgewebe-os-v1-t084/5e0085fc46
 
-      - name: Verify exact parent
+      - name: Verify exact code base
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "25f39e77c4e5949ed159881adc442c1a2b819711"
+          git merge-base --is-ancestor 25f39e77c4e5949ed159881adc442c1a2b819711 HEAD
+          changed="$(git diff --name-only 25f39e77c4e5949ed159881adc442c1a2b819711..HEAD)"
+          test "${changed}" = ".github/workflows/pr1813-ha-owner-api-fix.yml"
 
       - name: Update HA caller to public ownership API
         shell: bash
