@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import argparse
 import io
 import json
 import sys
+import tempfile
 import unittest
 from contextlib import redirect_stdout
 from pathlib import Path
@@ -142,6 +144,41 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         rendered = stdout.getvalue()
         self.assertNotIn("must-not-escape", rendered)
         self.assertNotIn("c" * 64, rendered)
+
+    def test_retained_secret_preflight_blocks_cluster_mutation(self) -> None:
+        args = argparse.Namespace(
+            cluster=staging.DEFAULT_CLUSTER,
+            owner_id="owner",
+            source_commit=None,
+        )
+        receipt = {
+            "tools": {
+                "kind": "kind",
+                "kubectl": "kubectl",
+                "flux": "flux",
+                "helm": "helm",
+            }
+        }
+        with tempfile.TemporaryDirectory(prefix="staging-cell-preflight-") as tmp_name:
+            root = Path(tmp_name)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=receipt),
+                mock.patch.object(staging, "retained_postgres_state_exists", return_value=True),
+                mock.patch.object(
+                    staging,
+                    "load_or_create_secret_material",
+                    side_effect=staging.StagingCellError("secret preflight failed"),
+                ),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
+                mock.patch.object(staging, "require_clean_commit") as commit_mock,
+                mock.patch.object(staging.reference, "create_kind_cluster") as create_mock,
+            ):
+                with self.assertRaisesRegex(staging.StagingCellError, "secret preflight failed"):
+                    staging.command_up(args)
+        commit_mock.assert_not_called()
+        create_mock.assert_not_called()
 
     def test_existing_cluster_commit_check_is_receipt_bound_without_remote_lookup(self) -> None:
         head = "a" * 40
