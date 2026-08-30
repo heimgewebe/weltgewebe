@@ -1,0 +1,136 @@
+---
+name: PR1813 final review fixes
+
+"on":
+  push:
+    branches:
+      - bureau/weltgewebe-os-v1-t084/5e0085fc46
+    paths:
+      - .github/workflows/pr1813-final-review-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          ref: bureau/weltgewebe-os-v1-t084/5e0085fc46
+
+      - name: Verify exact parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "8fcfff7e549ee3ec92b12a978bca98887f850b0a"
+
+      - name: Apply lifecycle serialization and degraded-observation fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          staging = "scripts/platform/staging_cell.py"
+          replace_once(
+              staging,
+              "import argparse\nimport base64\n",
+              "import argparse\nimport base64\nimport errno\nimport fcntl\n",
+          )
+          replace_once(
+              staging,
+              "from pathlib import Path\nfrom typing import Any\n",
+              "from contextlib import contextmanager\nfrom functools import wraps\nfrom pathlib import Path\nfrom typing import Any\n",
+          )
+          lock_helpers = '''\n\n@contextmanager\ndef lifecycle_lock(root: Path):\n    root.mkdir(parents=True, exist_ok=True, mode=0o700)\n    lock_path = root / "lifecycle.lock"\n    flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC\n    if hasattr(os, "O_NOFOLLOW"):\n        flags |= os.O_NOFOLLOW\n    fd = os.open(lock_path, flags, 0o600)\n    try:\n        opened = os.fstat(fd)\n        linked = os.stat(lock_path, follow_symlinks=False)\n        if (\n            not stat.S_ISREG(opened.st_mode)\n            or opened.st_dev != linked.st_dev\n            or opened.st_ino != linked.st_ino\n            or opened.st_uid != os.geteuid()\n            or stat.S_IMODE(opened.st_mode) & 0o077\n        ):\n            raise StagingCellError("staging lifecycle lock identity is unsafe")\n        try:\n            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)\n        except OSError as error:\n            if error.errno not in {errno.EACCES, errno.EAGAIN}:\n                raise\n            raise StagingCellError(\n                "another staging lifecycle mutation is already in progress"\n            ) from error\n        yield\n    finally:\n        os.close(fd)\n\n\ndef lifecycle_mutation_locked(function):\n    @wraps(function)\n    def wrapped(args: argparse.Namespace) -> dict[str, Any]:\n        require_singleton_cluster(args.cluster)\n        owner_id = getattr(args, "owner_id", None)\n        if not owner_id:\n            raise StagingCellError("--owner-id is required for real staging ownership")\n        reference.validate_owner_id(owner_id)\n        root = state_root(getattr(args, "state_root", None))\n        with lifecycle_lock(root):\n            return function(args)\n\n    return wrapped\n'''
+          replace_once(
+              staging,
+              '''def configure_reference_paths(root: Path) -> None:\n''',
+              lock_helpers + '''\n\ndef configure_reference_paths(root: Path) -> None:\n''',
+          )
+          replace_once(
+              staging,
+              '''def command_up(args: argparse.Namespace) -> dict[str, Any]:\n''',
+              '''@lifecycle_mutation_locked\ndef command_up(args: argparse.Namespace) -> dict[str, Any]:\n''',
+          )
+          replace_once(
+              staging,
+              '''def command_down(args: argparse.Namespace) -> dict[str, Any]:\n''',
+              '''@lifecycle_mutation_locked\ndef command_down(args: argparse.Namespace) -> dict[str, Any]:\n''',
+          )
+          for resource in ("gitrepository", "kustomization", "pvc"):
+              pass
+          replace_once(
+              staging,
+              '''            SOURCE_NAME,\n            "-o",\n            "jsonpath={.status.artifact.revision}",\n''',
+              '''            SOURCE_NAME,\n            "--ignore-not-found",\n            "-o",\n            "jsonpath={.status.artifact.revision}",\n''',
+          )
+          replace_once(
+              staging,
+              '''        ]\n    )\n    source_matches_commit = flux_revision_matches_commit(source_revision, commit)\n''',
+              '''        ]\n    ) or "missing"\n    source_matches_commit = flux_revision_matches_commit(source_revision, commit)\n''',
+          )
+          replace_once(
+              staging,
+              '''            DATA_KUSTOMIZATION,\n            "-o",\n            "jsonpath={.status.conditions[?(@.type=='Ready')].status}",\n''',
+              '''            DATA_KUSTOMIZATION,\n            "--ignore-not-found",\n            "-o",\n            "jsonpath={.status.conditions[?(@.type=='Ready')].status}",\n''',
+          )
+          replace_once(
+              staging,
+              '''        ]\n    )\n    pvcs = {\n''',
+              '''        ]\n    ) or "missing"\n    pvcs = {\n''',
+          )
+          replace_once(
+              staging,
+              '''                pvc,\n                "-o",\n                "jsonpath={.status.phase}",\n''',
+              '''                pvc,\n                "--ignore-not-found",\n                "-o",\n                "jsonpath={.status.phase}",\n''',
+          )
+          replace_once(
+              staging,
+              '''            ]\n        )\n        for pvc in ("postgres-data", "nats-data")\n''',
+              '''            ]\n        ) or "missing"\n        for pvc in ("postgres-data", "nats-data")\n''',
+          )
+
+          tests = "scripts/ci/tests/test_staging_cell_runtime_contract.py"
+          new_tests = '''    def test_lifecycle_lock_rejects_parallel_mutations(self) -> None:\n        with tempfile.TemporaryDirectory(prefix="staging-cell-lifecycle-lock-") as tmp_name:\n            root = Path(tmp_name)\n            with staging.lifecycle_lock(root):\n                with self.assertRaisesRegex(\n                    staging.StagingCellError, "lifecycle mutation is already in progress"\n                ):\n                    with staging.lifecycle_lock(root):\n                        self.fail("parallel lifecycle lock unexpectedly acquired")\n            with staging.lifecycle_lock(root):\n                pass\n\n    def test_status_degrades_when_flux_or_pvc_resources_are_missing(self) -> None:\n        owner = "owner-a"\n        commit = "f" * 40\n        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)\n        with tempfile.TemporaryDirectory(prefix="staging-cell-status-missing-resources-") as tmp_name:\n            root = Path(tmp_name)\n            self._write_bound_receipt(root, owner=owner, commit=commit)\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),\n                mock.patch.object(staging.reference, "clusters", return_value=[staging.DEFAULT_CLUSTER]),\n                mock.patch.object(staging.reference, "require_owned_cluster"),\n                mock.patch.object(staging, "output", side_effect=["", "", "", ""]) as output_mock,\n                mock.patch.object(\n                    staging,\n                    "verify_external_secret_binding",\n                    return_value={"database": True, "runtime": True, "ready": True},\n                ),\n                mock.patch.object(\n                    staging, "image_promotion_state", return_value={"status": "blocked"}\n                ),\n            ):\n                result = staging.command_status(args)\n        self.assertEqual(result["status"], "degraded")\n        self.assertEqual(result["source_revision"], "missing")\n        self.assertEqual(result["data_ready"], "missing")\n        self.assertEqual(\n            result["pvcs"],\n            {"postgres-data": "missing", "nats-data": "missing"},\n        )\n        for call in output_mock.call_args_list:\n            self.assertIn("--ignore-not-found", call.args[0])\n\n'''
+          replace_once(
+              tests,
+              '''    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n''',
+              new_tests
+              + '''    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n''',
+          )
+          PY
+
+      - name: Run focused regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+          python3 -m compileall -q scripts/platform/kind_reference.py scripts/platform/ha_reference.py scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract scripts.ci.tests.test_staging_cell_runtime_contract scripts.ci.tests.test_kubernetes_ha_contract
+          git diff --check
+
+      - name: Commit exact fix and remove one-shot writer
+        shell: bash
+        env:
+          BRANCH: bureau/weltgewebe-os-v1-t084/5e0085fc46
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/pr1813-final-review-fix.yml
+          git config user.name 'alexdermohr'
+          git config user.email '216529510+alexdermohr@users.noreply.github.com'
+          git add scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          git diff --cached --check
+          git commit -m 'fix(platform): serialize staging lifecycle mutations'
+          git push origin "HEAD:${BRANCH}"
