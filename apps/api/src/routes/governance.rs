@@ -22,6 +22,7 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::{env, sync::OnceLock};
 
 use super::webgemeindezentren::{
     ensure_webgemeindezentrum_activity_faden, repair_webgemeindezentrum_activity_faden,
@@ -39,6 +40,36 @@ use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
 
 type ApiError = (StatusCode, String);
+
+const GUEST_EXIT_STEP_UP_ENABLED_ENV: &str = "AUTH_GUEST_EXIT_STEP_UP_ENABLED";
+static GUEST_EXIT_STEP_UP_ENABLED: OnceLock<bool> = OnceLock::new();
+
+fn parse_guest_exit_step_up_enabled(raw: Option<&str>) -> bool {
+    raw.is_some_and(|value| {
+        let value = value.trim();
+        value == "1" || value.eq_ignore_ascii_case("true")
+    })
+}
+
+fn guest_exit_step_up_enabled() -> bool {
+    *GUEST_EXIT_STEP_UP_ENABLED.get_or_init(|| {
+        let raw = env::var(GUEST_EXIT_STEP_UP_ENABLED_ENV).ok();
+        let enabled = parse_guest_exit_step_up_enabled(raw.as_deref());
+        if raw.as_deref().is_some_and(|value| {
+            let value = value.trim();
+            !matches!(value, "0" | "1")
+                && !value.eq_ignore_ascii_case("true")
+                && !value.eq_ignore_ascii_case("false")
+        }) {
+            tracing::warn!(
+                env_var = GUEST_EXIT_STEP_UP_ENABLED_ENV,
+                value = raw.as_deref().unwrap_or_default(),
+                "invalid guest-exit step-up rollout flag; failing closed"
+            );
+        }
+        enabled
+    })
+}
 
 fn private_no_store_json<T: Serialize>(value: T) -> Response {
     ([(header::CACHE_CONTROL, "private, no-store")], Json(value)).into_response()
@@ -1025,6 +1056,24 @@ pub async fn exit_own_account(
     // Preserve fail-closed governance semantics before issuing any security token.
     require_guest_exit_pool(&state)?;
 
+    // `ExitGuestAccount` is persisted in the shared step-up challenge payload.
+    // During the first rollout, older API replicas cannot deserialize that new
+    // enum variant. Keep challenge creation disabled until every live API replica
+    // runs a compatibility-aware binary; activation is a separate rollout step.
+    if !guest_exit_step_up_enabled() {
+        tracing::warn!(
+            event = "governance.guest.exit_step_up_rollout_gated",
+            account_id = %account_id,
+            env_var = GUEST_EXIT_STEP_UP_ENABLED_ENV,
+            "Guest exit is temporarily unavailable until the step-up rollout gate is activated"
+        );
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "guest exit is temporarily unavailable while step-up confirmation is being activated"
+                .to_string(),
+        ));
+    }
+
     let device_id = auth.device_id.clone().ok_or((
         StatusCode::INTERNAL_SERVER_ERROR,
         "authenticated context missing device_id".to_string(),
@@ -1061,7 +1110,10 @@ pub async fn exit_own_account(
 
 #[cfg(test)]
 mod tests {
-    use super::{private_no_store_json, proposal_list_view, record_guest_exit_session_cleanup};
+    use super::{
+        parse_guest_exit_step_up_enabled, private_no_store_json, proposal_list_view,
+        record_guest_exit_session_cleanup,
+    };
     use crate::{
         auth::{role::Role, session::SessionBackendError},
         governance::{ProposalListEntry, ProposalStatus, ProposalWithCounts},
@@ -1212,6 +1264,17 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("private, no-store")
         );
+    }
+
+    #[test]
+    fn guest_exit_step_up_rollout_flag_is_fail_closed() {
+        assert!(!parse_guest_exit_step_up_enabled(None));
+        assert!(!parse_guest_exit_step_up_enabled(Some("")));
+        assert!(!parse_guest_exit_step_up_enabled(Some("0")));
+        assert!(!parse_guest_exit_step_up_enabled(Some("false")));
+        assert!(!parse_guest_exit_step_up_enabled(Some("unexpected")));
+        assert!(parse_guest_exit_step_up_enabled(Some("1")));
+        assert!(parse_guest_exit_step_up_enabled(Some(" TRUE ")));
     }
 
     #[test]
