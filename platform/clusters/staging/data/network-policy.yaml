@@ -22,6 +22,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
+              # commonthing-naming: legacy
               weltgewebe.net/data-client: "true"
       ports:
         - port: 5432
@@ -41,6 +42,7 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
+              # commonthing-naming: legacy
               weltgewebe.net/data-client: "true"
       ports:
         - port: 4222
