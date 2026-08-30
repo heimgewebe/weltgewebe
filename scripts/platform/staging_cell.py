@@ -259,23 +259,35 @@ def recorded_secret_source_sha(root: Path) -> str | None:
     return source_sha
 
 
+def retained_data_directory_exists(root: Path, name: str) -> bool:
+    data_path = root / "data" / name
+    if not data_path.exists():
+        return False
+    linked = data_path.lstat()
+    if stat.S_ISLNK(linked.st_mode) or not stat.S_ISDIR(linked.st_mode):
+        raise StagingCellError(
+            f"staging {name} data path must be a regular directory"
+        )
+    try:
+        with os.scandir(data_path) as entries:
+            return next(entries, None) is not None
+    except PermissionError:
+        # Retained data may intentionally be 0700 and owned by a container UID.
+        # Inability to inspect it is evidence to preserve, never permission to
+        # bind a new owner/commit or mint replacement credentials.
+        return True
+
+
 def retained_postgres_state_exists(root: Path) -> bool:
     if (root / "receipts/cell-bootstrap.json").is_file():
         return True
-    pgdata = root / "data/postgres"
-    if not pgdata.exists():
-        return False
-    linked = pgdata.lstat()
-    if stat.S_ISLNK(linked.st_mode) or not stat.S_ISDIR(linked.st_mode):
-        raise StagingCellError("staging PostgreSQL data path must be a regular directory")
-    try:
-        with os.scandir(pgdata) as entries:
-            return next(entries, None) is not None
-    except PermissionError:
-        # A retained database directory may intentionally be 0700 and owned by
-        # the container UID. Inability to inspect it is evidence to preserve,
-        # never permission to mint replacement credentials.
-        return True
+    return retained_data_directory_exists(root, "postgres")
+
+
+def retained_staging_data_exists(root: Path) -> bool:
+    return any(
+        retained_data_directory_exists(root, name) for name in ("postgres", "nats")
+    )
 
 
 def render_kind_config(root: Path) -> Path:
@@ -751,7 +763,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         raise StagingCellError(
             "staging cluster exists without a bootstrap receipt; refusing unbound recovery"
         )
-    if cell is None and retained_postgres_state_exists(root):
+    if cell is None and retained_staging_data_exists(root):
         raise StagingCellError(
             "retained staging data exists without a bootstrap receipt; explicit recovery is required"
         )

@@ -239,7 +239,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 mock.patch.object(staging, "configure_reference_paths"),
                 mock.patch.object(staging, "load_tool_receipt", return_value=receipt),
                 mock.patch.object(staging.reference, "clusters", return_value=[]),
-                mock.patch.object(staging, "retained_postgres_state_exists", return_value=True),
+                mock.patch.object(staging, "retained_staging_data_exists", return_value=True),
                 mock.patch.object(staging, "require_clean_commit") as commit_mock,
                 mock.patch.object(staging.reference, "create_kind_cluster") as create_mock,
             ):
@@ -561,6 +561,36 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         self.assertEqual(len(chowns), 2)
         self.assertTrue(all("-R" not in argv for argv in chowns))
         self.assertEqual(len([argv for argv in commands if "chmod" in argv]), 2)
+
+    def test_nats_only_retained_state_blocks_unbound_recreation(self) -> None:
+        args = argparse.Namespace(
+            cluster=staging.DEFAULT_CLUSTER,
+            owner_id="owner",
+            source_commit=None,
+        )
+        with tempfile.TemporaryDirectory(prefix="staging-cell-nats-retained-") as tmp_name:
+            root = Path(tmp_name)
+            nats = root / "data/nats"
+            nats.mkdir(parents=True)
+            (nats / "jetstream.marker").write_text("retained", encoding="utf-8")
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(
+                    staging, "load_tool_receipt", return_value=self._tool_receipt()
+                ),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
+                mock.patch.object(staging, "require_clean_commit") as commit_mock,
+                mock.patch.object(
+                    staging.reference, "create_kind_cluster"
+                ) as create_mock,
+            ):
+                with self.assertRaisesRegex(
+                    staging.StagingCellError, "without a bootstrap receipt"
+                ):
+                    staging.command_up(args)
+        commit_mock.assert_not_called()
+        create_mock.assert_not_called()
 
     def test_retained_postgres_permission_error_is_preservation_evidence(self) -> None:
         with tempfile.TemporaryDirectory(prefix="staging-cell-retained-permission-") as tmp_name:
