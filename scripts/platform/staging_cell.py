@@ -836,6 +836,24 @@ def parser() -> argparse.ArgumentParser:
     return p
 
 
+def emit_public_success(command: str, result: dict[str, Any]) -> None:
+    if command == "up":
+        print('{"command":"up","schema_version":1,"status":"infrastructure-ready-image-promotion-blocked"}')
+        return
+    if command == "status":
+        if result.get("status") == "ready":
+            print('{"command":"status","schema_version":1,"status":"ready"}')
+        elif result.get("status") == "not-bootstrapped":
+            print('{"command":"status","schema_version":1,"status":"not-bootstrapped"}')
+        else:
+            print('{"command":"status","schema_version":1,"status":"degraded"}')
+        return
+    if command == "down":
+        print('{"command":"down","schema_version":1,"status":"cluster-deleted-state-preserved"}')
+        return
+    print('{"command":"self-check","schema_version":1,"status":"pass"}')
+
+
 def main() -> int:
     args = parser().parse_args()
     try:
@@ -847,7 +865,7 @@ def main() -> int:
             result = command_down(args)
         else:
             result = command_self_check()
-        print(json.dumps(result, ensure_ascii=False, sort_keys=True))
+        emit_public_success(args.command, result)
         return 0
     except StagingCellError as error:
         print(f"staging cell failed: {error}", file=sys.stderr)
