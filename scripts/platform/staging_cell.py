@@ -85,6 +85,29 @@ def output(argv: list[str], *, timeout: int | None = None) -> str:
     return run(argv, capture=True, timeout=timeout).stdout.strip()
 
 
+
+
+def fsync_directory(path: Path) -> None:
+    flags = os.O_RDONLY | os.O_CLOEXEC
+    if hasattr(os, "O_DIRECTORY"):
+        flags |= os.O_DIRECTORY
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(path, flags)
+    try:
+        opened = os.fstat(fd)
+        linked = os.stat(path, follow_symlinks=False)
+        if (
+            not stat.S_ISDIR(opened.st_mode)
+            or opened.st_dev != linked.st_dev
+            or opened.st_ino != linked.st_ino
+        ):
+            raise StagingCellError("atomic write parent directory identity is unsafe")
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
 def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, tmp_name = tempfile.mkstemp(
@@ -102,6 +125,7 @@ def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> No
             os.fsync(handle.fileno())
         os.replace(tmp, path)
         os.chmod(path, mode)
+        fsync_directory(path.parent)
     finally:
         if fd >= 0:
             os.close(fd)
@@ -124,6 +148,7 @@ def atomic_text(path: Path, text: str, *, mode: int = 0o600) -> None:
             os.fsync(handle.fileno())
         os.replace(tmp, path)
         os.chmod(path, mode)
+        fsync_directory(path.parent)
     finally:
         if fd >= 0:
             os.close(fd)
@@ -949,9 +974,6 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
     root = state_root(getattr(args, "state_root", None))
     configure_reference_paths(root)
-    receipt = load_tool_receipt(root)
-    kind = receipt["tools"]["kind"]
-    kubectl = receipt["tools"]["kubectl"]
     owner_path = root / "receipts/cell-bootstrap.json"
     if not owner_path.exists():
         return {
@@ -959,6 +981,9 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
             "status": "not-bootstrapped",
             "cluster": args.cluster,
         }
+    receipt = load_tool_receipt(root)
+    kind = receipt["tools"]["kind"]
+    kubectl = receipt["tools"]["kubectl"]
     owner = load_cell_receipt(root)
     require_receipt_cluster(owner, args.cluster)
     commit = str(owner.get("bootstrap_commit") or "")
@@ -1001,6 +1026,32 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         ]
     ) or "missing"
     source_matches_commit = flux_revision_matches_commit(source_revision, commit)
+    source_health_raw = output(
+        [
+            kubectl,
+            "-n",
+            "flux-system",
+            "get",
+            "gitrepository",
+            SOURCE_NAME,
+            "--ignore-not-found",
+            "-o",
+            "jsonpath={.metadata.generation}|{.status.observedGeneration}|{.status.conditions[?(@.type=='Ready')].status}",
+        ]
+    )
+    source_health_parts = source_health_raw.split("|", 2) if source_health_raw else []
+    if len(source_health_parts) != 3:
+        source_ready = "missing"
+    else:
+        source_generation, source_observed_generation, source_ready_status = source_health_parts
+        if (
+            not source_generation
+            or not source_observed_generation
+            or source_generation != source_observed_generation
+        ):
+            source_ready = "stale"
+        else:
+            source_ready = source_ready_status or "missing"
     data_ready = output(
         [
             kubectl,
@@ -1040,6 +1091,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         }
     ready = (
         source_matches_commit
+        and source_ready == "True"
         and data_ready == "True"
         and all(value == "Bound" for value in pvcs.values())
         and external_secret["ready"]
@@ -1052,6 +1104,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         "bootstrap_commit": commit,
         "source_revision": source_revision,
         "source_matches_commit": source_matches_commit,
+        "source_ready": source_ready,
         "data_ready": data_ready,
         "pvcs": pvcs,
         "external_secret": external_secret,
@@ -1309,6 +1362,7 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
                     "bootstrap_commit": str(result.get("bootstrap_commit") or ""),
                     "source_revision": str(result.get("source_revision") or ""),
                     "source_matches_commit": bool(result.get("source_matches_commit")),
+                    "source_ready": result.get("source_ready") == "True",
                     "data_ready": result.get("data_ready") == "True",
                     "pvcs": {
                         "postgres-data": str(pvcs.get("postgres-data") or "missing"),

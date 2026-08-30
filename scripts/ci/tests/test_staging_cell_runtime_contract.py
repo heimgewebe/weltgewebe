@@ -446,6 +446,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     "output",
                     side_effect=[
                         f"main@sha1:{commit}",
+                        "1|1|True",
                         "True",
                         "Bound",
                         "Bound",
@@ -486,7 +487,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 mock.patch.object(
                     staging,
                     "output",
-                    side_effect=[f"main@sha1:{commit}", "True", "Bound", "Bound"],
+                    side_effect=[f"main@sha1:{commit}", "1|1|True", "True", "Bound", "Bound"],
                 ),
                 mock.patch.object(
                     staging,
@@ -604,7 +605,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
                 mock.patch.object(staging.reference, "clusters", return_value=[staging.DEFAULT_CLUSTER]),
                 mock.patch.object(staging.reference, "require_owned_cluster"),
-                mock.patch.object(staging, "output", side_effect=["", "", "", ""]) as output_mock,
+                mock.patch.object(staging, "output", side_effect=["", "", "", "", ""]) as output_mock,
                 mock.patch.object(
                     staging,
                     "verify_external_secret_binding",
@@ -624,6 +625,69 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         )
         for call in output_mock.call_args_list:
             self.assertIn("--ignore-not-found", call.args[0])
+
+    def test_atomic_writes_fsync_parent_directory(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="staging-cell-fsync-parent-") as tmp_name:
+            root = Path(tmp_name)
+            json_path = root / "receipt.json"
+            text_path = root / "receipt.txt"
+            with mock.patch.object(staging, "fsync_directory") as fsync_mock:
+                staging.atomic_json(json_path, {"schema_version": 1})
+                fsync_mock.assert_called_once_with(root)
+            with mock.patch.object(staging, "fsync_directory") as fsync_mock:
+                staging.atomic_text(text_path, "ok\n")
+                fsync_mock.assert_called_once_with(root)
+
+    def test_status_reports_not_bootstrapped_without_toolchain(self) -> None:
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        with tempfile.TemporaryDirectory(prefix="staging-cell-not-bootstrapped-") as tmp_name:
+            root = Path(tmp_name)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt") as tool_receipt_mock,
+            ):
+                result = staging.command_status(args)
+        self.assertEqual(result["status"], "not-bootstrapped")
+        tool_receipt_mock.assert_not_called()
+
+    def test_status_requires_current_gitrepository_ready_condition(self) -> None:
+        owner = "owner-a"
+        commit = "7" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        with tempfile.TemporaryDirectory(prefix="staging-cell-source-ready-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(staging.reference, "clusters", return_value=[staging.DEFAULT_CLUSTER]),
+                mock.patch.object(staging.reference, "require_owned_cluster"),
+                mock.patch.object(
+                    staging,
+                    "output",
+                    side_effect=[
+                        f"main@sha1:{commit}",
+                        "3|3|False",
+                        "True",
+                        "Bound",
+                        "Bound",
+                    ],
+                ),
+                mock.patch.object(
+                    staging,
+                    "verify_external_secret_binding",
+                    return_value={"database": True, "runtime": True, "ready": True},
+                ),
+                mock.patch.object(
+                    staging, "image_promotion_state", return_value={"status": "blocked"}
+                ),
+            ):
+                result = staging.command_status(args)
+        self.assertEqual(result["status"], "degraded")
+        self.assertTrue(result["source_matches_commit"])
+        self.assertEqual(result["source_ready"], "False")
 
     def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:
         events: list[str] = []
