@@ -38,6 +38,7 @@ Livebeleg.
 | Migrationen auf VPS einordnen | [`docs/deploy/vps-db-initialization-boundary.md`](../docs/deploy/vps-db-initialization-boundary.md) |
 | migrationssicheren Runtime-Smoke ausführen | [`docs/deploy/vps-migration-safe-runtime-smoke.md`](../docs/deploy/vps-migration-safe-runtime-smoke.md) |
 | Public Login und SMTP vorbereiten | [`docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md`](../docs/deploy/domain-mail-migration-ionos-to-inwx-mailbox-brevo.md) |
+| Gast-Austritt mit Step-up zweiphasig ausrollen | [`runbooks/guest-exit-step-up-rollout.md`](guest-exit-step-up-rollout.md) |
 | Sicherheitsgrenzen prüfen | [`docs/deploy/security.md`](../docs/deploy/security.md) |
 | allgemeine Anwendungsvorfälle | [`docs/runbook.md`](../docs/runbook.md) |
 | Metriken und Diagnose | [`docs/runbook.observability.md`](../docs/runbook.observability.md) |

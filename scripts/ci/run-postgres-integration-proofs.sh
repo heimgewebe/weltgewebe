@@ -385,7 +385,8 @@ fi
 for target in "${targets[@]}"; do
   printf '=== PostgreSQL proof: %s ===\n' "$target"
   reset_database
-  cargo test --locked -p weltgewebe-api --test "$target" -- --include-ignored --test-threads=1
+  AUTH_GUEST_EXIT_STEP_UP_ENABLED=1 \
+    cargo test --locked -p weltgewebe-api --test "$target" -- --include-ignored --test-threads=1
 done
 
 # The required all-target CI lane also executes the existing conversation Push proof.

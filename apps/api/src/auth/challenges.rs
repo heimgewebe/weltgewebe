@@ -10,6 +10,7 @@ use uuid::Uuid;
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub enum ChallengeIntent {
     LogoutAll,
+    ExitGuestAccount,
     RemoveDevice { target_device_id: String },
     UpdateEmail { new_email: String },
     BeginPasskeyRegistration,

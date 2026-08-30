@@ -22,11 +22,12 @@ use serde::Deserialize;
 use serde::Serialize;
 use serde_json::Value;
 use sqlx::PgPool;
+use std::{env, sync::OnceLock};
 
 use super::webgemeindezentren::{
     ensure_webgemeindezentrum_activity_faden, repair_webgemeindezentrum_activity_faden,
 };
-use crate::auth::role::Role;
+use crate::auth::{challenges::ChallengeIntent, role::Role};
 use crate::config::{
     DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource, DomainReadSource,
 };
@@ -39,6 +40,36 @@ use crate::middleware::auth::AuthContext;
 use crate::state::ApiState;
 
 type ApiError = (StatusCode, String);
+
+const GUEST_EXIT_STEP_UP_ENABLED_ENV: &str = "AUTH_GUEST_EXIT_STEP_UP_ENABLED";
+static GUEST_EXIT_STEP_UP_ENABLED: OnceLock<bool> = OnceLock::new();
+
+fn parse_guest_exit_step_up_enabled(raw: Option<&str>) -> bool {
+    raw.is_some_and(|value| {
+        let value = value.trim();
+        value == "1" || value.eq_ignore_ascii_case("true")
+    })
+}
+
+fn guest_exit_step_up_enabled() -> bool {
+    *GUEST_EXIT_STEP_UP_ENABLED.get_or_init(|| {
+        let raw = env::var(GUEST_EXIT_STEP_UP_ENABLED_ENV).ok();
+        let enabled = parse_guest_exit_step_up_enabled(raw.as_deref());
+        if raw.as_deref().is_some_and(|value| {
+            let value = value.trim();
+            !matches!(value, "0" | "1")
+                && !value.eq_ignore_ascii_case("true")
+                && !value.eq_ignore_ascii_case("false")
+        }) {
+            tracing::warn!(
+                env_var = GUEST_EXIT_STEP_UP_ENABLED_ENV,
+                value = raw.as_deref().unwrap_or_default(),
+                "invalid guest-exit step-up rollout flag; failing closed"
+            );
+        }
+        enabled
+    })
+}
 
 fn private_no_store_json<T: Serialize>(value: T) -> Response {
     ([(header::CACHE_CONTROL, "private, no-store")], Json(value)).into_response()
@@ -969,25 +1000,14 @@ pub async fn post_proposal_message(
     Ok((StatusCode::CREATED, Json(message)))
 }
 
-/// POST /accounts/me/exit — der selbst initiierte Austritt aus dem
-/// Weltgewebe. Nur Gäste dürfen diesen Sonderpfad nutzen. Er entfernt ihre
-/// Authentifizierungsidentität samt eigenen Weberanträgen und Anmeldedaten aus
-/// der kanonischen Datenbank, aus der Laufzeitprojektion und aus allen Sessions.
-/// Gemeinschaftliche Knoten und Beiträge bleiben anonymisiert erhalten.
-pub async fn exit_own_account(
-    State(state): State<ApiState>,
-    Extension(auth): Extension<AuthContext>,
-) -> Result<Json<Value>, ApiError> {
-    let account_id = require_account_id(&auth)?;
-    if auth.role != Role::Gast {
-        return Err((
-            StatusCode::CONFLICT,
-            "only guest accounts can use the guest exit path".to_string(),
-        ));
-    }
-    let pool = require_guest_exit_pool(&state)?;
+/// Führt den bereits frisch bestätigten Gast-Austritt aus. Der Aufrufer muss
+/// die Step-up-Autorisierung vorher konsumiert haben. Die kanonische Löschung
+/// bleibt transaktional; ein nachgelagerter Session-Cleanup-Fehler macht eine
+/// bereits committete Löschung nicht rückwirkend zu einem Fehler.
+pub(crate) async fn execute_guest_exit(state: &ApiState, account_id: &str) -> Result<(), ApiError> {
+    let pool = require_guest_exit_pool(state)?;
 
-    governance::delete_guest_account(pool, &account_id)
+    governance::delete_guest_account(pool, account_id)
         .await
         .map_err(|error| match error {
             GuestExitError::NotEligible => (
@@ -1001,21 +1021,99 @@ pub async fn exit_own_account(
             GuestExitError::Database(error) => internal_error("delete_guest_account")(error),
         })?;
 
-    let session_cleanup = state.sessions.delete_all_by_account(&account_id).await;
-    record_guest_exit_session_cleanup(&account_id, session_cleanup);
+    let session_cleanup = state.sessions.delete_all_by_account(account_id).await;
+    record_guest_exit_session_cleanup(account_id, session_cleanup);
     // In PostgreSQL mode the projection middleware holds a read guard for the
     // whole request. Refreshing here would try to upgrade that guard to a write
     // lock and deadlock against ourselves. The next domain request observes the
     // incremented database generation and refreshes before taking its read guard.
 
-    tracing::info!(event = "governance.guest.exited", "Guest account deleted");
+    tracing::info!(
+        event = "governance.guest.exited",
+        account_id,
+        "Guest account deleted after step-up confirmation"
+    );
 
-    Ok(Json(serde_json::json!({ "status": "exited" })))
+    Ok(())
+}
+
+/// POST /accounts/me/exit — startet den irreversiblen Austritt eines Gasts.
+/// Eine normale Sitzung darf die Löschung nicht mehr selbst ausführen: Sie
+/// erzeugt nur einen kurzlebigen, an Account + Gerät + Lösch-Intent gebundenen
+/// Step-up-Challenge. Erst dessen einmaliger Verbrauch führt die Löschung aus.
+pub async fn exit_own_account(
+    State(state): State<ApiState>,
+    Extension(auth): Extension<AuthContext>,
+) -> Result<Response, ApiError> {
+    let account_id = require_account_id(&auth)?;
+    if auth.role != Role::Gast {
+        return Err((
+            StatusCode::CONFLICT,
+            "only guest accounts can use the guest exit path".to_string(),
+        ));
+    }
+
+    // Preserve fail-closed governance semantics before issuing any security token.
+    require_guest_exit_pool(&state)?;
+
+    // `ExitGuestAccount` is persisted in the shared step-up challenge payload.
+    // During the first rollout, older API replicas cannot deserialize that new
+    // enum variant. Keep challenge creation disabled until every live API replica
+    // runs a compatibility-aware binary; activation is a separate rollout step.
+    if !guest_exit_step_up_enabled() {
+        tracing::warn!(
+            event = "governance.guest.exit_step_up_rollout_gated",
+            account_id = %account_id,
+            env_var = GUEST_EXIT_STEP_UP_ENABLED_ENV,
+            "Guest exit is temporarily unavailable until the step-up rollout gate is activated"
+        );
+        return Err((
+            StatusCode::SERVICE_UNAVAILABLE,
+            "guest exit is temporarily unavailable while step-up confirmation is being activated"
+                .to_string(),
+        ));
+    }
+
+    let device_id = auth.device_id.clone().ok_or((
+        StatusCode::INTERNAL_SERVER_ERROR,
+        "authenticated context missing device_id".to_string(),
+    ))?;
+
+    let challenge = match super::auth::create_shared_challenge(
+        &state,
+        account_id.clone(),
+        device_id,
+        ChallengeIntent::ExitGuestAccount,
+    )
+    .await
+    {
+        Ok(challenge) => challenge,
+        Err(response) => return Ok(response),
+    };
+
+    tracing::info!(
+        event = "governance.guest.exit_step_up_required",
+        account_id = %account_id,
+        challenge_id = %challenge.id,
+        "Guest account exit requires fresh step-up confirmation"
+    );
+
+    Ok((
+        StatusCode::FORBIDDEN,
+        Json(serde_json::json!({
+            "error": "STEP_UP_REQUIRED",
+            "challenge_id": challenge.id
+        })),
+    )
+        .into_response())
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{private_no_store_json, proposal_list_view, record_guest_exit_session_cleanup};
+    use super::{
+        parse_guest_exit_step_up_enabled, private_no_store_json, proposal_list_view,
+        record_guest_exit_session_cleanup,
+    };
     use crate::{
         auth::{role::Role, session::SessionBackendError},
         governance::{ProposalListEntry, ProposalStatus, ProposalWithCounts},
@@ -1166,6 +1264,17 @@ mod tests {
                 .and_then(|value| value.to_str().ok()),
             Some("private, no-store")
         );
+    }
+
+    #[test]
+    fn guest_exit_step_up_rollout_flag_is_fail_closed() {
+        assert!(!parse_guest_exit_step_up_enabled(None));
+        assert!(!parse_guest_exit_step_up_enabled(Some("")));
+        assert!(!parse_guest_exit_step_up_enabled(Some("0")));
+        assert!(!parse_guest_exit_step_up_enabled(Some("false")));
+        assert!(!parse_guest_exit_step_up_enabled(Some("unexpected")));
+        assert!(parse_guest_exit_step_up_enabled(Some("1")));
+        assert!(parse_guest_exit_step_up_enabled(Some(" TRUE ")));
     }
 
     #[test]

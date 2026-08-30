@@ -225,10 +225,65 @@ export async function postProposalMessage(
   return message;
 }
 
-export function exitGuestAccount(): Promise<{ status: "exited" }> {
-  return request<{ status: "exited" }>("/api/accounts/me/exit", {
+export type GuestExitResult =
+  | { status: "exited" }
+  | { status: "step-up-required"; challengeId: string };
+
+export async function exitGuestAccount(): Promise<GuestExitResult> {
+  const response = await fetch("/api/accounts/me/exit", {
     method: "POST",
+    credentials: "include",
   });
+  const responseText = (await response.text()).trim();
+
+  // Rolling-deploy compatibility: an older API may still complete the exit
+  // directly. Treat that as terminal instead of trying to request a challenge
+  // for an account that has already been deleted.
+  if (response.ok) return { status: "exited" };
+
+  let payload: { error?: unknown; challenge_id?: unknown } | null = null;
+  if (responseText) {
+    try {
+      payload = JSON.parse(responseText) as {
+        error?: unknown;
+        challenge_id?: unknown;
+      };
+    } catch {
+      payload = null;
+    }
+  }
+
+  if (
+    response.status === 403 &&
+    payload?.error === "STEP_UP_REQUIRED" &&
+    typeof payload.challenge_id === "string" &&
+    payload.challenge_id
+  ) {
+    return {
+      status: "step-up-required",
+      challengeId: payload.challenge_id,
+    };
+  }
+
+  throw new GovernanceApiError(
+    response.status,
+    responseText || `HTTP ${response.status}`,
+  );
+}
+
+export async function requestGuestExitStepUp(
+  challengeId: string,
+): Promise<void> {
+  const response = await fetch("/api/auth/step-up/magic-link/request", {
+    method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ challenge_id: challengeId }),
+  });
+  if (!response.ok) {
+    const message = (await response.text()).trim() || `HTTP ${response.status}`;
+    throw new GovernanceApiError(response.status, message);
+  }
 }
 
 export function formatRemaining(seconds?: number): string {

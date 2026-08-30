@@ -628,6 +628,60 @@ test("a guest reaches the Weber application as a distinct weaving action", async
   governance.releaseListResponse();
 });
 
+test("guest exit requests fresh step-up confirmation before deleting the account", async ({
+  page,
+}) => {
+  await mockApiResponses(page, {
+    auth: { authenticated: true, account_id: GUEST_ID, role: "gast" },
+  });
+  await installGovernanceRoutes(page);
+
+  let exitRequests = 0;
+  let stepUpBody: unknown = null;
+  await page.route("**/api/accounts/me/exit", async (route: Route) => {
+    exitRequests += 1;
+    await route.fulfill({
+      status: 403,
+      contentType: "application/json",
+      body: JSON.stringify({
+        error: "STEP_UP_REQUIRED",
+        challenge_id: "guest-exit-challenge",
+      }),
+    });
+  });
+  await page.route(
+    "**/api/auth/step-up/magic-link/request",
+    async (route: Route) => {
+      stepUpBody = route.request().postDataJSON();
+      await route.fulfill({ status: 204 });
+    },
+  );
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.type()).toBe("confirm");
+    expect(dialog.message()).toContain("Bestätigungslink");
+    await dialog.accept();
+  });
+
+  await page.goto("/antraege");
+  await page
+    .getByRole("button", { name: "commonThing vollständig verlassen" })
+    .click();
+
+  await expect.poll(() => exitRequests).toBe(1);
+  await expect
+    .poll(() => stepUpBody)
+    .toEqual({
+      challenge_id: "guest-exit-challenge",
+    });
+  await expect(
+    page.getByText(
+      "Bestätigungslink gesendet. Dein Gastkonto bleibt bestehen, bis du den Link in deiner E-Mail bestätigst.",
+    ),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/antraege$/);
+});
+
 test("client-side hash navigation focuses the Weber application without remounting", async ({
   page,
 }) => {
