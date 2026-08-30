@@ -497,6 +497,11 @@ if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
     if [[ "$PURGE_ZOMBIES" == "1" ]]; then
       while IFS= read -r container_name; do
         [[ -n "$container_name" ]] || continue
+        if [[ "$container_name" == "$EDGE_GATEWAY_CONTAINER" ]]; then
+          echo "ERROR: Refusing to auto-purge configured external edge gateway container: $container_name" >&2
+          echo "       Remediate the external edge stack separately; --purge-compose-leaks does not own EDGE_GATEWAY_CONTAINER." >&2
+          exit 1
+        fi
         container_id="$(docker inspect --format '{{.Id}}' "$container_name")" || {
           echo "ERROR: Could not bind zombie container identity for deferred purge: $container_name" >&2
           exit 1

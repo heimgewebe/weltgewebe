@@ -32,6 +32,8 @@ if [[ "$1" == "ps" ]]; then
     echo "zombie-container compose $(pwd)/infra/compose/compose.prod.yml"
   elif [[ "${MOCK_ZOMBIE:-}" == "GENERIC" ]]; then
       echo "zombie-generic compose"
+  elif [[ "${MOCK_ZOMBIE:-}" == "EDGE" ]]; then
+      echo "${EDGE_GATEWAY_CONTAINER:-edge-caddy} compose"
   # HANDLE DIRECT docker ps -q api (if used)
   elif [[ "$ARGS" == *"-q api"* ]]; then
       if [[ "${MOCK_MISSING_API:-0}" == "1" ]]; then
@@ -272,6 +274,24 @@ else
   echo "$OUTPUT"
   exit 1
 fi
+
+# 3b. Test Zombie Guard (Never Purge External Edge Gateway)
+echo ">>> Test 3b: Zombie Guard (Protect External Edge Gateway)"
+export MOCK_ZOMBIE=EDGE
+set +e
+OUTPUT=$(EDGE_GATEWAY_CONTAINER=edge-caddy DEPLOY_FRONTEND_MODE=edge REQUIRE_FRONTEND=1 ./scripts/weltgewebe-up --no-pull --no-build --purge-compose-leaks 2>&1)
+EDGE_PURGE_RC=$?
+set -e
+if [[ "$EDGE_PURGE_RC" -ne 0 ]] &&
+  echo "$OUTPUT" | grep -q "Refusing to auto-purge configured external edge gateway container: edge-caddy" &&
+  ! echo "$OUTPUT" | grep -q "Mocked remove:"; then
+  echo "PASS: External edge gateway is fail-closed and never queued for compose-leak purge."
+else
+  echo "FAIL: External edge gateway was not protected from compose-leak purge."
+  echo "$OUTPUT"
+  exit 1
+fi
+export MOCK_ZOMBIE=0
 
 # 4. Test Bake Auto-Disable (Missing /apps)
 echo ">>> Test 4: Bake Auto-Disable (Missing /apps)"

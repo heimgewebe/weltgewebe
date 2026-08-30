@@ -88,11 +88,11 @@ Der Guard listet alle blockierenden Container mit Name, Projekt-Label und Config
 **Remediation:**
 
 1. Manuell: `docker compose -p <fremd_projekt> down`
-2. Automatisch: Script mit `--purge-compose-leaks` starten. Das Script bindet die erkannten Ziele zuerst read-only an ihre unveränderliche 64-stellige Docker-Container-ID und führt `docker rm -f` erst aus, nachdem die vollständige fail-closed Deployment-Preflight-Kette erfolgreich war.
+2. Automatisch: Script mit `--purge-compose-leaks` starten. Das Script bindet die erkannten Ziele zuerst read-only an ihre unveränderliche 64-stellige Docker-Container-ID und führt `docker rm -f` erst aus, nachdem die vollständige fail-closed Deployment-Preflight-Kette erfolgreich war. Das konfigurierte externe `EDGE_GATEWAY_CONTAINER` ist ausdrücklich ausgenommen; wird es als Zombie erkannt, bricht der Lauf fail-closed ab und verlangt eine getrennte Remediation des Edge-Stacks.
 
 **Optionen:**
 
-- `--purge-compose-leaks`: Entfernt automatisch erkannte Zombie-Container ausschließlich über die zuvor gebundenen Container-IDs und erst unmittelbar vor dem eigentlichen Deploy; ohne die Option bleibt der Guard fail-closed und löscht nichts.
+- `--purge-compose-leaks`: Entfernt automatisch erkannte Zombie-Container ausschließlich über die zuvor gebundenen Container-IDs und erst unmittelbar vor dem eigentlichen Deploy. Das externe `EDGE_GATEWAY_CONTAINER` wird niemals über diesen Pfad entfernt. Ohne die Option bleibt der Guard fail-closed und löscht nichts.
 - `--build-web`: Erzwingt einen Frontend-Build (erfordert `pnpm`).
 - `--no-build-web`: Unterdrückt den Auto-Build des Frontends (warnt nur).
 
