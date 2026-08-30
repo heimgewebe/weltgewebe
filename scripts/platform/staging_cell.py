@@ -27,6 +27,9 @@ DATA_NAMESPACE = "weltgewebe-data"
 APP_NAMESPACE = "weltgewebe-staging"
 DATABASE_SECRET = "weltgewebe-staging-database"
 RUNTIME_SECRET = "weltgewebe-runtime"
+PUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"
+DATA_CLIENT_LABEL = "weltgewebe.net/data-client"
+SECRET_SOURCE_ANNOTATION = "commonthing.net/external-secret-source-sha256"
 REQUIRED_TOOLS = ("kind", "kubectl", "kustomize", "flux", "helm")
 REQUIRED_ARTIFACTS = (
     "gateway_api_gatewayclasses",
@@ -78,11 +81,15 @@ def output(argv: list[str], *, timeout: int | None = None) -> str:
 
 def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
     tmp = Path(tmp_name)
     try:
-        os.fchmod(fd, mode)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+        fd = -1
+        with handle:
+            os.fchmod(handle.fileno(), mode)
             json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
             handle.write("\n")
             handle.flush()
@@ -90,22 +97,30 @@ def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> No
         os.replace(tmp, path)
         os.chmod(path, mode)
     finally:
+        if fd >= 0:
+            os.close(fd)
         tmp.unlink(missing_ok=True)
 
 
 def atomic_text(path: Path, text: str, *, mode: int = 0o600) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    fd, tmp_name = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tmp")
+    fd, tmp_name = tempfile.mkstemp(
+        dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
+    )
     tmp = Path(tmp_name)
     try:
-        os.fchmod(fd, mode)
-        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        handle = os.fdopen(fd, "w", encoding="utf-8")
+        fd = -1
+        with handle:
+            os.fchmod(handle.fileno(), mode)
             handle.write(text)
             handle.flush()
             os.fsync(handle.fileno())
         os.replace(tmp, path)
         os.chmod(path, mode)
     finally:
+        if fd >= 0:
+            os.close(fd)
         tmp.unlink(missing_ok=True)
 
 
@@ -137,9 +152,13 @@ def load_tool_receipt(root: Path) -> dict[str, Any]:
         raise StagingCellError("toolchain receipt is not bound to the current platform lock")
     tools = receipt.get("tools") if isinstance(receipt.get("tools"), dict) else {}
     artifacts = receipt.get("artifacts") if isinstance(receipt.get("artifacts"), dict) else {}
-    missing_tools = [name for name in REQUIRED_TOOLS if not Path(str(tools.get(name, ""))).is_file()]
+    missing_tools = [
+        name for name in REQUIRED_TOOLS if not Path(str(tools.get(name, ""))).is_file()
+    ]
     missing_artifacts = [
-        name for name in REQUIRED_ARTIFACTS if not Path(str(artifacts.get(name, ""))).is_file()
+        name
+        for name in REQUIRED_ARTIFACTS
+        if not Path(str(artifacts.get(name, ""))).is_file()
     ]
     if missing_tools or missing_artifacts:
         raise StagingCellError(
@@ -148,23 +167,42 @@ def load_tool_receipt(root: Path) -> dict[str, Any]:
     return receipt
 
 
-def require_clean_commit(source_commit: str | None) -> str:
+def require_clean_commit(
+    source_commit: str | None,
+    *,
+    expected_commit: str | None = None,
+    require_public_main: bool = True,
+) -> str:
     if output(["git", "status", "--porcelain"]):
         raise StagingCellError("staging cell mutation requires a clean worktree")
     head = output(["git", "rev-parse", "HEAD"])
     if source_commit is not None and source_commit != head:
-        raise StagingCellError(f"source commit {source_commit} does not equal worktree HEAD {head}")
+        raise StagingCellError(
+            f"source commit {source_commit} does not equal worktree HEAD {head}"
+        )
     if len(head) != 40 or any(ch not in "0123456789abcdef" for ch in head):
         raise StagingCellError("worktree HEAD is not a canonical 40-hex commit")
-    public = output(
-        ["git", "ls-remote", "https://github.com/heimgewebe/weltgewebe.git", "refs/heads/main"],
-        timeout=30,
-    )
-    remote_head = public.split()[0] if public else ""
-    if remote_head != head:
-        raise StagingCellError(
-            f"staging bootstrap requires exact public main; local={head} public-main={remote_head or 'missing'}"
+    if expected_commit is not None:
+        if len(expected_commit) != 40 or any(
+            ch not in "0123456789abcdef" for ch in expected_commit
+        ):
+            raise StagingCellError("persisted bootstrap commit is not canonical 40-hex")
+        if head != expected_commit:
+            raise StagingCellError(
+                "existing staging cell is pinned to bootstrap commit "
+                f"{expected_commit}; current worktree HEAD is {head}"
+            )
+    if require_public_main:
+        public = output(
+            ["git", "ls-remote", PUBLIC_REPOSITORY, "refs/heads/main"],
+            timeout=30,
         )
+        remote_head = public.split()[0] if public else ""
+        if remote_head != head:
+            raise StagingCellError(
+                f"staging bootstrap requires exact public main; local={head} "
+                f"public-main={remote_head or 'missing'}"
+            )
     return head
 
 
@@ -208,7 +246,9 @@ def recorded_secret_source_sha(root: Path) -> str | None:
         or len(source_sha) != 64
         or any(ch not in "0123456789abcdef" for ch in source_sha)
     ):
-        raise StagingCellError("cell bootstrap receipt has no canonical external-secret source hash")
+        raise StagingCellError(
+            "cell bootstrap receipt has no canonical external-secret source hash"
+        )
     return source_sha
 
 
@@ -244,7 +284,9 @@ def render_kind_config(root: Path) -> Path:
     for index, node in enumerate(nodes):
         mounts = node.get("extraMounts") if isinstance(node, dict) else None
         if not isinstance(mounts, list) or len(mounts) != 1:
-            raise StagingCellError(f"staging kind node {index} mount contract is invalid")
+            raise StagingCellError(
+                f"staging kind node {index} mount contract is invalid"
+            )
         mount = mounts[0]
         if mount.get("hostPath") != placeholder:
             raise StagingCellError(f"staging kind node {index} hostPath template drift")
@@ -264,7 +306,9 @@ def load_or_create_secret_material(root: Path) -> tuple[dict[str, str], str]:
         if stat.S_ISLNK(linked.st_mode) or not stat.S_ISREG(linked.st_mode):
             raise StagingCellError("staging secret source must be a regular file")
         if stat.S_IMODE(linked.st_mode) & 0o077:
-            raise StagingCellError("staging secret source must not be group/world accessible")
+            raise StagingCellError(
+                "staging secret source must not be group/world accessible"
+            )
         payload = json.loads(path.read_text(encoding="utf-8"))
     else:
         if retained_postgres_state_exists(root):
@@ -320,7 +364,7 @@ def secret_document_matches(
         metadata.get("name") != name
         or metadata.get("namespace") != namespace_name
         or not isinstance(annotations, dict)
-        or annotations.get("commonthing.net/external-secret-source-sha256") != source_sha
+        or annotations.get(SECRET_SOURCE_ANNOTATION) != source_sha
     ):
         return False
     data = document.get("data")
@@ -390,12 +434,16 @@ def verify_external_secret_binding(kubectl: str, root: Path) -> dict[str, Any]:
 def flux_revision_matches_commit(revision: str, commit: str) -> bool:
     if len(commit) != 40 or any(ch not in "0123456789abcdef" for ch in commit):
         return False
-    return revision in {commit, f"sha1:{commit}"} or revision.endswith(f"@sha1:{commit}")
+    return revision in {commit, f"sha1:{commit}"} or revision.endswith(
+        f"@sha1:{commit}"
+    )
 
 
 def apply_yaml(kubectl: str, documents: list[dict[str, Any]] | dict[str, Any]) -> None:
     docs = documents if isinstance(documents, list) else [documents]
-    body = "\n---\n".join(yaml.safe_dump(doc, sort_keys=False).strip() for doc in docs) + "\n"
+    body = "\n---\n".join(
+        yaml.safe_dump(doc, sort_keys=False).strip() for doc in docs
+    ) + "\n"
     run([kubectl, "apply", "-f", "-"], input_text=body, timeout=120)
 
 
@@ -406,8 +454,12 @@ def namespace(name: str, *, data_client: bool = False) -> dict[str, Any]:
         "pod-security.kubernetes.io/warn": "restricted",
     }
     if data_client:
-        labels["commonthing.net/data-client"] = "true"
-    return {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": name, "labels": labels}}
+        labels[DATA_CLIENT_LABEL] = "true"
+    return {
+        "apiVersion": "v1",
+        "kind": "Namespace",
+        "metadata": {"name": name, "labels": labels},
+    }
 
 
 def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
@@ -416,7 +468,7 @@ def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
     password = material["database_password"]
     database = material["database_name"]
     runtime_database_url = database_url(material)
-    annotations = {"commonthing.net/external-secret-source-sha256": source_sha}
+    annotations = {SECRET_SOURCE_ANNOTATION: source_sha}
     apply_yaml(kubectl, [namespace(DATA_NAMESPACE), namespace(APP_NAMESPACE, data_client=True)])
     apply_yaml(
         kubectl,
@@ -424,14 +476,26 @@ def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
             {
                 "apiVersion": "v1",
                 "kind": "Secret",
-                "metadata": {"name": DATABASE_SECRET, "namespace": DATA_NAMESPACE, "annotations": annotations},
+                "metadata": {
+                    "name": DATABASE_SECRET,
+                    "namespace": DATA_NAMESPACE,
+                    "annotations": annotations,
+                },
                 "type": "Opaque",
-                "stringData": {"username": username, "password": password, "database": database},
+                "stringData": {
+                    "username": username,
+                    "password": password,
+                    "database": database,
+                },
             },
             {
                 "apiVersion": "v1",
                 "kind": "Secret",
-                "metadata": {"name": RUNTIME_SECRET, "namespace": APP_NAMESPACE, "annotations": annotations},
+                "metadata": {
+                    "name": RUNTIME_SECRET,
+                    "namespace": APP_NAMESPACE,
+                    "annotations": annotations,
+                },
                 "type": "Opaque",
                 "stringData": {"database-url": runtime_database_url},
             },
@@ -446,11 +510,28 @@ def public_external_secret_state() -> dict[str, Any]:
 
 def prepare_volume_permissions(kind: str, cluster: str) -> None:
     nodes = reference.kind_nodes(kind, cluster)
-    node = nodes[0]
-    for path, identity in (("/var/local/weltgewebe-staging/postgres", "999:999"), ("/var/local/weltgewebe-staging/nats", "1000:1000")):
-        run(["docker", "exec", node, "mkdir", "-p", path], timeout=30)
-        run(["docker", "exec", node, "chown", "-R", identity, path], timeout=30)
-        run(["docker", "exec", node, "chmod", "0700", path], timeout=30)
+    if len(nodes) != 3:
+        raise StagingCellError(
+            f"staging cluster must expose exactly three kind nodes; observed {len(nodes)}"
+        )
+    owner_node = nodes[0]
+    for path, identity in (
+        ("/var/local/weltgewebe-staging/postgres", "999:999"),
+        ("/var/local/weltgewebe-staging/nats", "1000:1000"),
+    ):
+        run(["docker", "exec", owner_node, "mkdir", "-p", path], timeout=30)
+        run(["docker", "exec", owner_node, "chown", "-R", identity, path], timeout=30)
+        run(["docker", "exec", owner_node, "chmod", "0700", path], timeout=30)
+        expected = f"{identity}:700"
+        for node in nodes:
+            observed = output(
+                ["docker", "exec", node, "stat", "-c", "%u:%g:%a", path],
+                timeout=30,
+            )
+            if observed != expected:
+                raise StagingCellError(
+                    f"staging host mount is not shared consistently on kind node {node!r}"
+                )
 
 
 def flux_documents(commit: str) -> list[dict[str, Any]]:
@@ -461,7 +542,7 @@ def flux_documents(commit: str) -> list[dict[str, Any]]:
             "metadata": {"name": SOURCE_NAME, "namespace": "flux-system"},
             "spec": {
                 "interval": "1m",
-                "url": "https://github.com/heimgewebe/weltgewebe",
+                "url": PUBLIC_REPOSITORY,
                 "ref": {"commit": commit},
             },
         },
@@ -478,8 +559,18 @@ def flux_documents(commit: str) -> list[dict[str, Any]]:
                 "sourceRef": {"kind": "GitRepository", "name": SOURCE_NAME},
                 "path": "./platform/clusters/staging/data",
                 "healthChecks": [
-                    {"apiVersion": "apps/v1", "kind": "Deployment", "name": "postgres", "namespace": DATA_NAMESPACE},
-                    {"apiVersion": "apps/v1", "kind": "Deployment", "name": "nats", "namespace": DATA_NAMESPACE},
+                    {
+                        "apiVersion": "apps/v1",
+                        "kind": "Deployment",
+                        "name": "postgres",
+                        "namespace": DATA_NAMESPACE,
+                    },
+                    {
+                        "apiVersion": "apps/v1",
+                        "kind": "Deployment",
+                        "name": "nats",
+                        "namespace": DATA_NAMESPACE,
+                    },
                 ],
             },
         },
@@ -487,18 +578,38 @@ def flux_documents(commit: str) -> list[dict[str, Any]]:
 
 
 def wait_data(kubectl: str) -> None:
-    reference.wait_condition(kubectl, "flux-system", f"gitrepository/{SOURCE_NAME}", "Ready")
-    reference.wait_condition(kubectl, "flux-system", f"kustomization/{DATA_KUSTOMIZATION}", "Ready")
+    reference.wait_condition(
+        kubectl, "flux-system", f"gitrepository/{SOURCE_NAME}", "Ready"
+    )
+    reference.wait_condition(
+        kubectl,
+        "flux-system",
+        f"kustomization/{DATA_KUSTOMIZATION}",
+        "Ready",
+    )
     reference.wait_rollout(kubectl, DATA_NAMESPACE, "deployment/postgres", "8m")
     reference.wait_rollout(kubectl, DATA_NAMESPACE, "deployment/nats", "8m")
     for pvc in ("postgres-data", "nats-data"):
-        phase = output([kubectl, "-n", DATA_NAMESPACE, "get", "pvc", pvc, "-o", "jsonpath={.status.phase}"])
+        phase = output(
+            [
+                kubectl,
+                "-n",
+                DATA_NAMESPACE,
+                "get",
+                "pvc",
+                pvc,
+                "-o",
+                "jsonpath={.status.phase}",
+            ]
+        )
         if phase != "Bound":
             raise StagingCellError(f"PVC {pvc} is not Bound: {phase!r}")
 
 
 def image_promotion_state() -> dict[str, Any]:
-    contract = json.loads((ROOT / "platform/image-promotion.contract.json").read_text(encoding="utf-8"))
+    contract = json.loads(
+        (ROOT / "platform/image-promotion.contract.json").read_text(encoding="utf-8")
+    )
     return {
         "status": contract.get("status"),
         "production_activation": contract.get("production_activation"),
@@ -514,7 +625,7 @@ def write_cell_receipt(root: Path, payload: dict[str, Any]) -> str:
 
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
-    root = state_root(args.state_root)
+    root = state_root(getattr(args, "state_root", None))
     root.mkdir(parents=True, exist_ok=True)
     os.chmod(root, 0o700)
     data_root = root / "data"
@@ -522,7 +633,6 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     os.chmod(data_root, 0o755)
     (data_root / "postgres").mkdir(parents=True, exist_ok=True)
     (data_root / "nats").mkdir(parents=True, exist_ok=True)
-    commit = require_clean_commit(args.source_commit)
     configure_reference_paths(root)
     receipt = load_tool_receipt(root)
     tools = receipt["tools"]
@@ -534,21 +644,29 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     if not owner_id:
         raise StagingCellError("--owner-id is required for real staging ownership")
 
-    secret_path = root / "secrets/staging-runtime.json"
-    if secret_path.exists() or retained_postgres_state_exists(root):
-        load_or_create_secret_material(root)
-
-    rendered_kind_config = render_kind_config(root)
-
-    if args.cluster in reference.clusters(kind):
+    existing = args.cluster in reference.clusters(kind)
+    if existing:
+        cell = load_cell_receipt(root)
+        require_receipt_cluster(cell, args.cluster)
+        persisted_owner = str(cell.get("owner_id") or "")
+        persisted_commit = str(cell.get("bootstrap_commit") or "")
+        if owner_id != persisted_owner:
+            raise StagingCellError("--owner-id does not match the persisted cluster owner")
+        commit = require_clean_commit(
+            args.source_commit,
+            expected_commit=persisted_commit,
+            require_public_main=False,
+        )
         reference.require_owned_cluster(
             kind,
             args.cluster,
-            expected_commit=commit,
+            expected_commit=persisted_commit,
             expected_owner_id=owner_id,
         )
         created = False
     else:
+        commit = require_clean_commit(args.source_commit)
+        rendered_kind_config = render_kind_config(root)
         reference.create_kind_cluster(
             kind,
             args.cluster,
@@ -560,28 +678,57 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
         created = True
 
+    secret_path = root / "secrets/staging-runtime.json"
+    if secret_path.exists() or retained_postgres_state_exists(root):
+        load_or_create_secret_material(root)
+
     prepare_volume_permissions(kind, args.cluster)
     api_server_host = reference.control_plane_address(args.cluster)
-    reference.install_platform_components(kubectl, flux, helm, receipt["artifacts"], api_server_host)
-    run([kubectl, "wait", "--for=condition=Ready", "nodes", "--all", "--timeout=5m"], timeout=360)
+    reference.install_platform_components(
+        kubectl, flux, helm, receipt["artifacts"], api_server_host
+    )
+    run(
+        [
+            kubectl,
+            "wait",
+            "--for=condition=Ready",
+            "nodes",
+            "--all",
+            "--timeout=5m",
+        ],
+        timeout=360,
+    )
     secret_receipt = inject_external_secrets(kubectl, root)
     apply_yaml(kubectl, flux_documents(commit))
     wait_data(kubectl)
-    node_count = int(output([kubectl, "get", "nodes", "-o", "name"]).count("\n") + 1)
+    node_names = output([kubectl, "get", "nodes", "-o", "name"]).splitlines()
+    if len(node_names) != 3:
+        raise StagingCellError(
+            f"staging Kubernetes node count drift: expected 3, observed {len(node_names)}"
+        )
+    node_count = len(node_names)
     base_result = {
         "schema_version": 1,
         "status": "infrastructure-ready-image-promotion-blocked",
         "cluster": args.cluster,
         "owner_id": owner_id,
         "bootstrap_commit": commit,
-        "public_source": "https://github.com/heimgewebe/weltgewebe",
+        "public_source": PUBLIC_REPOSITORY,
         "gitops_source_commit": commit,
         "cluster_created": created,
         "node_count": node_count,
         "toolchain_lock_sha256": receipt["lock_sha256"],
         "kubeconfig": str(reference.kubeconfig_path(args.cluster)),
-        "persistent_storage": {"postgres": "Bound", "nats": "Bound", "host_state_root": str(root / "data")},
-        "flux": {"source": SOURCE_NAME, "data_kustomization": DATA_KUSTOMIZATION, "ready": True},
+        "persistent_storage": {
+            "postgres": "Bound",
+            "nats": "Bound",
+            "host_state_root": str(root / "data"),
+        },
+        "flux": {
+            "source": SOURCE_NAME,
+            "data_kustomization": DATA_KUSTOMIZATION,
+            "ready": True,
+        },
         "image_promotion": image_promotion_state(),
         "app_activation": False,
         "production_changed": False,
@@ -604,14 +751,18 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
-    root = state_root(args.state_root)
+    root = state_root(getattr(args, "state_root", None))
     configure_reference_paths(root)
     receipt = load_tool_receipt(root)
     kind = receipt["tools"]["kind"]
     kubectl = receipt["tools"]["kubectl"]
     owner_path = root / "receipts/cell-bootstrap.json"
     if not owner_path.exists():
-        return {"schema_version": 1, "status": "not-bootstrapped", "cluster": args.cluster}
+        return {
+            "schema_version": 1,
+            "status": "not-bootstrapped",
+            "cluster": args.cluster,
+        }
     owner = load_cell_receipt(root)
     require_receipt_cluster(owner, args.cluster)
     commit = str(owner.get("bootstrap_commit") or "")
@@ -623,21 +774,50 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         expected_owner_id=owner_id,
     )
     source_revision = output(
-        [kubectl, "-n", "flux-system", "get", "gitrepository", SOURCE_NAME, "-o", "jsonpath={.status.artifact.revision}"]
+        [
+            kubectl,
+            "-n",
+            "flux-system",
+            "get",
+            "gitrepository",
+            SOURCE_NAME,
+            "-o",
+            "jsonpath={.status.artifact.revision}",
+        ]
     )
     source_matches_commit = flux_revision_matches_commit(source_revision, commit)
     data_ready = output(
-        [kubectl, "-n", "flux-system", "get", "kustomization", DATA_KUSTOMIZATION, "-o", "jsonpath={.status.conditions[?(@.type=='Ready')].status}"]
+        [
+            kubectl,
+            "-n",
+            "flux-system",
+            "get",
+            "kustomization",
+            DATA_KUSTOMIZATION,
+            "-o",
+            "jsonpath={.status.conditions[?(@.type=='Ready')].status}",
+        ]
     )
     pvcs = {
-        pvc: output([kubectl, "-n", DATA_NAMESPACE, "get", "pvc", pvc, "-o", "jsonpath={.status.phase}"])
+        pvc: output(
+            [
+                kubectl,
+                "-n",
+                DATA_NAMESPACE,
+                "get",
+                "pvc",
+                pvc,
+                "-o",
+                "jsonpath={.status.phase}",
+            ]
+        )
         for pvc in ("postgres-data", "nats-data")
     }
     external_secret = verify_external_secret_binding(kubectl, root)
     ready = (
         source_matches_commit
         and data_ready == "True"
-        and all(v == "Bound" for v in pvcs.values())
+        and all(value == "Bound" for value in pvcs.values())
         and external_secret["ready"]
     )
     return {
@@ -659,7 +839,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
-    root = state_root(args.state_root)
+    root = state_root(getattr(args, "state_root", None))
     configure_reference_paths(root)
     receipt = load_tool_receipt(root)
     cell = load_cell_receipt(root)
@@ -685,7 +865,11 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
     }
     path = root / "receipts/cell-down.json"
     atomic_json(path, result)
-    return {**result, "receipt_path": str(path), "receipt_sha256": sha256_file(path)}
+    return {
+        **result,
+        "receipt_path": str(path),
+        "receipt_sha256": sha256_file(path),
+    }
 
 
 def command_self_check() -> dict[str, Any]:
@@ -695,11 +879,24 @@ def command_self_check() -> dict[str, Any]:
     except StagingCellError:
         pass
     else:
-        raise StagingCellError("self-check accepted a second cluster over singleton persistent state")
+        raise StagingCellError(
+            "self-check accepted a second cluster over singleton persistent state"
+        )
+
+    if state_root(None) != DEFAULT_STATE_ROOT.resolve():
+        raise StagingCellError("self-check default state root drift")
+    try:
+        state_root(str(DEFAULT_STATE_ROOT.parent / "unexpected-root"))
+    except StagingCellError:
+        pass
+    else:
+        raise StagingCellError("self-check accepted a non-canonical state root")
 
     public_secret = public_external_secret_state()
     if public_secret != {"bound": True, "required_keys": ["database-url"]}:
-        raise StagingCellError("self-check public external-secret state exposes unexpected fields")
+        raise StagingCellError(
+            "self-check public external-secret state exposes unexpected fields"
+        )
 
     commit = "a" * 40
     if not (
@@ -710,7 +907,9 @@ def command_self_check() -> dict[str, Any]:
     ):
         raise StagingCellError("self-check Flux revision binding is invalid")
 
-    with tempfile.TemporaryDirectory(prefix="commonthing-staging-cell-self-check-") as tmp_name:
+    with tempfile.TemporaryDirectory(
+        prefix="commonthing-staging-cell-self-check-"
+    ) as tmp_name:
         root = Path(tmp_name)
         (root / "data/postgres").mkdir(parents=True)
         material, source_sha = load_or_create_secret_material(root)
@@ -720,9 +919,13 @@ def command_self_check() -> dict[str, Any]:
         if len(source_sha) != 64 or not material.get("database_password"):
             raise StagingCellError("self-check secret source binding is invalid")
 
-        annotations = {"commonthing.net/external-secret-source-sha256": source_sha}
+        annotations = {SECRET_SOURCE_ANNOTATION: source_sha}
         database_document = {
-            "metadata": {"name": DATABASE_SECRET, "namespace": DATA_NAMESPACE, "annotations": annotations},
+            "metadata": {
+                "name": DATABASE_SECRET,
+                "namespace": DATA_NAMESPACE,
+                "annotations": annotations,
+            },
             "data": {
                 key: base64.b64encode(value.encode("utf-8")).decode("ascii")
                 for key, value in {
@@ -743,8 +946,12 @@ def command_self_check() -> dict[str, Any]:
                 "database": material["database_name"],
             },
         ):
-            raise StagingCellError("self-check rejected a valid injected database Secret")
-        database_document["data"]["password"] = base64.b64encode(b"wrong").decode("ascii")
+            raise StagingCellError(
+                "self-check rejected a valid injected database Secret"
+            )
+        database_document["data"]["password"] = base64.b64encode(b"wrong").decode(
+            "ascii"
+        )
         if secret_document_matches(
             database_document,
             name=DATABASE_SECRET,
@@ -776,7 +983,9 @@ def command_self_check() -> dict[str, Any]:
             if "differs from the bootstrap receipt" not in str(error):
                 raise
         else:
-            raise StagingCellError("self-check accepted credential rotation over retained PostgreSQL state")
+            raise StagingCellError(
+                "self-check accepted credential rotation over retained PostgreSQL state"
+            )
 
         atomic_json(
             secret_path,
@@ -790,7 +999,9 @@ def command_self_check() -> dict[str, Any]:
             if "retained PostgreSQL state exists" not in str(error):
                 raise
         else:
-            raise StagingCellError("self-check regenerated credentials over retained PostgreSQL state")
+            raise StagingCellError(
+                "self-check regenerated credentials over retained PostgreSQL state"
+            )
 
         rendered_path = render_kind_config(root)
         rendered = yaml.safe_load(rendered_path.read_text(encoding="utf-8"))
@@ -801,12 +1012,15 @@ def command_self_check() -> dict[str, Any]:
             for mount in node.get("extraMounts", [])
         ]
         if observed != [expected, expected, expected]:
-            raise StagingCellError("self-check rendered kind host mounts do not bind the state root")
+            raise StagingCellError(
+                "self-check rendered kind host mounts do not bind the state root"
+            )
     return {
         "schema_version": 1,
         "status": "pass",
         "checks": [
             "singleton-cluster",
+            "fixed-state-root",
             "flux-source-exact-commit",
             "retained-secret-fail-closed",
             "retained-secret-rotation-fail-closed",
@@ -818,18 +1032,17 @@ def command_self_check() -> dict[str, Any]:
 
 
 def parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="Persistent owner-bound T084 staging GewebeZelle controller")
+    p = argparse.ArgumentParser(
+        description="Persistent owner-bound T084 staging GewebeZelle controller"
+    )
     sub = p.add_subparsers(dest="command", required=True)
     up = sub.add_parser("up")
-    up.add_argument("--state-root")
     up.add_argument("--cluster", default=DEFAULT_CLUSTER)
     up.add_argument("--owner-id", required=True)
     up.add_argument("--source-commit")
     status = sub.add_parser("status")
-    status.add_argument("--state-root")
     status.add_argument("--cluster", default=DEFAULT_CLUSTER)
     down = sub.add_parser("down")
-    down.add_argument("--state-root")
     down.add_argument("--cluster", default=DEFAULT_CLUSTER)
     down.add_argument("--owner-id", required=True)
     sub.add_parser("self-check")
@@ -838,18 +1051,50 @@ def parser() -> argparse.ArgumentParser:
 
 def emit_public_success(command: str, result: dict[str, Any]) -> None:
     if command == "up":
-        print('{"command":"up","schema_version":1,"status":"infrastructure-ready-image-promotion-blocked"}')
+        print(
+            '{"command":"up","schema_version":1,'
+            '"status":"infrastructure-ready-image-promotion-blocked"}'
+        )
         return
     if command == "status":
-        if result.get("status") == "ready":
-            print('{"command":"status","schema_version":1,"status":"ready"}')
-        elif result.get("status") == "not-bootstrapped":
-            print('{"command":"status","schema_version":1,"status":"not-bootstrapped"}')
-        else:
-            print('{"command":"status","schema_version":1,"status":"degraded"}')
+        status = str(result.get("status") or "degraded")
+        safe: dict[str, Any] = {
+            "command": "status",
+            "schema_version": 1,
+            "status": status,
+            "cluster": str(result.get("cluster") or DEFAULT_CLUSTER),
+        }
+        if status != "not-bootstrapped":
+            pvcs = result.get("pvcs") if isinstance(result.get("pvcs"), dict) else {}
+            external = (
+                result.get("external_secret")
+                if isinstance(result.get("external_secret"), dict)
+                else {}
+            )
+            safe.update(
+                {
+                    "bootstrap_commit": str(result.get("bootstrap_commit") or ""),
+                    "source_revision": str(result.get("source_revision") or ""),
+                    "source_matches_commit": bool(result.get("source_matches_commit")),
+                    "data_ready": result.get("data_ready") == "True",
+                    "pvcs": {
+                        "postgres-data": str(pvcs.get("postgres-data") or "missing"),
+                        "nats-data": str(pvcs.get("nats-data") or "missing"),
+                    },
+                    "external_secret": {
+                        "database": bool(external.get("database")),
+                        "runtime": bool(external.get("runtime")),
+                        "ready": bool(external.get("ready")),
+                    },
+                }
+            )
+        print(json.dumps(safe, ensure_ascii=False, sort_keys=True))
         return
     if command == "down":
-        print('{"command":"down","schema_version":1,"status":"cluster-deleted-state-preserved"}')
+        print(
+            '{"command":"down","schema_version":1,'
+            '"status":"cluster-deleted-state-preserved"}'
+        )
         return
     print('{"command":"self-check","schema_version":1,"status":"pass"}')
 
@@ -874,7 +1119,10 @@ def main() -> int:
         print("staging cell failed: platform proof operation failed", file=sys.stderr)
         return 1
     except subprocess.CalledProcessError as error:
-        print(f"staging cell failed: external command exited with status {error.returncode}", file=sys.stderr)
+        print(
+            f"staging cell failed: external command exited with status {error.returncode}",
+            file=sys.stderr,
+        )
         return 1
     except subprocess.TimeoutExpired:
         print("staging cell failed: external command timed out", file=sys.stderr)
