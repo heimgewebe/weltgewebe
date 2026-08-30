@@ -215,7 +215,11 @@ def test_vps_deploy_admits_and_pins_exact_editor_release_before_build() -> None:
     exact_export = deploy.index('export SCHAUWERK_EDITOR_RELEASE_DIR="$SCHAUWERK_EDITOR_RELEASE_PATH"')
     authoritative_mount = deploy.index('mount.get("source") != expected', exact_export)
     build_decision = deploy.index('# 4. Build Decision')
-    deploying = deploy.index('echo ">> Deploying..."', build_decision)
+    runtime_preflight = deploy.index('echo ">> Preflight: Validating runtime contract..."', build_decision)
+    csp_preflight = deploy.index('echo ">> Preflight: Validating static CSP contract..."', runtime_preflight)
+    csp_call = deploy.index('if ! bash scripts/preflight/csp_contract_static.sh; then', csp_preflight)
+    deferred_purge = deploy.index('docker rm -f "${ZOMBIE_CONTAINER_IDS_TO_PURGE[@]}"', csp_call)
+    deploying = deploy.index('echo ">> Deploying..."', deferred_purge)
 
     assert (
         discovery_override
@@ -227,10 +231,34 @@ def test_vps_deploy_admits_and_pins_exact_editor_release_before_build() -> None:
         < exact_export
         < authoritative_mount
         < build_decision
+        < runtime_preflight
+        < csp_preflight
+        < csp_call
+        < deferred_purge
         < deploying
     )
     assert 'bind.get("create_host_path") is not False' in deploy[mount_target:build_decision]
     assert '--lock "$SCHAUWERK_EDITOR_LOCK_PATH"' in deploy[mount_target:build_decision]
+
+
+def test_compose_leak_purge_never_targets_external_edge_gateway() -> None:
+    repo = Path(__file__).resolve().parents[3]
+    deploy = (repo / "scripts" / "weltgewebe-up").read_text(encoding="utf-8")
+
+    candidate_loop = deploy.index('while IFS= read -r container_name; do')
+    edge_guard = deploy.index('if [[ "$container_name" == "$EDGE_GATEWAY_CONTAINER" ]]; then', candidate_loop)
+    identity_binding = deploy.index(
+        "container_id=\"$(docker inspect --format '{{.Id}}' \"$container_name\")\"",
+        edge_guard,
+    )
+    queued_name = deploy.index('ZOMBIE_CONTAINER_NAMES_TO_PURGE+=("$container_name")', identity_binding)
+    deferred_purge = deploy.index('docker rm -f "${ZOMBIE_CONTAINER_IDS_TO_PURGE[@]}"', queued_name)
+
+    assert candidate_loop < edge_guard < identity_binding < queued_name < deferred_purge
+    guard = deploy[edge_guard:identity_binding]
+    assert "Refusing to auto-purge configured external edge gateway container" in guard
+    assert "--purge-compose-leaks does not own EDGE_GATEWAY_CONTAINER" in guard
+    assert "exit 1" in guard
 
 
 def test_full_vps_deploy_reads_back_editor_through_caddy_before_state_commit() -> None:
