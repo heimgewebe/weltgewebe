@@ -579,6 +579,52 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     )
         self.assertFalse((root / "receipts/cell-down.json").exists())
 
+    def test_lifecycle_lock_rejects_parallel_mutations(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="staging-cell-lifecycle-lock-") as tmp_name:
+            root = Path(tmp_name)
+            with staging.lifecycle_lock(root):
+                with self.assertRaisesRegex(
+                    staging.StagingCellError, "lifecycle mutation is already in progress"
+                ):
+                    with staging.lifecycle_lock(root):
+                        self.fail("parallel lifecycle lock unexpectedly acquired")
+            with staging.lifecycle_lock(root):
+                pass
+
+    def test_status_degrades_when_flux_or_pvc_resources_are_missing(self) -> None:
+        owner = "owner-a"
+        commit = "f" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        with tempfile.TemporaryDirectory(prefix="staging-cell-status-missing-resources-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(staging.reference, "clusters", return_value=[staging.DEFAULT_CLUSTER]),
+                mock.patch.object(staging.reference, "require_owned_cluster"),
+                mock.patch.object(staging, "output", side_effect=["", "", "", ""]) as output_mock,
+                mock.patch.object(
+                    staging,
+                    "verify_external_secret_binding",
+                    return_value={"database": True, "runtime": True, "ready": True},
+                ),
+                mock.patch.object(
+                    staging, "image_promotion_state", return_value={"status": "blocked"}
+                ),
+            ):
+                result = staging.command_status(args)
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(result["source_revision"], "missing")
+        self.assertEqual(result["data_ready"], "missing")
+        self.assertEqual(
+            result["pvcs"],
+            {"postgres-data": "missing", "nats-data": "missing"},
+        )
+        for call in output_mock.call_args_list:
+            self.assertIn("--ignore-not-found", call.args[0])
+
     def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:
         events: list[str] = []
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import base64
+import errno
+import fcntl
 import hashlib
 import hmac
 import json
@@ -14,6 +16,8 @@ import sys
 import tempfile
 import time
 import urllib.parse
+from contextlib import contextmanager
+from functools import wraps
 from pathlib import Path
 from typing import Any
 
@@ -132,6 +136,55 @@ def state_root(value: str | None) -> Path:
     if resolved != expected:
         raise StagingCellError(f"state root must be exactly {expected}")
     return resolved
+
+
+
+
+@contextmanager
+def lifecycle_lock(root: Path):
+    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock_path = root / "lifecycle.lock"
+    flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    fd = os.open(lock_path, flags, 0o600)
+    try:
+        opened = os.fstat(fd)
+        linked = os.stat(lock_path, follow_symlinks=False)
+        if (
+            not stat.S_ISREG(opened.st_mode)
+            or opened.st_dev != linked.st_dev
+            or opened.st_ino != linked.st_ino
+            or opened.st_uid != os.geteuid()
+            or stat.S_IMODE(opened.st_mode) & 0o077
+        ):
+            raise StagingCellError("staging lifecycle lock identity is unsafe")
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as error:
+            if error.errno not in {errno.EACCES, errno.EAGAIN}:
+                raise
+            raise StagingCellError(
+                "another staging lifecycle mutation is already in progress"
+            ) from error
+        yield
+    finally:
+        os.close(fd)
+
+
+def lifecycle_mutation_locked(function):
+    @wraps(function)
+    def wrapped(args: argparse.Namespace) -> dict[str, Any]:
+        require_singleton_cluster(args.cluster)
+        owner_id = getattr(args, "owner_id", None)
+        if not owner_id:
+            raise StagingCellError("--owner-id is required for real staging ownership")
+        reference.validate_owner_id(owner_id)
+        root = state_root(getattr(args, "state_root", None))
+        with lifecycle_lock(root):
+            return function(args)
+
+    return wrapped
 
 
 def configure_reference_paths(root: Path) -> None:
@@ -735,6 +788,7 @@ def write_cell_receipt(root: Path, payload: dict[str, Any]) -> str:
     return str(path)
 
 
+@lifecycle_mutation_locked
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
     owner_id = args.owner_id
@@ -941,10 +995,11 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
             "get",
             "gitrepository",
             SOURCE_NAME,
+            "--ignore-not-found",
             "-o",
             "jsonpath={.status.artifact.revision}",
         ]
-    )
+    ) or "missing"
     source_matches_commit = flux_revision_matches_commit(source_revision, commit)
     data_ready = output(
         [
@@ -954,10 +1009,11 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
             "get",
             "kustomization",
             DATA_KUSTOMIZATION,
+            "--ignore-not-found",
             "-o",
             "jsonpath={.status.conditions[?(@.type=='Ready')].status}",
         ]
-    )
+    ) or "missing"
     pvcs = {
         pvc: output(
             [
@@ -967,10 +1023,11 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
                 "get",
                 "pvc",
                 pvc,
+                "--ignore-not-found",
                 "-o",
                 "jsonpath={.status.phase}",
             ]
-        )
+        ) or "missing"
         for pvc in ("postgres-data", "nats-data")
     }
     try:
@@ -1004,6 +1061,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+@lifecycle_mutation_locked
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
     reference.validate_owner_id(args.owner_id)
