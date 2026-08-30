@@ -1,0 +1,138 @@
+---
+name: PR1813 one-shot recovery fix
+
+"on":
+  push:
+    branches:
+      - bureau/weltgewebe-os-v1-t084/5e0085fc46
+    paths:
+      - .github/workflows/pr1813-one-shot-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 2
+          ref: bureau/weltgewebe-os-v1-t084/5e0085fc46
+
+      - name: Verify exact parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "6e9e126a6c0f503f75295e309d059120b04b44c3"
+
+      - name: Apply reviewed lifecycle patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          kind = "scripts/platform/kind_reference.py"
+          replace_once(
+              kind,
+              '''def _validate_ownership_binding(commit: str, owner_id: str) -> None:\n    if not FULL_GIT_OBJECT_ID.fullmatch(commit):\n        raise ProofError("cluster ownership requires a full lowercase Git object id")\n    if (\n        not owner_id\n        or len(owner_id) > 128\n        or re.fullmatch(r"[A-Za-z0-9._:@-]+", owner_id) is None\n    ):\n        raise ProofError("cluster ownership requires a stable owner id")\n''',
+              '''def validate_owner_id(owner_id: str) -> None:\n    if (\n        not owner_id\n        or len(owner_id) > 128\n        or re.fullmatch(r"[A-Za-z0-9._:@-]+", owner_id) is None\n    ):\n        raise ProofError("cluster ownership requires a stable owner id")\n\n\ndef validate_ownership_binding(commit: str, owner_id: str) -> None:\n    if not FULL_GIT_OBJECT_ID.fullmatch(commit):\n        raise ProofError("cluster ownership requires a full lowercase Git object id")\n    validate_owner_id(owner_id)\n''',
+          )
+          p = Path(kind)
+          text = p.read_text(encoding="utf-8")
+          if text.count("_validate_ownership_binding(") != 4:
+              raise SystemExit("kind_reference owner-binding call count drift")
+          p.write_text(
+              text.replace("_validate_ownership_binding(", "validate_ownership_binding("),
+              encoding="utf-8",
+          )
+
+          staging = "scripts/platform/staging_cell.py"
+          replace_once(
+              staging,
+              '''def command_up(args: argparse.Namespace) -> dict[str, Any]:\n    require_singleton_cluster(args.cluster)\n    root = state_root(getattr(args, "state_root", None))\n''',
+              '''def command_up(args: argparse.Namespace) -> dict[str, Any]:\n    require_singleton_cluster(args.cluster)\n    owner_id = args.owner_id\n    if not owner_id:\n        raise StagingCellError("--owner-id is required for real staging ownership")\n    reference.validate_owner_id(owner_id)\n    root = state_root(getattr(args, "state_root", None))\n''',
+          )
+          replace_once(
+              staging,
+              '''    helm = tools["helm"]\n    owner_id = args.owner_id\n    if not owner_id:\n        raise StagingCellError("--owner-id is required for real staging ownership")\n\n    existing = args.cluster in reference.clusters(kind)\n''',
+              '''    helm = tools["helm"]\n\n    existing = args.cluster in reference.clusters(kind)\n''',
+          )
+          replace_once(
+              staging,
+              '''    try:\n        external_secret = verify_external_secret_binding(kubectl, root)\n    except StagingCellError:\n''',
+              '''    try:\n        external_secret = verify_external_secret_binding(kubectl, root)\n    except (StagingCellError, subprocess.CalledProcessError):\n''',
+          )
+          replace_once(
+              staging,
+              '''def command_down(args: argparse.Namespace) -> dict[str, Any]:\n    require_singleton_cluster(args.cluster)\n    root = state_root(getattr(args, "state_root", None))\n''',
+              '''def command_down(args: argparse.Namespace) -> dict[str, Any]:\n    require_singleton_cluster(args.cluster)\n    reference.validate_owner_id(args.owner_id)\n    root = state_root(getattr(args, "state_root", None))\n''',
+          )
+          replace_once(
+              staging,
+              '''    if args.owner_id != owner_id:\n        raise StagingCellError("--owner-id does not match the persisted cluster owner")\n    kind = receipt["tools"]["kind"]\n    cluster_present = args.cluster in reference.clusters(kind)\n    if cluster_present:\n        reference.delete_owned_cluster(\n            kind,\n            args.cluster,\n            expected_commit=commit,\n            expected_owner_id=owner_id,\n        )\n''',
+              '''    if args.owner_id != owner_id:\n        raise StagingCellError("--owner-id does not match the persisted cluster owner")\n    reference.validate_ownership_binding(commit, owner_id)\n    kind = receipt["tools"]["kind"]\n    cluster_present = args.cluster in reference.clusters(kind)\n    reference.delete_owned_cluster_if_present(\n        kind,\n        args.cluster,\n        expected_commit=commit,\n        expected_owner_id=owner_id,\n    )\n''',
+          )
+          replace_once(
+              staging,
+              '''    if command == "down":\n        print(\n            '{"command":"down","schema_version":1,'\n            '"status":"cluster-deleted-state-preserved"}'\n        )\n        return\n''',
+              '''    if command == "down":\n        safe = {\n            "command": "down",\n            "schema_version": 1,\n            "status": str(\n                result.get("status") or "cluster-deleted-state-preserved"\n            ),\n            "cluster": str(result.get("cluster") or DEFAULT_CLUSTER),\n        }\n        print(json.dumps(safe, ensure_ascii=False, sort_keys=True))\n        return\n''',
+          )
+
+          tests = "scripts/ci/tests/test_staging_cell_runtime_contract.py"
+          replace_once(tests, "import json\nimport sys\n", "import json\nimport subprocess\nimport sys\n")
+          invalid_owner_test = '''    def test_invalid_owner_ids_fail_before_any_staging_write(self) -> None:\n        for owner_id in ("team ops", "x" * 129):\n            with self.subTest(owner_id=owner_id):\n                args = argparse.Namespace(\n                    cluster=staging.DEFAULT_CLUSTER,\n                    owner_id=owner_id,\n                    source_commit=None,\n                )\n                with (\n                    mock.patch.object(staging, "state_root") as state_root_mock,\n                    mock.patch.object(staging, "load_or_create_secret_material") as secret_mock,\n                    mock.patch.object(staging, "write_cell_receipt") as receipt_mock,\n                ):\n                    with self.assertRaisesRegex(\n                        staging.reference.ProofError, "stable owner id"\n                    ):\n                        staging.command_up(args)\n                state_root_mock.assert_not_called()\n                secret_mock.assert_not_called()\n                receipt_mock.assert_not_called()\n\n'''
+          replace_once(
+              tests,
+              "    def test_bootstrap_receipt_is_persisted_before_cluster_creation(self) -> None:\n",
+              invalid_owner_test
+              + "    def test_bootstrap_receipt_is_persisted_before_cluster_creation(self) -> None:\n",
+          )
+          recovery_tests = '''    def test_status_degrades_when_injected_secret_is_missing(self) -> None:\n        owner = "owner-a"\n        commit = "d" * 40\n        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)\n        with tempfile.TemporaryDirectory(prefix="staging-cell-status-missing-secret-") as tmp_name:\n            root = Path(tmp_name)\n            self._write_bound_receipt(root, owner=owner, commit=commit)\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),\n                mock.patch.object(staging.reference, "clusters", return_value=[staging.DEFAULT_CLUSTER]),\n                mock.patch.object(staging.reference, "require_owned_cluster"),\n                mock.patch.object(\n                    staging,\n                    "output",\n                    side_effect=[f"main@sha1:{commit}", "True", "Bound", "Bound"],\n                ),\n                mock.patch.object(\n                    staging,\n                    "verify_external_secret_binding",\n                    side_effect=subprocess.CalledProcessError(\n                        1, ["kubectl", "get", "secret"]\n                    ),\n                ),\n                mock.patch.object(\n                    staging, "image_promotion_state", return_value={"status": "blocked"}\n                ),\n            ):\n                result = staging.command_status(args)\n        self.assertEqual(result["status"], "degraded")\n        self.assertEqual(\n            result["external_secret"],\n            {"database": False, "runtime": False, "ready": False},\n        )\n\n    def test_down_cleans_exactly_bound_marker_when_cluster_is_absent(self) -> None:\n        owner = "owner-a"\n        commit = "e" * 40\n        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER, owner_id=owner)\n        with tempfile.TemporaryDirectory(prefix="staging-cell-down-absent-") as tmp_name:\n            root = Path(tmp_name)\n            self._write_bound_receipt(root, owner=owner, commit=commit)\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),\n                mock.patch.object(staging.reference, "clusters", return_value=[]),\n                mock.patch.object(\n                    staging.reference,\n                    "delete_owned_cluster_if_present",\n                    return_value=True,\n                ) as delete_mock,\n            ):\n                result = staging.command_down(args)\n        delete_mock.assert_called_once_with(\n            "kind",\n            staging.DEFAULT_CLUSTER,\n            expected_commit=commit,\n            expected_owner_id=owner,\n        )\n        self.assertEqual(result["status"], "cluster-absent-state-preserved")\n\n    def test_down_fails_closed_for_wrong_owner_or_marker_binding(self) -> None:\n        owner = "owner-a"\n        commit = "e" * 40\n        with tempfile.TemporaryDirectory(prefix="staging-cell-down-binding-") as tmp_name:\n            root = Path(tmp_name)\n            self._write_bound_receipt(root, owner=owner, commit=commit)\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),\n                mock.patch.object(staging.reference, "clusters", return_value=[]),\n                mock.patch.object(\n                    staging.reference, "delete_owned_cluster_if_present"\n                ) as delete_mock,\n            ):\n                with self.assertRaisesRegex(\n                    staging.StagingCellError, "persisted cluster owner"\n                ):\n                    staging.command_down(\n                        argparse.Namespace(\n                            cluster=staging.DEFAULT_CLUSTER, owner_id="owner-b"\n                        )\n                    )\n            delete_mock.assert_not_called()\n\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),\n                mock.patch.object(staging.reference, "clusters", return_value=[]),\n                mock.patch.object(\n                    staging.reference,\n                    "delete_owned_cluster_if_present",\n                    side_effect=staging.reference.ProofError("marker binding mismatch"),\n                ),\n            ):\n                with self.assertRaisesRegex(\n                    staging.reference.ProofError, "marker binding mismatch"\n                ):\n                    staging.command_down(\n                        argparse.Namespace(\n                            cluster=staging.DEFAULT_CLUSTER, owner_id=owner\n                        )\n                    )\n        self.assertFalse((root / "receipts/cell-down.json").exists())\n\n'''
+          replace_once(
+              tests,
+              "    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n",
+              recovery_tests
+              + "    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n",
+          )
+          public_down_test = '''    def test_public_down_output_preserves_actual_status(self) -> None:\n        stdout = io.StringIO()\n        with redirect_stdout(stdout):\n            staging.emit_public_success(\n                "down",\n                {\n                    "status": "cluster-absent-state-preserved",\n                    "cluster": staging.DEFAULT_CLUSTER,\n                },\n            )\n        public = json.loads(stdout.getvalue())\n        self.assertEqual(public["status"], "cluster-absent-state-preserved")\n        self.assertEqual(public["cluster"], staging.DEFAULT_CLUSTER)\n\n'''
+          replace_once(
+              tests,
+              "    def test_retained_secret_preflight_blocks_cluster_mutation(self) -> None:\n",
+              public_down_test
+              + "    def test_retained_secret_preflight_blocks_cluster_mutation(self) -> None:\n",
+          )
+          PY
+
+      - name: Run focused validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+          python3 -m compileall -q scripts/platform/kind_reference.py scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          python3 -m unittest scripts.ci.tests.test_staging_cell_runtime_contract
+          git diff --check
+
+      - name: Commit exact fix and remove one-shot writer
+        shell: bash
+        env:
+          BRANCH: bureau/weltgewebe-os-v1-t084/5e0085fc46
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/pr1813-one-shot-fix.yml
+          git config user.name 'alexdermohr'
+          git config user.email '216529510+alexdermohr@users.noreply.github.com'
+          git add scripts/platform/kind_reference.py scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          git diff --cached --check
+          git commit -m 'fix(platform): harden staging lifecycle recovery'
+          git push origin "HEAD:${BRANCH}"
