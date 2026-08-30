@@ -1,0 +1,67 @@
+---
+name: PR1813 HA owner API fix
+
+"on":
+  push:
+    branches:
+      - bureau/weltgewebe-os-v1-t084/5e0085fc46
+    paths:
+      - .github/workflows/pr1813-ha-owner-api-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 2
+          ref: bureau/weltgewebe-os-v1-t084/5e0085fc46
+
+      - name: Verify exact parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "25f39e77c4e5949ed159881adc442c1a2b819711"
+
+      - name: Update HA caller to public ownership API
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          path = Path("scripts/platform/ha_reference.py")
+          text = path.read_text(encoding="utf-8")
+          old = "ref._validate_ownership_binding(commit, owner_id)"
+          new = "ref.validate_ownership_binding(commit, owner_id)"
+          count = text.count(old)
+          if count != 2:
+              raise SystemExit(f"expected exactly two HA ownership helper calls, found {count}")
+          path.write_text(text.replace(old, new), encoding="utf-8")
+          PY
+
+      - name: Run focused platform regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+          python3 -m compileall -q scripts/platform/kind_reference.py scripts/platform/ha_reference.py scripts/platform/staging_cell.py
+          python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract scripts.ci.tests.test_staging_cell_runtime_contract scripts.ci.tests.test_kubernetes_ha_contract
+          git diff --check
+
+      - name: Commit exact fix and remove one-shot writer
+        shell: bash
+        env:
+          BRANCH: bureau/weltgewebe-os-v1-t084/5e0085fc46
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/pr1813-ha-owner-api-fix.yml
+          git config user.name 'alexdermohr'
+          git config user.email '216529510+alexdermohr@users.noreply.github.com'
+          git add scripts/platform/ha_reference.py
+          git diff --cached --check
+          git commit -m 'fix(platform): migrate HA ownership validation caller'
+          git push origin "HEAD:${BRANCH}"
