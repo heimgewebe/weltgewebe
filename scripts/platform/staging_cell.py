@@ -60,7 +60,7 @@ def run(
     capture: bool = False,
     timeout: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    print("+", " ".join(argv), flush=True)
+    print("+ external command [arguments redacted]", flush=True)
     return subprocess.run(
         argv,
         cwd=ROOT,
@@ -381,7 +381,6 @@ def verify_external_secret_binding(kubectl: str, root: Path) -> dict[str, Any]:
             expected_values=expected_values,
         )
     return {
-        "source_sha256": source_sha,
         "database": matches.get("database", False),
         "runtime": matches.get("runtime", False),
         "ready": bool(matches) and all(matches.values()),
@@ -439,6 +438,10 @@ def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
         ],
     )
     return {"source_sha256": source_sha, "required_keys": ["database-url"]}
+
+
+def public_external_secret_state() -> dict[str, Any]:
+    return {"bound": True, "required_keys": ["database-url"]}
 
 
 def prepare_volume_permissions(kind: str, cluster: str) -> None:
@@ -503,10 +506,10 @@ def image_promotion_state() -> dict[str, Any]:
     }
 
 
-def write_cell_receipt(root: Path, payload: dict[str, Any]) -> dict[str, Any]:
+def write_cell_receipt(root: Path, payload: dict[str, Any]) -> str:
     path = root / "receipts/cell-bootstrap.json"
     atomic_json(path, payload, mode=0o600)
-    return {**payload, "receipt_path": str(path), "receipt_sha256": sha256_file(path)}
+    return str(path)
 
 
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
@@ -565,7 +568,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     apply_yaml(kubectl, flux_documents(commit))
     wait_data(kubectl)
     node_count = int(output([kubectl, "get", "nodes", "-o", "name"]).count("\n") + 1)
-    result = {
+    base_result = {
         "schema_version": 1,
         "status": "infrastructure-ready-image-promotion-blocked",
         "cluster": args.cluster,
@@ -577,7 +580,6 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         "node_count": node_count,
         "toolchain_lock_sha256": receipt["lock_sha256"],
         "kubeconfig": str(reference.kubeconfig_path(args.cluster)),
-        "external_secret": secret_receipt,
         "persistent_storage": {"postgres": "Bound", "nats": "Bound", "host_state_root": str(root / "data")},
         "flux": {"source": SOURCE_NAME, "data_kustomization": DATA_KUSTOMIZATION, "ready": True},
         "image_promotion": image_promotion_state(),
@@ -591,7 +593,13 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             "production Kubernetes cutover",
         ],
     }
-    return write_cell_receipt(root, result)
+    private_result = {**base_result, "external_secret": secret_receipt}
+    receipt_path = write_cell_receipt(root, private_result)
+    return {
+        **base_result,
+        "external_secret": public_external_secret_state(),
+        "receipt_path": receipt_path,
+    }
 
 
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
@@ -688,6 +696,10 @@ def command_self_check() -> dict[str, Any]:
         pass
     else:
         raise StagingCellError("self-check accepted a second cluster over singleton persistent state")
+
+    public_secret = public_external_secret_state()
+    if public_secret != {"bound": True, "required_keys": ["database-url"]}:
+        raise StagingCellError("self-check public external-secret state exposes unexpected fields")
 
     commit = "a" * 40
     if not (
@@ -799,6 +811,7 @@ def command_self_check() -> dict[str, Any]:
             "retained-secret-fail-closed",
             "retained-secret-rotation-fail-closed",
             "injected-secret-integrity",
+            "public-secret-output-redaction",
             "state-root-kind-render",
         ],
     }
@@ -836,8 +849,17 @@ def main() -> int:
             result = command_self_check()
         print(json.dumps(result, ensure_ascii=False, sort_keys=True))
         return 0
-    except (StagingCellError, reference.ProofError, subprocess.CalledProcessError, subprocess.TimeoutExpired) as error:
+    except StagingCellError as error:
         print(f"staging cell failed: {error}", file=sys.stderr)
+        return 1
+    except reference.ProofError:
+        print("staging cell failed: platform proof operation failed", file=sys.stderr)
+        return 1
+    except subprocess.CalledProcessError as error:
+        print(f"staging cell failed: external command exited with status {error.returncode}", file=sys.stderr)
+        return 1
+    except subprocess.TimeoutExpired:
+        print("staging cell failed: external command timed out", file=sys.stderr)
         return 1
 
 
