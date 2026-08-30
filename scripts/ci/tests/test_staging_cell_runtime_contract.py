@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import io
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -225,6 +226,20 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         self.assertNotIn("must-not-escape", rendered)
         self.assertNotIn("c" * 64, rendered)
 
+    def test_public_down_output_preserves_actual_status(self) -> None:
+        stdout = io.StringIO()
+        with redirect_stdout(stdout):
+            staging.emit_public_success(
+                "down",
+                {
+                    "status": "cluster-absent-state-preserved",
+                    "cluster": staging.DEFAULT_CLUSTER,
+                },
+            )
+        public = json.loads(stdout.getvalue())
+        self.assertEqual(public["status"], "cluster-absent-state-preserved")
+        self.assertEqual(public["cluster"], staging.DEFAULT_CLUSTER)
+
     def test_retained_secret_preflight_blocks_cluster_mutation(self) -> None:
         args = argparse.Namespace(
             cluster=staging.DEFAULT_CLUSTER,
@@ -247,6 +262,27 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     staging.command_up(args)
         commit_mock.assert_not_called()
         create_mock.assert_not_called()
+
+    def test_invalid_owner_ids_fail_before_any_staging_write(self) -> None:
+        for owner_id in ("team ops", "x" * 129):
+            with self.subTest(owner_id=owner_id):
+                args = argparse.Namespace(
+                    cluster=staging.DEFAULT_CLUSTER,
+                    owner_id=owner_id,
+                    source_commit=None,
+                )
+                with (
+                    mock.patch.object(staging, "state_root") as state_root_mock,
+                    mock.patch.object(staging, "load_or_create_secret_material") as secret_mock,
+                    mock.patch.object(staging, "write_cell_receipt") as receipt_mock,
+                ):
+                    with self.assertRaisesRegex(
+                        staging.reference.ProofError, "stable owner id"
+                    ):
+                        staging.command_up(args)
+                state_root_mock.assert_not_called()
+                secret_mock.assert_not_called()
+                receipt_mock.assert_not_called()
 
     def test_bootstrap_receipt_is_persisted_before_cluster_creation(self) -> None:
         args = argparse.Namespace(
@@ -433,6 +469,115 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             result["external_secret"],
             {"database": False, "runtime": False, "ready": False},
         )
+
+    def test_status_degrades_when_injected_secret_is_missing(self) -> None:
+        owner = "owner-a"
+        commit = "d" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        with tempfile.TemporaryDirectory(prefix="staging-cell-status-missing-secret-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(staging.reference, "clusters", return_value=[staging.DEFAULT_CLUSTER]),
+                mock.patch.object(staging.reference, "require_owned_cluster"),
+                mock.patch.object(
+                    staging,
+                    "output",
+                    side_effect=[f"main@sha1:{commit}", "True", "Bound", "Bound"],
+                ),
+                mock.patch.object(
+                    staging,
+                    "verify_external_secret_binding",
+                    side_effect=subprocess.CalledProcessError(
+                        1, ["kubectl", "get", "secret"]
+                    ),
+                ),
+                mock.patch.object(
+                    staging, "image_promotion_state", return_value={"status": "blocked"}
+                ),
+            ):
+                result = staging.command_status(args)
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(
+            result["external_secret"],
+            {"database": False, "runtime": False, "ready": False},
+        )
+
+    def test_down_cleans_exactly_bound_marker_when_cluster_is_absent(self) -> None:
+        owner = "owner-a"
+        commit = "e" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER, owner_id=owner)
+        with tempfile.TemporaryDirectory(prefix="staging-cell-down-absent-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
+                mock.patch.object(
+                    staging.reference,
+                    "delete_owned_cluster_if_present",
+                    return_value=True,
+                ) as delete_mock,
+            ):
+                result = staging.command_down(args)
+        delete_mock.assert_called_once_with(
+            "kind",
+            staging.DEFAULT_CLUSTER,
+            expected_commit=commit,
+            expected_owner_id=owner,
+        )
+        self.assertEqual(result["status"], "cluster-absent-state-preserved")
+
+    def test_down_fails_closed_for_wrong_owner_or_marker_binding(self) -> None:
+        owner = "owner-a"
+        commit = "e" * 40
+        with tempfile.TemporaryDirectory(prefix="staging-cell-down-binding-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
+                mock.patch.object(
+                    staging.reference, "delete_owned_cluster_if_present"
+                ) as delete_mock,
+            ):
+                with self.assertRaisesRegex(
+                    staging.StagingCellError, "persisted cluster owner"
+                ):
+                    staging.command_down(
+                        argparse.Namespace(
+                            cluster=staging.DEFAULT_CLUSTER, owner_id="owner-b"
+                        )
+                    )
+            delete_mock.assert_not_called()
+
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
+                mock.patch.object(
+                    staging.reference,
+                    "delete_owned_cluster_if_present",
+                    side_effect=staging.reference.ProofError("marker binding mismatch"),
+                ),
+            ):
+                with self.assertRaisesRegex(
+                    staging.reference.ProofError, "marker binding mismatch"
+                ):
+                    staging.command_down(
+                        argparse.Namespace(
+                            cluster=staging.DEFAULT_CLUSTER, owner_id=owner
+                        )
+                    )
+        self.assertFalse((root / "receipts/cell-down.json").exists())
 
     def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:
         events: list[str] = []

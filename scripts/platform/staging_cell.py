@@ -737,6 +737,10 @@ def write_cell_receipt(root: Path, payload: dict[str, Any]) -> str:
 
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
+    owner_id = args.owner_id
+    if not owner_id:
+        raise StagingCellError("--owner-id is required for real staging ownership")
+    reference.validate_owner_id(owner_id)
     root = state_root(getattr(args, "state_root", None))
     root.mkdir(parents=True, exist_ok=True)
     os.chmod(root, 0o700)
@@ -752,9 +756,6 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     kubectl = tools["kubectl"]
     flux = tools["flux"]
     helm = tools["helm"]
-    owner_id = args.owner_id
-    if not owner_id:
-        raise StagingCellError("--owner-id is required for real staging ownership")
 
     existing = args.cluster in reference.clusters(kind)
     cell_path = root / "receipts/cell-bootstrap.json"
@@ -974,7 +975,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     }
     try:
         external_secret = verify_external_secret_binding(kubectl, root)
-    except StagingCellError:
+    except (StagingCellError, subprocess.CalledProcessError):
         external_secret = {
             "database": False,
             "runtime": False,
@@ -1005,6 +1006,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
 
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
+    reference.validate_owner_id(args.owner_id)
     root = state_root(getattr(args, "state_root", None))
     configure_reference_paths(root)
     receipt = load_tool_receipt(root)
@@ -1014,15 +1016,15 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
     owner_id = str(cell.get("owner_id") or "")
     if args.owner_id != owner_id:
         raise StagingCellError("--owner-id does not match the persisted cluster owner")
+    reference.validate_ownership_binding(commit, owner_id)
     kind = receipt["tools"]["kind"]
     cluster_present = args.cluster in reference.clusters(kind)
-    if cluster_present:
-        reference.delete_owned_cluster(
-            kind,
-            args.cluster,
-            expected_commit=commit,
-            expected_owner_id=owner_id,
-        )
+    reference.delete_owned_cluster_if_present(
+        kind,
+        args.cluster,
+        expected_commit=commit,
+        expected_owner_id=owner_id,
+    )
     result = {
         "schema_version": 1,
         "status": (
@@ -1266,10 +1268,15 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
         print(json.dumps(safe, ensure_ascii=False, sort_keys=True))
         return
     if command == "down":
-        print(
-            '{"command":"down","schema_version":1,'
-            '"status":"cluster-deleted-state-preserved"}'
-        )
+        safe = {
+            "command": "down",
+            "schema_version": 1,
+            "status": str(
+                result.get("status") or "cluster-deleted-state-preserved"
+            ),
+            "cluster": str(result.get("cluster") or DEFAULT_CLUSTER),
+        }
+        print(json.dumps(safe, ensure_ascii=False, sort_keys=True))
         return
     print('{"command":"self-check","schema_version":1,"status":"pass"}')
 
