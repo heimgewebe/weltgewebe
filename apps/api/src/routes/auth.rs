@@ -108,7 +108,7 @@ fn shared_auth_backend_json_response_with_jar(
         .into_response()
 }
 
-async fn create_shared_challenge(
+pub(crate) async fn create_shared_challenge(
     state: &ApiState,
     account_id: String,
     device_id: String,
@@ -2099,6 +2099,32 @@ pub async fn consume_step_up(
                 state.config.auth_cookie_secure,
             );
             (StatusCode::NO_CONTENT, jar.add(cookie)).into_response()
+        }
+        ChallengeIntent::ExitGuestAccount => {
+            tracing::info!(
+                event = "auth.step_up.consume.exit_guest_account",
+                request_id = %request_id,
+                account_id = %account_id,
+                "Step-up consume: executing irreversible guest account exit"
+            );
+
+            match super::governance::execute_guest_exit(&state, &account_id).await {
+                Ok(()) => {
+                    let cookie = build_session_cookie(
+                        "".to_string(),
+                        Some(Duration::seconds(0)),
+                        state.config.auth_cookie_secure,
+                    );
+                    (StatusCode::NO_CONTENT, jar.add(cookie)).into_response()
+                }
+                Err((status, message)) => {
+                    let err = serde_json::json!({
+                        "error": "GUEST_EXIT_FAILED",
+                        "message": message
+                    });
+                    (status, jar, Json(err)).into_response()
+                }
+            }
         }
         ChallengeIntent::RemoveDevice { target_device_id } => {
             tracing::info!(

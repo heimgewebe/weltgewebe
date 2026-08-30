@@ -60,6 +60,7 @@ Source: scripts/docmeta/generate_system_map.py
 
 |id|path|role|organ|status|last_reviewed|depends_on|verifies_with|missing_scripts|
 |---|---|---|---|---|---|---|---|---|
+|runbooks.guest-exit-step-up-rollout|runbooks/guest-exit-step-up-rollout.md|runbooks|ops|canonical|2026-08-30|runbooks.readme|scripts/platform/validate_platform.py||
 |runbooks.kubernetes-local-reference|runbooks/kubernetes-local-reference.md|runbooks|ops|canonical|2026-07-16|platform.readme|scripts/platform/kind_reference.py||
 |runbooks.readme|runbooks/README.md|runbooks|ops|canonical|2026-07-11||||
 

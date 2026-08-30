@@ -12,6 +12,9 @@ data:
   AUTH_COOKIE_SECURE: "1"
   AUTH_LOG_MAGIC_TOKEN: "0"
   AUTH_PUBLIC_LOGIN: "0"
+  # Phase-gated because the shared step-up payload gains a new enum intent.
+  # Enable only after every API replica runs a compatibility-aware binary.
+  AUTH_GUEST_EXIT_STEP_UP_ENABLED: "0"
   GEWEBE_IN_DIR: /data
   GEWEBE_SEED_DEMO: "false"
   GEWEBE_SEED_REAL: "false"

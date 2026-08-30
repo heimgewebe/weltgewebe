@@ -638,6 +638,7 @@ jobs:
       - name: Run domain node write path proof (direct PostgreSQL, --include-ignored)
         run: |
           DATABASE_URL="postgres://${PGUSER}:${PGPASSWORD}@localhost:5432/${PGDATABASE}" \
+            AUTH_GUEST_EXIT_STEP_UP_ENABLED=1 \
             cargo test --locked -p weltgewebe-api \
               --test db_domain_node_write_path \
               -- --include-ignored --test-threads=1

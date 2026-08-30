@@ -9,6 +9,7 @@
     createWeberProposal,
     exitGuestAccount,
     formatRemaining,
+    requestGuestExitStepUp,
     listProposals,
     proposalTitle,
     proposalStatusLabel,
@@ -22,6 +23,7 @@
   let summary = $state("");
   let submitting = $state(false);
   let leaving = $state(false);
+  let leaveNotice = $state("");
   type ApplicationFocusRequest = "initial" | "navigation";
 
   let applicationSection: HTMLElement | null = $state(null);
@@ -119,17 +121,26 @@
   async function leaveWeltgewebe() {
     if (!isGuest || leaving) return;
     const confirmed = window.confirm(
-      "Gastkonto wirklich vollständig auflösen? Der Account, eigene Weberanträge, Passkeys und Sitzungen werden gelöscht.",
+      "Gastkonto wirklich vollständig auflösen? Nach diesem Schritt senden wir einen Bestätigungslink an deine hinterlegte E-Mail-Adresse. Erst dessen Bestätigung löscht Account, eigene Weberanträge, Passkeys und Sitzungen dauerhaft.",
     );
     if (!confirmed) return;
     leaving = true;
     error = "";
+    leaveNotice = "";
     try {
-      await exitGuestAccount();
-      await authStore.checkAuth();
-      await goto("/login");
+      const result = await exitGuestAccount();
+      if (result.status === "exited") {
+        await authStore.checkAuth();
+        await goto("/login");
+        return;
+      }
+
+      await requestGuestExitStepUp(result.challengeId);
+      leaveNotice =
+        "Bestätigungslink gesendet. Dein Gastkonto bleibt bestehen, bis du den Link in deiner E-Mail bestätigst.";
     } catch (cause) {
       error = describeError(cause);
+    } finally {
       leaving = false;
     }
   }
@@ -317,6 +328,9 @@
               ? "Gastkonto wird aufgelöst…"
               : "commonThing vollständig verlassen"}
           </button>
+          {#if leaveNotice}
+            <div class="wg-state" role="status">{leaveNotice}</div>
+          {/if}
         </section>
       {/if}
 
