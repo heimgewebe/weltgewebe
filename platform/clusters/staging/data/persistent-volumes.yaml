@@ -8,7 +8,7 @@ spec:
     storage: 10Gi
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: weltgewebe-staging-hostpath
+  storageClassName: ""
   hostPath:
     path: /var/local/weltgewebe-staging/postgres
     type: DirectoryOrCreate
@@ -20,7 +20,7 @@ metadata:
   namespace: weltgewebe-data
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: weltgewebe-staging-hostpath
+  storageClassName: ""
   volumeName: weltgewebe-staging-postgres
   resources:
     requests:
@@ -35,7 +35,7 @@ spec:
     storage: 5Gi
   accessModes: ["ReadWriteOnce"]
   persistentVolumeReclaimPolicy: Retain
-  storageClassName: weltgewebe-staging-hostpath
+  storageClassName: ""
   hostPath:
     path: /var/local/weltgewebe-staging/nats
     type: DirectoryOrCreate
@@ -47,7 +47,7 @@ metadata:
   namespace: weltgewebe-data
 spec:
   accessModes: ["ReadWriteOnce"]
-  storageClassName: weltgewebe-staging-hostpath
+  storageClassName: ""
   volumeName: weltgewebe-staging-nats
   resources:
     requests:
