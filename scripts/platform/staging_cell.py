@@ -265,6 +265,9 @@ def retained_postgres_state_exists(root: Path) -> bool:
         with os.scandir(pgdata) as entries:
             return next(entries, None) is not None
     except PermissionError:
+        # A retained database directory may intentionally be 0700 and owned by
+        # the container UID. Inability to inspect it is evidence to preserve,
+        # never permission to mint replacement credentials.
         return True
 
 
