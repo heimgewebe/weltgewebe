@@ -11,23 +11,38 @@ spec:
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
 metadata:
-  name: allow-app-data-access
+  name: allow-app-postgres-access
   namespace: weltgewebe-data
 spec:
   podSelector:
-    matchExpressions:
-      - key: app.kubernetes.io/name
-        operator: In
-        values: ["postgres", "nats"]
+    matchLabels:
+      app.kubernetes.io/name: postgres
   policyTypes: ["Ingress"]
   ingress:
     - from:
         - namespaceSelector:
             matchLabels:
-              commonthing.net/data-client: "true"
+              weltgewebe.net/data-client: "true"
       ports:
         - port: 5432
           protocol: TCP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-app-nats-access
+  namespace: weltgewebe-data
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: nats
+  policyTypes: ["Ingress"]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              weltgewebe.net/data-client: "true"
+      ports:
         - port: 4222
           protocol: TCP
 ---
