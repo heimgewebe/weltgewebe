@@ -644,6 +644,10 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     if not owner_id:
         raise StagingCellError("--owner-id is required for real staging ownership")
 
+    secret_path = root / "secrets/staging-runtime.json"
+    if secret_path.exists() or retained_postgres_state_exists(root):
+        load_or_create_secret_material(root)
+
     existing = args.cluster in reference.clusters(kind)
     if existing:
         cell = load_cell_receipt(root)
@@ -677,10 +681,6 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             timeout=900,
         )
         created = True
-
-    secret_path = root / "secrets/staging-runtime.json"
-    if secret_path.exists() or retained_postgres_state_exists(root):
-        load_or_create_secret_material(root)
 
     prepare_volume_permissions(kind, args.cluster)
     api_server_host = reference.control_plane_address(args.cluster)
