@@ -7,17 +7,9 @@ networking:
   kubeProxyMode: none
 nodes:
   - role: control-plane
-    extraMounts:
-      - hostPath: __COMMONTHING_STAGING_DATA_ROOT__
-        containerPath: /var/local/weltgewebe-staging
-        readOnly: false
   - role: worker
     extraMounts:
       - hostPath: __COMMONTHING_STAGING_DATA_ROOT__
         containerPath: /var/local/weltgewebe-staging
         readOnly: false
   - role: worker
-    extraMounts:
-      - hostPath: __COMMONTHING_STAGING_DATA_ROOT__
-        containerPath: /var/local/weltgewebe-staging
-        readOnly: false

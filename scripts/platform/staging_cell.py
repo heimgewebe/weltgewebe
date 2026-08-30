@@ -12,6 +12,7 @@ import stat
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.parse
 from pathlib import Path
 from typing import Any
@@ -28,8 +29,9 @@ APP_NAMESPACE = "weltgewebe-staging"
 DATABASE_SECRET = "weltgewebe-staging-database"
 RUNTIME_SECRET = "weltgewebe-runtime"
 PUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"
-DATA_CLIENT_LABEL = "weltgewebe.net/data-client"  # commonthing-naming: legacy
 SECRET_SOURCE_ANNOTATION = "commonthing.net/external-secret-source-sha256"
+PVC_BIND_TIMEOUT_SECONDS = 45.0
+ALLOWED_RETAINED_VOLUME_MODES = {"700", "770", "2770"}
 REQUIRED_TOOLS = ("kind", "kubectl", "kustomize", "flux", "helm")
 REQUIRED_ARTIFACTS = (
     "gateway_api_gatewayclasses",
@@ -213,6 +215,11 @@ def require_singleton_cluster(cluster: str) -> None:
         )
 
 
+def data_node_name(cluster: str) -> str:
+    require_singleton_cluster(cluster)
+    return f"{cluster}-worker"
+
+
 def load_cell_receipt(root: Path) -> dict[str, Any]:
     path = root / "receipts/cell-bootstrap.json"
     if not path.exists():
@@ -279,19 +286,30 @@ def render_kind_config(root: Path) -> Path:
     nodes = document.get("nodes")
     if not isinstance(nodes, list) or len(nodes) != 3:
         raise StagingCellError("staging kind template must contain exactly three nodes")
+    roles = [node.get("role") if isinstance(node, dict) else None for node in nodes]
+    if roles != ["control-plane", "worker", "worker"]:
+        raise StagingCellError("staging kind template node roles drift")
     data_root = str((root / "data").resolve())
     placeholder = "__COMMONTHING_STAGING_DATA_ROOT__"
     for index, node in enumerate(nodes):
-        mounts = node.get("extraMounts") if isinstance(node, dict) else None
+        mounts = node.get("extraMounts", []) if isinstance(node, dict) else []
+        if index != 1:
+            if mounts:
+                raise StagingCellError(
+                    f"staging kind node {index} must not mount persistent data"
+                )
+            continue
         if not isinstance(mounts, list) or len(mounts) != 1:
             raise StagingCellError(
-                f"staging kind node {index} mount contract is invalid"
+                "staging data worker must bind exactly one persistent host mount"
             )
         mount = mounts[0]
         if mount.get("hostPath") != placeholder:
-            raise StagingCellError(f"staging kind node {index} hostPath template drift")
+            raise StagingCellError("staging data worker hostPath template drift")
         if mount.get("containerPath") != "/var/local/weltgewebe-staging":
-            raise StagingCellError(f"staging kind node {index} containerPath drift")
+            raise StagingCellError("staging data worker containerPath drift")
+        if mount.get("readOnly") is not False:
+            raise StagingCellError("staging data worker persistent mount must be writable")
         mount["hostPath"] = data_root
     rendered = yaml.safe_dump(document, sort_keys=False)
     path = root / "generated/kind.yaml"
@@ -441,20 +459,16 @@ def flux_revision_matches_commit(revision: str, commit: str) -> bool:
 
 def apply_yaml(kubectl: str, documents: list[dict[str, Any]] | dict[str, Any]) -> None:
     docs = documents if isinstance(documents, list) else [documents]
-    body = "\n---\n".join(
-        yaml.safe_dump(doc, sort_keys=False).strip() for doc in docs
-    ) + "\n"
+    body = yaml.safe_dump_all(docs, sort_keys=False, explicit_start=True)
     run([kubectl, "apply", "-f", "-"], input_text=body, timeout=120)
 
 
-def namespace(name: str, *, data_client: bool = False) -> dict[str, Any]:
+def namespace(name: str) -> dict[str, Any]:
     labels = {
         "pod-security.kubernetes.io/enforce": "restricted",
         "pod-security.kubernetes.io/audit": "restricted",
         "pod-security.kubernetes.io/warn": "restricted",
     }
-    if data_client:
-        labels[DATA_CLIENT_LABEL] = "true"
     return {
         "apiVersion": "v1",
         "kind": "Namespace",
@@ -469,7 +483,7 @@ def inject_external_secrets(kubectl: str, root: Path) -> dict[str, str]:
     database = material["database_name"]
     runtime_database_url = database_url(material)
     annotations = {SECRET_SOURCE_ANNOTATION: source_sha}
-    apply_yaml(kubectl, [namespace(DATA_NAMESPACE), namespace(APP_NAMESPACE, data_client=True)])
+    apply_yaml(kubectl, [namespace(DATA_NAMESPACE), namespace(APP_NAMESPACE)])
     apply_yaml(
         kubectl,
         [
@@ -508,30 +522,94 @@ def public_external_secret_state() -> dict[str, Any]:
     return {"bound": True, "required_keys": ["database-url"]}
 
 
-def prepare_volume_permissions(kind: str, cluster: str) -> None:
+def prepare_volume_permissions(kind: str, cluster: str, root: Path) -> None:
     nodes = reference.kind_nodes(kind, cluster)
     if len(nodes) != 3:
         raise StagingCellError(
             f"staging cluster must expose exactly three kind nodes; observed {len(nodes)}"
         )
-    owner_node = nodes[0]
-    for path, identity in (
+    data_node = data_node_name(cluster)
+    if data_node not in nodes:
+        raise StagingCellError(
+            f"staging data worker {data_node!r} is missing from kind nodes {nodes!r}"
+        )
+
+    expected_source = str((root / "data").resolve())
+    for node in nodes:
+        raw_mounts = output(
+            ["docker", "inspect", "--format", "{{json .Mounts}}", node],
+            timeout=30,
+        )
+        try:
+            mounts = json.loads(raw_mounts)
+        except json.JSONDecodeError as error:
+            raise StagingCellError(
+                f"cannot inspect staging kind mount topology for node {node!r}"
+            ) from error
+        data_mounts = [
+            mount
+            for mount in mounts
+            if isinstance(mount, dict)
+            and mount.get("Destination") == "/var/local/weltgewebe-staging"
+        ]
+        if node == data_node:
+            if (
+                len(data_mounts) != 1
+                or data_mounts[0].get("Source") != expected_source
+                or data_mounts[0].get("RW") is not True
+            ):
+                raise StagingCellError(
+                    "staging data worker does not expose the exact writable retained host mount"
+                )
+        elif data_mounts:
+            raise StagingCellError(
+                f"staging non-data node {node!r} unexpectedly exposes retained host storage"
+            )
+
+    for volume_path, identity in (
         ("/var/local/weltgewebe-staging/postgres", "999:999"),
         ("/var/local/weltgewebe-staging/nats", "1000:1000"),
     ):
-        run(["docker", "exec", owner_node, "mkdir", "-p", path], timeout=30)
-        run(["docker", "exec", owner_node, "chown", "-R", identity, path], timeout=30)
-        run(["docker", "exec", owner_node, "chmod", "0700", path], timeout=30)
-        expected = f"{identity}:700"
-        for node in nodes:
-            observed = output(
-                ["docker", "exec", node, "stat", "-c", "%u:%g:%a", path],
-                timeout=30,
+        run(["docker", "exec", data_node, "mkdir", "-p", volume_path], timeout=30)
+        observed = output(
+            ["docker", "exec", data_node, "stat", "-c", "%u:%g:%a", volume_path],
+            timeout=30,
+        )
+        uid_gid, _, mode = observed.rpartition(":")
+        if uid_gid == identity and mode in ALLOWED_RETAINED_VOLUME_MODES:
+            continue
+
+        first_entry = output(
+            [
+                "docker",
+                "exec",
+                data_node,
+                "find",
+                volume_path,
+                "-mindepth",
+                "1",
+                "-maxdepth",
+                "1",
+                "-print",
+                "-quit",
+            ],
+            timeout=30,
+        )
+        if first_entry:
+            raise StagingCellError(
+                f"retained staging volume {volume_path!r} has unexpected permissions {observed!r}; "
+                "refusing recursive ownership or mode changes over live data"
             )
-            if observed != expected:
-                raise StagingCellError(
-                    f"staging host mount is not shared consistently on kind node {node!r}"
-                )
+        run(["docker", "exec", data_node, "chown", identity, volume_path], timeout=30)
+        run(["docker", "exec", data_node, "chmod", "0700", volume_path], timeout=30)
+        initialized = output(
+            ["docker", "exec", data_node, "stat", "-c", "%u:%g:%a", volume_path],
+            timeout=30,
+        )
+        if initialized != f"{identity}:700":
+            raise StagingCellError(
+                f"staging volume {volume_path!r} permission initialization failed: {initialized!r}"
+            )
 
 
 def flux_documents(commit: str) -> list[dict[str, Any]]:
@@ -577,33 +655,55 @@ def flux_documents(commit: str) -> list[dict[str, Any]]:
     ]
 
 
+def wait_pvcs_bound(
+    kubectl: str, *, timeout_seconds: float = PVC_BIND_TIMEOUT_SECONDS
+) -> None:
+    pvcs = ("postgres-data", "nats-data")
+    deadline = time.monotonic() + timeout_seconds
+    observed: dict[str, str] = {}
+    while True:
+        for pvc in pvcs:
+            phase = output(
+                [
+                    kubectl,
+                    "-n",
+                    DATA_NAMESPACE,
+                    "get",
+                    "pvc",
+                    pvc,
+                    "--ignore-not-found",
+                    "-o",
+                    "jsonpath={.status.phase}",
+                ]
+            )
+            observed[pvc] = phase or "missing"
+        if all(observed[pvc] == "Bound" for pvc in pvcs):
+            return
+        unexpected = {
+            pvc: phase
+            for pvc, phase in observed.items()
+            if phase not in {"missing", "Pending", "Bound"}
+        }
+        if unexpected:
+            raise StagingCellError(f"staging PVC entered unexpected phase: {unexpected!r}")
+        if time.monotonic() >= deadline:
+            raise StagingCellError(
+                f"staging PVCs did not bind within {timeout_seconds:g}s: {observed!r}"
+            )
+        time.sleep(1)
+
+
 def wait_data(kubectl: str) -> None:
     reference.wait_condition(
         kubectl, "flux-system", f"gitrepository/{SOURCE_NAME}", "Ready"
     )
+    wait_pvcs_bound(kubectl)
     reference.wait_condition(
         kubectl,
         "flux-system",
         f"kustomization/{DATA_KUSTOMIZATION}",
         "Ready",
     )
-    reference.wait_rollout(kubectl, DATA_NAMESPACE, "deployment/postgres", "8m")
-    reference.wait_rollout(kubectl, DATA_NAMESPACE, "deployment/nats", "8m")
-    for pvc in ("postgres-data", "nats-data"):
-        phase = output(
-            [
-                kubectl,
-                "-n",
-                DATA_NAMESPACE,
-                "get",
-                "pvc",
-                pvc,
-                "-o",
-                "jsonpath={.status.phase}",
-            ]
-        )
-        if phase != "Bound":
-            raise StagingCellError(f"PVC {pvc} is not Bound: {phase!r}")
 
 
 def image_promotion_state() -> dict[str, Any]:
@@ -644,32 +744,61 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     if not owner_id:
         raise StagingCellError("--owner-id is required for real staging ownership")
 
-    secret_path = root / "secrets/staging-runtime.json"
-    if secret_path.exists() or retained_postgres_state_exists(root):
-        load_or_create_secret_material(root)
-
     existing = args.cluster in reference.clusters(kind)
-    if existing:
-        cell = load_cell_receipt(root)
+    cell_path = root / "receipts/cell-bootstrap.json"
+    cell = load_cell_receipt(root) if cell_path.exists() else None
+    if existing and cell is None:
+        raise StagingCellError(
+            "staging cluster exists without a bootstrap receipt; refusing unbound recovery"
+        )
+    if cell is None and retained_postgres_state_exists(root):
+        raise StagingCellError(
+            "retained staging data exists without a bootstrap receipt; explicit recovery is required"
+        )
+    if cell is not None:
         require_receipt_cluster(cell, args.cluster)
         persisted_owner = str(cell.get("owner_id") or "")
-        persisted_commit = str(cell.get("bootstrap_commit") or "")
         if owner_id != persisted_owner:
             raise StagingCellError("--owner-id does not match the persisted cluster owner")
+
+    _, source_sha = load_or_create_secret_material(root)
+
+    if cell is not None:
+        persisted_commit = str(cell.get("bootstrap_commit") or "")
         commit = require_clean_commit(
             args.source_commit,
             expected_commit=persisted_commit,
             require_public_main=False,
         )
+    else:
+        commit = require_clean_commit(args.source_commit)
+
+    if existing:
         reference.require_owned_cluster(
             kind,
             args.cluster,
-            expected_commit=persisted_commit,
+            expected_commit=commit,
             expected_owner_id=owner_id,
         )
         created = False
     else:
-        commit = require_clean_commit(args.source_commit)
+        if cell is None:
+            write_cell_receipt(
+                root,
+                {
+                    "schema_version": 1,
+                    "status": "bootstrap-in-progress",
+                    "cluster": args.cluster,
+                    "owner_id": owner_id,
+                    "bootstrap_commit": commit,
+                    "public_source": PUBLIC_REPOSITORY,
+                    "external_secret": {
+                        "source_sha256": source_sha,
+                        "required_keys": ["database-url"],
+                    },
+                    "production_changed": False,
+                },
+            )
         rendered_kind_config = render_kind_config(root)
         reference.create_kind_cluster(
             kind,
@@ -682,7 +811,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         )
         created = True
 
-    prepare_volume_permissions(kind, args.cluster)
+    prepare_volume_permissions(kind, args.cluster, root)
     api_server_host = reference.control_plane_address(args.cluster)
     reference.install_platform_components(
         kubectl, flux, helm, receipt["artifacts"], api_server_host
@@ -767,12 +896,30 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
     require_receipt_cluster(owner, args.cluster)
     commit = str(owner.get("bootstrap_commit") or "")
     owner_id = str(owner.get("owner_id") or "")
+    if args.cluster not in reference.clusters(kind):
+        return {
+            "schema_version": 1,
+            "status": "cluster-absent-state-preserved",
+            "cluster": args.cluster,
+            "owner_id": owner_id,
+            "bootstrap_commit": commit,
+            "production_changed": False,
+        }
     reference.require_owned_cluster(
         kind,
         args.cluster,
         expected_commit=commit,
         expected_owner_id=owner_id,
     )
+    if owner.get("status") == "bootstrap-in-progress":
+        return {
+            "schema_version": 1,
+            "status": "bootstrap-in-progress",
+            "cluster": args.cluster,
+            "owner_id": owner_id,
+            "bootstrap_commit": commit,
+            "production_changed": False,
+        }
     source_revision = output(
         [
             kubectl,
@@ -813,7 +960,14 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         )
         for pvc in ("postgres-data", "nats-data")
     }
-    external_secret = verify_external_secret_binding(kubectl, root)
+    try:
+        external_secret = verify_external_secret_binding(kubectl, root)
+    except StagingCellError:
+        external_secret = {
+            "database": False,
+            "runtime": False,
+            "ready": False,
+        }
     ready = (
         source_matches_commit
         and data_ready == "True"
@@ -848,15 +1002,22 @@ def command_down(args: argparse.Namespace) -> dict[str, Any]:
     owner_id = str(cell.get("owner_id") or "")
     if args.owner_id != owner_id:
         raise StagingCellError("--owner-id does not match the persisted cluster owner")
-    reference.delete_owned_cluster(
-        receipt["tools"]["kind"],
-        args.cluster,
-        expected_commit=commit,
-        expected_owner_id=owner_id,
-    )
+    kind = receipt["tools"]["kind"]
+    cluster_present = args.cluster in reference.clusters(kind)
+    if cluster_present:
+        reference.delete_owned_cluster(
+            kind,
+            args.cluster,
+            expected_commit=commit,
+            expected_owner_id=owner_id,
+        )
     result = {
         "schema_version": 1,
-        "status": "cluster-deleted-state-preserved",
+        "status": (
+            "cluster-deleted-state-preserved"
+            if cluster_present
+            else "cluster-absent-state-preserved"
+        ),
         "cluster": args.cluster,
         "owner_id": owner_id,
         "bootstrap_commit": commit,
@@ -1011,9 +1172,9 @@ def command_self_check() -> dict[str, Any]:
             for node in rendered.get("nodes", [])
             for mount in node.get("extraMounts", [])
         ]
-        if observed != [expected, expected, expected]:
+        if observed != [expected]:
             raise StagingCellError(
-                "self-check rendered kind host mounts do not bind the state root"
+                "self-check rendered kind data-worker mount does not bind the state root"
             )
     return {
         "schema_version": 1,
@@ -1026,7 +1187,7 @@ def command_self_check() -> dict[str, Any]:
             "retained-secret-rotation-fail-closed",
             "injected-secret-integrity",
             "public-secret-output-redaction",
-            "state-root-kind-render",
+            "single-data-worker-kind-render",
         ],
     }
 
@@ -1037,13 +1198,13 @@ def parser() -> argparse.ArgumentParser:
     )
     sub = p.add_subparsers(dest="command", required=True)
     up = sub.add_parser("up")
-    up.add_argument("--cluster", default=DEFAULT_CLUSTER)
+    up.set_defaults(cluster=DEFAULT_CLUSTER)
     up.add_argument("--owner-id", required=True)
     up.add_argument("--source-commit")
     status = sub.add_parser("status")
-    status.add_argument("--cluster", default=DEFAULT_CLUSTER)
+    status.set_defaults(cluster=DEFAULT_CLUSTER)
     down = sub.add_parser("down")
-    down.add_argument("--cluster", default=DEFAULT_CLUSTER)
+    down.set_defaults(cluster=DEFAULT_CLUSTER)
     down.add_argument("--owner-id", required=True)
     sub.add_parser("self-check")
     return p
@@ -1064,7 +1225,7 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
             "status": status,
             "cluster": str(result.get("cluster") or DEFAULT_CLUSTER),
         }
-        if status != "not-bootstrapped":
+        if status in {"ready", "degraded"}:
             pvcs = result.get("pvcs") if isinstance(result.get("pvcs"), dict) else {}
             external = (
                 result.get("external_secret")
@@ -1088,6 +1249,8 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
                     },
                 }
             )
+        elif result.get("bootstrap_commit"):
+            safe["bootstrap_commit"] = str(result.get("bootstrap_commit") or "")
         print(json.dumps(safe, ensure_ascii=False, sort_keys=True))
         return
     if command == "down":

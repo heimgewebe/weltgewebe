@@ -8,8 +8,8 @@ status: canonical
 canonicality: normative
 lifecycle_state: active
 owner: ops
-review_after: 2026-08-16
-last_reviewed: 2026-07-16
+review_after: 2026-09-30
+last_reviewed: 2026-08-30
 depends_on: []
 relations:
   - type: relates_to
@@ -62,6 +62,53 @@ verifies_with:
 - Proof-Cluster werden lokal unter einem pro Cluster serialisierten Ownership-Lock reserviert; Cleanup verlangt den exakten Commit und dieselbe Owner-ID. Verwaiste Marker werden fail-closed nicht automatisch entfernt.
 - Werkzeugarchive werden vor jeder Schreibwirkung vollständig geprüft; nur reguläre Dateien und Verzeichnisse sind zulässig. Symlinks, Hardlinks, Devices, FIFOs, Traversal und widersprüchliche Member werden fail-closed abgewiesen; die ausführbare Datei wird anschließend atomisch installiert.
 - Produktionsdeployments, DNS, Compose und reale Replikazahlen werden durch diesen Vertrag nicht verändert.
+
+## Persistente Staging-Zelle
+
+`scripts/platform/staging_cell.py` verwaltet genau eine owner- und commitgebundene
+Staging-Zelle namens `weltgewebe-staging`. Der öffentliche CLI-Vertrag bietet
+bewusst keinen frei wählbaren Cluster- oder State-Root: der Zustand liegt unter
+`~/.local/state/weltgewebe/staging-cell`, und der Clustername ist fest.
+
+Beim ersten `up --owner-id <id>` wird die externe Secretquelle vor jeder
+Clustererzeugung erzeugt bzw. validiert. Anschließend bindet ein
+`bootstrap-in-progress`-Receipt Owner, exakten Commit und Secretquellen-Hash,
+bevor Kind erzeugt wird. Dadurch bleiben auch abgebrochene Bootstraps
+wiederaufnehmbar oder über `down --owner-id <id>` kontrolliert abbaubar. Ein
+späteres `up` nach `down` bleibt am Receipt-Commit und am ursprünglichen Owner
+gebunden; ein stilles Umbinden an ein inzwischen weitergelaufenes `main` ist
+verboten. Ein Commitwechsel benötigt einen getrennten, ausdrücklich geprüften
+Upgrade-/Recovery-Pfad.
+
+PostgreSQL und NATS verwenden statische, klassenlose und vorgebundene HostPath-PVs
+mit `Retain`. Persistente Daten werden ausschließlich in den ersten Kind-Worker
+`weltgewebe-staging-worker` gemountet. PV-Node-Affinity und Pod-NodeSelector
+erzwingen denselben Daten-Worker. Das ist bewusst **kein HA-Failover**: bei
+Node-Ausfall bleibt der Datendienst lieber unavailable, statt ohne externes
+Fencing einen zweiten Schreiber auf dieselben Dateien zu starten.
+
+Volume-Rechte werden nur für leere Volume-Wurzeln initialisiert. Ein gesundes
+oder bereits befülltes Datenverzeichnis wird bei erneutem `up` ausschließlich
+geprüft; rekursive `chown`-/`chmod`-Änderungen über laufende oder erhaltene Daten
+sind verboten. `fsGroupChangePolicy: OnRootMismatch` begrenzt zusätzlich
+unbeabsichtigte rekursive Rechtearbeit durch Kubernetes.
+
+Die Data-NetworkPolicies erlauben PostgreSQL (`5432`) und NATS (`4222`) nur Pods
+mit `app.kubernetes.io/name=weltgewebe-api` im exakten Namespace
+<!-- commonthing-naming: legacy -->
+`weltgewebe-staging`. Die frühere namespaceweite Freigabe über das Legacy-Label
+`weltgewebe.net/data-client` ist für diese Staging-Datenpfade nicht maßgeblich.
+Neue Secret-Binding-Metadaten verwenden gemäß Naming-Policy den kanonischen
+Schlüssel `commonthing.net/external-secret-source-sha256`.
+
+Beim Warten wird zuerst die Flux-Quelle gebunden, dann werden die statischen PVCs
+mit kurzem Budget auf `Bound` geprüft und erst anschließend die Flux-Kustomization
+auf `Ready` abgenommen. Deren `healthChecks` decken PostgreSQL und NATS bereits ab;
+zusätzliche Deployment-Rollout-Waits wären redundant.
+
+Die Staging-Zelle etabliert weiterhin weder Image-Promotion noch App-/Gateway-
+Aktivierung, Delete-to-Prove, NATS-Authentisierung/TLS oder einen
+Produktions-Kubernetes-Cutover. Diese Grenzen sind getrennt zu beweisen.
 
 ## Beweise
 

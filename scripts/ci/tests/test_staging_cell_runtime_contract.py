@@ -27,7 +27,39 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             if isinstance(document, dict)
         ]
 
-    def test_persistent_volumes_are_explicitly_static_and_prebound(self) -> None:
+    def _tool_receipt(self) -> dict:
+        return {
+            "tools": {
+                "kind": "kind",
+                "kubectl": "kubectl",
+                "flux": "flux",
+                "helm": "helm",
+            },
+            "kubernetes": {"kind_node_image": "kind-node-image"},
+            "artifacts": {},
+            "lock_sha256": "f" * 64,
+        }
+
+    def _write_bound_receipt(self, root: Path, *, owner: str, commit: str) -> str:
+        (root / "data/postgres").mkdir(parents=True, exist_ok=True)
+        _, source_sha = staging.load_or_create_secret_material(root)
+        staging.write_cell_receipt(
+            root,
+            {
+                "schema_version": 1,
+                "status": "infrastructure-ready-image-promotion-blocked",
+                "cluster": staging.DEFAULT_CLUSTER,
+                "owner_id": owner,
+                "bootstrap_commit": commit,
+                "external_secret": {
+                    "source_sha256": source_sha,
+                    "required_keys": ["database-url"],
+                },
+            },
+        )
+        return source_sha
+
+    def test_persistent_volumes_are_static_prebound_and_fenced_to_data_worker(self) -> None:
         documents = self._documents(
             "platform/clusters/staging/data/persistent-volumes.yaml"
         )
@@ -43,25 +75,25 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             pvc = by_kind_name[("PersistentVolumeClaim", claim)]
             self.assertEqual(pv["spec"].get("storageClassName"), "")
             self.assertEqual(pv["spec"].get("persistentVolumeReclaimPolicy"), "Retain")
+            terms = pv["spec"]["nodeAffinity"]["required"]["nodeSelectorTerms"]
+            self.assertEqual(
+                terms,
+                [
+                    {
+                        "matchExpressions": [
+                            {
+                                "key": "kubernetes.io/hostname",
+                                "operator": "In",
+                                "values": [staging.data_node_name(staging.DEFAULT_CLUSTER)],
+                            }
+                        ]
+                    }
+                ],
+            )
             self.assertEqual(pvc["spec"].get("storageClassName"), "")
             self.assertEqual(pvc["spec"].get("volumeName"), volume)
 
-    def test_network_policies_follow_the_canonical_staging_compatibility_label(self) -> None:
-        namespace = yaml.safe_load(
-            (
-                ROOT
-                / "platform/apps/weltgewebe/overlays/staging/namespace.yaml"
-            ).read_text(encoding="utf-8")
-        )
-        labels = namespace["metadata"]["labels"]
-        data_client_labels = [
-            key
-            for key, value in labels.items()
-            if key.endswith("/data-client") and str(value).lower() == "true"
-        ]
-        self.assertEqual(len(data_client_labels), 1)
-        data_client_label = data_client_labels[0]
-
+    def test_network_policies_allow_only_staging_api_pods(self) -> None:
         documents = self._documents("platform/clusters/staging/data/network-policy.yaml")
         policies = {document["metadata"]["name"]: document for document in documents}
         expected = {
@@ -76,10 +108,36 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             )
             ingress = policy["spec"]["ingress"]
             self.assertEqual(len(ingress), 1)
-            selector = ingress[0]["from"][0]["namespaceSelector"]["matchLabels"]
-            self.assertEqual(selector, {data_client_label: "true"})
+            peer = ingress[0]["from"][0]
+            self.assertEqual(
+                peer["namespaceSelector"]["matchLabels"],
+                {"kubernetes.io/metadata.name": staging.APP_NAMESPACE},
+            )
+            self.assertEqual(
+                peer["podSelector"]["matchLabels"],
+                {"app.kubernetes.io/name": "weltgewebe-api"},
+            )
             self.assertEqual(ingress[0]["ports"], [{"port": port, "protocol": "TCP"}])
         self.assertNotIn("allow-app-data-access", policies)
+
+    def test_data_workloads_are_pinned_and_avoid_recursive_fs_group_churn(self) -> None:
+        for relative in (
+            "platform/clusters/staging/data/postgres.yaml",
+            "platform/clusters/staging/data/nats.yaml",
+        ):
+            documents = self._documents(relative)
+            deployment = next(
+                document for document in documents if document.get("kind") == "Deployment"
+            )
+            pod_spec = deployment["spec"]["template"]["spec"]
+            self.assertEqual(
+                pod_spec["nodeSelector"],
+                {"kubernetes.io/hostname": staging.data_node_name(staging.DEFAULT_CLUSTER)},
+            )
+            self.assertEqual(
+                pod_spec["securityContext"]["fsGroupChangePolicy"], "OnRootMismatch"
+            )
+            self.assertEqual(deployment["spec"]["strategy"], {"type": "Recreate"})
 
     def test_postgres_has_startup_budget_and_known_writable_mounts(self) -> None:
         documents = self._documents("platform/clusters/staging/data/postgres.yaml")
@@ -95,26 +153,48 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             {"/var/lib/postgresql/data", "/var/run/postgresql", "/tmp"}.issubset(mounts)
         )
 
-    def test_kind_template_exposes_same_staging_mount_to_exactly_three_nodes(self) -> None:
+    def test_kind_template_mounts_retained_data_on_exactly_one_worker(self) -> None:
         config = yaml.safe_load(
             (ROOT / "platform/clusters/staging/kind.yaml").read_text(encoding="utf-8")
         )
         nodes = config["nodes"]
-        self.assertEqual(len(nodes), 3)
-        mounts = [node["extraMounts"][0] for node in nodes]
-        self.assertEqual(
-            {mount["hostPath"] for mount in mounts},
-            {"__COMMONTHING_STAGING_DATA_ROOT__"},
-        )
-        self.assertEqual(
-            {mount["containerPath"] for mount in mounts},
-            {"/var/local/weltgewebe-staging"},
-        )
+        self.assertEqual([node["role"] for node in nodes], ["control-plane", "worker", "worker"])
+        mounted = [
+            (index, node, node.get("extraMounts", []))
+            for index, node in enumerate(nodes)
+            if node.get("extraMounts")
+        ]
+        self.assertEqual(len(mounted), 1)
+        index, node, mounts = mounted[0]
+        self.assertEqual(index, 1)
+        self.assertEqual(node["role"], "worker")
+        self.assertEqual(len(mounts), 1)
+        self.assertEqual(mounts[0]["hostPath"], "__COMMONTHING_STAGING_DATA_ROOT__")
+        self.assertEqual(mounts[0]["containerPath"], "/var/local/weltgewebe-staging")
+        self.assertFalse(mounts[0]["readOnly"])
+
+    def test_apply_yaml_emits_native_multi_document_stream(self) -> None:
+        documents = [
+            {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "one"}},
+            {"apiVersion": "v1", "kind": "Namespace", "metadata": {"name": "two"}},
+        ]
+        with mock.patch.object(staging, "run") as run_mock:
+            staging.apply_yaml("kubectl", documents)
+        body = run_mock.call_args.kwargs["input_text"]
+        self.assertTrue(body.startswith("---\n"))
+        self.assertEqual(list(yaml.safe_load_all(body)), documents)
 
     def test_public_parser_does_not_offer_state_root_override(self) -> None:
         parser = staging.parser()
         with self.assertRaises(SystemExit):
             parser.parse_args(["status", "--state-root", "/tmp/other"])
+
+    def test_public_parser_does_not_offer_cluster_override(self) -> None:
+        parser = staging.parser()
+        with self.assertRaises(SystemExit):
+            parser.parse_args(["status", "--cluster", "other"])
+        parsed = parser.parse_args(["status"])
+        self.assertEqual(parsed.cluster, staging.DEFAULT_CLUSTER)
 
     def test_public_status_keeps_diagnostics_without_secret_material(self) -> None:
         result = {
@@ -151,31 +231,140 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             owner_id="owner",
             source_commit=None,
         )
-        receipt = {
-            "tools": {
-                "kind": "kind",
-                "kubectl": "kubectl",
-                "flux": "flux",
-                "helm": "helm",
-            }
-        }
+        receipt = self._tool_receipt()
         with tempfile.TemporaryDirectory(prefix="staging-cell-preflight-") as tmp_name:
             root = Path(tmp_name)
             with (
                 mock.patch.object(staging, "state_root", return_value=root),
                 mock.patch.object(staging, "configure_reference_paths"),
                 mock.patch.object(staging, "load_tool_receipt", return_value=receipt),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
                 mock.patch.object(staging, "retained_postgres_state_exists", return_value=True),
+                mock.patch.object(staging, "require_clean_commit") as commit_mock,
+                mock.patch.object(staging.reference, "create_kind_cluster") as create_mock,
+            ):
+                with self.assertRaisesRegex(staging.StagingCellError, "without a bootstrap receipt"):
+                    staging.command_up(args)
+        commit_mock.assert_not_called()
+        create_mock.assert_not_called()
+
+    def test_bootstrap_receipt_is_persisted_before_cluster_creation(self) -> None:
+        args = argparse.Namespace(
+            cluster=staging.DEFAULT_CLUSTER,
+            owner_id="owner-a",
+            source_commit=None,
+        )
+        commit = "a" * 40
+        receipt = self._tool_receipt()
+        with tempfile.TemporaryDirectory(prefix="staging-cell-bootstrap-receipt-") as tmp_name:
+            root = Path(tmp_name)
+
+            def fail_after_receipt(*call_args, **call_kwargs):
+                del call_kwargs
+                bound = staging.load_cell_receipt(root)
+                self.assertEqual(bound["status"], "bootstrap-in-progress")
+                self.assertEqual(bound["owner_id"], "owner-a")
+                self.assertEqual(bound["bootstrap_commit"], commit)
+                self.assertEqual(call_args[4], commit)
+                self.assertEqual(call_args[5], "owner-a")
+                raise RuntimeError("stop after ownership receipt proof")
+
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=receipt),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
+                mock.patch.object(staging, "require_clean_commit", return_value=commit),
+                mock.patch.object(
+                    staging.reference,
+                    "create_kind_cluster",
+                    side_effect=fail_after_receipt,
+                ),
+            ):
+                with self.assertRaisesRegex(RuntimeError, "ownership receipt proof"):
+                    staging.command_up(args)
+
+            self.assertTrue((root / "receipts/cell-bootstrap.json").is_file())
+            self.assertTrue((root / "secrets/staging-runtime.json").is_file())
+
+    def test_recreate_after_down_preserves_receipt_owner_and_commit_pin(self) -> None:
+        owner = "owner-a"
+        persisted_commit = "b" * 40
+        args = argparse.Namespace(
+            cluster=staging.DEFAULT_CLUSTER,
+            owner_id=owner,
+            source_commit=None,
+        )
+        receipt = self._tool_receipt()
+        with tempfile.TemporaryDirectory(prefix="staging-cell-recreate-") as tmp_name:
+            root = Path(tmp_name)
+            source_sha = self._write_bound_receipt(
+                root, owner=owner, commit=persisted_commit
+            )
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=receipt),
+                mock.patch.object(staging.reference, "clusters", return_value=[]),
                 mock.patch.object(
                     staging,
-                    "load_or_create_secret_material",
-                    side_effect=staging.StagingCellError("secret preflight failed"),
+                    "require_clean_commit",
+                    return_value=persisted_commit,
+                ) as commit_mock,
+                mock.patch.object(staging.reference, "create_kind_cluster") as create_mock,
+                mock.patch.object(staging, "prepare_volume_permissions"),
+                mock.patch.object(staging.reference, "control_plane_address", return_value="127.0.0.1"),
+                mock.patch.object(staging.reference, "install_platform_components"),
+                mock.patch.object(staging, "run"),
+                mock.patch.object(
+                    staging,
+                    "inject_external_secrets",
+                    return_value={"source_sha256": source_sha, "required_keys": ["database-url"]},
                 ),
+                mock.patch.object(staging, "apply_yaml"),
+                mock.patch.object(staging, "wait_data"),
+                mock.patch.object(
+                    staging,
+                    "output",
+                    return_value="node-a\nnode-b\nnode-c",
+                ),
+                mock.patch.object(
+                    staging,
+                    "image_promotion_state",
+                    return_value={"status": "blocked"},
+                ),
+            ):
+                result = staging.command_up(args)
+
+            commit_mock.assert_called_once_with(
+                None,
+                expected_commit=persisted_commit,
+                require_public_main=False,
+            )
+            create_args = create_mock.call_args.args
+            self.assertEqual(create_args[4], persisted_commit)
+            self.assertEqual(create_args[5], owner)
+            self.assertEqual(result["bootstrap_commit"], persisted_commit)
+
+    def test_recreate_after_down_rejects_different_owner_before_mutation(self) -> None:
+        persisted_commit = "c" * 40
+        args = argparse.Namespace(
+            cluster=staging.DEFAULT_CLUSTER,
+            owner_id="owner-b",
+            source_commit=None,
+        )
+        with tempfile.TemporaryDirectory(prefix="staging-cell-owner-pin-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner="owner-a", commit=persisted_commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
                 mock.patch.object(staging.reference, "clusters", return_value=[]),
                 mock.patch.object(staging, "require_clean_commit") as commit_mock,
                 mock.patch.object(staging.reference, "create_kind_cluster") as create_mock,
             ):
-                with self.assertRaisesRegex(staging.StagingCellError, "secret preflight failed"):
+                with self.assertRaisesRegex(staging.StagingCellError, "persisted cluster owner"):
                     staging.command_up(args)
         commit_mock.assert_not_called()
         create_mock.assert_not_called()
@@ -199,26 +388,187 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             )
         self.assertEqual(observed, head)
 
-    def test_volume_visibility_is_verified_on_every_kind_node(self) -> None:
-        nodes = ["node-a", "node-b", "node-c"]
+    def test_status_degrades_when_external_secret_binding_is_invalid(self) -> None:
+        owner = "owner-a"
+        commit = "d" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        with tempfile.TemporaryDirectory(prefix="staging-cell-status-secret-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(
+                    staging.reference,
+                    "clusters",
+                    return_value=[staging.DEFAULT_CLUSTER],
+                ),
+                mock.patch.object(staging.reference, "require_owned_cluster"),
+                mock.patch.object(
+                    staging,
+                    "output",
+                    side_effect=[
+                        f"main@sha1:{commit}",
+                        "True",
+                        "Bound",
+                        "Bound",
+                    ],
+                ),
+                mock.patch.object(
+                    staging,
+                    "verify_external_secret_binding",
+                    side_effect=staging.StagingCellError("secret source missing"),
+                ),
+                mock.patch.object(
+                    staging,
+                    "image_promotion_state",
+                    return_value={"status": "blocked"},
+                ),
+            ):
+                result = staging.command_status(args)
 
-        def fake_output(argv: list[str], *, timeout: int | None = None) -> str:
-            del timeout
-            path = argv[-1]
-            if path.endswith("/postgres"):
-                return "999:999:700"
-            if path.endswith("/nats"):
-                return "1000:1000:700"
-            self.fail(f"unexpected command: {argv}")
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(
+            result["external_secret"],
+            {"database": False, "runtime": False, "ready": False},
+        )
+
+    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:
+        events: list[str] = []
+
+        def wait_condition(_kubectl: str, _namespace: str, resource: str, _condition: str) -> None:
+            events.append(resource)
 
         with (
-            mock.patch.object(staging.reference, "kind_nodes", return_value=nodes),
-            mock.patch.object(staging, "run") as run_mock,
-            mock.patch.object(staging, "output", side_effect=fake_output) as output_mock,
+            mock.patch.object(staging.reference, "wait_condition", side_effect=wait_condition),
+            mock.patch.object(
+                staging,
+                "wait_pvcs_bound",
+                side_effect=lambda _kubectl: events.append("pvcs-bound"),
+            ),
+            mock.patch.object(
+                staging.reference,
+                "wait_rollout",
+                side_effect=AssertionError("redundant rollout wait must not run"),
+            ),
         ):
-            staging.prepare_volume_permissions("kind", staging.DEFAULT_CLUSTER)
-        self.assertEqual(run_mock.call_count, 6)
-        self.assertEqual(output_mock.call_count, 6)
+            staging.wait_data("kubectl")
+        self.assertEqual(
+            events,
+            [
+                f"gitrepository/{staging.SOURCE_NAME}",
+                "pvcs-bound",
+                f"kustomization/{staging.DATA_KUSTOMIZATION}",
+            ],
+        )
+
+    def test_volume_permissions_verify_single_mount_and_do_not_touch_healthy_data(self) -> None:
+        nodes = [
+            f"{staging.DEFAULT_CLUSTER}-control-plane",
+            staging.data_node_name(staging.DEFAULT_CLUSTER),
+            f"{staging.DEFAULT_CLUSTER}-worker2",
+        ]
+        with tempfile.TemporaryDirectory(prefix="staging-cell-volume-proof-") as tmp_name:
+            root = Path(tmp_name)
+            (root / "data").mkdir()
+            expected_source = str((root / "data").resolve())
+
+            def fake_output(argv: list[str], *, timeout: int | None = None) -> str:
+                del timeout
+                if argv[:2] == ["docker", "inspect"]:
+                    node = argv[-1]
+                    mounts = (
+                        [
+                            {
+                                "Destination": "/var/local/weltgewebe-staging",
+                                "Source": expected_source,
+                                "RW": True,
+                            }
+                        ]
+                        if node == staging.data_node_name(staging.DEFAULT_CLUSTER)
+                        else []
+                    )
+                    return json.dumps(mounts)
+                if "stat" in argv:
+                    volume_path = argv[-1]
+                    if volume_path.endswith("/postgres"):
+                        return "999:999:770"
+                    if volume_path.endswith("/nats"):
+                        return "1000:1000:2770"
+                self.fail(f"unexpected command: {argv}")
+
+            with (
+                mock.patch.object(staging.reference, "kind_nodes", return_value=nodes),
+                mock.patch.object(staging, "run") as run_mock,
+                mock.patch.object(staging, "output", side_effect=fake_output) as output_mock,
+            ):
+                staging.prepare_volume_permissions("kind", staging.DEFAULT_CLUSTER, root)
+
+        self.assertEqual(run_mock.call_count, 2)
+        self.assertEqual(output_mock.call_count, 5)
+        flattened = [str(item) for call in run_mock.call_args_list for item in call.args[0]]
+        self.assertNotIn("chown", flattened)
+        self.assertNotIn("chmod", flattened)
+
+    def test_volume_permission_initialization_never_uses_recursive_chown(self) -> None:
+        nodes = [
+            f"{staging.DEFAULT_CLUSTER}-control-plane",
+            staging.data_node_name(staging.DEFAULT_CLUSTER),
+            f"{staging.DEFAULT_CLUSTER}-worker2",
+        ]
+        with tempfile.TemporaryDirectory(prefix="staging-cell-volume-init-") as tmp_name:
+            root = Path(tmp_name)
+            (root / "data").mkdir()
+            expected_source = str((root / "data").resolve())
+            stat_calls = {"postgres": 0, "nats": 0}
+
+            def fake_output(argv: list[str], *, timeout: int | None = None) -> str:
+                del timeout
+                if argv[:2] == ["docker", "inspect"]:
+                    node = argv[-1]
+                    mounts = (
+                        [
+                            {
+                                "Destination": "/var/local/weltgewebe-staging",
+                                "Source": expected_source,
+                                "RW": True,
+                            }
+                        ]
+                        if node == staging.data_node_name(staging.DEFAULT_CLUSTER)
+                        else []
+                    )
+                    return json.dumps(mounts)
+                if "find" in argv:
+                    return ""
+                if "stat" in argv:
+                    volume = "postgres" if argv[-1].endswith("/postgres") else "nats"
+                    stat_calls[volume] += 1
+                    if stat_calls[volume] == 1:
+                        return "0:0:755"
+                    return "999:999:700" if volume == "postgres" else "1000:1000:700"
+                self.fail(f"unexpected command: {argv}")
+
+            with (
+                mock.patch.object(staging.reference, "kind_nodes", return_value=nodes),
+                mock.patch.object(staging, "run") as run_mock,
+                mock.patch.object(staging, "output", side_effect=fake_output),
+            ):
+                staging.prepare_volume_permissions("kind", staging.DEFAULT_CLUSTER, root)
+
+        commands = [call.args[0] for call in run_mock.call_args_list]
+        chowns = [argv for argv in commands if "chown" in argv]
+        self.assertEqual(len(chowns), 2)
+        self.assertTrue(all("-R" not in argv for argv in chowns))
+        self.assertEqual(len([argv for argv in commands if "chmod" in argv]), 2)
+
+    def test_retained_postgres_permission_error_is_preservation_evidence(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="staging-cell-retained-permission-") as tmp_name:
+            root = Path(tmp_name)
+            pgdata = root / "data/postgres"
+            pgdata.mkdir(parents=True)
+            with mock.patch.object(staging.os, "scandir", side_effect=PermissionError):
+                self.assertTrue(staging.retained_postgres_state_exists(root))
 
 
 if __name__ == "__main__":

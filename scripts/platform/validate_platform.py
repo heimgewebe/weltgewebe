@@ -627,17 +627,27 @@ def _assert_staging_cell_contract() -> None:
     nodes = cluster.get("nodes")
     if not isinstance(nodes, list) or len(nodes) != 3:
         raise ContractError("staging kind cluster must have one control-plane and two workers")
+    roles = [node.get("role") if isinstance(node, dict) else None for node in nodes]
+    if roles != ["control-plane", "worker", "worker"]:
+        raise ContractError("staging kind node-role contract drift")
+
     expected_host = "__COMMONTHING_STAGING_DATA_ROOT__"
     expected_container = "/var/local/weltgewebe-staging"
     for index, node in enumerate(nodes):
-        mounts = node.get("extraMounts") if isinstance(node, dict) else None
+        mounts = node.get("extraMounts", []) if isinstance(node, dict) else []
+        if index != 1:
+            if mounts:
+                raise ContractError(
+                    f"staging non-data node {index} must not expose retained host storage"
+                )
+            continue
         if not isinstance(mounts, list) or len(mounts) != 1:
-            raise ContractError(f"staging kind node {index} must bind exactly one persistent host mount")
+            raise ContractError("staging data worker must bind exactly one persistent host mount")
         mount = mounts[0]
         if mount.get("hostPath") != expected_host or mount.get("containerPath") != expected_container:
-            raise ContractError(f"staging kind node {index} persistent host mount drift")
+            raise ContractError("staging data-worker persistent host mount drift")
         if mount.get("readOnly") is not False:
-            raise ContractError(f"staging kind node {index} persistent host mount must be writable")
+            raise ContractError("staging data-worker persistent host mount must be writable")
 
     data_root = PLATFORM / "clusters/staging/data"
     documents = [
@@ -645,35 +655,93 @@ def _assert_staging_cell_contract() -> None:
         for path in sorted(data_root.glob("*.yaml"))
         for document in _documents(path)
     ]
-    pvs = {d.get("metadata", {}).get("name"): d for d in documents if d.get("kind") == "PersistentVolume"}
+    pvs = {
+        d.get("metadata", {}).get("name"): d
+        for d in documents
+        if d.get("kind") == "PersistentVolume"
+    }
+    pvcs = {
+        d.get("metadata", {}).get("name"): d
+        for d in documents
+        if d.get("kind") == "PersistentVolumeClaim"
+    }
     expected_pvs = {
-        "weltgewebe-staging-postgres": "/var/local/weltgewebe-staging/postgres",
-        "weltgewebe-staging-nats": "/var/local/weltgewebe-staging/nats",
+        "weltgewebe-staging-postgres": (
+            "/var/local/weltgewebe-staging/postgres",
+            "postgres-data",
+        ),
+        "weltgewebe-staging-nats": (
+            "/var/local/weltgewebe-staging/nats",
+            "nats-data",
+        ),
     }
     if set(pvs) != set(expected_pvs):
         raise ContractError(f"unexpected staging persistent volumes: {sorted(pvs)}")
-    for name, path in expected_pvs.items():
+    if set(pvcs) != {claim for _, claim in expected_pvs.values()}:
+        raise ContractError(f"unexpected staging persistent volume claims: {sorted(pvcs)}")
+    expected_affinity = {
+        "required": {
+            "nodeSelectorTerms": [
+                {
+                    "matchExpressions": [
+                        {
+                            "key": "kubernetes.io/hostname",
+                            "operator": "In",
+                            "values": ["weltgewebe-staging-worker"],
+                        }
+                    ]
+                }
+            ]
+        }
+    }
+    for name, (host_path, claim) in expected_pvs.items():
         spec = pvs[name].get("spec", {})
         if spec.get("persistentVolumeReclaimPolicy") != "Retain":
             raise ContractError(f"staging PV {name} must retain data across cluster deletion")
-        if spec.get("hostPath", {}).get("path") != path:
+        if spec.get("storageClassName") != "":
+            raise ContractError(f"staging PV {name} must use the explicit classless static binding")
+        if spec.get("hostPath", {}).get("path") != host_path:
             raise ContractError(f"staging PV {name} hostPath drift")
+        if spec.get("nodeAffinity") != expected_affinity:
+            raise ContractError(f"staging PV {name} must be fenced to the dedicated data worker")
+        claim_spec = pvcs[claim].get("spec", {})
+        if claim_spec.get("storageClassName") != "":
+            raise ContractError(f"staging PVC {claim} must disable dynamic provisioning")
+        if claim_spec.get("volumeName") != name:
+            raise ContractError(f"staging PVC {claim} must be pre-bound to {name}")
 
-    deployments = {d.get("metadata", {}).get("name"): d for d in documents if d.get("kind") == "Deployment"}
+    deployments = {
+        d.get("metadata", {}).get("name"): d
+        for d in documents
+        if d.get("kind") == "Deployment"
+    }
     if set(deployments) != {"postgres", "nats"}:
         raise ContractError(f"unexpected staging data deployments: {sorted(deployments)}")
     for name, claim in (("postgres", "postgres-data"), ("nats", "nats-data")):
-        deployment_spec = deployments[name].get("spec", {})
+        deployment = deployments[name]
+        deployment_spec = deployment.get("spec", {})
         if deployment_spec.get("strategy") != {"type": "Recreate"}:
             raise ContractError(
-                f"staging {name} must use Recreate to prevent concurrent writers on retained host storage"
+                f"staging {name} must use Recreate as an additional single-writer guard"
             )
-        volumes = deployment_spec.get("template", {}).get("spec", {}).get("volumes", [])
+        pod_spec = deployment_spec.get("template", {}).get("spec", {})
+        if pod_spec.get("nodeSelector") != {
+            "kubernetes.io/hostname": "weltgewebe-staging-worker"
+        }:
+            raise ContractError(f"staging {name} must be pinned to the dedicated data worker")
+        if pod_spec.get("securityContext", {}).get("fsGroupChangePolicy") != "OnRootMismatch":
+            raise ContractError(
+                f"staging {name} must avoid repeated recursive fsGroup ownership changes"
+            )
+        volumes = pod_spec.get("volumes", [])
         data = next((item for item in volumes if item.get("name") == "data"), None)
         if not isinstance(data, dict) or data.get("persistentVolumeClaim", {}).get("claimName") != claim:
             raise ContractError(f"staging {name} data volume must use PVC {claim}")
         if "emptyDir" in data:
             raise ContractError(f"staging {name} data volume must not be ephemeral")
+        containers = pod_spec.get("containers", [])
+        if not containers or containers[0].get("securityContext", {}).get("readOnlyRootFilesystem") is not True:
+            raise ContractError(f"staging {name} must keep the container root filesystem read-only")
 
     postgres = deployments["postgres"].get("spec", {}).get("template", {}).get("spec", {}).get("containers", [])[0]
     env = {item.get("name"): item for item in postgres.get("env", []) if isinstance(item, dict)}
@@ -681,6 +749,56 @@ def _assert_staging_cell_contract() -> None:
         ref = env.get(name, {}).get("valueFrom", {}).get("secretKeyRef", {})
         if ref.get("name") != "weltgewebe-staging-database" or ref.get("key") != key:
             raise ContractError(f"staging postgres {name} must come from external Secret binding")
+    startup = postgres.get("startupProbe", {})
+    if int(startup.get("failureThreshold", 0)) * int(startup.get("periodSeconds", 0)) < 300:
+        raise ContractError("staging postgres startup probe must allow at least 300 seconds")
+    postgres_mounts = {
+        item.get("mountPath")
+        for item in postgres.get("volumeMounts", [])
+        if isinstance(item, dict)
+    }
+    if not {"/var/lib/postgresql/data", "/var/run/postgresql", "/tmp"}.issubset(postgres_mounts):
+        raise ContractError("staging postgres writable mount contract drift")
+
+    policies = {
+        d.get("metadata", {}).get("name"): d
+        for d in documents
+        if d.get("kind") == "NetworkPolicy"
+    }
+    for policy_name, (pod_name, port) in {
+        "allow-app-postgres-access": ("postgres", 5432),
+        "allow-app-nats-access": ("nats", 4222),
+    }.items():
+        policy = policies.get(policy_name)
+        if not isinstance(policy, dict):
+            raise ContractError(f"staging network policy {policy_name} is missing")
+        spec = policy.get("spec", {})
+        if spec.get("podSelector", {}).get("matchLabels") != {
+            "app.kubernetes.io/name": pod_name
+        }:
+            raise ContractError(f"staging network policy {policy_name} target drift")
+        ingress = spec.get("ingress")
+        expected_ingress = [
+            {
+                "from": [
+                    {
+                        "namespaceSelector": {
+                            "matchLabels": {
+                                "kubernetes.io/metadata.name": "weltgewebe-staging"
+                            }
+                        },
+                        "podSelector": {
+                            "matchLabels": {"app.kubernetes.io/name": "weltgewebe-api"}
+                        },
+                    }
+                ],
+                "ports": [{"port": port, "protocol": "TCP"}],
+            }
+        ]
+        if ingress != expected_ingress:
+            raise ContractError(
+                f"staging network policy {policy_name} must allow only staging API pods"
+            )
 
     secret_contract = json.loads((PLATFORM / "apps/weltgewebe/secret-contract.json").read_text(encoding="utf-8"))
     if secret_contract.get("required_keys") != ["database-url"]:

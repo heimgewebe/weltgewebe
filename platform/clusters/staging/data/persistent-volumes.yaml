@@ -12,6 +12,14 @@ spec:
   hostPath:
     path: /var/local/weltgewebe-staging/postgres
     type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - weltgewebe-staging-worker
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -39,6 +47,14 @@ spec:
   hostPath:
     path: /var/local/weltgewebe-staging/nats
     type: DirectoryOrCreate
+  nodeAffinity:
+    required:
+      nodeSelectorTerms:
+        - matchExpressions:
+            - key: kubernetes.io/hostname
+              operator: In
+              values:
+                - weltgewebe-staging-worker
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim

@@ -22,8 +22,10 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              # commonthing-naming: legacy
-              weltgewebe.net/data-client: "true"
+              kubernetes.io/metadata.name: weltgewebe-staging
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: weltgewebe-api
       ports:
         - port: 5432
           protocol: TCP
@@ -42,8 +44,10 @@ spec:
     - from:
         - namespaceSelector:
             matchLabels:
-              # commonthing-naming: legacy
-              weltgewebe.net/data-client: "true"
+              kubernetes.io/metadata.name: weltgewebe-staging
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: weltgewebe-api
       ports:
         - port: 4222
           protocol: TCP
