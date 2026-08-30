@@ -32,6 +32,8 @@ if [[ "$1" == "ps" ]]; then
     echo "zombie-container compose $(pwd)/infra/compose/compose.prod.yml"
   elif [[ "${MOCK_ZOMBIE:-}" == "GENERIC" ]]; then
       echo "zombie-generic compose"
+  elif [[ "${MOCK_ZOMBIE:-}" == "EDGE" ]]; then
+      echo "${EDGE_GATEWAY_CONTAINER:-edge-caddy} compose"
   # HANDLE DIRECT docker ps -q api (if used)
   elif [[ "$ARGS" == *"-q api"* ]]; then
       if [[ "${MOCK_MISSING_API:-0}" == "1" ]]; then
@@ -49,8 +51,11 @@ elif [[ "$1" == "rm" ]]; then
     fi
 elif [[ "$1" == "inspect" ]]; then
     ARGS="$*"
+    # Deferred zombie purge binds the immutable Docker container ID before any later effect.
+    if [[ "$ARGS" == *"--format"* && "$ARGS" == *"{{.Id}}"* ]]; then
+        echo "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
     # Return dummy alias if requesting format with Aliases
-    if [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
+    elif [[ "$ARGS" == *"--format"* && "$ARGS" == *"Aliases"* ]]; then
         echo "weltgewebe-api"
     # EXISTENCE CHECK: Handle {{if .State.Health}}yes{{else}}no{{end}}
     # We use looser matching to avoid quoting issues. Match core parts.
@@ -81,8 +86,12 @@ elif [[ "$1" == "compose" ]]; then
         echo "caddy"
      fi
      if [[ "$ARGS" != *"--services"* ]]; then
-         # config check succeeds
-         echo "services: {}"
+         # Keep both ordinary and JSON config renders valid for current preflights.
+         if [[ "$ARGS" == *"--format json"* ]]; then
+             echo '{"services": {}}'
+         else
+             echo "services: {}"
+         fi
      fi
      exit 0
   fi
@@ -181,9 +190,14 @@ if [[ "$1" == "rev-parse" ]]; then
     if [[ "$ARGS" == *"--show-toplevel"* ]]; then
         # Return the exported REPO_DIR
         echo "$REPO_DIR"
+    elif [[ "$ARGS" == *"--short"* && "$ARGS" == *"HEAD"* ]]; then
+        echo "01234567"
     elif [[ "$ARGS" == *"HEAD"* ]]; then
-        echo "mock-sha-12345"
+        echo "0123456789abcdef0123456789abcdef01234567"
     fi
+    exit 0
+elif [[ "$1" == "show" && "$ARGS" == *"--format=%cI"* ]]; then
+    echo "2026-08-29T12:00:00+00:00"
     exit 0
 elif [[ "$1" == "fetch" ]]; then
     exit 0
@@ -251,14 +265,33 @@ fi
 # 3. Test Zombie Guard (Purge)
 echo ">>> Test 3: Zombie Guard (Purge)"
 export MOCK_ZOMBIE=1
-OUTPUT=$(./scripts/weltgewebe-up --no-pull --no-build --purge-compose-leaks 2>&1)
-if echo "$OUTPUT" | grep -q "Purging as requested"; then
-  echo "PASS: Purge triggered."
+OUTPUT=$(DEPLOY_FRONTEND_MODE=off REQUIRE_FRONTEND=0 ./scripts/weltgewebe-up --no-pull --no-build --purge-compose-leaks 2>&1)
+if echo "$OUTPUT" | grep -q "All deployment preflights passed. Purging the previously bound container identities as requested" &&
+  echo "$OUTPUT" | grep -q "Mocked remove: rm -f aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"; then
+  echo "PASS: Purge triggered after preflight using the bound container ID."
 else
-  echo "FAIL: Purge NOT triggered."
+  echo "FAIL: Deferred purge did not use the bound container ID after preflight."
   echo "$OUTPUT"
   exit 1
 fi
+
+# 3b. Test Zombie Guard (Never Purge External Edge Gateway)
+echo ">>> Test 3b: Zombie Guard (Protect External Edge Gateway)"
+export MOCK_ZOMBIE=EDGE
+set +e
+OUTPUT=$(EDGE_GATEWAY_CONTAINER=edge-caddy DEPLOY_FRONTEND_MODE=edge REQUIRE_FRONTEND=1 ./scripts/weltgewebe-up --no-pull --no-build --purge-compose-leaks 2>&1)
+EDGE_PURGE_RC=$?
+set -e
+if [[ "$EDGE_PURGE_RC" -ne 0 ]] &&
+  echo "$OUTPUT" | grep -q "Refusing to auto-purge configured external edge gateway container: edge-caddy" &&
+  ! echo "$OUTPUT" | grep -q "Mocked remove:"; then
+  echo "PASS: External edge gateway is fail-closed and never queued for compose-leak purge."
+else
+  echo "FAIL: External edge gateway was not protected from compose-leak purge."
+  echo "$OUTPUT"
+  exit 1
+fi
+export MOCK_ZOMBIE=0
 
 # 4. Test Bake Auto-Disable (Missing /apps)
 echo ">>> Test 4: Bake Auto-Disable (Missing /apps)"

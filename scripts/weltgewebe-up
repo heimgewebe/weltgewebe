@@ -488,19 +488,34 @@ ZOMBIES=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}}
 ZOMBIES_GENERIC=$(docker ps --format '{{.Names}} {{.Label "com.docker.compose.project"}}' |
   awk '$2 == "compose" {print}' || true)
 
+ZOMBIE_CONTAINER_IDS_TO_PURGE=()
+ZOMBIE_CONTAINER_NAMES_TO_PURGE=()
 if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
   ALL_ZOMBIES=$(echo -e "$ZOMBIES\n$ZOMBIES_GENERIC" | sort | uniq | grep .)
 
   if [[ -n "$ALL_ZOMBIES" ]]; then
     if [[ "$PURGE_ZOMBIES" == "1" ]]; then
+      while IFS= read -r container_name; do
+        [[ -n "$container_name" ]] || continue
+        if [[ "$container_name" == "$EDGE_GATEWAY_CONTAINER" ]]; then
+          echo "ERROR: Refusing to auto-purge configured external edge gateway container: $container_name" >&2
+          echo "       Remediate the external edge stack separately; --purge-compose-leaks does not own EDGE_GATEWAY_CONTAINER." >&2
+          exit 1
+        fi
+        container_id="$(docker inspect --format '{{.Id}}' "$container_name")" || {
+          echo "ERROR: Could not bind zombie container identity for deferred purge: $container_name" >&2
+          exit 1
+        }
+        if [[ ! "$container_id" =~ ^[0-9a-f]{64}$ ]]; then
+          echo "ERROR: Zombie container identity is malformed for deferred purge: $container_name" >&2
+          exit 1
+        fi
+        ZOMBIE_CONTAINER_NAMES_TO_PURGE+=("$container_name")
+        ZOMBIE_CONTAINER_IDS_TO_PURGE+=("$container_id")
+      done < <(awk '{print $1}' <<< "$ALL_ZOMBIES" | sort -u)
       echo
-      echo "WARNING: Detected zombie containers. Purging as requested..."
-      # Extract container names (column 1)
-      CONTAINERS=$(echo "$ALL_ZOMBIES" | awk '{print $1}')
-      echo "Purging containers: $CONTAINERS"
-      # shellcheck disable=SC2086
-      docker rm -f $CONTAINERS
-      echo "Purged."
+      echo "WARNING: Detected zombie containers. Purge requested; deferring container removal until all deployment preflights pass."
+      echo "Pending purge containers: ${ZOMBIE_CONTAINER_NAMES_TO_PURGE[*]}"
     else
       echo
       echo "ERROR: Detected foreign compose project using weltgewebe config (or project 'compose')."
@@ -513,7 +528,7 @@ if [[ -n "$ZOMBIES" || -n "$ZOMBIES_GENERIC" ]]; then
       echo "This causes port collisions and drift."
       echo "Resolve: identify foreign project (column 2), then run:"
       echo "  docker compose -p <foreign_project> down"
-      echo "  (Or run with --purge-compose-leaks to auto-clean via 'docker rm -f')"
+      echo "  (Or run with --purge-compose-leaks to auto-clean via 'docker rm -f' after deployment preflights pass)"
       echo
       exit 3
     fi
@@ -1967,6 +1982,19 @@ except Exception:
   fi
 else
   echo "WARNING: Preflight script scripts/preflight/csp_contract_static.sh not found or not executable. Skipping." >&2
+fi
+
+# Explicit compose-leak cleanup is destructive and therefore stays behind the
+# complete deployment-admission chain. Zombie identities were bound read-only
+# above; delete only those exact immutable IDs after every fail-closed preflight
+# has passed and immediately before the actual deployment section can mutate
+# containers.
+if ((${#ZOMBIE_CONTAINER_IDS_TO_PURGE[@]} > 0)); then
+  echo
+  echo "WARNING: All deployment preflights passed. Purging the previously bound container identities as requested..."
+  echo "Purging containers: ${ZOMBIE_CONTAINER_NAMES_TO_PURGE[*]}"
+  docker rm -f "${ZOMBIE_CONTAINER_IDS_TO_PURGE[@]}"
+  echo "Purged."
 fi
 
 echo ">> Deploying..."
