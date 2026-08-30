@@ -1,0 +1,136 @@
+---
+name: PR1813 durability and status fixes
+
+"on":
+  push:
+    branches:
+      - bureau/weltgewebe-os-v1-t084/5e0085fc46
+    paths:
+      - .github/workflows/pr1813-durability-status-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          ref: bureau/weltgewebe-os-v1-t084/5e0085fc46
+
+      - name: Verify exact parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "907c996121e55b949efd30e688dd470eb76b30fb"
+
+      - name: Apply durability and source-health fixes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          staging = "scripts/platform/staging_cell.py"
+          fsync_helper = '''\n\ndef fsync_directory(path: Path) -> None:\n    flags = os.O_RDONLY | os.O_CLOEXEC\n    if hasattr(os, "O_DIRECTORY"):\n        flags |= os.O_DIRECTORY\n    if hasattr(os, "O_NOFOLLOW"):\n        flags |= os.O_NOFOLLOW\n    fd = os.open(path, flags)\n    try:\n        opened = os.fstat(fd)\n        linked = os.stat(path, follow_symlinks=False)\n        if (\n            not stat.S_ISDIR(opened.st_mode)\n            or opened.st_dev != linked.st_dev\n            or opened.st_ino != linked.st_ino\n        ):\n            raise StagingCellError("atomic write parent directory identity is unsafe")\n        os.fsync(fd)\n    finally:\n        os.close(fd)\n'''
+          replace_once(
+              staging,
+              '''def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> None:\n''',
+              fsync_helper
+              + '''\n\ndef atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> None:\n''',
+          )
+          p = Path(staging)
+          text = p.read_text(encoding="utf-8")
+          old_publish = '''        os.replace(tmp, path)\n        os.chmod(path, mode)\n    finally:\n'''
+          new_publish = '''        os.replace(tmp, path)\n        os.chmod(path, mode)\n        fsync_directory(path.parent)\n    finally:\n'''
+          if text.count(old_publish) != 2:
+              raise SystemExit(
+                  f"expected two atomic publish sequences, found {text.count(old_publish)}"
+              )
+          p.write_text(text.replace(old_publish, new_publish), encoding="utf-8")
+
+          replace_once(
+              staging,
+              '''    configure_reference_paths(root)\n    receipt = load_tool_receipt(root)\n    kind = receipt["tools"]["kind"]\n    kubectl = receipt["tools"]["kubectl"]\n    owner_path = root / "receipts/cell-bootstrap.json"\n    if not owner_path.exists():\n        return {\n            "schema_version": 1,\n            "status": "not-bootstrapped",\n            "cluster": args.cluster,\n        }\n    owner = load_cell_receipt(root)\n''',
+              '''    configure_reference_paths(root)\n    owner_path = root / "receipts/cell-bootstrap.json"\n    if not owner_path.exists():\n        return {\n            "schema_version": 1,\n            "status": "not-bootstrapped",\n            "cluster": args.cluster,\n        }\n    receipt = load_tool_receipt(root)\n    kind = receipt["tools"]["kind"]\n    kubectl = receipt["tools"]["kubectl"]\n    owner = load_cell_receipt(root)\n''',
+          )
+          replace_once(
+              staging,
+              '''    source_matches_commit = flux_revision_matches_commit(source_revision, commit)\n    data_ready = output(\n''',
+              '''    source_matches_commit = flux_revision_matches_commit(source_revision, commit)\n    source_health_raw = output(\n        [\n            kubectl,\n            "-n",\n            "flux-system",\n            "get",\n            "gitrepository",\n            SOURCE_NAME,\n            "--ignore-not-found",\n            "-o",\n            "jsonpath={.metadata.generation}|{.status.observedGeneration}|{.status.conditions[?(@.type=='Ready')].status}",\n        ]\n    )\n    source_health_parts = source_health_raw.split("|", 2) if source_health_raw else []\n    if len(source_health_parts) != 3:\n        source_ready = "missing"\n    else:\n        source_generation, source_observed_generation, source_ready_status = source_health_parts\n        if (\n            not source_generation\n            or not source_observed_generation\n            or source_generation != source_observed_generation\n        ):\n            source_ready = "stale"\n        else:\n            source_ready = source_ready_status or "missing"\n    data_ready = output(\n''',
+          )
+          replace_once(
+              staging,
+              '''    ready = (\n        source_matches_commit\n        and data_ready == "True"\n''',
+              '''    ready = (\n        source_matches_commit\n        and source_ready == "True"\n        and data_ready == "True"\n''',
+          )
+          replace_once(
+              staging,
+              '''        "source_revision": source_revision,\n        "source_matches_commit": source_matches_commit,\n        "data_ready": data_ready,\n''',
+              '''        "source_revision": source_revision,\n        "source_matches_commit": source_matches_commit,\n        "source_ready": source_ready,\n        "data_ready": data_ready,\n''',
+          )
+          replace_once(
+              staging,
+              '''                    "source_matches_commit": bool(result.get("source_matches_commit")),\n                    "data_ready": result.get("data_ready") == "True",\n''',
+              '''                    "source_matches_commit": bool(result.get("source_matches_commit")),\n                    "source_ready": result.get("source_ready") == "True",\n                    "data_ready": result.get("data_ready") == "True",\n''',
+          )
+
+          tests = "scripts/ci/tests/test_staging_cell_runtime_contract.py"
+          tp = Path(tests)
+          t = tp.read_text(encoding="utf-8")
+          t = t.replace(
+              '''                        f"main@sha1:{commit}",\n                        "True",\n                        "Bound",\n                        "Bound",\n''',
+              '''                        f"main@sha1:{commit}",\n                        "1|1|True",\n                        "True",\n                        "Bound",\n                        "Bound",\n''',
+          )
+          t = t.replace(
+              '''side_effect=[f"main@sha1:{commit}", "True", "Bound", "Bound"],''',
+              '''side_effect=[f"main@sha1:{commit}", "1|1|True", "True", "Bound", "Bound"],''',
+          )
+          t = t.replace(
+              '''side_effect=["", "", "", ""]''',
+              '''side_effect=["", "", "", "", ""]''',
+          )
+          tp.write_text(t, encoding="utf-8")
+
+          extra_tests = '''    def test_atomic_writes_fsync_parent_directory(self) -> None:\n        with tempfile.TemporaryDirectory(prefix="staging-cell-fsync-parent-") as tmp_name:\n            root = Path(tmp_name)\n            json_path = root / "receipt.json"\n            text_path = root / "receipt.txt"\n            with mock.patch.object(staging, "fsync_directory") as fsync_mock:\n                staging.atomic_json(json_path, {"schema_version": 1})\n                fsync_mock.assert_called_once_with(root)\n            with mock.patch.object(staging, "fsync_directory") as fsync_mock:\n                staging.atomic_text(text_path, "ok\\n")\n                fsync_mock.assert_called_once_with(root)\n\n    def test_status_reports_not_bootstrapped_without_toolchain(self) -> None:\n        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)\n        with tempfile.TemporaryDirectory(prefix="staging-cell-not-bootstrapped-") as tmp_name:\n            root = Path(tmp_name)\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(staging, "load_tool_receipt") as tool_receipt_mock,\n            ):\n                result = staging.command_status(args)\n        self.assertEqual(result["status"], "not-bootstrapped")\n        tool_receipt_mock.assert_not_called()\n\n    def test_status_requires_current_gitrepository_ready_condition(self) -> None:\n        owner = "owner-a"\n        commit = "7" * 40\n        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)\n        with tempfile.TemporaryDirectory(prefix="staging-cell-source-ready-") as tmp_name:\n            root = Path(tmp_name)\n            self._write_bound_receipt(root, owner=owner, commit=commit)\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),\n                mock.patch.object(staging.reference, "clusters", return_value=[staging.DEFAULT_CLUSTER]),\n                mock.patch.object(staging.reference, "require_owned_cluster"),\n                mock.patch.object(\n                    staging,\n                    "output",\n                    side_effect=[\n                        f"main@sha1:{commit}",\n                        "3|3|False",\n                        "True",\n                        "Bound",\n                        "Bound",\n                    ],\n                ),\n                mock.patch.object(\n                    staging,\n                    "verify_external_secret_binding",\n                    return_value={"database": True, "runtime": True, "ready": True},\n                ),\n                mock.patch.object(\n                    staging, "image_promotion_state", return_value={"status": "blocked"}\n                ),\n            ):\n                result = staging.command_status(args)\n        self.assertEqual(result["status"], "degraded")\n        self.assertTrue(result["source_matches_commit"])\n        self.assertEqual(result["source_ready"], "False")\n\n'''
+          replace_once(
+              tests,
+              '''    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n''',
+              extra_tests
+              + '''    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n''',
+          )
+          PY
+
+      - name: Run focused regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+          python3 -m compileall -q scripts/platform/kind_reference.py scripts/platform/ha_reference.py scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          python3 -m unittest scripts.ci.tests.test_kubernetes_platform_contract scripts.ci.tests.test_staging_cell_runtime_contract scripts.ci.tests.test_kubernetes_ha_contract
+          git diff --check
+
+      - name: Commit exact fix and remove one-shot writer
+        shell: bash
+        env:
+          BRANCH: bureau/weltgewebe-os-v1-t084/5e0085fc46
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/pr1813-durability-status-fix.yml
+          git config user.name 'alexdermohr'
+          git config user.email '216529510+alexdermohr@users.noreply.github.com'
+          git add scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          git diff --cached --check
+          git commit -m 'fix(platform): harden staging durability and source status'
+          git push origin "HEAD:${BRANCH}"
