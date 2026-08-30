@@ -28,7 +28,7 @@ APP_NAMESPACE = "weltgewebe-staging"
 DATABASE_SECRET = "weltgewebe-staging-database"
 RUNTIME_SECRET = "weltgewebe-runtime"
 PUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"
-DATA_CLIENT_LABEL = "weltgewebe.net/data-client"
+DATA_CLIENT_LABEL = "weltgewebe.net/data-client"  # commonthing-naming: legacy
 SECRET_SOURCE_ANNOTATION = "commonthing.net/external-secret-source-sha256"
 REQUIRED_TOOLS = ("kind", "kubectl", "kustomize", "flux", "helm")
 REQUIRED_ARTIFACTS = (
@@ -265,9 +265,6 @@ def retained_postgres_state_exists(root: Path) -> bool:
         with os.scandir(pgdata) as entries:
             return next(entries, None) is not None
     except PermissionError:
-        # A retained database directory may intentionally be 0700 and owned by
-        # the container UID. Inability to inspect it is evidence to preserve,
-        # never permission to mint replacement credentials.
         return True
 
 
