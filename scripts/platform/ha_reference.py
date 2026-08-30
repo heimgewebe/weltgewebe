@@ -371,7 +371,7 @@ def external_object_store_names(cluster: str) -> tuple[str, str]:
 def external_object_store_binding(
     cluster: str, commit: str, owner_id: str
 ) -> dict[str, str]:
-    ref._validate_ownership_binding(commit, owner_id)
+    ref.validate_ownership_binding(commit, owner_id)
     return {
         "weltgewebe.net/proof-repository": str(ROOT),
         "weltgewebe.net/proof-cluster": cluster,
@@ -626,7 +626,7 @@ def reconcile_owned_ha_resources(
     include_primary: bool = True,
     include_object_store: bool = True,
 ) -> dict[str, Any]:
-    ref._validate_ownership_binding(commit, owner_id)
+    ref.validate_ownership_binding(commit, owner_id)
     resources: dict[str, str] = {}
     errors: dict[str, str] = {}
     cluster_resources = (
