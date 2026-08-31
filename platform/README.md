@@ -101,10 +101,15 @@ mit `app.kubernetes.io/name=weltgewebe-api` im exakten Namespace
 Neue Secret-Binding-Metadaten verwenden gemäß Naming-Policy den kanonischen
 Schlüssel `commonthing.net/external-secret-source-sha256`.
 
-Beim Warten wird zuerst die Flux-Quelle gebunden, dann werden die statischen PVCs
-mit kurzem Budget auf `Bound` geprüft und erst anschließend die Flux-Kustomization
-auf `Ready` abgenommen. Deren `healthChecks` decken PostgreSQL und NATS bereits ab;
-zusätzliche Deployment-Rollout-Waits wären redundant.
+Nach dem Apply stößt jedes `up` ausdrücklich `flux reconcile kustomization
+weltgewebe-staging-data --with-source` an und wartet damit auf eine neue
+Source- und Kustomization-Reconciliation dieses Laufs. Danach werden Source und
+Kustomization nochmals gegen aktuelle Generation und exakte Receipt-Revision
+geprüft; die PVCs müssen `Bound` sein. Zusätzlich müssen PostgreSQL, NATS,
+`source-controller` und `kustomize-controller` als aktuelle Deployments die
+gewünschten verfügbaren, bereiten und aktualisierten Replikas melden. `status`
+verwendet dieselben Live-Workload-Schranken und degradiert bei fehlenden, stale
+oder nicht verfügbaren Ressourcen statt einen früheren Ready-Zustand fortzuschreiben.
 
 Die Staging-Zelle etabliert weiterhin weder Image-Promotion noch App-/Gateway-
 Aktivierung, Delete-to-Prove, NATS-Authentisierung/TLS oder einen
