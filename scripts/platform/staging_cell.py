@@ -77,15 +77,16 @@ def run(
     capture: bool = False,
     timeout: int | None = None,
 ) -> subprocess.CompletedProcess[str]:
-    print("+ external command [arguments redacted]", flush=True)
+    print("+ external command [arguments redacted]", file=sys.stderr, flush=True)
+    kwargs: dict[str, Any] = {"capture_output": True} if capture else {"stdout": sys.stderr}
     return subprocess.run(
         argv,
         cwd=ROOT,
         text=True,
         input=input_text,
-        capture_output=capture,
         check=True,
         timeout=timeout,
+        **kwargs,
     )
 
 
@@ -252,6 +253,19 @@ def configure_reference_paths(root: Path) -> None:
     reference.OCI_MIRROR_STATE = root / "oci-mirror"
 
 
+def reference_output_routed(function):
+    @wraps(function)
+    def wrapped(*args, **kwargs):
+        original_run = reference.run
+        reference.run = run
+        try:
+            return function(*args, **kwargs)
+        finally:
+            reference.run = original_run
+
+    return wrapped
+
+
 def require_locked_file(
     path: Path, expected_sha256: str, *, label: str, executable: bool = False
 ) -> None:
@@ -277,7 +291,12 @@ def require_locked_file(
         )
 
 
-def load_tool_receipt(root: Path) -> dict[str, Any]:
+def load_tool_receipt(
+    root: Path,
+    *,
+    required_tools: tuple[str, ...] = REQUIRED_TOOLS,
+    required_artifacts: tuple[str, ...] = REQUIRED_ARTIFACTS,
+) -> dict[str, Any]:
     receipt_path = root / "toolchain/receipt.json"
     if not receipt_path.is_file() or receipt_path.is_symlink():
         raise StagingCellError(
@@ -305,13 +324,20 @@ def load_tool_receipt(root: Path) -> dict[str, Any]:
     lock_artifacts = (
         lock.get("artifacts") if isinstance(lock.get("artifacts"), dict) else {}
     )
+    unknown_tools = sorted(set(required_tools) - set(REQUIRED_TOOLS))
+    unknown_artifacts = sorted(set(required_artifacts) - set(REQUIRED_ARTIFACTS))
+    if unknown_tools or unknown_artifacts:
+        raise StagingCellError(
+            "toolchain receipt requested unknown staging dependencies: "
+            f"tools={unknown_tools}, artifacts={unknown_artifacts}"
+        )
     missing_specs = [
-        name for name in (*REQUIRED_TOOLS, *REQUIRED_ARTIFACTS)
-        if name not in (lock_tools if name in REQUIRED_TOOLS else lock_artifacts)
+        name for name in (*required_tools, *required_artifacts)
+        if name not in (lock_tools if name in required_tools else lock_artifacts)
     ]
     if missing_specs:
         raise StagingCellError(f"platform lock is missing staging entries: {missing_specs}")
-    for name in REQUIRED_TOOLS:
+    for name in required_tools:
         spec = lock_tools[name]
         expected_path = cache_root / "bin" / str(spec.get("binary") or "")
         observed_path = Path(str(tools.get(name) or ""))
@@ -329,7 +355,7 @@ def load_tool_receipt(root: Path) -> dict[str, Any]:
             label=f"tool {name}",
             executable=True,
         )
-    for name in REQUIRED_ARTIFACTS:
+    for name in required_artifacts:
         spec = lock_artifacts[name]
         expected_path = cache_root / "artifacts" / str(spec.get("filename") or "")
         observed_path = Path(str(artifacts.get(name) or ""))
@@ -1168,6 +1194,7 @@ def write_cell_receipt(root: Path, payload: dict[str, Any]) -> str:
 
 
 @lifecycle_mutation_locked
+@reference_output_routed
 def command_up(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
     owner_id = args.owner_id
@@ -1334,6 +1361,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
+@reference_output_routed
 def command_status(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
     root = state_root(getattr(args, "state_root", None))
@@ -1512,12 +1540,15 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
 
 
 @lifecycle_mutation_locked
+@reference_output_routed
 def command_down(args: argparse.Namespace) -> dict[str, Any]:
     require_singleton_cluster(args.cluster)
     reference.validate_owner_id(args.owner_id)
     root = state_root(getattr(args, "state_root", None))
     configure_reference_paths(root)
-    receipt = load_tool_receipt(root)
+    receipt = load_tool_receipt(
+        root, required_tools=("kind",), required_artifacts=()
+    )
     cell = load_cell_receipt(root)
     require_receipt_cluster(cell, args.cluster)
     commit = str(cell.get("bootstrap_commit") or "")

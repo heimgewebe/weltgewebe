@@ -7,7 +7,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import redirect_stderr, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -59,6 +59,34 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             },
         )
         return source_sha
+
+    def test_operational_commands_keep_public_stdout_reserved_for_json(self) -> None:
+        stdout = io.StringIO()
+        stderr = io.StringIO()
+        completed = subprocess.CompletedProcess(["tool"], 0, stdout="", stderr="")
+        with (
+            mock.patch.object(staging.subprocess, "run", return_value=completed) as run_mock,
+            redirect_stdout(stdout),
+            redirect_stderr(stderr),
+        ):
+            staging.run(["tool"])
+
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertIn("+ external command [arguments redacted]", stderr.getvalue())
+        self.assertIs(run_mock.call_args.kwargs["stdout"], stderr)
+        self.assertNotIn("capture_output", run_mock.call_args.kwargs)
+
+    def test_reference_commands_use_scoped_staging_stdout_routing(self) -> None:
+        original = staging.reference.run
+        observed = []
+
+        @staging.reference_output_routed
+        def exercise() -> None:
+            observed.append(staging.reference.run)
+
+        exercise()
+        self.assertEqual(observed, [staging.run])
+        self.assertIs(staging.reference.run, original)
 
     def test_tool_receipt_revalidates_locked_binary_and_artifact_digests(self) -> None:
         with tempfile.TemporaryDirectory(prefix="staging-tool-receipt-") as tmp_name:
@@ -130,6 +158,14 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     staging.StagingCellError, f"artifact {first_artifact} digest mismatch"
                 ):
                     staging.load_tool_receipt(state_root)
+
+                flux = Path(tools["flux"])
+                flux.write_bytes(b"tampered-unused-flux")
+                flux.chmod(0o700)
+                reduced = staging.load_tool_receipt(
+                    state_root, required_tools=("kind",), required_artifacts=()
+                )
+                self.assertEqual(reduced["tools"]["kind"], tools["kind"])
 
     def test_persistent_volumes_are_static_prebound_and_fenced_to_data_worker(self) -> None:
         documents = self._documents(
@@ -635,7 +671,9 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             with (
                 mock.patch.object(staging, "state_root", return_value=root),
                 mock.patch.object(staging, "configure_reference_paths"),
-                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(
+                    staging, "load_tool_receipt", return_value=self._tool_receipt()
+                ) as tool_receipt_mock,
                 mock.patch.object(staging.reference, "clusters", return_value=[]),
                 mock.patch.object(
                     staging.reference,
@@ -644,6 +682,9 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 ) as delete_mock,
             ):
                 result = staging.command_down(args)
+        tool_receipt_mock.assert_called_once_with(
+            root, required_tools=("kind",), required_artifacts=()
+        )
         delete_mock.assert_called_once_with(
             "kind",
             staging.DEFAULT_CLUSTER,
