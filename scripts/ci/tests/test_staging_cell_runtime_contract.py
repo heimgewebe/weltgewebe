@@ -228,6 +228,12 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             "data_revision": "main@sha1:" + "d" * 40,
             "data_matches_commit": False,
             "pvcs": {"postgres-data": "Bound", "nats-data": "Pending"},
+            "live_workloads": {
+                "postgres": "True",
+                "nats": "False",
+                "source-controller": "True",
+                "kustomize-controller": "True",
+            },
             "external_secret": {
                 "database": True,
                 "runtime": False,
@@ -247,6 +253,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         self.assertFalse(public["data_matches_commit"])
         self.assertEqual(public["data_revision"], "main@sha1:" + "d" * 40)
         self.assertEqual(public["pvcs"]["nats-data"], "Pending")
+        self.assertEqual(public["live_workloads"]["nats"], "False")
         self.assertFalse(public["external_secret"]["runtime"])
         rendered = stdout.getvalue()
         self.assertNotIn("must-not-escape", rendered)
@@ -348,6 +355,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
 
             self.assertTrue((root / "receipts/cell-bootstrap.json").is_file())
             self.assertTrue((root / "secrets/staging-runtime.json").is_file())
+            self.assertTrue((root / "clusters").is_dir())
 
     def test_recreate_after_down_preserves_receipt_owner_and_commit_pin(self) -> None:
         owner = "owner-a"
@@ -384,7 +392,13 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     return_value={"source_sha256": source_sha, "required_keys": ["database-url"]},
                 ),
                 mock.patch.object(staging, "apply_yaml"),
+                mock.patch.object(staging, "reconcile_data") as reconcile_mock,
                 mock.patch.object(staging, "wait_data"),
+                mock.patch.object(
+                    staging,
+                    "staging_live_health",
+                    return_value={name: "True" for name in staging.LIVE_DEPLOYMENTS},
+                ) as live_mock,
                 mock.patch.object(
                     staging,
                     "output",
@@ -406,6 +420,8 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             create_args = create_mock.call_args.args
             self.assertEqual(create_args[4], persisted_commit)
             self.assertEqual(create_args[5], owner)
+            reconcile_mock.assert_called_once_with("flux")
+            live_mock.assert_called_once_with("kubectl")
             self.assertEqual(result["bootstrap_commit"], persisted_commit)
 
     def test_recreate_after_down_rejects_different_owner_before_mutation(self) -> None:
@@ -803,6 +819,13 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                         ),
                         mock.patch.object(
                             staging,
+                            "staging_live_health",
+                            return_value={
+                                name: "True" for name in staging.LIVE_DEPLOYMENTS
+                            },
+                        ),
+                        mock.patch.object(
+                            staging,
                             "image_promotion_state",
                             return_value={"status": "blocked"},
                         ),
@@ -967,6 +990,104 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 f"kustomization/{staging.DATA_KUSTOMIZATION}",
             ],
         )
+
+
+    def test_reconcile_data_forces_source_refresh_and_waits(self) -> None:
+        with mock.patch.object(staging, "run") as run_mock:
+            staging.reconcile_data("flux")
+        run_mock.assert_called_once_with(
+            [
+                "flux",
+                "reconcile",
+                "kustomization",
+                staging.DATA_KUSTOMIZATION,
+                "--namespace=flux-system",
+                "--with-source",
+                f"--timeout={staging.DATA_KUSTOMIZATION_TIMEOUT}",
+            ],
+            timeout=int(staging.DATA_KUSTOMIZATION_TIMEOUT_SECONDS) + 60,
+        )
+
+    def test_deployment_ready_state_requires_current_live_replicas(self) -> None:
+        healthy = {
+            "metadata": {"generation": 3},
+            "spec": {"replicas": 1},
+            "status": {
+                "observedGeneration": 3,
+                "availableReplicas": 1,
+                "readyReplicas": 1,
+                "updatedReplicas": 1,
+            },
+        }
+        stale = json.loads(json.dumps(healthy))
+        stale["status"]["observedGeneration"] = 2
+        unavailable = json.loads(json.dumps(healthy))
+        unavailable["status"]["availableReplicas"] = 0
+        for payload, expected in (
+            (healthy, "True"),
+            (stale, "stale"),
+            (unavailable, "False"),
+        ):
+            with self.subTest(expected=expected):
+                with mock.patch.object(
+                    staging, "output", return_value=json.dumps(payload)
+                ):
+                    observed = staging.deployment_ready_state(
+                        "kubectl", "flux-system", "source-controller"
+                    )
+                self.assertEqual(observed, expected)
+
+    def test_status_degrades_when_live_workload_is_unavailable(self) -> None:
+        owner = "owner-a"
+        commit = "9" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        live = {name: "True" for name in staging.LIVE_DEPLOYMENTS}
+        live["nats"] = "False"
+        with tempfile.TemporaryDirectory(prefix="staging-cell-live-status-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(
+                    staging, "load_tool_receipt", return_value=self._tool_receipt()
+                ),
+                mock.patch.object(
+                    staging.reference,
+                    "clusters",
+                    return_value=[staging.DEFAULT_CLUSTER],
+                ),
+                mock.patch.object(staging.reference, "require_owned_cluster"),
+                mock.patch.object(
+                    staging,
+                    "output",
+                    side_effect=[
+                        f"main@sha1:{commit}",
+                        "1|1|True",
+                        f"1|1|True|main@sha1:{commit}",
+                        "Bound",
+                        "Bound",
+                    ],
+                ),
+                mock.patch.object(
+                    staging,
+                    "verify_external_secret_binding",
+                    return_value={
+                        "database": True,
+                        "runtime": True,
+                        "ready": True,
+                    },
+                ),
+                mock.patch.object(
+                    staging, "staging_live_health", return_value=live
+                ),
+                mock.patch.object(
+                    staging, "image_promotion_state", return_value={"status": "blocked"}
+                ),
+            ):
+                result = staging.command_status(args)
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(result["live_workloads"]["nats"], "False")
 
     def test_volume_permissions_verify_single_mount_and_do_not_touch_healthy_data(self) -> None:
         nodes = [

@@ -32,6 +32,12 @@ DATA_NAMESPACE = "weltgewebe-data"
 APP_NAMESPACE = "weltgewebe-staging"
 DATABASE_SECRET = "weltgewebe-staging-database"
 RUNTIME_SECRET = "weltgewebe-runtime"
+LIVE_DEPLOYMENTS = {
+    "postgres": (DATA_NAMESPACE, "postgres"),
+    "nats": (DATA_NAMESPACE, "nats"),
+    "source-controller": ("flux-system", "source-controller"),
+    "kustomize-controller": ("flux-system", "kustomize-controller"),
+}
 PUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"
 SECRET_SOURCE_ANNOTATION = "commonthing.net/external-secret-source-sha256"
 DATA_KUSTOMIZATION_TIMEOUT = "8m"
@@ -951,6 +957,77 @@ def wait_flux_resource_current(
         time.sleep(1)
 
 
+def reconcile_data(flux: str) -> None:
+    run(
+        [
+            flux,
+            "reconcile",
+            "kustomization",
+            DATA_KUSTOMIZATION,
+            "--namespace=flux-system",
+            "--with-source",
+            f"--timeout={DATA_KUSTOMIZATION_TIMEOUT}",
+        ],
+        timeout=int(DATA_KUSTOMIZATION_TIMEOUT_SECONDS) + 60,
+    )
+
+
+def deployment_ready_state(kubectl: str, namespace: str, name: str) -> str:
+    raw = output(
+        [
+            kubectl,
+            "-n",
+            namespace,
+            "get",
+            "deployment",
+            name,
+            "--ignore-not-found",
+            "-o",
+            "json",
+        ]
+    )
+    if not raw:
+        return "missing"
+    try:
+        document = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise StagingCellError(
+            f"cannot parse deployment health JSON for {namespace}/{name}"
+        ) from error
+    if not isinstance(document, dict):
+        return "missing"
+    metadata = document.get("metadata")
+    spec = document.get("spec")
+    status_payload = document.get("status")
+    if not all(isinstance(value, dict) for value in (metadata, spec, status_payload)):
+        return "missing"
+    generation = metadata.get("generation")
+    observed_generation = status_payload.get("observedGeneration")
+    if (
+        not isinstance(generation, int)
+        or isinstance(generation, bool)
+        or not isinstance(observed_generation, int)
+        or isinstance(observed_generation, bool)
+        or generation != observed_generation
+    ):
+        return "stale"
+    desired = spec.get("replicas", 1)
+    if not isinstance(desired, int) or isinstance(desired, bool) or desired < 1:
+        return "False"
+    for field in ("availableReplicas", "readyReplicas", "updatedReplicas"):
+        value = status_payload.get(field, 0)
+        if not isinstance(value, int) or isinstance(value, bool) or value < desired:
+            return "False"
+    return "True"
+
+
+def staging_live_health(kubectl: str) -> dict[str, str]:
+    return {
+        label: deployment_ready_state(kubectl, namespace, name)
+        for label, (namespace, name) in LIVE_DEPLOYMENTS.items()
+    }
+
+
 def wait_data(kubectl: str, commit: str) -> None:
     wait_flux_resource_current(kubectl, "gitrepository", SOURCE_NAME, commit)
     wait_pvcs_bound(kubectl)
@@ -985,6 +1062,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     ensure_directory_durable(root, mode=0o700)
     os.chmod(root, 0o700)
     configure_reference_paths(root)
+    ensure_directory_durable(root / "clusters", mode=0o700)
     receipt = load_tool_receipt(root)
     data_root = root / "data"
     ensure_directory_durable(data_root, mode=0o755)
@@ -1082,7 +1160,16 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     )
     secret_receipt = inject_external_secrets(kubectl, root)
     apply_yaml(kubectl, flux_documents(commit))
+    reconcile_data(flux)
     wait_data(kubectl, commit)
+    live_workloads = staging_live_health(kubectl)
+    unhealthy_workloads = {
+        name: state for name, state in live_workloads.items() if state != "True"
+    }
+    if unhealthy_workloads:
+        raise StagingCellError(
+            f"staging workloads are not live after reconciliation: {unhealthy_workloads!r}"
+        )
     node_names = output([kubectl, "get", "nodes", "-o", "name"]).splitlines()
     if len(node_names) != 3:
         raise StagingCellError(
@@ -1111,6 +1198,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
             "data_kustomization": DATA_KUSTOMIZATION,
             "ready": True,
         },
+        "live_workloads": live_workloads,
         "image_promotion": image_promotion_state(),
         "app_activation": False,
         "production_changed": False,
@@ -1272,7 +1360,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
             "runtime": False,
             "ready": False,
         }
-    ready = (
+    base_ready = (
         source_matches_commit
         and source_ready == "True"
         and data_ready == "True"
@@ -1280,6 +1368,13 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         and all(value == "Bound" for value in pvcs.values())
         and external_secret["ready"]
     )
+    live_workloads = {name: "unchecked" for name in LIVE_DEPLOYMENTS}
+    if base_ready:
+        try:
+            live_workloads = staging_live_health(kubectl)
+        except (StagingCellError, subprocess.CalledProcessError):
+            live_workloads = {name: "missing" for name in LIVE_DEPLOYMENTS}
+    ready = base_ready and all(value == "True" for value in live_workloads.values())
     return {
         "schema_version": 1,
         "status": "ready" if ready else "degraded",
@@ -1294,6 +1389,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         "data_matches_commit": data_matches_commit,
         "pvcs": pvcs,
         "external_secret": external_secret,
+        "live_workloads": live_workloads,
         "image_promotion": image_promotion_state(),
         "app_activation": False,
         "production_changed": False,
@@ -1543,6 +1639,11 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
                 if isinstance(result.get("external_secret"), dict)
                 else {}
             )
+            live = (
+                result.get("live_workloads")
+                if isinstance(result.get("live_workloads"), dict)
+                else {}
+            )
             safe.update(
                 {
                     "bootstrap_commit": str(result.get("bootstrap_commit") or ""),
@@ -1562,6 +1663,10 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
                         "database": bool(external.get("database")),
                         "runtime": bool(external.get("runtime")),
                         "ready": bool(external.get("ready")),
+                    },
+                    "live_workloads": {
+                        name: str(live.get(name) or "unchecked")
+                        for name in LIVE_DEPLOYMENTS
                     },
                 }
             )
