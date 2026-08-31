@@ -393,7 +393,6 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 ),
                 mock.patch.object(staging, "apply_yaml"),
                 mock.patch.object(staging, "reconcile_data") as reconcile_mock,
-                mock.patch.object(staging, "wait_data"),
                 mock.patch.object(
                     staging,
                     "staging_live_health",
@@ -420,7 +419,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             create_args = create_mock.call_args.args
             self.assertEqual(create_args[4], persisted_commit)
             self.assertEqual(create_args[5], owner)
-            reconcile_mock.assert_called_once_with("flux")
+            reconcile_mock.assert_called_once_with("kubectl", persisted_commit)
             live_mock.assert_called_once_with("kubectl")
             self.assertEqual(result["bootstrap_commit"], persisted_commit)
 
@@ -906,33 +905,46 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     bind_timeout_seconds=1.0,
                 )
 
-    def test_flux_wait_requires_current_generation_and_exact_revision(self) -> None:
+    def test_flux_wait_requires_current_generation_exact_revision_and_request(self) -> None:
         commit = "a" * 40
+        requested_at = "staging-up-123"
         states = [
+            {
+                "ready": "True",
+                "revision": f"main@sha1:{commit}",
+                "matches_commit": True,
+                "current_generation": True,
+                "last_handled_reconcile_at": "older-request",
+            },
             {
                 "ready": "stale",
                 "revision": f"main@sha1:{commit}",
                 "matches_commit": True,
                 "current_generation": False,
+                "last_handled_reconcile_at": requested_at,
             },
             {
                 "ready": "True",
                 "revision": f"main@sha1:{'b' * 40}",
                 "matches_commit": False,
                 "current_generation": True,
+                "last_handled_reconcile_at": requested_at,
             },
             {
                 "ready": "True",
                 "revision": f"main@sha1:{commit}",
                 "matches_commit": True,
                 "current_generation": True,
+                "last_handled_reconcile_at": requested_at,
             },
         ]
         with (
             mock.patch.object(
                 staging, "flux_resource_current_state", side_effect=states
             ) as state_mock,
-            mock.patch.object(staging.time, "monotonic", side_effect=[0.0, 1.0, 2.0]),
+            mock.patch.object(
+                staging.time, "monotonic", side_effect=[0.0, 1.0, 2.0, 3.0]
+            ),
             mock.patch.object(staging.time, "sleep") as sleep_mock,
         ):
             result = staging.wait_flux_resource_current(
@@ -941,72 +953,119 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 staging.DATA_KUSTOMIZATION,
                 commit,
                 timeout_seconds=10.0,
+                requested_at=requested_at,
             )
         self.assertTrue(result["matches_commit"])
         self.assertEqual(result["ready"], "True")
-        self.assertEqual(state_mock.call_count, 3)
-        self.assertEqual(sleep_mock.call_count, 2)
+        self.assertEqual(result["last_handled_reconcile_at"], requested_at)
+        self.assertEqual(state_mock.call_count, 4)
+        self.assertEqual(sleep_mock.call_count, 3)
 
-    def test_wait_data_requires_exact_flux_states_around_pvc_binding(self) -> None:
-        events: list[str] = []
+    def test_flux_state_reads_last_handled_reconcile_token(self) -> None:
         commit = "c" * 40
+        requested_at = "staging-up-456"
+        payload = {
+            "metadata": {"generation": 2},
+            "status": {
+                "observedGeneration": 2,
+                "conditions": [{"type": "Ready", "status": "True"}],
+                "lastAppliedRevision": f"main@sha1:{commit}",
+                "lastHandledReconcileAt": requested_at,
+            },
+        }
+        with mock.patch.object(staging, "output", return_value=json.dumps(payload)):
+            state = staging.flux_resource_current_state(
+                "kubectl", "kustomization", staging.DATA_KUSTOMIZATION, commit
+            )
+        self.assertEqual(state["ready"], "True")
+        self.assertTrue(state["matches_commit"])
+        self.assertEqual(state["last_handled_reconcile_at"], requested_at)
+
+    def test_request_flux_reconcile_uses_requested_at_annotation(self) -> None:
+        requested_at = "staging-up-789"
+        with mock.patch.object(staging, "run") as run_mock:
+            staging.request_flux_reconcile(
+                "kubectl", "gitrepository", staging.SOURCE_NAME, requested_at
+            )
+        run_mock.assert_called_once_with(
+            [
+                "kubectl",
+                "-n",
+                "flux-system",
+                "annotate",
+                f"gitrepository/{staging.SOURCE_NAME}",
+                f"reconcile.fluxcd.io/requestedAt={requested_at}",
+                "--field-manager=flux-client-side-apply",
+                "--overwrite",
+            ],
+            timeout=30,
+        )
+
+    def test_reconcile_data_keeps_pvc_fail_fast_inside_shared_budget(self) -> None:
+        events: list[str] = []
+        commit = "d" * 40
+        requested_at = "staging-up-123456789"
+        wait_calls: list[tuple[str, float, str | None]] = []
+
+        def request(
+            _kubectl: str, resource: str, name: str, token: str
+        ) -> None:
+            self.assertEqual(token, requested_at)
+            events.append(f"request:{resource}/{name}")
 
         def wait_flux(
-            _kubectl: str, resource: str, name: str, observed_commit: str
+            _kubectl: str,
+            resource: str,
+            name: str,
+            observed_commit: str,
+            *,
+            timeout_seconds: float = staging.DATA_KUSTOMIZATION_TIMEOUT_SECONDS,
+            requested_at: str | None = None,
         ) -> dict[str, object]:
             self.assertEqual(observed_commit, commit)
-            events.append(f"{resource}/{name}")
+            wait_calls.append((resource, timeout_seconds, requested_at))
+            events.append(f"wait:{resource}/{name}")
             return {
                 "ready": "True",
                 "revision": f"main@sha1:{commit}",
                 "matches_commit": True,
                 "current_generation": True,
+                "last_handled_reconcile_at": requested_at,
             }
 
+        def wait_pvcs(_kubectl: str, **kwargs: float) -> None:
+            self.assertEqual(
+                kwargs["visibility_timeout_seconds"],
+                staging.DATA_KUSTOMIZATION_TIMEOUT_SECONDS,
+            )
+            events.append("pvcs-bound")
+
         with (
-            mock.patch.object(staging, "wait_flux_resource_current", side_effect=wait_flux),
+            mock.patch.object(staging.time, "time_ns", return_value=123456789),
             mock.patch.object(
-                staging,
-                "wait_pvcs_bound",
-                side_effect=lambda _kubectl: events.append("pvcs-bound"),
+                staging.time, "monotonic", side_effect=[100.0, 100.0, 120.0]
             ),
+            mock.patch.object(staging, "request_flux_reconcile", side_effect=request),
             mock.patch.object(
-                staging.reference,
-                "wait_condition",
-                side_effect=AssertionError("condition-only Flux wait must not run"),
+                staging, "wait_flux_resource_current", side_effect=wait_flux
             ),
-            mock.patch.object(
-                staging.reference,
-                "wait_rollout",
-                side_effect=AssertionError("redundant rollout wait must not run"),
-            ),
+            mock.patch.object(staging, "wait_pvcs_bound", side_effect=wait_pvcs),
         ):
-            staging.wait_data("kubectl", commit)
+            token = staging.reconcile_data("kubectl", commit)
+
+        self.assertEqual(token, requested_at)
         self.assertEqual(
             events,
             [
-                f"gitrepository/{staging.SOURCE_NAME}",
+                f"request:gitrepository/{staging.SOURCE_NAME}",
+                f"wait:gitrepository/{staging.SOURCE_NAME}",
+                f"request:kustomization/{staging.DATA_KUSTOMIZATION}",
                 "pvcs-bound",
-                f"kustomization/{staging.DATA_KUSTOMIZATION}",
+                f"wait:kustomization/{staging.DATA_KUSTOMIZATION}",
             ],
         )
-
-
-    def test_reconcile_data_forces_source_refresh_and_waits(self) -> None:
-        with mock.patch.object(staging, "run") as run_mock:
-            staging.reconcile_data("flux")
-        run_mock.assert_called_once_with(
-            [
-                "flux",
-                "reconcile",
-                "kustomization",
-                staging.DATA_KUSTOMIZATION,
-                "--namespace=flux-system",
-                "--with-source",
-                f"--timeout={staging.DATA_KUSTOMIZATION_TIMEOUT}",
-            ],
-            timeout=int(staging.DATA_KUSTOMIZATION_TIMEOUT_SECONDS) + 60,
-        )
+        self.assertEqual(wait_calls[0][2], requested_at)
+        self.assertEqual(wait_calls[1], ("kustomization", 460.0, requested_at))
 
     def test_deployment_ready_state_requires_current_live_replicas(self) -> None:
         healthy = {

@@ -101,15 +101,19 @@ mit `app.kubernetes.io/name=weltgewebe-api` im exakten Namespace
 Neue Secret-Binding-Metadaten verwenden gemäß Naming-Policy den kanonischen
 Schlüssel `commonthing.net/external-secret-source-sha256`.
 
-Nach dem Apply stößt jedes `up` ausdrücklich `flux reconcile kustomization
-weltgewebe-staging-data --with-source` an und wartet damit auf eine neue
-Source- und Kustomization-Reconciliation dieses Laufs. Danach werden Source und
-Kustomization nochmals gegen aktuelle Generation und exakte Receipt-Revision
-geprüft; die PVCs müssen `Bound` sein. Zusätzlich müssen PostgreSQL, NATS,
-`source-controller` und `kustomize-controller` als aktuelle Deployments die
-gewünschten verfügbaren, bereiten und aktualisierten Replikas melden. `status`
-verwendet dieselben Live-Workload-Schranken und degradiert bei fehlenden, stale
-oder nicht verfügbaren Ressourcen statt einen früheren Ready-Zustand fortzuschreiben.
+Nach dem Apply fordert jedes `up` über Flux' kanonische
+`reconcile.fluxcd.io/requestedAt`-Annotation zuerst eine neue Source-Reconciliation
+an und akzeptiert sie erst, wenn `status.lastHandledReconcileAt`, aktuelle Generation
+und exakte Receipt-Revision übereinstimmen. Danach wird mit demselben eindeutigen
+Token die Daten-Kustomization angestoßen. PVC-Sichtbarkeit und -Bindung bleiben im
+gemeinsamen 8-Minuten-Kustomization-Budget; sobald beide Claims sichtbar sind, gilt
+weiterhin der 45-Sekunden-Bindefehler. Erst danach muss die Kustomization denselben
+Reconcile-Token, aktuelle Generation, `Ready=True` und die exakte angewandte
+Receipt-Revision melden. Zusätzlich müssen PostgreSQL, NATS, `source-controller` und
+`kustomize-controller` als aktuelle Deployments die gewünschten verfügbaren,
+bereiten und aktualisierten Replikas melden. `status` verwendet dieselben
+Live-Workload-Schranken und degradiert bei fehlenden, stale oder nicht verfügbaren
+Ressourcen statt einen früheren Ready-Zustand fortzuschreiben.
 
 Die Staging-Zelle etabliert weiterhin weder Image-Promotion noch App-/Gateway-
 Aktivierung, Delete-to-Prove, NATS-Authentisierung/TLS oder einen

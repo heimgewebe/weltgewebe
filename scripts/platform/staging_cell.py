@@ -847,7 +847,9 @@ def wait_pvcs_bound(
         all_visible = all(observed[pvc] != "missing" for pvc in pvcs)
         if all_visible:
             if bind_deadline is None:
-                bind_deadline = now + bind_timeout_seconds
+                bind_deadline = min(
+                    now + bind_timeout_seconds, visibility_deadline
+                )
             if now >= bind_deadline:
                 raise StagingCellError(
                     "staging PVCs did not bind within "
@@ -920,6 +922,12 @@ def flux_resource_current_state(
                     ready_status = value
                 break
     ready = ready_status if current_generation else "stale"
+    last_handled_value = status_payload.get("lastHandledReconcileAt")
+    last_handled = (
+        last_handled_value
+        if isinstance(last_handled_value, str) and last_handled_value
+        else "missing"
+    )
     if resource == "gitrepository":
         artifact = status_payload.get("artifact")
         revision_value = artifact.get("revision") if isinstance(artifact, dict) else None
@@ -931,6 +939,7 @@ def flux_resource_current_state(
         "revision": revision,
         "matches_commit": flux_revision_matches_commit(revision, commit),
         "current_generation": current_generation,
+        "last_handled_reconcile_at": last_handled,
     }
 
 
@@ -941,35 +950,79 @@ def wait_flux_resource_current(
     commit: str,
     *,
     timeout_seconds: float = DATA_KUSTOMIZATION_TIMEOUT_SECONDS,
+    requested_at: str | None = None,
 ) -> dict[str, Any]:
     deadline = time.monotonic() + timeout_seconds
     observed: dict[str, Any] = {}
     while True:
         observed = flux_resource_current_state(kubectl, resource, name, commit)
-        if observed["ready"] == "True" and observed["matches_commit"]:
+        handled_request = (
+            requested_at is None
+            or observed.get("last_handled_reconcile_at") == requested_at
+        )
+        if (
+            observed["ready"] == "True"
+            and observed["matches_commit"]
+            and handled_request
+        ):
             return observed
         if time.monotonic() >= deadline:
             raise StagingCellError(
                 f"Flux {resource}/{name} did not reach the current receipt-bound revision "
                 f"within {timeout_seconds:g}s: ready={observed.get('ready')!r} "
-                f"revision={observed.get('revision')!r}"
+                f"revision={observed.get('revision')!r} "
+                f"lastHandledReconcileAt={observed.get('last_handled_reconcile_at')!r}"
             )
         time.sleep(1)
 
 
-def reconcile_data(flux: str) -> None:
+def request_flux_reconcile(
+    kubectl: str, resource: str, name: str, requested_at: str
+) -> None:
+    if resource not in {"gitrepository", "kustomization"}:
+        raise StagingCellError(f"unsupported Flux reconcile resource type: {resource}")
     run(
         [
-            flux,
-            "reconcile",
-            "kustomization",
-            DATA_KUSTOMIZATION,
-            "--namespace=flux-system",
-            "--with-source",
-            f"--timeout={DATA_KUSTOMIZATION_TIMEOUT}",
+            kubectl,
+            "-n",
+            "flux-system",
+            "annotate",
+            f"{resource}/{name}",
+            f"reconcile.fluxcd.io/requestedAt={requested_at}",
+            "--field-manager=flux-client-side-apply",
+            "--overwrite",
         ],
-        timeout=int(DATA_KUSTOMIZATION_TIMEOUT_SECONDS) + 60,
+        timeout=30,
     )
+
+
+def reconcile_data(kubectl: str, commit: str) -> str:
+    requested_at = f"staging-up-{time.time_ns()}"
+    request_flux_reconcile(kubectl, "gitrepository", SOURCE_NAME, requested_at)
+    wait_flux_resource_current(
+        kubectl,
+        "gitrepository",
+        SOURCE_NAME,
+        commit,
+        requested_at=requested_at,
+    )
+
+    request_flux_reconcile(
+        kubectl, "kustomization", DATA_KUSTOMIZATION, requested_at
+    )
+    deadline = time.monotonic() + DATA_KUSTOMIZATION_TIMEOUT_SECONDS
+    pvc_budget = max(0.0, deadline - time.monotonic())
+    wait_pvcs_bound(kubectl, visibility_timeout_seconds=pvc_budget)
+    remaining = max(0.0, deadline - time.monotonic())
+    wait_flux_resource_current(
+        kubectl,
+        "kustomization",
+        DATA_KUSTOMIZATION,
+        commit,
+        timeout_seconds=remaining,
+        requested_at=requested_at,
+    )
+    return requested_at
 
 
 def deployment_ready_state(kubectl: str, namespace: str, name: str) -> str:
@@ -1026,12 +1079,6 @@ def staging_live_health(kubectl: str) -> dict[str, str]:
         label: deployment_ready_state(kubectl, namespace, name)
         for label, (namespace, name) in LIVE_DEPLOYMENTS.items()
     }
-
-
-def wait_data(kubectl: str, commit: str) -> None:
-    wait_flux_resource_current(kubectl, "gitrepository", SOURCE_NAME, commit)
-    wait_pvcs_bound(kubectl)
-    wait_flux_resource_current(kubectl, "kustomization", DATA_KUSTOMIZATION, commit)
 
 
 def image_promotion_state() -> dict[str, Any]:
@@ -1160,8 +1207,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     )
     secret_receipt = inject_external_secrets(kubectl, root)
     apply_yaml(kubectl, flux_documents(commit))
-    reconcile_data(flux)
-    wait_data(kubectl, commit)
+    reconcile_data(kubectl, commit)
     live_workloads = staging_live_health(kubectl)
     unhealthy_workloads = {
         name: state for name, state in live_workloads.items() if state != "True"
