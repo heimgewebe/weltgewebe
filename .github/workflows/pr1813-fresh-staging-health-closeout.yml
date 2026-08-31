@@ -1,0 +1,166 @@
+---
+name: PR1813 fresh staging health closeout
+
+"on":
+  push:
+    branches:
+      - bureau/weltgewebe-os-v1-t084/5e0085fc46
+    paths:
+      - .github/workflows/pr1813-fresh-staging-health-closeout.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          ref: bureau/weltgewebe-os-v1-t084/5e0085fc46
+
+      - name: Verify exact parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "5938921f3c2133eae5d6e3d632cfab5bc2dee874"
+
+      - name: Apply fresh health and marker durability hardening
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              target = Path(path)
+              text = target.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}")
+              target.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          staging = "scripts/platform/staging_cell.py"
+          tests = "scripts/ci/tests/test_staging_cell_runtime_contract.py"
+
+          replace_once(
+              staging,
+              '''RUNTIME_SECRET = "weltgewebe-runtime"\nPUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"\n''',
+              '''RUNTIME_SECRET = "weltgewebe-runtime"\nLIVE_DEPLOYMENTS = {\n    "postgres": (DATA_NAMESPACE, "postgres"),\n    "nats": (DATA_NAMESPACE, "nats"),\n    "source-controller": ("flux-system", "source-controller"),\n    "kustomize-controller": ("flux-system", "kustomize-controller"),\n}\nPUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"\n''',
+          )
+
+          replace_once(
+              staging,
+              '''def wait_data(kubectl: str, commit: str) -> None:\n    wait_flux_resource_current(kubectl, "gitrepository", SOURCE_NAME, commit)\n    wait_pvcs_bound(kubectl)\n    wait_flux_resource_current(kubectl, "kustomization", DATA_KUSTOMIZATION, commit)\n''',
+              '''def reconcile_data(flux: str) -> None:\n    run(\n        [\n            flux,\n            "reconcile",\n            "kustomization",\n            DATA_KUSTOMIZATION,\n            "--namespace=flux-system",\n            "--with-source",\n            f"--timeout={DATA_KUSTOMIZATION_TIMEOUT}",\n        ],\n        timeout=int(DATA_KUSTOMIZATION_TIMEOUT_SECONDS) + 60,\n    )\n\n\ndef deployment_ready_state(kubectl: str, namespace: str, name: str) -> str:\n    raw = output(\n        [\n            kubectl,\n            "-n",\n            namespace,\n            "get",\n            "deployment",\n            name,\n            "--ignore-not-found",\n            "-o",\n            "json",\n        ]\n    )\n    if not raw:\n        return "missing"\n    try:\n        document = json.loads(raw)\n    except json.JSONDecodeError as error:\n        raise StagingCellError(\n            f"cannot parse deployment health JSON for {namespace}/{name}"\n        ) from error\n    if not isinstance(document, dict):\n        return "missing"\n    metadata = document.get("metadata")\n    spec = document.get("spec")\n    status_payload = document.get("status")\n    if not all(isinstance(value, dict) for value in (metadata, spec, status_payload)):\n        return "missing"\n    generation = metadata.get("generation")\n    observed_generation = status_payload.get("observedGeneration")\n    if (\n        not isinstance(generation, int)\n        or isinstance(generation, bool)\n        or not isinstance(observed_generation, int)\n        or isinstance(observed_generation, bool)\n        or generation != observed_generation\n    ):\n        return "stale"\n    desired = spec.get("replicas", 1)\n    if not isinstance(desired, int) or isinstance(desired, bool) or desired < 1:\n        return "False"\n    for field in ("availableReplicas", "readyReplicas", "updatedReplicas"):\n        value = status_payload.get(field, 0)\n        if not isinstance(value, int) or isinstance(value, bool) or value < desired:\n            return "False"\n    return "True"\n\n\ndef staging_live_health(kubectl: str) -> dict[str, str]:\n    return {\n        label: deployment_ready_state(kubectl, namespace, name)\n        for label, (namespace, name) in LIVE_DEPLOYMENTS.items()\n    }\n\n\ndef wait_data(kubectl: str, commit: str) -> None:\n    wait_flux_resource_current(kubectl, "gitrepository", SOURCE_NAME, commit)\n    wait_pvcs_bound(kubectl)\n    wait_flux_resource_current(kubectl, "kustomization", DATA_KUSTOMIZATION, commit)\n''',
+          )
+
+          replace_once(
+              staging,
+              '''    os.chmod(root, 0o700)\n    configure_reference_paths(root)\n    receipt = load_tool_receipt(root)\n''',
+              '''    os.chmod(root, 0o700)\n    configure_reference_paths(root)\n    ensure_directory_durable(root / "clusters", mode=0o700)\n    receipt = load_tool_receipt(root)\n''',
+          )
+
+          replace_once(
+              staging,
+              '''    secret_receipt = inject_external_secrets(kubectl, root)\n    apply_yaml(kubectl, flux_documents(commit))\n    wait_data(kubectl, commit)\n    node_names = output([kubectl, "get", "nodes", "-o", "name"]).splitlines()\n''',
+              '''    secret_receipt = inject_external_secrets(kubectl, root)\n    apply_yaml(kubectl, flux_documents(commit))\n    reconcile_data(flux)\n    wait_data(kubectl, commit)\n    live_workloads = staging_live_health(kubectl)\n    unhealthy_workloads = {\n        name: state for name, state in live_workloads.items() if state != "True"\n    }\n    if unhealthy_workloads:\n        raise StagingCellError(\n            f"staging workloads are not live after reconciliation: {unhealthy_workloads!r}"\n        )\n    node_names = output([kubectl, "get", "nodes", "-o", "name"]).splitlines()\n''',
+          )
+
+          replace_once(
+              staging,
+              '''        "flux": {\n            "source": SOURCE_NAME,\n            "data_kustomization": DATA_KUSTOMIZATION,\n            "ready": True,\n        },\n        "image_promotion": image_promotion_state(),\n''',
+              '''        "flux": {\n            "source": SOURCE_NAME,\n            "data_kustomization": DATA_KUSTOMIZATION,\n            "ready": True,\n        },\n        "live_workloads": live_workloads,\n        "image_promotion": image_promotion_state(),\n''',
+          )
+
+          replace_once(
+              staging,
+              '''    ready = (\n        source_matches_commit\n        and source_ready == "True"\n        and data_ready == "True"\n        and data_matches_commit\n        and all(value == "Bound" for value in pvcs.values())\n        and external_secret["ready"]\n    )\n    return {\n''',
+              '''    base_ready = (\n        source_matches_commit\n        and source_ready == "True"\n        and data_ready == "True"\n        and data_matches_commit\n        and all(value == "Bound" for value in pvcs.values())\n        and external_secret["ready"]\n    )\n    live_workloads = {name: "unchecked" for name in LIVE_DEPLOYMENTS}\n    if base_ready:\n        try:\n            live_workloads = staging_live_health(kubectl)\n        except (StagingCellError, subprocess.CalledProcessError):\n            live_workloads = {name: "missing" for name in LIVE_DEPLOYMENTS}\n    ready = base_ready and all(value == "True" for value in live_workloads.values())\n    return {\n''',
+          )
+
+          replace_once(
+              staging,
+              '''        "pvcs": pvcs,\n        "external_secret": external_secret,\n        "image_promotion": image_promotion_state(),\n''',
+              '''        "pvcs": pvcs,\n        "external_secret": external_secret,\n        "live_workloads": live_workloads,\n        "image_promotion": image_promotion_state(),\n''',
+          )
+
+          replace_once(
+              staging,
+              '''            external = (\n                result.get("external_secret")\n                if isinstance(result.get("external_secret"), dict)\n                else {}\n            )\n            safe.update(\n''',
+              '''            external = (\n                result.get("external_secret")\n                if isinstance(result.get("external_secret"), dict)\n                else {}\n            )\n            live = (\n                result.get("live_workloads")\n                if isinstance(result.get("live_workloads"), dict)\n                else {}\n            )\n            safe.update(\n''',
+          )
+
+          replace_once(
+              staging,
+              '''                    "external_secret": {\n                        "database": bool(external.get("database")),\n                        "runtime": bool(external.get("runtime")),\n                        "ready": bool(external.get("ready")),\n                    },\n''',
+              '''                    "external_secret": {\n                        "database": bool(external.get("database")),\n                        "runtime": bool(external.get("runtime")),\n                        "ready": bool(external.get("ready")),\n                    },\n                    "live_workloads": {\n                        name: str(live.get(name) or "unchecked")\n                        for name in LIVE_DEPLOYMENTS\n                    },\n''',
+          )
+
+          replace_once(
+              tests,
+              '''            "pvcs": {"postgres-data": "Bound", "nats-data": "Pending"},\n            "external_secret": {\n''',
+              '''            "pvcs": {"postgres-data": "Bound", "nats-data": "Pending"},\n            "live_workloads": {\n                "postgres": "True",\n                "nats": "False",\n                "source-controller": "True",\n                "kustomize-controller": "True",\n            },\n            "external_secret": {\n''',
+          )
+
+          replace_once(
+              tests,
+              '''        self.assertEqual(public["pvcs"]["nats-data"], "Pending")\n        self.assertFalse(public["external_secret"]["runtime"])\n''',
+              '''        self.assertEqual(public["pvcs"]["nats-data"], "Pending")\n        self.assertEqual(public["live_workloads"]["nats"], "False")\n        self.assertFalse(public["external_secret"]["runtime"])\n''',
+          )
+
+          replace_once(
+              tests,
+              '''            self.assertTrue((root / "receipts/cell-bootstrap.json").is_file())\n            self.assertTrue((root / "secrets/staging-runtime.json").is_file())\n''',
+              '''            self.assertTrue((root / "receipts/cell-bootstrap.json").is_file())\n            self.assertTrue((root / "secrets/staging-runtime.json").is_file())\n            self.assertTrue((root / "clusters").is_dir())\n''',
+          )
+
+          replace_once(
+              tests,
+              '''                mock.patch.object(staging, "apply_yaml"),\n                mock.patch.object(staging, "wait_data"),\n                mock.patch.object(\n                    staging,\n                    "output",\n''',
+              '''                mock.patch.object(staging, "apply_yaml"),\n                mock.patch.object(staging, "reconcile_data") as reconcile_mock,\n                mock.patch.object(staging, "wait_data"),\n                mock.patch.object(\n                    staging,\n                    "staging_live_health",\n                    return_value={name: "True" for name in staging.LIVE_DEPLOYMENTS},\n                ) as live_mock,\n                mock.patch.object(\n                    staging,\n                    "output",\n''',
+          )
+
+          replace_once(
+              tests,
+              '''            create_args = create_mock.call_args.args\n            self.assertEqual(create_args[4], persisted_commit)\n            self.assertEqual(create_args[5], owner)\n            self.assertEqual(result["bootstrap_commit"], persisted_commit)\n''',
+              '''            create_args = create_mock.call_args.args\n            self.assertEqual(create_args[4], persisted_commit)\n            self.assertEqual(create_args[5], owner)\n            reconcile_mock.assert_called_once_with("flux")\n            live_mock.assert_called_once_with("kubectl")\n            self.assertEqual(result["bootstrap_commit"], persisted_commit)\n''',
+          )
+
+          replace_once(
+              tests,
+              '''                        mock.patch.object(\n                            staging,\n                            "verify_external_secret_binding",\n                            return_value={\n                                "database": True,\n                                "runtime": True,\n                                "ready": True,\n                            },\n                        ),\n                        mock.patch.object(\n                            staging,\n                            "image_promotion_state",\n                            return_value={"status": "blocked"},\n                        ),\n''',
+              '''                        mock.patch.object(\n                            staging,\n                            "verify_external_secret_binding",\n                            return_value={\n                                "database": True,\n                                "runtime": True,\n                                "ready": True,\n                            },\n                        ),\n                        mock.patch.object(\n                            staging,\n                            "staging_live_health",\n                            return_value={\n                                name: "True" for name in staging.LIVE_DEPLOYMENTS\n                            },\n                        ),\n                        mock.patch.object(\n                            staging,\n                            "image_promotion_state",\n                            return_value={"status": "blocked"},\n                        ),\n''',
+          )
+
+          insert_after = '''        self.assertEqual(\n            events,\n            [\n                f"gitrepository/{staging.SOURCE_NAME}",\n                "pvcs-bound",\n                f"kustomization/{staging.DATA_KUSTOMIZATION}",\n            ],\n        )\n'''
+          additions = '''\n\n    def test_reconcile_data_forces_source_refresh_and_waits(self) -> None:\n        with mock.patch.object(staging, "run") as run_mock:\n            staging.reconcile_data("flux")\n        run_mock.assert_called_once_with(\n            [\n                "flux",\n                "reconcile",\n                "kustomization",\n                staging.DATA_KUSTOMIZATION,\n                "--namespace=flux-system",\n                "--with-source",\n                f"--timeout={staging.DATA_KUSTOMIZATION_TIMEOUT}",\n            ],\n            timeout=int(staging.DATA_KUSTOMIZATION_TIMEOUT_SECONDS) + 60,\n        )\n\n    def test_deployment_ready_state_requires_current_live_replicas(self) -> None:\n        healthy = {\n            "metadata": {"generation": 3},\n            "spec": {"replicas": 1},\n            "status": {\n                "observedGeneration": 3,\n                "availableReplicas": 1,\n                "readyReplicas": 1,\n                "updatedReplicas": 1,\n            },\n        }\n        stale = json.loads(json.dumps(healthy))\n        stale["status"]["observedGeneration"] = 2\n        unavailable = json.loads(json.dumps(healthy))\n        unavailable["status"]["availableReplicas"] = 0\n        for payload, expected in (\n            (healthy, "True"),\n            (stale, "stale"),\n            (unavailable, "False"),\n        ):\n            with self.subTest(expected=expected):\n                with mock.patch.object(\n                    staging, "output", return_value=json.dumps(payload)\n                ):\n                    observed = staging.deployment_ready_state(\n                        "kubectl", "flux-system", "source-controller"\n                    )\n                self.assertEqual(observed, expected)\n\n    def test_status_degrades_when_live_workload_is_unavailable(self) -> None:\n        owner = "owner-a"\n        commit = "9" * 40\n        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)\n        live = {name: "True" for name in staging.LIVE_DEPLOYMENTS}\n        live["nats"] = "False"\n        with tempfile.TemporaryDirectory(prefix="staging-cell-live-status-") as tmp_name:\n            root = Path(tmp_name)\n            self._write_bound_receipt(root, owner=owner, commit=commit)\n            with (\n                mock.patch.object(staging, "state_root", return_value=root),\n                mock.patch.object(staging, "configure_reference_paths"),\n                mock.patch.object(\n                    staging, "load_tool_receipt", return_value=self._tool_receipt()\n                ),\n                mock.patch.object(\n                    staging.reference,\n                    "clusters",\n                    return_value=[staging.DEFAULT_CLUSTER],\n                ),\n                mock.patch.object(staging.reference, "require_owned_cluster"),\n                mock.patch.object(\n                    staging,\n                    "output",\n                    side_effect=[\n                        f"main@sha1:{commit}",\n                        "1|1|True",\n                        f"1|1|True|main@sha1:{commit}",\n                        "Bound",\n                        "Bound",\n                    ],\n                ),\n                mock.patch.object(\n                    staging,\n                    "verify_external_secret_binding",\n                    return_value={\n                        "database": True,\n                        "runtime": True,\n                        "ready": True,\n                    },\n                ),\n                mock.patch.object(\n                    staging, "staging_live_health", return_value=live\n                ),\n                mock.patch.object(\n                    staging, "image_promotion_state", return_value={"status": "blocked"}\n                ),\n            ):\n                result = staging.command_status(args)\n        self.assertEqual(result["status"], "degraded")\n        self.assertEqual(result["live_workloads"]["nats"], "False")\n'''
+          replace_once(tests, insert_after, insert_after + additions)
+          PY
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990
+
+      - name: Run focused evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git diff --check
+          uv run --project tools/py --locked python -m unittest scripts.ci.tests.test_staging_cell_runtime_contract
+          uv run --project tools/py --locked python scripts/platform/staging_cell.py self-check
+          uv run --project tools/py --locked python scripts/platform/validate_platform.py --render
+
+      - name: Publish exact tested patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/pr1813-fresh-staging-health-closeout.yml
+          git config user.name "Alexander Mohr"
+          git config user.email "216529510+alexdermohr@users.noreply.github.com"
+          git add -A
+          git diff --cached --check
+          test -n "$(git diff --cached --name-only)"
+          git commit -m "fix(platform): require fresh staging health proof"
+          git push origin HEAD:bureau/weltgewebe-os-v1-t084/5e0085fc46
