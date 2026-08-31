@@ -110,8 +110,33 @@ def fsync_directory(path: Path) -> None:
         os.close(fd)
 
 
+def ensure_directory_durable(path: Path, *, mode: int = 0o700) -> None:
+    missing: list[Path] = []
+    current = path
+    while True:
+        try:
+            linked = current.lstat()
+        except FileNotFoundError:
+            parent = current.parent
+            if parent == current:
+                raise StagingCellError(
+                    f"cannot find an existing parent for durable directory {path}"
+                )
+            missing.append(current)
+            current = parent
+            continue
+        if stat.S_ISLNK(linked.st_mode) or not stat.S_ISDIR(linked.st_mode):
+            raise StagingCellError(
+                f"durable directory parent must be a real directory: {current}"
+            )
+        break
+    for directory in reversed(missing):
+        directory.mkdir(mode=mode)
+        fsync_directory(directory.parent)
+
+
 def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory_durable(path.parent)
     fd, tmp_name = tempfile.mkstemp(
         dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
     )
@@ -135,7 +160,7 @@ def atomic_json(path: Path, payload: dict[str, Any], *, mode: int = 0o600) -> No
 
 
 def atomic_text(path: Path, text: str, *, mode: int = 0o600) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
+    ensure_directory_durable(path.parent)
     fd, tmp_name = tempfile.mkstemp(
         dir=path.parent, prefix=f".{path.name}.", suffix=".tmp"
     )
@@ -169,7 +194,7 @@ def state_root(value: str | None) -> Path:
 
 @contextmanager
 def lifecycle_lock(root: Path):
-    root.mkdir(parents=True, exist_ok=True, mode=0o700)
+    ensure_directory_durable(root, mode=0o700)
     lock_path = root / "lifecycle.lock"
     flags = os.O_RDWR | os.O_CREAT | os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
@@ -830,17 +855,106 @@ def wait_pvcs_bound(
         time.sleep(1)
 
 
-def wait_data(kubectl: str) -> None:
-    reference.wait_condition(
-        kubectl, "flux-system", f"gitrepository/{SOURCE_NAME}", "Ready"
+def flux_resource_current_state(
+    kubectl: str, resource: str, name: str, commit: str
+) -> dict[str, Any]:
+    if resource not in {"gitrepository", "kustomization"}:
+        raise StagingCellError(f"unsupported Flux resource type: {resource}")
+    raw = output(
+        [
+            kubectl,
+            "-n",
+            "flux-system",
+            "get",
+            resource,
+            name,
+            "--ignore-not-found",
+            "-o",
+            "json",
+        ]
     )
+    if not raw:
+        return {
+            "ready": "missing",
+            "revision": "missing",
+            "matches_commit": False,
+            "current_generation": False,
+        }
+    try:
+        document = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise StagingCellError(f"cannot parse Flux {resource} status JSON") from error
+    if not isinstance(document, dict):
+        raise StagingCellError(f"Flux {resource} status payload is not an object")
+    metadata = document.get("metadata")
+    status_payload = document.get("status")
+    if not isinstance(metadata, dict) or not isinstance(status_payload, dict):
+        return {
+            "ready": "missing",
+            "revision": "missing",
+            "matches_commit": False,
+            "current_generation": False,
+        }
+    generation = metadata.get("generation")
+    observed_generation = status_payload.get("observedGeneration")
+    current_generation = (
+        isinstance(generation, int)
+        and not isinstance(generation, bool)
+        and isinstance(observed_generation, int)
+        and not isinstance(observed_generation, bool)
+        and generation == observed_generation
+    )
+    ready_status = "missing"
+    conditions = status_payload.get("conditions")
+    if isinstance(conditions, list):
+        for condition in conditions:
+            if isinstance(condition, dict) and condition.get("type") == "Ready":
+                value = condition.get("status")
+                if isinstance(value, str) and value:
+                    ready_status = value
+                break
+    ready = ready_status if current_generation else "stale"
+    if resource == "gitrepository":
+        artifact = status_payload.get("artifact")
+        revision_value = artifact.get("revision") if isinstance(artifact, dict) else None
+    else:
+        revision_value = status_payload.get("lastAppliedRevision")
+    revision = revision_value if isinstance(revision_value, str) and revision_value else "missing"
+    return {
+        "ready": ready,
+        "revision": revision,
+        "matches_commit": flux_revision_matches_commit(revision, commit),
+        "current_generation": current_generation,
+    }
+
+
+def wait_flux_resource_current(
+    kubectl: str,
+    resource: str,
+    name: str,
+    commit: str,
+    *,
+    timeout_seconds: float = DATA_KUSTOMIZATION_TIMEOUT_SECONDS,
+) -> dict[str, Any]:
+    deadline = time.monotonic() + timeout_seconds
+    observed: dict[str, Any] = {}
+    while True:
+        observed = flux_resource_current_state(kubectl, resource, name, commit)
+        if observed["ready"] == "True" and observed["matches_commit"]:
+            return observed
+        if time.monotonic() >= deadline:
+            raise StagingCellError(
+                f"Flux {resource}/{name} did not reach the current receipt-bound revision "
+                f"within {timeout_seconds:g}s: ready={observed.get('ready')!r} "
+                f"revision={observed.get('revision')!r}"
+            )
+        time.sleep(1)
+
+
+def wait_data(kubectl: str, commit: str) -> None:
+    wait_flux_resource_current(kubectl, "gitrepository", SOURCE_NAME, commit)
     wait_pvcs_bound(kubectl)
-    reference.wait_condition(
-        kubectl,
-        "flux-system",
-        f"kustomization/{DATA_KUSTOMIZATION}",
-        "Ready",
-    )
+    wait_flux_resource_current(kubectl, "kustomization", DATA_KUSTOMIZATION, commit)
 
 
 def image_promotion_state() -> dict[str, Any]:
@@ -868,15 +982,15 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
         raise StagingCellError("--owner-id is required for real staging ownership")
     reference.validate_owner_id(owner_id)
     root = state_root(getattr(args, "state_root", None))
-    root.mkdir(parents=True, exist_ok=True)
+    ensure_directory_durable(root, mode=0o700)
     os.chmod(root, 0o700)
     configure_reference_paths(root)
     receipt = load_tool_receipt(root)
     data_root = root / "data"
-    data_root.mkdir(parents=True, exist_ok=True)
+    ensure_directory_durable(data_root, mode=0o755)
     os.chmod(data_root, 0o755)
-    (data_root / "postgres").mkdir(parents=True, exist_ok=True)
-    (data_root / "nats").mkdir(parents=True, exist_ok=True)
+    ensure_directory_durable(data_root / "postgres", mode=0o700)
+    ensure_directory_durable(data_root / "nats", mode=0o700)
     tools = receipt["tools"]
     kind = tools["kind"]
     kubectl = tools["kubectl"]
@@ -968,7 +1082,7 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     )
     secret_receipt = inject_external_secrets(kubectl, root)
     apply_yaml(kubectl, flux_documents(commit))
-    wait_data(kubectl)
+    wait_data(kubectl, commit)
     node_names = output([kubectl, "get", "nodes", "-o", "name"]).splitlines()
     if len(node_names) != 3:
         raise StagingCellError(

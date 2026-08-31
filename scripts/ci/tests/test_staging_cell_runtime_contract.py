@@ -670,6 +670,17 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 staging.atomic_text(text_path, "ok\n")
                 fsync_mock.assert_called_once_with(root)
 
+    def test_atomic_write_fsyncs_new_parent_directory_entry(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="staging-cell-fsync-new-parent-") as tmp_name:
+            root = Path(tmp_name)
+            receipt_path = root / "receipts/cell.json"
+            with mock.patch.object(staging, "fsync_directory") as fsync_mock:
+                staging.atomic_json(receipt_path, {"schema_version": 1})
+        self.assertEqual(
+            fsync_mock.call_args_list,
+            [mock.call(root), mock.call(root / "receipts")],
+        )
+
     def test_status_reports_not_bootstrapped_without_toolchain(self) -> None:
         args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
         with tempfile.TemporaryDirectory(prefix="staging-cell-not-bootstrapped-") as tmp_name:
@@ -872,14 +883,65 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     bind_timeout_seconds=1.0,
                 )
 
-    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:
-        events: list[str] = []
+    def test_flux_wait_requires_current_generation_and_exact_revision(self) -> None:
+        commit = "a" * 40
+        states = [
+            {
+                "ready": "stale",
+                "revision": f"main@sha1:{commit}",
+                "matches_commit": True,
+                "current_generation": False,
+            },
+            {
+                "ready": "True",
+                "revision": f"main@sha1:{'b' * 40}",
+                "matches_commit": False,
+                "current_generation": True,
+            },
+            {
+                "ready": "True",
+                "revision": f"main@sha1:{commit}",
+                "matches_commit": True,
+                "current_generation": True,
+            },
+        ]
+        with (
+            mock.patch.object(
+                staging, "flux_resource_current_state", side_effect=states
+            ) as state_mock,
+            mock.patch.object(staging.time, "monotonic", side_effect=[0.0, 1.0, 2.0]),
+            mock.patch.object(staging.time, "sleep") as sleep_mock,
+        ):
+            result = staging.wait_flux_resource_current(
+                "kubectl",
+                "kustomization",
+                staging.DATA_KUSTOMIZATION,
+                commit,
+                timeout_seconds=10.0,
+            )
+        self.assertTrue(result["matches_commit"])
+        self.assertEqual(result["ready"], "True")
+        self.assertEqual(state_mock.call_count, 3)
+        self.assertEqual(sleep_mock.call_count, 2)
 
-        def wait_condition(_kubectl: str, _namespace: str, resource: str, _condition: str) -> None:
-            events.append(resource)
+    def test_wait_data_requires_exact_flux_states_around_pvc_binding(self) -> None:
+        events: list[str] = []
+        commit = "c" * 40
+
+        def wait_flux(
+            _kubectl: str, resource: str, name: str, observed_commit: str
+        ) -> dict[str, object]:
+            self.assertEqual(observed_commit, commit)
+            events.append(f"{resource}/{name}")
+            return {
+                "ready": "True",
+                "revision": f"main@sha1:{commit}",
+                "matches_commit": True,
+                "current_generation": True,
+            }
 
         with (
-            mock.patch.object(staging.reference, "wait_condition", side_effect=wait_condition),
+            mock.patch.object(staging, "wait_flux_resource_current", side_effect=wait_flux),
             mock.patch.object(
                 staging,
                 "wait_pvcs_bound",
@@ -887,11 +949,16 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             ),
             mock.patch.object(
                 staging.reference,
+                "wait_condition",
+                side_effect=AssertionError("condition-only Flux wait must not run"),
+            ),
+            mock.patch.object(
+                staging.reference,
                 "wait_rollout",
                 side_effect=AssertionError("redundant rollout wait must not run"),
             ),
         ):
-            staging.wait_data("kubectl")
+            staging.wait_data("kubectl", commit)
         self.assertEqual(
             events,
             [
