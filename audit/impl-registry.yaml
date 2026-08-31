@@ -394,6 +394,20 @@ implementations:
       - scripts/tests/test_weltgewebe_up_deploy_scope.sh
       - .github/workflows/production-live-contract.yml
 
+  - id: impl.workflow.production-main-reconcile
+    path: scripts/ops/reconcile-production-main-vps.sh
+    impl_type: workflow
+    status: active
+    criticality: high
+    evidence_level: ci
+    documented_by:
+      - docs/deploy/merge-to-live.md
+      - docs/deploy/schauwerk-editor-frontdoor.md
+    verified_by:
+      - scripts/ci/tests/test_production_reconciler_contract.py
+      - scripts/ci/tests/test_deploy_exact_commit_integration.py
+      - .github/workflows/production-live-contract.yml
+
   - id: impl.workflow.weltgewebe-up
     path: scripts/weltgewebe-up
     impl_type: workflow

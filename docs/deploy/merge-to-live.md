@@ -41,8 +41,10 @@ jedem abgeschlossenen Lauf erneut mit einem Abstand von zwei Minuten. Der Dienst
 
 1. aktualisiert ausschließlich `refs/remotes/origin/main`;
 2. liest den vollständigen Zielcommit;
-3. beendet sich ohne Änderung, wenn Frontend, API und Build-Header diesen
-   Commit bereits öffentlich liefern;
+3. beendet sich ohne Änderung nur, wenn Frontend, API und Build-Header diesen
+   Commit bereits öffentlich liefern, der bundesweite Deutschland-Basemap-Vertrag
+   stimmt **und** `/schaubild/manifest.json` bytegenau den im selben Commit
+   geprüften `infra/schauwerk-editor/release-lock.json`-Hash liefert;
 4. prüft mindestens 4 GiB freien Platz als absolute Host-Untergrenze und
    einen vollständig root-eigenen, nicht für Gruppe oder Welt beschreibbaren
    Git-Objektspeicher; unmittelbar vor einem tatsächlich nötigen Build verlangt
