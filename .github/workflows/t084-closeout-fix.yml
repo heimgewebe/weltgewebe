@@ -248,8 +248,6 @@ jobs:
                    missing = json.dumps({"apiVersion": "v1", "kind": "List", "items": []})
                    with (
           PATCH
-          # Strip the YAML block indentation before applying the patch.
-          sed -i 's/^          //' /tmp/t084.patch
           git apply --check /tmp/t084.patch
           git apply /tmp/t084.patch
       - name: Verify focused contracts
