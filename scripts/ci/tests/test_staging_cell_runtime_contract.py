@@ -628,47 +628,59 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         owner = "owner-a"
         commit = "d" * 40
         args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
-        with tempfile.TemporaryDirectory(prefix="staging-cell-status-malformed-secret-") as tmp_name:
-            root = Path(tmp_name)
-            self._write_bound_receipt(root, owner=owner, commit=commit)
-            secret_path = root / "secrets/staging-runtime.json"
-            secret_path.parent.mkdir(parents=True, exist_ok=True)
-            secret_path.write_text('{"schema_version": 1,', encoding="utf-8")
-            secret_path.chmod(0o600)
-            with (
-                mock.patch.object(staging, "state_root", return_value=root),
-                mock.patch.object(staging, "configure_reference_paths"),
-                mock.patch.object(
-                    staging, "load_tool_receipt", return_value=self._tool_receipt()
-                ),
-                mock.patch.object(
-                    staging.reference,
-                    "clusters",
-                    return_value=[staging.DEFAULT_CLUSTER],
-                ),
-                mock.patch.object(staging.reference, "require_owned_cluster"),
-                mock.patch.object(
-                    staging,
-                    "output",
-                    side_effect=[
-                        f"main@sha1:{commit}",
-                        "1|1|True",
-                        f"1|1|True|main@sha1:{commit}",
-                        "Bound",
-                        "Bound",
-                    ],
-                ),
-                mock.patch.object(
-                    staging, "image_promotion_state", return_value={"status": "blocked"}
-                ),
-            ):
-                result = staging.command_status(args)
-
-        self.assertEqual(result["status"], "degraded")
-        self.assertEqual(
-            result["external_secret"],
-            {"database": False, "runtime": False, "ready": False},
+        cases = (
+            ("invalid-syntax", '{"schema_version": 1,'),
+            ("array-root", "[]"),
+            ("null-root", "null"),
         )
+        for label, secret_text in cases:
+            with self.subTest(label=label):
+                with tempfile.TemporaryDirectory(
+                    prefix=f"staging-cell-status-malformed-secret-{label}-"
+                ) as tmp_name:
+                    root = Path(tmp_name)
+                    self._write_bound_receipt(root, owner=owner, commit=commit)
+                    secret_path = root / "secrets/staging-runtime.json"
+                    secret_path.write_text(secret_text, encoding="utf-8")
+                    secret_path.chmod(0o600)
+                    with (
+                        mock.patch.object(staging, "state_root", return_value=root),
+                        mock.patch.object(staging, "configure_reference_paths"),
+                        mock.patch.object(
+                            staging,
+                            "load_tool_receipt",
+                            return_value=self._tool_receipt(),
+                        ),
+                        mock.patch.object(
+                            staging.reference,
+                            "clusters",
+                            return_value=[staging.DEFAULT_CLUSTER],
+                        ),
+                        mock.patch.object(staging.reference, "require_owned_cluster"),
+                        mock.patch.object(
+                            staging,
+                            "output",
+                            side_effect=[
+                                f"main@sha1:{commit}",
+                                "1|1|True",
+                                f"1|1|True|main@sha1:{commit}",
+                                "Bound",
+                                "Bound",
+                            ],
+                        ),
+                        mock.patch.object(
+                            staging,
+                            "image_promotion_state",
+                            return_value={"status": "blocked"},
+                        ),
+                    ):
+                        result = staging.command_status(args)
+
+                self.assertEqual(result["status"], "degraded")
+                self.assertEqual(
+                    result["external_secret"],
+                    {"database": False, "runtime": False, "ready": False},
+                )
 
     def test_status_degrades_when_injected_secret_is_missing(self) -> None:
         owner = "owner-a"
@@ -1051,6 +1063,52 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             self.assertEqual(argv.count("nats-data"), 1)
             self.assertIn("json", argv)
             self.assertFalse(any(str(value).startswith("jsonpath=") for value in argv))
+
+    def test_pvc_wait_keeps_bind_deadline_after_visible_claim_disappears(self) -> None:
+        pending = json.dumps(
+            {
+                "apiVersion": "v1",
+                "kind": "List",
+                "items": [
+                    {
+                        "metadata": {"name": "postgres-data"},
+                        "status": {"phase": "Pending"},
+                    },
+                    {
+                        "metadata": {"name": "nats-data"},
+                        "status": {"phase": "Pending"},
+                    },
+                ],
+            }
+        )
+        one_missing = json.dumps(
+            {
+                "apiVersion": "v1",
+                "kind": "List",
+                "items": [
+                    {
+                        "metadata": {"name": "postgres-data"},
+                        "status": {"phase": "Pending"},
+                    }
+                ],
+            }
+        )
+        with (
+            mock.patch.object(staging, "output", side_effect=[pending, one_missing]),
+            mock.patch.object(
+                staging.time, "monotonic", side_effect=[0.0, 1.0, 12.0]
+            ),
+            mock.patch.object(staging.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(
+                staging.StagingCellError,
+                "did not bind within 10s after becoming visible",
+            ):
+                staging.wait_pvcs_bound(
+                    "kubectl",
+                    visibility_timeout_seconds=100.0,
+                    bind_timeout_seconds=10.0,
+                )
 
     def test_pvc_wait_uses_flux_budget_before_claims_exist(self) -> None:
         missing = json.dumps({"apiVersion": "v1", "kind": "List", "items": []})

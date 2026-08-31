@@ -549,6 +549,8 @@ def load_or_create_secret_material(root: Path) -> tuple[dict[str, str], str]:
             payload = json.loads(path.read_text(encoding="utf-8"))
         except (json.JSONDecodeError, OSError, UnicodeError) as exc:
             raise StagingCellError("staging secret source is unreadable or malformed") from exc
+        if not isinstance(payload, dict):
+            raise StagingCellError("staging secret source is malformed")
     else:
         if retained_postgres_state_exists(root):
             raise StagingCellError(
@@ -943,17 +945,14 @@ def wait_pvcs_bound(
             raise StagingCellError(f"staging PVC entered unexpected phase: {unexpected!r}")
         now = time.monotonic()
         all_visible = all(observed[pvc] != "missing" for pvc in pvcs)
-        if all_visible:
-            if bind_deadline is None:
-                bind_deadline = min(
-                    now + bind_timeout_seconds, visibility_deadline
-                )
-            if now >= bind_deadline:
-                raise StagingCellError(
-                    "staging PVCs did not bind within "
-                    f"{bind_timeout_seconds:g}s after becoming visible: {observed!r}"
-                )
-        elif now >= visibility_deadline:
+        if all_visible and bind_deadline is None:
+            bind_deadline = min(now + bind_timeout_seconds, visibility_deadline)
+        if bind_deadline is not None and now >= bind_deadline:
+            raise StagingCellError(
+                "staging PVCs did not bind within "
+                f"{bind_timeout_seconds:g}s after becoming visible: {observed!r}"
+            )
+        if bind_deadline is None and now >= visibility_deadline:
             raise StagingCellError(
                 "staging PVCs did not become visible within the Flux Kustomization "
                 f"budget of {visibility_timeout_seconds:g}s: {observed!r}"
