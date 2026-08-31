@@ -582,7 +582,9 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             with (
                 mock.patch.object(staging, "state_root", return_value=root),
                 mock.patch.object(staging, "configure_reference_paths"),
-                mock.patch.object(staging, "load_tool_receipt", return_value=self._tool_receipt()),
+                mock.patch.object(
+                    staging, "load_tool_receipt", return_value=self._tool_receipt()
+                ) as tool_receipt_mock,
                 mock.patch.object(
                     staging.reference,
                     "clusters",
@@ -609,6 +611,55 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     staging,
                     "image_promotion_state",
                     return_value={"status": "blocked"},
+                ),
+            ):
+                result = staging.command_status(args)
+
+        tool_receipt_mock.assert_called_once_with(
+            root, required_tools=("kind", "kubectl"), required_artifacts=()
+        )
+        self.assertEqual(result["status"], "degraded")
+        self.assertEqual(
+            result["external_secret"],
+            {"database": False, "runtime": False, "ready": False},
+        )
+
+    def test_status_degrades_when_external_secret_source_is_malformed_json(self) -> None:
+        owner = "owner-a"
+        commit = "d" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        with tempfile.TemporaryDirectory(prefix="staging-cell-status-malformed-secret-") as tmp_name:
+            root = Path(tmp_name)
+            self._write_bound_receipt(root, owner=owner, commit=commit)
+            secret_path = root / "secrets/staging-runtime.json"
+            secret_path.parent.mkdir(parents=True, exist_ok=True)
+            secret_path.write_text('{"schema_version": 1,', encoding="utf-8")
+            secret_path.chmod(0o600)
+            with (
+                mock.patch.object(staging, "state_root", return_value=root),
+                mock.patch.object(staging, "configure_reference_paths"),
+                mock.patch.object(
+                    staging, "load_tool_receipt", return_value=self._tool_receipt()
+                ),
+                mock.patch.object(
+                    staging.reference,
+                    "clusters",
+                    return_value=[staging.DEFAULT_CLUSTER],
+                ),
+                mock.patch.object(staging.reference, "require_owned_cluster"),
+                mock.patch.object(
+                    staging,
+                    "output",
+                    side_effect=[
+                        f"main@sha1:{commit}",
+                        "1|1|True",
+                        f"1|1|True|main@sha1:{commit}",
+                        "Bound",
+                        "Bound",
+                    ],
+                ),
+                mock.patch.object(
+                    staging, "image_promotion_state", return_value={"status": "blocked"}
                 ),
             ):
                 result = staging.command_status(args)

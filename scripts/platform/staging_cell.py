@@ -545,7 +545,10 @@ def load_or_create_secret_material(root: Path) -> tuple[dict[str, str], str]:
             raise StagingCellError(
                 "staging secret source must not be group/world accessible"
             )
-        payload = json.loads(path.read_text(encoding="utf-8"))
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError, UnicodeError) as exc:
+            raise StagingCellError("staging secret source is unreadable or malformed") from exc
     else:
         if retained_postgres_state_exists(root):
             raise StagingCellError(
@@ -1373,7 +1376,9 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
             "status": "not-bootstrapped",
             "cluster": args.cluster,
         }
-    receipt = load_tool_receipt(root)
+    receipt = load_tool_receipt(
+        root, required_tools=("kind", "kubectl"), required_artifacts=()
+    )
     kind = receipt["tools"]["kind"]
     kubectl = receipt["tools"]["kubectl"]
     owner = load_cell_receipt(root)
