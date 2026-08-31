@@ -70,6 +70,18 @@ Staging-Zelle namens `weltgewebe-staging`. Der öffentliche CLI-Vertrag bietet
 bewusst keinen frei wählbaren Cluster- oder State-Root: der Zustand liegt unter
 `~/.local/state/weltgewebe/staging-cell`, und der Clustername ist fest.
 
+Vor dem ersten `up` müssen die in `platform/toolchain.lock.json` gepinnten
+Werkzeuge und Drittartefakte exakt in den T084-Toolchain-Cache installiert werden:
+
+```bash
+export WELTGEWEBE_STAGING_OWNER_ID="owner-t084-staging"
+uv run --project tools/py --locked python scripts/platform/bootstrap_tools.py --cache "$HOME/.local/state/weltgewebe/staging-cell/toolchain"
+uv run --project tools/py --locked python scripts/platform/staging_cell.py up --owner-id "$WELTGEWEBE_STAGING_OWNER_ID"
+```
+
+`bootstrap_tools.py` schreibt dabei das von `staging_cell.py` verlangte
+`toolchain/receipt.json`; ein anderer Cachepfad wird fail-closed abgewiesen.
+
 Beim ersten `up --owner-id <id>` wird die externe Secretquelle vor jeder
 Clustererzeugung erzeugt bzw. validiert. Anschließend bindet ein
 `bootstrap-in-progress`-Receipt Owner, exakten Commit und Secretquellen-Hash,

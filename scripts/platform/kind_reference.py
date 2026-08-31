@@ -671,8 +671,7 @@ def cluster_creation_reservation(
             except Exception as error:
                 rollback_error = error
             if rollback_error is None:
-                marker_path(name).unlink(missing_ok=True)
-                kubeconfig_path(name).unlink(missing_ok=True)
+                _remove_cluster_state_files_durably(name, marker_missing_ok=True)
             else:
                 print(
                     f"cluster {name!r} creation rollback incomplete; "
@@ -680,6 +679,20 @@ def cluster_creation_reservation(
                     file=sys.stderr,
                 )
             raise
+
+
+def _remove_cluster_state_files_durably(
+    name: str, *, marker_missing_ok: bool = False
+) -> None:
+    marker = marker_path(name)
+    marker.unlink(missing_ok=marker_missing_ok)
+    if marker.parent.is_dir():
+        _fsync_directory(marker.parent)
+
+    kubeconfig = kubeconfig_path(name)
+    kubeconfig.unlink(missing_ok=True)
+    if kubeconfig.parent.is_dir():
+        _fsync_directory(kubeconfig.parent)
 
 
 def _delete_owned_cluster_locked(
@@ -698,8 +711,7 @@ def _delete_owned_cluster_locked(
     )
     if name in clusters(kind):
         run([kind, "delete", "cluster", "--name", name])
-    marker_path(name).unlink()
-    kubeconfig_path(name).unlink(missing_ok=True)
+    _remove_cluster_state_files_durably(name)
 
 
 def delete_owned_cluster(

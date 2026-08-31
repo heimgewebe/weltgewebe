@@ -83,6 +83,22 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "unknown tool selection"):
             self.bootstrap._selected_tool_specs(lock, ["missing"])
 
+    def test_staging_readme_bootstraps_tools_into_canonical_cache_before_up(self) -> None:
+        readme = (ROOT / "platform/README.md").read_text(encoding="utf-8")
+        bootstrap = (
+            'uv run --project tools/py --locked python scripts/platform/bootstrap_tools.py '
+            '--cache "$HOME/.local/state/weltgewebe/staging-cell/toolchain"'
+        )
+        up = (
+            'uv run --project tools/py --locked python scripts/platform/staging_cell.py '
+            'up --owner-id "$WELTGEWEBE_STAGING_OWNER_ID"'
+        )
+        self.assertIn('export WELTGEWEBE_STAGING_OWNER_ID="owner-t084-staging"', readme)
+        self.assertIn(bootstrap, readme)
+        self.assertIn(up, readme)
+        self.assertLess(readme.index(bootstrap), readme.index(up))
+        self.assertIn("toolchain/receipt.json", readme)
+
     def test_tool_download_retries_transient_gateway_failure_and_cleans_temps(self) -> None:
         payload = b"kind-binary"
         expected = hashlib.sha256(payload).hexdigest()
@@ -2709,6 +2725,81 @@ spec:
                     )
             finally:
                 self.reference.MARKERS = original
+
+    def test_reference_cleanup_fsyncs_marker_and_kubeconfig_directories(self) -> None:
+        commit = "a" * 40
+        owner = "owner-durable-cleanup"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            markers = root / "clusters"
+            kubeconfigs = root / "kubeconfigs"
+            markers.mkdir()
+            kubeconfigs.mkdir()
+            original_markers = self.reference.MARKERS
+            original_kubeconfigs = self.reference.KUBECONFIGS
+            self.reference.MARKERS = markers
+            self.reference.KUBECONFIGS = kubeconfigs
+            try:
+                self.reference.write_marker("proof", commit, owner)
+                self.reference.kubeconfig_path("proof").write_text(
+                    "apiVersion: v1\n", encoding="utf-8"
+                )
+                with (
+                    mock.patch.object(self.reference, "clusters", return_value=set()),
+                    mock.patch.object(
+                        self.reference,
+                        "_fsync_directory",
+                        wraps=self.reference._fsync_directory,
+                    ) as fsync_directory,
+                ):
+                    deleted = self.reference.delete_owned_cluster_if_present(
+                        "kind",
+                        "proof",
+                        expected_commit=commit,
+                        expected_owner_id=owner,
+                    )
+                self.assertTrue(deleted)
+                self.assertFalse(self.reference.marker_path("proof").exists())
+                self.assertFalse(self.reference.kubeconfig_path("proof").exists())
+                fsync_directory.assert_has_calls(
+                    [mock.call(markers), mock.call(kubeconfigs)], any_order=False
+                )
+            finally:
+                self.reference.MARKERS = original_markers
+                self.reference.KUBECONFIGS = original_kubeconfigs
+
+    def test_creation_reservation_failure_uses_durable_state_cleanup(self) -> None:
+        commit = "a" * 40
+        owner = "owner-durable-rollback"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            markers = root / "clusters"
+            kubeconfigs = root / "kubeconfigs"
+            original_markers = self.reference.MARKERS
+            original_kubeconfigs = self.reference.KUBECONFIGS
+            self.reference.MARKERS = markers
+            self.reference.KUBECONFIGS = kubeconfigs
+            try:
+                with (
+                    mock.patch.object(self.reference, "clusters", return_value=set()),
+                    mock.patch.object(
+                        self.reference,
+                        "_remove_cluster_state_files_durably",
+                        wraps=self.reference._remove_cluster_state_files_durably,
+                    ) as durable_cleanup,
+                ):
+                    with self.assertRaisesRegex(self.reference.ProofError, "create failed"):
+                        with self.reference.cluster_creation_reservation(
+                            "kind", "proof", commit, owner
+                        ):
+                            raise self.reference.ProofError("create failed")
+                durable_cleanup.assert_called_once_with(
+                    "proof", marker_missing_ok=True
+                )
+                self.assertFalse(self.reference.marker_path("proof").exists())
+            finally:
+                self.reference.MARKERS = original_markers
+                self.reference.KUBECONFIGS = original_kubeconfigs
 
     def test_reference_refuses_cluster_without_marker_in_if_present_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
