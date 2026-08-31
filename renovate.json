@@ -1,0 +1,27 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "automerge": false,
+  "packageRules": [
+    {
+      "description": "Attach proven governance metadata to allowlisted web tooling patches",
+      "matchManagers": [
+        "npm"
+      ],
+      "matchFileNames": [
+        "apps/web/package.json"
+      ],
+      "matchPackageNames": [
+        "eslint",
+        "postcss"
+      ],
+      "matchUpdateTypes": [
+        "patch"
+      ],
+      "prBodyNotes": [
+        "<!-- weltgewebe-risk: R2 -->",
+        "<!-- weltgewebe-attention-impact: none -->",
+        "<!-- weltgewebe-attention-rationale: Allowlisted dependency-only patch update in apps/web; no attention-domain semantics, prioritization, triggers, or user-facing attention behavior changed. -->"
+      ]
+    }
+  ]
+}
