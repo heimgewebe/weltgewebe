@@ -2288,6 +2288,27 @@ if [[ "$DEPLOY_SCOPE" == "full" ]]; then
     else
       rm -f "$ERR_FILE"
     fi
+
+    # The exact-commit deploy helper replaces apps/web/build in place before this
+    # full deploy. A pre-existing Caddy bind mount can therefore remain attached
+    # to the removed directory inode even though the host path now contains the
+    # freshly extracted web artifact. Recreate only Caddy on VPS production so
+    # both the web tree and the separately lock-bound Schauwerk directory are
+    # rebound before public readback; do not restart its dependencies here.
+    if [[ "$DEPLOY_TARGET" == "vps" ]]; then
+      CADDY_REFRESH_CMD=(
+        "docker" "compose" "${BASE_ARGS[@]}" "up" "-d"
+        "--no-deps" "--force-recreate" "caddy"
+      )
+      echo "Refreshing VPS Caddy bind mounts: ${CADDY_REFRESH_CMD[*]}"
+      CADDY_REFRESH_ERR_FILE=$(mktemp)
+      if ! "${CADDY_REFRESH_CMD[@]}" > "$CADDY_REFRESH_ERR_FILE" 2>&1; then
+        generate_failure_bundle "VPS Caddy bind-mount refresh failed." "$CADDY_REFRESH_ERR_FILE"
+        rm -f "$CADDY_REFRESH_ERR_FILE"
+        exit 1
+      fi
+      rm -f "$CADDY_REFRESH_ERR_FILE"
+    fi
   else
     CMD=("${CMD_BASE[@]}" "${SCALE_ARGS[@]}")
     echo "Running: ${CMD[*]}"

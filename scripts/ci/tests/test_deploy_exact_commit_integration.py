@@ -153,6 +153,28 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         (self.seed / "map-style/style-germany-dark.json").write_text(
             '{"name":"Germany dark fixture"}\n', encoding="utf-8"
         )
+        self.schauwerk_manifest = self.root / "schauwerk-manifest.json"
+        self.schauwerk_manifest.write_text(
+            '{"fixture":"schauwerk"}\n', encoding="utf-8"
+        )
+        schauwerk_manifest_sha = hashlib.sha256(
+            self.schauwerk_manifest.read_bytes()
+        ).hexdigest()
+        (self.seed / "infra/schauwerk-editor").mkdir(parents=True)
+        (self.seed / "infra/schauwerk-editor/release-lock.json").write_text(
+            json.dumps(
+                {
+                    "schema_version": "weltgewebe-schauwerk-release-lock.v1",
+                    "source_repository": "heimgewebe/schauwerk",
+                    "source_commit": "c" * 40,
+                    "release_id": "c" * 40,
+                    "manifest_file_sha256": schauwerk_manifest_sha,
+                },
+                sort_keys=True,
+            )
+            + "\n",
+            encoding="utf-8",
+        )
         up_script = self.seed / "scripts/weltgewebe-up"
         up_script.write_text(
             textwrap.dedent(
@@ -426,7 +448,13 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 if [[ -n "${TEST_DEPLOY_MARKER:-}" && -e "$TEST_DEPLOY_MARKER" ]]; then
                   public_commit="$TEST_COMMIT"
                 fi
-                if [[ "$url" == *"/api/version" ]]; then
+                if [[ "$url" == *"/schaubild/manifest.json" ]]; then
+                  if [[ "${TEST_PUBLIC_SCHAUWERK_MANIFEST_BROKEN:-0}" == "1" && ( -z "${TEST_DEPLOY_MARKER:-}" || ! -e "$TEST_DEPLOY_MARKER" ) ]]; then
+                    printf '{"fixture":"stale-schauwerk"}\n'
+                  else
+                    cat "$TEST_SCHAUWERK_MANIFEST"
+                  fi
+                elif [[ "$url" == *"/api/version" ]]; then
                   if [[ -n "$headers" ]]; then
                     {
                       printf 'HTTP/1.1 200 OK\\r\\n'
@@ -787,7 +815,13 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 "https://example.invalid/local-basemap/basemap-germany.pmtiles"
             ),
             "WELTGEWEBE_API_VERSION_URL": "https://example.invalid/api/version",
+            "WELTGEWEBE_SCHAUWERK_MANIFEST_URL": (
+                "https://example.invalid/schaubild/manifest.json"
+            ),
             "TEST_COMMIT": self.commit,
+            "TEST_SCHAUWERK_MANIFEST": str(
+                getattr(self, "schauwerk_manifest", self.root / "schauwerk-manifest.json")
+            ),
             "TEST_REMOTE": str(self.remote),
             "TEST_WEB_ARTIFACT": str(self.artifact),
             "TEST_UP_LOG": str(self.root / "weltgewebe-up.log"),
@@ -992,7 +1026,26 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("production_reconcile=noop", result.stdout)
         self.assertIn("basemap_variant=germany", result.stdout)
+        self.assertIn("schauwerk_release=verified", result.stdout)
         self.assertNotIn("reason=basemap_identity_drift", result.stdout)
+        self.assertNotIn("reason=schauwerk_release_identity_drift", result.stdout)
+
+    def test_reconciler_repairs_same_commit_with_stale_public_schauwerk_release(self) -> None:
+        marker = self.root / "deploy-complete"
+        result = self.reconcile_existing_public_commit(
+            extra_env={
+                "WELTGEWEBE_DEPLOY_HELPER": str(DEPLOY_SCRIPT),
+                "PUBLIC_COMMIT": self.commit,
+                "TEST_PUBLIC_SCHAUWERK_MANIFEST_BROKEN": "1",
+                "TEST_DEPLOY_MARKER": str(marker),
+            }
+        )
+        self.restore_test_ownership()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertTrue(marker.exists())
+        self.assertIn("reason=schauwerk_release_identity_drift", result.stdout)
+        self.assertIn("production_reconcile=verified", result.stdout)
+        self.assertNotIn("production_reconcile=noop", result.stdout)
 
     def assert_reconciler_rejects_broken_public_germany_delivery(
         self, environment_flag: str

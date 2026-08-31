@@ -132,6 +132,23 @@ class ProductionReconcilerContractTests(unittest.TestCase):
         self.assertIn("--range 0-126", script)
         self.assertIn("public Germany PMTiles range response is not HTTP 206", script)
 
+    def test_reconciler_binds_noop_and_postdeploy_to_schauwerk_release_lock(self) -> None:
+        script = self.read("scripts/ops/reconcile-production-main-vps.sh")
+        self.assertIn("WELTGEWEBE_SCHAUWERK_MANIFEST_URL", script)
+        self.assertIn("infra/schauwerk-editor/release-lock.json", script)
+        self.assertIn("weltgewebe-schauwerk-release-lock.v1", script)
+        self.assertIn("verify_public_schauwerk_release", script)
+        self.assertEqual(script.count("verify_public_schauwerk_release"), 3)
+        self.assertIn("reason=schauwerk_release_identity_drift", script)
+        self.assertIn("schauwerk_release=verified", script)
+        self.assertIn(
+            "public Schauwerk manifest does not match the reviewed release after deploy",
+            script,
+        )
+        no_op = script.index('if [[ "$basemap_identity_matches" == "1" && "$schauwerk_identity_matches" == "1" ]]')
+        repair = script.index("repair_observed_deployment_state", no_op)
+        self.assertLess(no_op, repair)
+
     def test_deploy_helper_runs_bounded_migrations_before_full_deploy(self) -> None:
         script = self.read("scripts/ops/deploy-exact-commit-vps.sh")
         migration = script.index("run_release_deploy migration")
@@ -761,6 +778,23 @@ prune_releases
         ):
             self.assertNotIn(forbidden, script)
 
+    def test_production_reconciler_is_in_critical_impl_registry(self) -> None:
+        registry = self.read("audit/impl-registry.yaml")
+        start = registry.index("  - id: impl.workflow.production-main-reconcile\n")
+        next_entry = registry.find("\n  - id:", start + 1)
+        entry = registry[start : next_entry if next_entry != -1 else len(registry)]
+        for expected in (
+            "path: scripts/ops/reconcile-production-main-vps.sh",
+            "criticality: high",
+            "evidence_level: ci",
+            "docs/deploy/merge-to-live.md",
+            "docs/deploy/schauwerk-editor-frontdoor.md",
+            "scripts/ci/tests/test_production_reconciler_contract.py",
+            "scripts/ci/tests/test_deploy_exact_commit_integration.py",
+            ".github/workflows/production-live-contract.yml",
+        ):
+            self.assertIn(expected, entry)
+
     def test_secure_receipt_helper_is_in_critical_impl_registry(self) -> None:
         registry = self.read("audit/impl-registry.yaml")
         self.assertIn("id: impl.guard.secure-receipt-io", registry)
@@ -930,6 +964,21 @@ prune_releases
             "refusing to continue without public Caddy",
             up[vps_guard:fallback],
         )
+
+    def test_full_vps_deploy_refreshes_caddy_bind_mounts_after_web_replacement(self) -> None:
+        up = self.read("scripts/weltgewebe-up")
+        full = up.index('if [[ "$DEPLOY_SCOPE" == "full" ]]; then')
+        compose = up.index('CMD_BASE=("docker" "compose"', full)
+        refresh_guard = up.index('if [[ "$DEPLOY_TARGET" == "vps" ]]; then', compose)
+        refresh = up.index('CADDY_REFRESH_CMD=(', refresh_guard)
+        self.assertLess(compose, refresh_guard)
+        self.assertLess(refresh_guard, refresh)
+        refresh_slice = up[refresh : up.index('  else\n    CMD=("${CMD_BASE[@]}"', refresh)]
+        self.assertIn('"--no-deps" "--force-recreate" "caddy"', refresh_slice)
+        self.assertIn("Refreshing VPS Caddy bind mounts", refresh_slice)
+        self.assertIn("VPS Caddy bind-mount refresh failed.", refresh_slice)
+        self.assertNotIn('"db"', refresh_slice)
+        self.assertNotIn('"nats"', refresh_slice)
 
     def test_weltgewebe_up_normalizes_release_trailing_slashes(self) -> None:
         with tempfile.TemporaryDirectory(
