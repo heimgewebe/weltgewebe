@@ -1,7 +1,7 @@
 {
   "schema_version": "weltgewebe-schauwerk-release-lock.v1",
   "source_repository": "heimgewebe/schauwerk",
-  "source_commit": "e624c03f41ba04e13a484907dde4ef6368c449f9",
-  "release_id": "e624c03f41ba04e13a484907dde4ef6368c449f9",
-  "manifest_file_sha256": "435d6b336e08f0d8875a3dafcce024b6456baea27179d2489eed8c9c0bc149f8"
+  "source_commit": "52a3b1ab2d16edbc733778238b2984f201c0dc51",
+  "release_id": "52a3b1ab2d16edbc733778238b2984f201c0dc51",
+  "manifest_file_sha256": "0312069b23dffce1fbdace5075333610aabb519fd60951b3c950c4d22b45b263"
 }
