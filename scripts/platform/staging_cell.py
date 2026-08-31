@@ -34,6 +34,8 @@ DATABASE_SECRET = "weltgewebe-staging-database"
 RUNTIME_SECRET = "weltgewebe-runtime"
 PUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"
 SECRET_SOURCE_ANNOTATION = "commonthing.net/external-secret-source-sha256"
+DATA_KUSTOMIZATION_TIMEOUT = "8m"
+DATA_KUSTOMIZATION_TIMEOUT_SECONDS = 8 * 60.0
 PVC_BIND_TIMEOUT_SECONDS = 45.0
 ALLOWED_RETAINED_VOLUME_MODES = {"700", "770", "2770"}
 REQUIRED_TOOLS = ("kind", "kubectl", "kustomize", "flux", "helm")
@@ -721,7 +723,7 @@ def flux_documents(commit: str) -> list[dict[str, Any]]:
             "spec": {
                 "interval": "2m",
                 "retryInterval": "20s",
-                "timeout": "8m",
+                "timeout": DATA_KUSTOMIZATION_TIMEOUT,
                 "prune": True,
                 "wait": True,
                 "sourceRef": {"kind": "GitRepository", "name": SOURCE_NAME},
@@ -745,28 +747,62 @@ def flux_documents(commit: str) -> list[dict[str, Any]]:
     ]
 
 
+def pvc_phase_snapshot(kubectl: str) -> dict[str, str]:
+    pvcs = ("postgres-data", "nats-data")
+    raw = output(
+        [
+            kubectl,
+            "-n",
+            DATA_NAMESPACE,
+            "get",
+            "pvc",
+            *pvcs,
+            "--ignore-not-found",
+            "-o",
+            "json",
+        ]
+    )
+    if not raw:
+        return {pvc: "missing" for pvc in pvcs}
+    try:
+        document = json.loads(raw)
+    except json.JSONDecodeError as error:
+        raise StagingCellError("cannot parse staging PVC status JSON") from error
+    if not isinstance(document, dict):
+        raise StagingCellError("staging PVC status payload is not an object")
+    items = document.get("items")
+    if isinstance(items, list):
+        documents = items
+    elif document.get("kind") == "PersistentVolumeClaim":
+        documents = [document]
+    else:
+        raise StagingCellError("staging PVC status payload has no resource items")
+    observed = {pvc: "missing" for pvc in pvcs}
+    for item in documents:
+        if not isinstance(item, dict):
+            continue
+        metadata = item.get("metadata")
+        status = item.get("status")
+        if not isinstance(metadata, dict) or not isinstance(status, dict):
+            continue
+        name = metadata.get("name")
+        if name in observed:
+            phase = status.get("phase")
+            observed[str(name)] = phase if isinstance(phase, str) and phase else "missing"
+    return observed
+
+
 def wait_pvcs_bound(
-    kubectl: str, *, timeout_seconds: float = PVC_BIND_TIMEOUT_SECONDS
+    kubectl: str,
+    *,
+    visibility_timeout_seconds: float = DATA_KUSTOMIZATION_TIMEOUT_SECONDS,
+    bind_timeout_seconds: float = PVC_BIND_TIMEOUT_SECONDS,
 ) -> None:
     pvcs = ("postgres-data", "nats-data")
-    deadline = time.monotonic() + timeout_seconds
-    observed: dict[str, str] = {}
+    visibility_deadline = time.monotonic() + visibility_timeout_seconds
+    bind_deadline: float | None = None
     while True:
-        for pvc in pvcs:
-            phase = output(
-                [
-                    kubectl,
-                    "-n",
-                    DATA_NAMESPACE,
-                    "get",
-                    "pvc",
-                    pvc,
-                    "--ignore-not-found",
-                    "-o",
-                    "jsonpath={.status.phase}",
-                ]
-            )
-            observed[pvc] = phase or "missing"
+        observed = pvc_phase_snapshot(kubectl)
         if all(observed[pvc] == "Bound" for pvc in pvcs):
             return
         unexpected = {
@@ -776,9 +812,20 @@ def wait_pvcs_bound(
         }
         if unexpected:
             raise StagingCellError(f"staging PVC entered unexpected phase: {unexpected!r}")
-        if time.monotonic() >= deadline:
+        now = time.monotonic()
+        all_visible = all(observed[pvc] != "missing" for pvc in pvcs)
+        if all_visible:
+            if bind_deadline is None:
+                bind_deadline = now + bind_timeout_seconds
+            if now >= bind_deadline:
+                raise StagingCellError(
+                    "staging PVCs did not bind within "
+                    f"{bind_timeout_seconds:g}s after becoming visible: {observed!r}"
+                )
+        elif now >= visibility_deadline:
             raise StagingCellError(
-                f"staging PVCs did not bind within {timeout_seconds:g}s: {observed!r}"
+                "staging PVCs did not become visible within the Flux Kustomization "
+                f"budget of {visibility_timeout_seconds:g}s: {observed!r}"
             )
         time.sleep(1)
 
@@ -823,13 +870,13 @@ def command_up(args: argparse.Namespace) -> dict[str, Any]:
     root = state_root(getattr(args, "state_root", None))
     root.mkdir(parents=True, exist_ok=True)
     os.chmod(root, 0o700)
+    configure_reference_paths(root)
+    receipt = load_tool_receipt(root)
     data_root = root / "data"
     data_root.mkdir(parents=True, exist_ok=True)
     os.chmod(data_root, 0o755)
     (data_root / "postgres").mkdir(parents=True, exist_ok=True)
     (data_root / "nats").mkdir(parents=True, exist_ok=True)
-    configure_reference_paths(root)
-    receipt = load_tool_receipt(root)
     tools = receipt["tools"]
     kind = tools["kind"]
     kubectl = tools["kubectl"]
@@ -1388,7 +1435,9 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
                     "source_revision": str(result.get("source_revision") or ""),
                     "source_matches_commit": bool(result.get("source_matches_commit")),
                     "source_ready": result.get("source_ready") == "True",
+                    "source_ready_status": str(result.get("source_ready") or "missing"),
                     "data_ready": result.get("data_ready") == "True",
+                    "data_ready_status": str(result.get("data_ready") or "missing"),
                     "data_revision": str(result.get("data_revision") or ""),
                     "data_matches_commit": bool(result.get("data_matches_commit")),
                     "pvcs": {

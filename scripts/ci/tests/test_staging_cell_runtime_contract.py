@@ -121,6 +121,26 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             self.assertEqual(ingress[0]["ports"], [{"port": port, "protocol": "TCP"}])
         self.assertNotIn("allow-app-data-access", policies)
 
+        api_documents = self._documents(
+            "platform/apps/weltgewebe/base/api-deployment.yaml"
+        )
+        api = next(
+            document
+            for document in api_documents
+            if document.get("kind") == "Deployment"
+            and document.get("metadata", {}).get("name") == "weltgewebe-api"
+        )
+        expected_api_selector = {"app.kubernetes.io/name": "weltgewebe-api"}
+        self.assertEqual(api["spec"]["selector"]["matchLabels"], expected_api_selector)
+        self.assertEqual(
+            {
+                "app.kubernetes.io/name": api["spec"]["template"]["metadata"][
+                    "labels"
+                ]["app.kubernetes.io/name"]
+            },
+            expected_api_selector,
+        )
+
     def test_data_workloads_are_pinned_and_avoid_recursive_fs_group_churn(self) -> None:
         for relative in (
             "platform/clusters/staging/data/postgres.yaml",
@@ -222,6 +242,8 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         public = json.loads(stdout.getvalue())
         self.assertEqual(public["status"], "degraded")
         self.assertFalse(public["source_matches_commit"])
+        self.assertEqual(public["source_ready_status"], "missing")
+        self.assertEqual(public["data_ready_status"], "False")
         self.assertFalse(public["data_matches_commit"])
         self.assertEqual(public["data_revision"], "main@sha1:" + "d" * 40)
         self.assertEqual(public["pvcs"]["nats-data"], "Pending")
@@ -780,6 +802,74 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 self.assertEqual(result["data_matches_commit"], expected_match)
                 self.assertEqual(
                     result["data_revision"], data_health.rsplit("|", 1)[-1]
+                )
+
+    def test_pvc_wait_batches_queries_and_starts_bind_budget_after_visibility(self) -> None:
+        missing = json.dumps({"apiVersion": "v1", "kind": "List", "items": []})
+        pending = json.dumps(
+            {
+                "apiVersion": "v1",
+                "kind": "List",
+                "items": [
+                    {
+                        "metadata": {"name": "postgres-data"},
+                        "status": {"phase": "Pending"},
+                    },
+                    {
+                        "metadata": {"name": "nats-data"},
+                        "status": {"phase": "Pending"},
+                    },
+                ],
+            }
+        )
+        bound = json.dumps(
+            {
+                "apiVersion": "v1",
+                "kind": "List",
+                "items": [
+                    {
+                        "metadata": {"name": "postgres-data"},
+                        "status": {"phase": "Bound"},
+                    },
+                    {
+                        "metadata": {"name": "nats-data"},
+                        "status": {"phase": "Bound"},
+                    },
+                ],
+            }
+        )
+        with (
+            mock.patch.object(staging, "output", side_effect=[missing, pending, bound]) as output_mock,
+            mock.patch.object(staging.time, "monotonic", side_effect=[0.0, 100.0, 150.0]),
+            mock.patch.object(staging.time, "sleep"),
+        ):
+            staging.wait_pvcs_bound(
+                "kubectl",
+                visibility_timeout_seconds=200.0,
+                bind_timeout_seconds=10.0,
+            )
+        self.assertEqual(output_mock.call_count, 3)
+        for call in output_mock.call_args_list:
+            argv = call.args[0]
+            self.assertEqual(argv.count("postgres-data"), 1)
+            self.assertEqual(argv.count("nats-data"), 1)
+            self.assertIn("json", argv)
+            self.assertFalse(any(str(value).startswith("jsonpath=") for value in argv))
+
+    def test_pvc_wait_uses_flux_budget_before_claims_exist(self) -> None:
+        missing = json.dumps({"apiVersion": "v1", "kind": "List", "items": []})
+        with (
+            mock.patch.object(staging, "output", side_effect=[missing, missing]),
+            mock.patch.object(staging.time, "monotonic", side_effect=[0.0, 50.0, 101.0]),
+            mock.patch.object(staging.time, "sleep"),
+        ):
+            with self.assertRaisesRegex(
+                staging.StagingCellError, "Flux Kustomization budget"
+            ):
+                staging.wait_pvcs_bound(
+                    "kubectl",
+                    visibility_timeout_seconds=100.0,
+                    bind_timeout_seconds=1.0,
                 )
 
     def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:
