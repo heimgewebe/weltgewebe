@@ -60,6 +60,77 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         )
         return source_sha
 
+    def test_tool_receipt_revalidates_locked_binary_and_artifact_digests(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="staging-tool-receipt-") as tmp_name:
+            temp = Path(tmp_name)
+            repo_root = temp / "repo"
+            state_root = temp / "state"
+            cache = state_root / "toolchain"
+            (repo_root / "platform").mkdir(parents=True)
+            (cache / "bin").mkdir(parents=True)
+            (cache / "artifacts").mkdir(parents=True)
+
+            lock: dict[str, object] = {
+                "schema_version": 1,
+                "tools": {},
+                "artifacts": {},
+            }
+            tools: dict[str, str] = {}
+            artifacts: dict[str, str] = {}
+            for name in staging.REQUIRED_TOOLS:
+                payload = f"tool:{name}".encode()
+                path = cache / "bin" / name
+                path.write_bytes(payload)
+                path.chmod(0o700)
+                lock["tools"][name] = {
+                    "binary": name,
+                    "binary_sha256": staging.sha256_bytes(payload),
+                }
+                tools[name] = str(path)
+            for name in staging.REQUIRED_ARTIFACTS:
+                payload = f"artifact:{name}".encode()
+                filename = f"{name}.locked"
+                path = cache / "artifacts" / filename
+                path.write_bytes(payload)
+                path.chmod(0o600)
+                lock["artifacts"][name] = {
+                    "filename": filename,
+                    "sha256": staging.sha256_bytes(payload),
+                }
+                artifacts[name] = str(path)
+
+            lock_path = repo_root / "platform/toolchain.lock.json"
+            lock_path.write_text(json.dumps(lock), encoding="utf-8")
+            receipt = {
+                "schema_version": 1,
+                "lock_sha256": staging.sha256_file(lock_path),
+                "cache": str(cache),
+                "tools": tools,
+                "artifacts": artifacts,
+                "kubernetes": {"kind_node_image": "kind-node-image"},
+            }
+            receipt_path = cache / "receipt.json"
+            receipt_path.write_text(json.dumps(receipt), encoding="utf-8")
+
+            with mock.patch.object(staging, "ROOT", repo_root):
+                loaded = staging.load_tool_receipt(state_root)
+                self.assertEqual(loaded["lock_sha256"], receipt["lock_sha256"])
+
+                kind = Path(tools["kind"])
+                kind.write_bytes(b"tampered-kind")
+                kind.chmod(0o700)
+                with self.assertRaisesRegex(staging.StagingCellError, "tool kind digest mismatch"):
+                    staging.load_tool_receipt(state_root)
+
+                kind.write_bytes(b"tool:kind")
+                kind.chmod(0o700)
+                first_artifact = staging.REQUIRED_ARTIFACTS[0]
+                Path(artifacts[first_artifact]).write_bytes(b"tampered-artifact")
+                with self.assertRaisesRegex(
+                    staging.StagingCellError, f"artifact {first_artifact} digest mismatch"
+                ):
+                    staging.load_tool_receipt(state_root)
+
     def test_persistent_volumes_are_static_prebound_and_fenced_to_data_worker(self) -> None:
         documents = self._documents(
             "platform/clusters/staging/data/persistent-volumes.yaml"

@@ -65,6 +65,17 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             ROOT / "scripts/platform/staging_cell.py",
         )
 
+    def test_toolchain_lock_binds_installed_binary_digests(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/toolchain.lock.json").read_text(encoding="utf-8")
+        )
+        for name, spec in lock["tools"].items():
+            with self.subTest(name=name):
+                digest = spec.get("binary_sha256")
+                self.assertIsInstance(digest, str)
+                self.assertEqual(len(digest), 64)
+                self.assertTrue(all(ch in "0123456789abcdef" for ch in digest))
+
     def test_tool_bootstrap_selection_is_exact_and_deduplicated(self) -> None:
         lock = {"tools": {"kustomize": {"version": "x"}, "trivy": {"version": "y"}}}
         selected = self.bootstrap._selected_tool_specs(lock, ["trivy", "trivy"])

@@ -252,6 +252,31 @@ def configure_reference_paths(root: Path) -> None:
     reference.OCI_MIRROR_STATE = root / "oci-mirror"
 
 
+def require_locked_file(
+    path: Path, expected_sha256: str, *, label: str, executable: bool = False
+) -> None:
+    if (
+        len(expected_sha256) != 64
+        or any(ch not in "0123456789abcdef" for ch in expected_sha256)
+    ):
+        raise StagingCellError(f"{label} has no canonical SHA-256 in the platform lock")
+    try:
+        linked = path.lstat()
+    except OSError as error:
+        raise StagingCellError(f"{label} is missing or unreadable: {path}") from error
+    if stat.S_ISLNK(linked.st_mode) or not stat.S_ISREG(linked.st_mode):
+        raise StagingCellError(f"{label} must be a regular non-symlink file: {path}")
+    if linked.st_uid != os.geteuid() or stat.S_IMODE(linked.st_mode) & 0o022:
+        raise StagingCellError(f"{label} ownership or write mode is unsafe: {path}")
+    if executable and not os.access(path, os.X_OK):
+        raise StagingCellError(f"{label} is not executable: {path}")
+    actual_sha256 = sha256_file(path)
+    if not hmac.compare_digest(actual_sha256, expected_sha256):
+        raise StagingCellError(
+            f"{label} digest mismatch: expected {expected_sha256}, got {actual_sha256}"
+        )
+
+
 def load_tool_receipt(root: Path) -> dict[str, Any]:
     receipt_path = root / "toolchain/receipt.json"
     if not receipt_path.is_file() or receipt_path.is_symlink():
@@ -260,22 +285,66 @@ def load_tool_receipt(root: Path) -> dict[str, Any]:
         )
     receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
     lock_path = ROOT / "platform/toolchain.lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
     expected_lock = sha256_file(lock_path)
     if receipt.get("schema_version") != 1 or receipt.get("lock_sha256") != expected_lock:
         raise StagingCellError("toolchain receipt is not bound to the current platform lock")
+    cache_root = root / "toolchain"
+    if cache_root.is_symlink() or not cache_root.is_dir():
+        raise StagingCellError("toolchain cache root must be a real directory")
+    receipt_cache = Path(str(receipt.get("cache") or ""))
+    try:
+        cache_matches = receipt_cache.resolve(strict=True) == cache_root.resolve(strict=True)
+    except OSError:
+        cache_matches = False
+    if not cache_matches:
+        raise StagingCellError("toolchain receipt cache path is not the canonical T084 cache")
     tools = receipt.get("tools") if isinstance(receipt.get("tools"), dict) else {}
     artifacts = receipt.get("artifacts") if isinstance(receipt.get("artifacts"), dict) else {}
-    missing_tools = [
-        name for name in REQUIRED_TOOLS if not Path(str(tools.get(name, ""))).is_file()
+    lock_tools = lock.get("tools") if isinstance(lock.get("tools"), dict) else {}
+    lock_artifacts = (
+        lock.get("artifacts") if isinstance(lock.get("artifacts"), dict) else {}
+    )
+    missing_specs = [
+        name for name in (*REQUIRED_TOOLS, *REQUIRED_ARTIFACTS)
+        if name not in (lock_tools if name in REQUIRED_TOOLS else lock_artifacts)
     ]
-    missing_artifacts = [
-        name
-        for name in REQUIRED_ARTIFACTS
-        if not Path(str(artifacts.get(name, ""))).is_file()
-    ]
-    if missing_tools or missing_artifacts:
-        raise StagingCellError(
-            f"toolchain receipt incomplete: tools={missing_tools} artifacts={missing_artifacts}"
+    if missing_specs:
+        raise StagingCellError(f"platform lock is missing staging entries: {missing_specs}")
+    for name in REQUIRED_TOOLS:
+        spec = lock_tools[name]
+        expected_path = cache_root / "bin" / str(spec.get("binary") or "")
+        observed_path = Path(str(tools.get(name) or ""))
+        try:
+            path_matches = observed_path.resolve(strict=True) == expected_path.resolve(strict=True)
+        except OSError:
+            path_matches = False
+        if not path_matches:
+            raise StagingCellError(
+                f"toolchain receipt path mismatch for tool {name}: {observed_path}"
+            )
+        require_locked_file(
+            observed_path,
+            str(spec.get("binary_sha256") or ""),
+            label=f"tool {name}",
+            executable=True,
+        )
+    for name in REQUIRED_ARTIFACTS:
+        spec = lock_artifacts[name]
+        expected_path = cache_root / "artifacts" / str(spec.get("filename") or "")
+        observed_path = Path(str(artifacts.get(name) or ""))
+        try:
+            path_matches = observed_path.resolve(strict=True) == expected_path.resolve(strict=True)
+        except OSError:
+            path_matches = False
+        if not path_matches:
+            raise StagingCellError(
+                f"toolchain receipt path mismatch for artifact {name}: {observed_path}"
+            )
+        require_locked_file(
+            observed_path,
+            str(spec.get("sha256") or ""),
+            label=f"artifact {name}",
         )
     return receipt
 
