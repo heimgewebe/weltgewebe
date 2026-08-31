@@ -778,6 +778,23 @@ prune_releases
         ):
             self.assertNotIn(forbidden, script)
 
+    def test_production_reconciler_is_in_critical_impl_registry(self) -> None:
+        registry = self.read("audit/impl-registry.yaml")
+        start = registry.index("  - id: impl.workflow.production-main-reconcile\n")
+        next_entry = registry.find("\n  - id:", start + 1)
+        entry = registry[start : next_entry if next_entry != -1 else len(registry)]
+        for expected in (
+            "path: scripts/ops/reconcile-production-main-vps.sh",
+            "criticality: high",
+            "evidence_level: ci",
+            "docs/deploy/merge-to-live.md",
+            "docs/deploy/schauwerk-editor-frontdoor.md",
+            "scripts/ci/tests/test_production_reconciler_contract.py",
+            "scripts/ci/tests/test_deploy_exact_commit_integration.py",
+            ".github/workflows/production-live-contract.yml",
+        ):
+            self.assertIn(expected, entry)
+
     def test_secure_receipt_helper_is_in_critical_impl_registry(self) -> None:
         registry = self.read("audit/impl-registry.yaml")
         self.assertIn("id: impl.guard.secure-receipt-io", registry)
