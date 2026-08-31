@@ -19,6 +19,7 @@ BASEMAP_IDENTITY_URL="${WELTGEWEBE_FRONTEND_BASEMAP_IDENTITY_URL:-https://common
 BASEMAP_LIGHT_STYLE_URL="${WELTGEWEBE_FRONTEND_BASEMAP_LIGHT_STYLE_URL:-https://commonthing.net/local-basemap/style-germany.json}"
 BASEMAP_DARK_STYLE_URL="${WELTGEWEBE_FRONTEND_BASEMAP_DARK_STYLE_URL:-https://commonthing.net/local-basemap/style-germany-dark.json}"
 BASEMAP_PMTILES_URL="${WELTGEWEBE_FRONTEND_BASEMAP_PMTILES_URL:-https://commonthing.net/local-basemap/basemap-germany.pmtiles}"
+SCHAUWERK_MANIFEST_URL="${WELTGEWEBE_SCHAUWERK_MANIFEST_URL:-https://commonthing.net/schaubild/manifest.json}"
 API_URL="${WELTGEWEBE_API_VERSION_URL:-https://commonthing.net/api/version}"
 NODE_BUILD_IMAGE="${WELTGEWEBE_NODE_BUILD_IMAGE:-docker.io/library/node@sha256:8898f8ed3c0126667837b678979b4ed83306c856a1227c8bf5f5f77740c25cd6}"
 DEPLOY_HELPER="${WELTGEWEBE_DEPLOY_HELPER:-/usr/local/libexec/weltgewebe-deploy-exact-commit}"
@@ -277,6 +278,27 @@ fetch_main() {
   git -C "$SOURCE_CHECKOUT" fetch --no-tags origin \
     "+refs/heads/main:refs/remotes/origin/main" || return 1
   git -C "$SOURCE_CHECKOUT" rev-parse refs/remotes/origin/main || return 1
+}
+
+verify_public_schauwerk_release() {
+  local expected_manifest_sha="$1"
+  local public_manifest_sha
+
+  [[ "$expected_manifest_sha" =~ ^[0-9a-f]{64}$ ]] || return 1
+  public_manifest_sha="$(
+    curl --fail --silent --show-error \
+      --proto '=https' \
+      --connect-timeout 5 \
+      --max-time 15 \
+      --max-filesize 1048576 \
+      --header 'Accept-Encoding: identity' \
+      "$SCHAUWERK_MANIFEST_URL" |
+      sha256sum | awk '{print $1}'
+  )" || return 1
+  if [[ "$public_manifest_sha" != "$expected_manifest_sha" ]]; then
+    echo "public Schauwerk manifest hash mismatch" >&2
+    return 1
+  fi
 }
 
 verify_public_germany_basemap_delivery() {
@@ -1423,6 +1445,50 @@ target_commit="$(fetch_main)"
 [[ "$target_commit" =~ ^[0-9a-f]{40}$ ]] || fail "origin/main did not resolve to a full commit"
 write_state "observed" "$target_commit" "reconcile started"
 
+# The public Schauwerk shell is separately versioned but served by this edge.
+# A same-commit no-op therefore needs the exact raw manifest bytes reviewed in
+# this Weltgewebe commit, not only matching Weltgewebe frontend/API versions.
+schauwerk_release_lock_json="$(
+  git -C "$SOURCE_CHECKOUT" show "$target_commit:infra/schauwerk-editor/release-lock.json"
+)" || fail "target commit is missing the Schauwerk editor release lock"
+expected_schauwerk_manifest_sha="$(
+  SCHAUWERK_RELEASE_LOCK_JSON="$schauwerk_release_lock_json" run_ops_python << 'PY_SCHAUWERK_RELEASE_LOCK'
+import json
+import os
+import re
+
+try:
+    payload = json.loads(os.environ["SCHAUWERK_RELEASE_LOCK_JSON"])
+except (KeyError, json.JSONDecodeError) as exc:
+    raise SystemExit(f"invalid Schauwerk release lock JSON: {exc}")
+expected_keys = {
+    "schema_version",
+    "source_repository",
+    "source_commit",
+    "release_id",
+    "manifest_file_sha256",
+}
+if not isinstance(payload, dict) or set(payload) != expected_keys:
+    raise SystemExit("Schauwerk release lock field matrix is invalid")
+if payload.get("schema_version") != "weltgewebe-schauwerk-release-lock.v1":
+    raise SystemExit("Schauwerk release lock schema is invalid")
+if payload.get("source_repository") != "heimgewebe/schauwerk":
+    raise SystemExit("Schauwerk release lock repository is invalid")
+source_commit = payload.get("source_commit")
+release_id = payload.get("release_id")
+manifest_sha = payload.get("manifest_file_sha256")
+if not isinstance(source_commit, str) or re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
+    raise SystemExit("Schauwerk source commit is invalid")
+if release_id != source_commit:
+    raise SystemExit("Schauwerk release id does not match source commit")
+if not isinstance(manifest_sha, str) or re.fullmatch(r"[0-9a-f]{64}", manifest_sha) is None:
+    raise SystemExit("Schauwerk manifest hash is invalid")
+print(manifest_sha)
+PY_SCHAUWERK_RELEASE_LOCK
+)" || fail "target Schauwerk editor release lock is invalid"
+[[ "$expected_schauwerk_manifest_sha" =~ ^[0-9a-f]{64}$ ]] ||
+  fail "target Schauwerk editor manifest hash is invalid"
+
 # Nationwide Germany is the production sovereign contract. Bind the no-op
 # decision to the exact Germany style in this commit before public readback.
 for germany_style in map-style/style-germany.json map-style/style-germany-dark.json; do
@@ -1515,25 +1581,35 @@ if "$LIVE_VERIFIER" \
     "$expected_germany_artifact_size" "$expected_germany_range_sha"; then
     basemap_identity_matches=1
   fi
+  schauwerk_identity_matches=0
+  if verify_public_schauwerk_release "$expected_schauwerk_manifest_sha"; then
+    schauwerk_identity_matches=1
+  fi
   observed_main="$(fetch_main)"
   if [[ "$observed_main" != "$target_commit" ]]; then
     write_state "superseded_after_observe" "$observed_main" "main advanced after public readback"
     echo "production_reconcile=superseded observed=$target_commit current=$observed_main"
     exit 0
   fi
-  if [[ "$basemap_identity_matches" == "1" ]]; then
+  if [[ "$basemap_identity_matches" == "1" && "$schauwerk_identity_matches" == "1" ]]; then
     repair_observed_deployment_state "$initial_receipt"
     write_state "consistent_observed_unattested" "$target_commit" \
-      "public identity, artifact declaration, and Germany basemap delivery matched; provenance remains unattested"
+      "public identity, artifact declaration, Germany basemap delivery, and reviewed Schauwerk release matched; provenance remains unattested"
     ln -sfn "reconcile-receipts/$target_commit.json" "$STATE_ROOT/reconcile-current.json"
     prune_artifacts
     prune_releases
-    echo "production_reconcile=noop commit=$target_commit state=consistent_observed_unattested basemap_variant=germany"
+    echo "production_reconcile=noop commit=$target_commit state=consistent_observed_unattested basemap_variant=germany schauwerk_release=verified"
     exit 0
   fi
-  write_state "basemap_identity_drift" "$target_commit" \
-    "public commit matched but nationwide Germany basemap identity or delivery routes did not; rebuild required"
-  echo "production_reconcile=repair_required commit=$target_commit reason=basemap_identity_drift"
+  if [[ "$schauwerk_identity_matches" != "1" ]]; then
+    write_state "schauwerk_release_identity_drift" "$target_commit" \
+      "public commit matched but the public Schauwerk manifest did not match the reviewed release lock; redeploy required"
+    echo "production_reconcile=repair_required commit=$target_commit reason=schauwerk_release_identity_drift"
+  else
+    write_state "basemap_identity_drift" "$target_commit" \
+      "public commit matched but nationwide Germany basemap identity or delivery routes did not; rebuild required"
+    echo "production_reconcile=repair_required commit=$target_commit reason=basemap_identity_drift"
+  fi
 fi
 
 ensure_production_build_disk_headroom "$target_commit"
@@ -1733,6 +1809,8 @@ verify_public_germany_basemap_delivery \
   "$target_commit" "$expected_germany_style_sha" "$expected_germany_dark_style_sha" \
   "$expected_germany_artifact_size" "$expected_germany_range_sha" ||
   fail "public nationwide Germany basemap delivery mismatch after deploy"
+verify_public_schauwerk_release "$expected_schauwerk_manifest_sha" ||
+  fail "public Schauwerk manifest does not match the reviewed release after deploy"
 
 current_main="$(fetch_main)"
 if [[ "$current_main" != "$target_commit" ]]; then

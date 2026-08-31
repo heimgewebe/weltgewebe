@@ -100,6 +100,18 @@ preflight digest. The running Caddy mount must resolve to the same exact admitte
 release directory; retargeting host `current` after admission cannot change the
 bytes served by that container.
 
+The production reconciler uses the same raw manifest SHA-256 as part of its
+same-commit no-op decision. A matching Weltgewebe frontend/API commit is therefore
+insufficient when `/schaubild/manifest.json` still belongs to another reviewed
+Schauwerk release: that state requires a full exact-revision redeploy so Caddy is
+recreated with the lock-bound release. The exact-commit helper also replaces the
+web build directory before the full compose pass. Because a Linux bind mount may
+stay attached to the removed directory inode, the VPS full-deploy path performs a
+targeted `--no-deps --force-recreate caddy` after the normal compose convergence.
+This refreshes the web and Schauwerk bind mounts without deliberately recreating
+PostgreSQL, NATS, or API dependencies. The reconciler repeats the public identity
+checks after deployment before it may record the revision as verified.
+
 After that exact-commit deployment succeeds, read back the public edge as well:
 
 ```bash
