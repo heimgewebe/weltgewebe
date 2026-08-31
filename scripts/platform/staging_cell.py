@@ -1052,7 +1052,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
             source_ready = "stale"
         else:
             source_ready = source_ready_status or "missing"
-    data_ready = output(
+    data_health_raw = output(
         [
             kubectl,
             "-n",
@@ -1062,9 +1062,31 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
             DATA_KUSTOMIZATION,
             "--ignore-not-found",
             "-o",
-            "jsonpath={.status.conditions[?(@.type=='Ready')].status}",
+            "jsonpath={.metadata.generation}|{.status.observedGeneration}|{.status.conditions[?(@.type=='Ready')].status}|{.status.lastAppliedRevision}",
         ]
-    ) or "missing"
+    )
+    data_health_parts = data_health_raw.split("|", 3) if data_health_raw else []
+    if len(data_health_parts) != 4:
+        data_ready = "missing"
+        data_revision = "missing"
+        data_matches_commit = False
+    else:
+        (
+            data_generation,
+            data_observed_generation,
+            data_ready_status,
+            data_revision,
+        ) = data_health_parts
+        if (
+            not data_generation
+            or not data_observed_generation
+            or data_generation != data_observed_generation
+        ):
+            data_ready = "stale"
+        else:
+            data_ready = data_ready_status or "missing"
+        data_revision = data_revision or "missing"
+        data_matches_commit = flux_revision_matches_commit(data_revision, commit)
     pvcs = {
         pvc: output(
             [
@@ -1093,6 +1115,7 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         source_matches_commit
         and source_ready == "True"
         and data_ready == "True"
+        and data_matches_commit
         and all(value == "Bound" for value in pvcs.values())
         and external_secret["ready"]
     )
@@ -1106,6 +1129,8 @@ def command_status(args: argparse.Namespace) -> dict[str, Any]:
         "source_matches_commit": source_matches_commit,
         "source_ready": source_ready,
         "data_ready": data_ready,
+        "data_revision": data_revision,
+        "data_matches_commit": data_matches_commit,
         "pvcs": pvcs,
         "external_secret": external_secret,
         "image_promotion": image_promotion_state(),
@@ -1364,6 +1389,8 @@ def emit_public_success(command: str, result: dict[str, Any]) -> None:
                     "source_matches_commit": bool(result.get("source_matches_commit")),
                     "source_ready": result.get("source_ready") == "True",
                     "data_ready": result.get("data_ready") == "True",
+                    "data_revision": str(result.get("data_revision") or ""),
+                    "data_matches_commit": bool(result.get("data_matches_commit")),
                     "pvcs": {
                         "postgres-data": str(pvcs.get("postgres-data") or "missing"),
                         "nats-data": str(pvcs.get("nats-data") or "missing"),

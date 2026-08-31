@@ -205,6 +205,8 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
             "source_revision": "main@sha1:" + "b" * 40,
             "source_matches_commit": False,
             "data_ready": "False",
+            "data_revision": "main@sha1:" + "d" * 40,
+            "data_matches_commit": False,
             "pvcs": {"postgres-data": "Bound", "nats-data": "Pending"},
             "external_secret": {
                 "database": True,
@@ -220,6 +222,8 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         public = json.loads(stdout.getvalue())
         self.assertEqual(public["status"], "degraded")
         self.assertFalse(public["source_matches_commit"])
+        self.assertFalse(public["data_matches_commit"])
+        self.assertEqual(public["data_revision"], "main@sha1:" + "d" * 40)
         self.assertEqual(public["pvcs"]["nats-data"], "Pending")
         self.assertFalse(public["external_secret"]["runtime"])
         rendered = stdout.getvalue()
@@ -447,7 +451,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     side_effect=[
                         f"main@sha1:{commit}",
                         "1|1|True",
-                        "True",
+                        f"1|1|True|main@sha1:{commit}",
                         "Bound",
                         "Bound",
                     ],
@@ -487,7 +491,13 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                 mock.patch.object(
                     staging,
                     "output",
-                    side_effect=[f"main@sha1:{commit}", "1|1|True", "True", "Bound", "Bound"],
+                    side_effect=[
+                        f"main@sha1:{commit}",
+                        "1|1|True",
+                        f"1|1|True|main@sha1:{commit}",
+                        "Bound",
+                        "Bound",
+                    ],
                 ),
                 mock.patch.object(
                     staging,
@@ -670,7 +680,7 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
                     side_effect=[
                         f"main@sha1:{commit}",
                         "3|3|False",
-                        "True",
+                        f"1|1|True|main@sha1:{commit}",
                         "Bound",
                         "Bound",
                     ],
@@ -688,6 +698,89 @@ class StagingCellRuntimeContractTests(unittest.TestCase):
         self.assertEqual(result["status"], "degraded")
         self.assertTrue(result["source_matches_commit"])
         self.assertEqual(result["source_ready"], "False")
+
+    def test_status_binds_data_kustomization_to_current_revision(self) -> None:
+        owner = "owner-a"
+        commit = "6" * 40
+        other_commit = "8" * 40
+        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+        cases = (
+            (
+                "stale-generation",
+                f"4|3|True|main@sha1:{commit}",
+                "degraded",
+                "stale",
+                True,
+            ),
+            (
+                "wrong-revision",
+                f"4|4|True|main@sha1:{other_commit}",
+                "degraded",
+                "True",
+                False,
+            ),
+            (
+                "current-revision",
+                f"4|4|True|main@sha1:{commit}",
+                "ready",
+                "True",
+                True,
+            ),
+        )
+        for name, data_health, expected_status, expected_ready, expected_match in cases:
+            with self.subTest(name=name):
+                with tempfile.TemporaryDirectory(
+                    prefix=f"staging-cell-data-status-{name}-"
+                ) as tmp_name:
+                    root = Path(tmp_name)
+                    self._write_bound_receipt(root, owner=owner, commit=commit)
+                    with (
+                        mock.patch.object(staging, "state_root", return_value=root),
+                        mock.patch.object(staging, "configure_reference_paths"),
+                        mock.patch.object(
+                            staging,
+                            "load_tool_receipt",
+                            return_value=self._tool_receipt(),
+                        ),
+                        mock.patch.object(
+                            staging.reference,
+                            "clusters",
+                            return_value=[staging.DEFAULT_CLUSTER],
+                        ),
+                        mock.patch.object(staging.reference, "require_owned_cluster"),
+                        mock.patch.object(
+                            staging,
+                            "output",
+                            side_effect=[
+                                f"main@sha1:{commit}",
+                                "1|1|True",
+                                data_health,
+                                "Bound",
+                                "Bound",
+                            ],
+                        ),
+                        mock.patch.object(
+                            staging,
+                            "verify_external_secret_binding",
+                            return_value={
+                                "database": True,
+                                "runtime": True,
+                                "ready": True,
+                            },
+                        ),
+                        mock.patch.object(
+                            staging,
+                            "image_promotion_state",
+                            return_value={"status": "blocked"},
+                        ),
+                    ):
+                        result = staging.command_status(args)
+                self.assertEqual(result["status"], expected_status)
+                self.assertEqual(result["data_ready"], expected_ready)
+                self.assertEqual(result["data_matches_commit"], expected_match)
+                self.assertEqual(
+                    result["data_revision"], data_health.rsplit("|", 1)[-1]
+                )
 
     def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:
         events: list[str] = []
