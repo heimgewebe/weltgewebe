@@ -8,8 +8,8 @@ status: canonical
 canonicality: normative
 lifecycle_state: active
 owner: ops
-review_after: 2026-08-16
-last_reviewed: 2026-07-16
+review_after: 2026-09-30
+last_reviewed: 2026-08-30
 depends_on: []
 relations:
   - type: relates_to
@@ -62,6 +62,74 @@ verifies_with:
 - Proof-Cluster werden lokal unter einem pro Cluster serialisierten Ownership-Lock reserviert; Cleanup verlangt den exakten Commit und dieselbe Owner-ID. Verwaiste Marker werden fail-closed nicht automatisch entfernt.
 - Werkzeugarchive werden vor jeder Schreibwirkung vollständig geprüft; nur reguläre Dateien und Verzeichnisse sind zulässig. Symlinks, Hardlinks, Devices, FIFOs, Traversal und widersprüchliche Member werden fail-closed abgewiesen; die ausführbare Datei wird anschließend atomisch installiert.
 - Produktionsdeployments, DNS, Compose und reale Replikazahlen werden durch diesen Vertrag nicht verändert.
+
+## Persistente Staging-Zelle
+
+`scripts/platform/staging_cell.py` verwaltet genau eine owner- und commitgebundene
+Staging-Zelle namens `weltgewebe-staging`. Der öffentliche CLI-Vertrag bietet
+bewusst keinen frei wählbaren Cluster- oder State-Root: der Zustand liegt unter
+`~/.local/state/weltgewebe/staging-cell`, und der Clustername ist fest.
+
+Vor dem ersten `up` müssen die in `platform/toolchain.lock.json` gepinnten
+Werkzeuge und Drittartefakte exakt in den T084-Toolchain-Cache installiert werden:
+
+```bash
+export WELTGEWEBE_STAGING_OWNER_ID="owner-t084-staging"
+uv run --project tools/py --locked python scripts/platform/bootstrap_tools.py --cache "$HOME/.local/state/weltgewebe/staging-cell/toolchain"
+uv run --project tools/py --locked python scripts/platform/staging_cell.py up --owner-id "$WELTGEWEBE_STAGING_OWNER_ID"
+```
+
+`bootstrap_tools.py` schreibt dabei das von `staging_cell.py` verlangte
+`toolchain/receipt.json`; ein anderer Cachepfad wird fail-closed abgewiesen.
+
+Beim ersten `up --owner-id <id>` wird die externe Secretquelle vor jeder
+Clustererzeugung erzeugt bzw. validiert. Anschließend bindet ein
+`bootstrap-in-progress`-Receipt Owner, exakten Commit und Secretquellen-Hash,
+bevor Kind erzeugt wird. Dadurch bleiben auch abgebrochene Bootstraps
+wiederaufnehmbar oder über `down --owner-id <id>` kontrolliert abbaubar. Ein
+späteres `up` nach `down` bleibt am Receipt-Commit und am ursprünglichen Owner
+gebunden; ein stilles Umbinden an ein inzwischen weitergelaufenes `main` ist
+verboten. Ein Commitwechsel benötigt einen getrennten, ausdrücklich geprüften
+Upgrade-/Recovery-Pfad.
+
+PostgreSQL und NATS verwenden statische, klassenlose und vorgebundene HostPath-PVs
+mit `Retain`. Persistente Daten werden ausschließlich in den ersten Kind-Worker
+`weltgewebe-staging-worker` gemountet. PV-Node-Affinity und Pod-NodeSelector
+erzwingen denselben Daten-Worker. Das ist bewusst **kein HA-Failover**: bei
+Node-Ausfall bleibt der Datendienst lieber unavailable, statt ohne externes
+Fencing einen zweiten Schreiber auf dieselben Dateien zu starten.
+
+Volume-Rechte werden nur für leere Volume-Wurzeln initialisiert. Ein gesundes
+oder bereits befülltes Datenverzeichnis wird bei erneutem `up` ausschließlich
+geprüft; rekursive `chown`-/`chmod`-Änderungen über laufende oder erhaltene Daten
+sind verboten. `fsGroupChangePolicy: OnRootMismatch` begrenzt zusätzlich
+unbeabsichtigte rekursive Rechtearbeit durch Kubernetes.
+
+Die Data-NetworkPolicies erlauben PostgreSQL (`5432`) und NATS (`4222`) nur Pods
+mit `app.kubernetes.io/name=weltgewebe-api` im exakten Namespace
+<!-- commonthing-naming: legacy -->
+`weltgewebe-staging`. Die frühere namespaceweite Freigabe über das Legacy-Label
+`weltgewebe.net/data-client` ist für diese Staging-Datenpfade nicht maßgeblich.
+Neue Secret-Binding-Metadaten verwenden gemäß Naming-Policy den kanonischen
+Schlüssel `commonthing.net/external-secret-source-sha256`.
+
+Nach dem Apply fordert jedes `up` über Flux' kanonische
+`reconcile.fluxcd.io/requestedAt`-Annotation zuerst eine neue Source-Reconciliation
+an und akzeptiert sie erst, wenn `status.lastHandledReconcileAt`, aktuelle Generation
+und exakte Receipt-Revision übereinstimmen. Danach wird mit demselben eindeutigen
+Token die Daten-Kustomization angestoßen. PVC-Sichtbarkeit und -Bindung bleiben im
+gemeinsamen 8-Minuten-Kustomization-Budget; sobald beide Claims sichtbar sind, gilt
+weiterhin der 45-Sekunden-Bindefehler. Erst danach muss die Kustomization denselben
+Reconcile-Token, aktuelle Generation, `Ready=True` und die exakte angewandte
+Receipt-Revision melden. Zusätzlich müssen PostgreSQL, NATS, `source-controller` und
+`kustomize-controller` als aktuelle Deployments die gewünschten verfügbaren,
+bereiten und aktualisierten Replikas melden. `status` verwendet dieselben
+Live-Workload-Schranken und degradiert bei fehlenden, stale oder nicht verfügbaren
+Ressourcen statt einen früheren Ready-Zustand fortzuschreiben.
+
+Die Staging-Zelle etabliert weiterhin weder Image-Promotion noch App-/Gateway-
+Aktivierung, Delete-to-Prove, NATS-Authentisierung/TLS oder einen
+Produktions-Kubernetes-Cutover. Diese Grenzen sind getrennt zu beweisen.
 
 ## Beweise
 

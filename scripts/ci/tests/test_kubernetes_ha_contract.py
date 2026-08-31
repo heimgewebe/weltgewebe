@@ -92,6 +92,7 @@ class KubernetesHaContractTests(unittest.TestCase):
                 "sha256": "33784dc3b61edb0ddb1a68db6ef045bd32daace5db2ec1f0a02e0e8185eef7eb",
                 "format": "tar.gz",
                 "binary": "kubectl-cnpg",
+                "binary_sha256": "1c35af8cc18a9826c7582d057bd7d782e7404c0b79f85421c0b3bbeb36d5ef5d",
             },
         )
         self.assertEqual(

@@ -1,0 +1,15 @@
+---
+apiVersion: kind.x-k8s.io/v1alpha4
+kind: Cluster
+name: weltgewebe-staging
+networking:
+  disableDefaultCNI: true
+  kubeProxyMode: none
+nodes:
+  - role: control-plane
+  - role: worker
+    extraMounts:
+      - hostPath: __COMMONTHING_STAGING_DATA_ROOT__
+        containerPath: /var/local/weltgewebe-staging
+        readOnly: false
+  - role: worker

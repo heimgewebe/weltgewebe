@@ -60,6 +60,21 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "weltgewebe_oci_proof_mirror",
             ROOT / "scripts/platform/oci_proof_mirror.py",
         )
+        cls.staging_cell = load_module(
+            "weltgewebe_staging_cell",
+            ROOT / "scripts/platform/staging_cell.py",
+        )
+
+    def test_toolchain_lock_binds_installed_binary_digests(self) -> None:
+        lock = json.loads(
+            (ROOT / "platform/toolchain.lock.json").read_text(encoding="utf-8")
+        )
+        for name, spec in lock["tools"].items():
+            with self.subTest(name=name):
+                digest = spec.get("binary_sha256")
+                self.assertIsInstance(digest, str)
+                self.assertEqual(len(digest), 64)
+                self.assertTrue(all(ch in "0123456789abcdef" for ch in digest))
 
     def test_tool_bootstrap_selection_is_exact_and_deduplicated(self) -> None:
         lock = {"tools": {"kustomize": {"version": "x"}, "trivy": {"version": "y"}}}
@@ -67,6 +82,22 @@ class KubernetesPlatformContractTests(unittest.TestCase):
         self.assertEqual(selected, {"trivy": {"version": "y"}})
         with self.assertRaisesRegex(RuntimeError, "unknown tool selection"):
             self.bootstrap._selected_tool_specs(lock, ["missing"])
+
+    def test_staging_readme_bootstraps_tools_into_canonical_cache_before_up(self) -> None:
+        readme = (ROOT / "platform/README.md").read_text(encoding="utf-8")
+        bootstrap = (
+            'uv run --project tools/py --locked python scripts/platform/bootstrap_tools.py '
+            '--cache "$HOME/.local/state/weltgewebe/staging-cell/toolchain"'
+        )
+        up = (
+            'uv run --project tools/py --locked python scripts/platform/staging_cell.py '
+            'up --owner-id "$WELTGEWEBE_STAGING_OWNER_ID"'
+        )
+        self.assertIn('export WELTGEWEBE_STAGING_OWNER_ID="owner-t084-staging"', readme)
+        self.assertIn(bootstrap, readme)
+        self.assertIn(up, readme)
+        self.assertLess(readme.index(bootstrap), readme.index(up))
+        self.assertIn("toolchain/receipt.json", readme)
 
     def test_tool_download_retries_transient_gateway_failure_and_cleans_temps(self) -> None:
         payload = b"kind-binary"
@@ -387,6 +418,91 @@ class KubernetesPlatformContractTests(unittest.TestCase):
     def test_static_platform_contract_passes(self) -> None:
         result = self.validator.validate(render=False)
         self.assertEqual(result["status"], "pass")
+
+    def test_staging_cell_singleton_cluster_and_receipt_binding(self) -> None:
+        self.staging_cell.require_singleton_cluster(self.staging_cell.DEFAULT_CLUSTER)
+        with self.assertRaisesRegex(self.staging_cell.StagingCellError, "singleton"):
+            self.staging_cell.require_singleton_cluster("other-staging")
+        self.staging_cell.require_receipt_cluster(
+            {"cluster": self.staging_cell.DEFAULT_CLUSTER},
+            self.staging_cell.DEFAULT_CLUSTER,
+        )
+        with self.assertRaisesRegex(self.staging_cell.StagingCellError, "persisted cluster"):
+            self.staging_cell.require_receipt_cluster(
+                {"cluster": self.staging_cell.DEFAULT_CLUSTER},
+                "other-staging",
+            )
+
+    def test_staging_cell_flux_revision_requires_exact_commit(self) -> None:
+        commit = "a" * 40
+        for revision in (commit, f"sha1:{commit}", f"main@sha1:{commit}"):
+            with self.subTest(revision=revision):
+                self.assertTrue(
+                    self.staging_cell.flux_revision_matches_commit(revision, commit)
+                )
+        self.assertFalse(
+            self.staging_cell.flux_revision_matches_commit(f"sha1:{'b' * 40}", commit)
+        )
+
+    def test_staging_cell_rejects_secret_rotation_over_retained_state(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp_name:
+            root = Path(tmp_name)
+            material, source_sha = self.staging_cell.load_or_create_secret_material(root)
+            self.staging_cell.atomic_json(
+                root / "receipts/cell-bootstrap.json",
+                {
+                    "schema_version": 1,
+                    "cluster": self.staging_cell.DEFAULT_CLUSTER,
+                    "external_secret": {"source_sha256": source_sha},
+                },
+            )
+            changed = {"schema_version": 1, **material}
+            changed["database_password"] = "replacement"
+            self.staging_cell.atomic_json(
+                root / "secrets/staging-runtime.json", changed
+            )
+            with self.assertRaisesRegex(
+                self.staging_cell.StagingCellError, "differs from the bootstrap receipt"
+            ):
+                self.staging_cell.load_or_create_secret_material(root)
+
+    def test_staging_cell_secret_integrity_rejects_changed_values(self) -> None:
+        source_sha = "a" * 64
+        expected = {"username": "weltgewebe", "password": "secret"}
+        document = {
+            "metadata": {
+                "name": "database",
+                "namespace": "data",
+                "annotations": {
+                    "commonthing.net/external-secret-source-sha256": source_sha
+                },
+            },
+            "data": {
+                key: self.staging_cell.base64.b64encode(value.encode()).decode()
+                for key, value in expected.items()
+            },
+        }
+        self.assertTrue(
+            self.staging_cell.secret_document_matches(
+                document,
+                name="database",
+                namespace_name="data",
+                source_sha=source_sha,
+                expected_values=expected,
+            )
+        )
+        document["data"]["password"] = self.staging_cell.base64.b64encode(
+            b"changed"
+        ).decode()
+        self.assertFalse(
+            self.staging_cell.secret_document_matches(
+                document,
+                name="database",
+                namespace_name="data",
+                source_sha=source_sha,
+                expected_values=expected,
+            )
+        )
 
     def test_oci_proof_mirror_contract_is_private_digest_bound_and_budgeted(self) -> None:
         result = self.oci_mirror.validate_contract()
@@ -2609,6 +2725,81 @@ spec:
                     )
             finally:
                 self.reference.MARKERS = original
+
+    def test_reference_cleanup_fsyncs_marker_and_kubeconfig_directories(self) -> None:
+        commit = "a" * 40
+        owner = "owner-durable-cleanup"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            markers = root / "clusters"
+            kubeconfigs = root / "kubeconfigs"
+            markers.mkdir()
+            kubeconfigs.mkdir()
+            original_markers = self.reference.MARKERS
+            original_kubeconfigs = self.reference.KUBECONFIGS
+            self.reference.MARKERS = markers
+            self.reference.KUBECONFIGS = kubeconfigs
+            try:
+                self.reference.write_marker("proof", commit, owner)
+                self.reference.kubeconfig_path("proof").write_text(
+                    "apiVersion: v1\n", encoding="utf-8"
+                )
+                with (
+                    mock.patch.object(self.reference, "clusters", return_value=set()),
+                    mock.patch.object(
+                        self.reference,
+                        "_fsync_directory",
+                        wraps=self.reference._fsync_directory,
+                    ) as fsync_directory,
+                ):
+                    deleted = self.reference.delete_owned_cluster_if_present(
+                        "kind",
+                        "proof",
+                        expected_commit=commit,
+                        expected_owner_id=owner,
+                    )
+                self.assertTrue(deleted)
+                self.assertFalse(self.reference.marker_path("proof").exists())
+                self.assertFalse(self.reference.kubeconfig_path("proof").exists())
+                fsync_directory.assert_has_calls(
+                    [mock.call(markers), mock.call(kubeconfigs)], any_order=False
+                )
+            finally:
+                self.reference.MARKERS = original_markers
+                self.reference.KUBECONFIGS = original_kubeconfigs
+
+    def test_creation_reservation_failure_uses_durable_state_cleanup(self) -> None:
+        commit = "a" * 40
+        owner = "owner-durable-rollback"
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            markers = root / "clusters"
+            kubeconfigs = root / "kubeconfigs"
+            original_markers = self.reference.MARKERS
+            original_kubeconfigs = self.reference.KUBECONFIGS
+            self.reference.MARKERS = markers
+            self.reference.KUBECONFIGS = kubeconfigs
+            try:
+                with (
+                    mock.patch.object(self.reference, "clusters", return_value=set()),
+                    mock.patch.object(
+                        self.reference,
+                        "_remove_cluster_state_files_durably",
+                        wraps=self.reference._remove_cluster_state_files_durably,
+                    ) as durable_cleanup,
+                ):
+                    with self.assertRaisesRegex(self.reference.ProofError, "create failed"):
+                        with self.reference.cluster_creation_reservation(
+                            "kind", "proof", commit, owner
+                        ):
+                            raise self.reference.ProofError("create failed")
+                durable_cleanup.assert_called_once_with(
+                    "proof", marker_missing_ok=True
+                )
+                self.assertFalse(self.reference.marker_path("proof").exists())
+            finally:
+                self.reference.MARKERS = original_markers
+                self.reference.KUBECONFIGS = original_kubeconfigs
 
     def test_reference_refuses_cluster_without_marker_in_if_present_cleanup(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

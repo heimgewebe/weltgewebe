@@ -385,6 +385,19 @@ def install(
                 _install_executable(candidate, destination)
         else:
             raise RuntimeError(f"unsupported format {spec['format']} for {name}")
+        expected_binary_sha256 = spec.get("binary_sha256")
+        if (
+            not isinstance(expected_binary_sha256, str)
+            or len(expected_binary_sha256) != 64
+            or any(ch not in "0123456789abcdef" for ch in expected_binary_sha256)
+        ):
+            raise RuntimeError(f"tool {name} has no canonical binary_sha256 in the lock")
+        actual_binary_sha256 = _sha256(destination)
+        if actual_binary_sha256 != expected_binary_sha256:
+            raise DownloadIntegrityError(
+                f"installed tool hash mismatch for {name}: "
+                f"expected {expected_binary_sha256}, got {actual_binary_sha256}"
+            )
         tool_paths[name] = str(destination)
 
     artifact_paths: dict[str, str] = {}

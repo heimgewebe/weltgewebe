@@ -443,15 +443,19 @@ def generate_owner_id(prefix: str) -> str:
     return f"{prefix}-{os.getpid()}-{secrets.token_hex(8)}"
 
 
-def _validate_ownership_binding(commit: str, owner_id: str) -> None:
-    if not FULL_GIT_OBJECT_ID.fullmatch(commit):
-        raise ProofError("cluster ownership requires a full lowercase Git object id")
+def validate_owner_id(owner_id: str) -> None:
     if (
         not owner_id
         or len(owner_id) > 128
         or re.fullmatch(r"[A-Za-z0-9._:@-]+", owner_id) is None
     ):
         raise ProofError("cluster ownership requires a stable owner id")
+
+
+def validate_ownership_binding(commit: str, owner_id: str) -> None:
+    if not FULL_GIT_OBJECT_ID.fullmatch(commit):
+        raise ProofError("cluster ownership requires a full lowercase Git object id")
+    validate_owner_id(owner_id)
 
 
 @contextmanager
@@ -486,7 +490,7 @@ def _require_marker_binding(
     expected_commit: str,
     expected_owner_id: str,
 ) -> None:
-    _validate_ownership_binding(expected_commit, expected_owner_id)
+    validate_ownership_binding(expected_commit, expected_owner_id)
     expected = {
         "schema_version": 2,
         "cluster": name,
@@ -583,7 +587,7 @@ def write_json_atomic(path: Path, payload: dict[str, Any]) -> None:
 
 
 def _write_marker_locked(name: str, commit: str, owner_id: str) -> None:
-    _validate_ownership_binding(commit, owner_id)
+    validate_ownership_binding(commit, owner_id)
     MARKERS.mkdir(parents=True, exist_ok=True)
     marker = marker_path(name)
     temporary = MARKERS / f".{name}.{os.getpid()}.{secrets.token_hex(8)}.marker.tmp"
@@ -620,7 +624,7 @@ def write_marker(name: str, commit: str, owner_id: str) -> None:
 
 
 def reserve_cluster_name(kind: str, name: str, commit: str, owner_id: str) -> None:
-    _validate_ownership_binding(commit, owner_id)
+    validate_ownership_binding(commit, owner_id)
     with cluster_ownership_lock(name):
         if name in clusters(kind):
             raise ProofError(
@@ -645,7 +649,7 @@ def cluster_creation_reservation(
     gap between reservation and cluster creation. Persistent lock files are kept
     because unlinking flock files can create inode races between waiters.
     """
-    _validate_ownership_binding(commit, owner_id)
+    validate_ownership_binding(commit, owner_id)
     with cluster_ownership_lock(name):
         if name in clusters(kind):
             raise ProofError(
@@ -667,8 +671,7 @@ def cluster_creation_reservation(
             except Exception as error:
                 rollback_error = error
             if rollback_error is None:
-                marker_path(name).unlink(missing_ok=True)
-                kubeconfig_path(name).unlink(missing_ok=True)
+                _remove_cluster_state_files_durably(name, marker_missing_ok=True)
             else:
                 print(
                     f"cluster {name!r} creation rollback incomplete; "
@@ -676,6 +679,20 @@ def cluster_creation_reservation(
                     file=sys.stderr,
                 )
             raise
+
+
+def _remove_cluster_state_files_durably(
+    name: str, *, marker_missing_ok: bool = False
+) -> None:
+    marker = marker_path(name)
+    marker.unlink(missing_ok=marker_missing_ok)
+    if marker.parent.is_dir():
+        _fsync_directory(marker.parent)
+
+    kubeconfig = kubeconfig_path(name)
+    kubeconfig.unlink(missing_ok=True)
+    if kubeconfig.parent.is_dir():
+        _fsync_directory(kubeconfig.parent)
 
 
 def _delete_owned_cluster_locked(
@@ -694,8 +711,7 @@ def _delete_owned_cluster_locked(
     )
     if name in clusters(kind):
         run([kind, "delete", "cluster", "--name", name])
-    marker_path(name).unlink()
-    kubeconfig_path(name).unlink(missing_ok=True)
+    _remove_cluster_state_files_durably(name)
 
 
 def delete_owned_cluster(
