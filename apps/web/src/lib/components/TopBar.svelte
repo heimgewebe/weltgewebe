@@ -15,10 +15,9 @@
   });
 </script>
 
-<div
+<nav
   class="topbar"
   class:panel-open={$contextPanelOpen}
-  role="toolbar"
   aria-label="Navigation"
 >
   {#if AttentionSlot}
@@ -27,7 +26,7 @@
   {#if AuthSlot}
     <AuthSlot />
   {/if}
-</div>
+</nav>
 
 <style>
   .topbar {
