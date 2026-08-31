@@ -1,0 +1,125 @@
+---
+name: PR1813 Kustomization status binding fix
+
+"on":
+  push:
+    branches:
+      - bureau/weltgewebe-os-v1-t084/5e0085fc46
+    paths:
+      - .github/workflows/pr1813-kustomization-status-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          fetch-depth: 0
+          ref: bureau/weltgewebe-os-v1-t084/5e0085fc46
+
+      - name: Verify exact parent
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "64f068d8d3a4676b0c63b2a64464b4d5c3768db6"
+
+      - name: Bind data readiness to current applied revision
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_once(path: str, old: str, new: str) -> None:
+              p = Path(path)
+              text = p.read_text(encoding="utf-8")
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f"{path}: expected one replacement, found {count}")
+              p.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          staging = "scripts/platform/staging_cell.py"
+          replace_once(
+              staging,
+              '''    data_ready = output(\n        [\n            kubectl,\n            "-n",\n            "flux-system",\n            "get",\n            "kustomization",\n            DATA_KUSTOMIZATION,\n            "--ignore-not-found",\n            "-o",\n            "jsonpath={.status.conditions[?(@.type=='Ready')].status}",\n        ]\n    ) or "missing"\n''',
+              '''    data_health_raw = output(\n        [\n            kubectl,\n            "-n",\n            "flux-system",\n            "get",\n            "kustomization",\n            DATA_KUSTOMIZATION,\n            "--ignore-not-found",\n            "-o",\n            "jsonpath={.metadata.generation}|{.status.observedGeneration}|{.status.conditions[?(@.type=='Ready')].status}|{.status.lastAppliedRevision}",\n        ]\n    )\n    data_health_parts = data_health_raw.split("|", 3) if data_health_raw else []\n    if len(data_health_parts) != 4:\n        data_ready = "missing"\n        data_revision = "missing"\n        data_matches_commit = False\n    else:\n        (\n            data_generation,\n            data_observed_generation,\n            data_ready_status,\n            data_revision,\n        ) = data_health_parts\n        if (\n            not data_generation\n            or not data_observed_generation\n            or data_generation != data_observed_generation\n        ):\n            data_ready = "stale"\n        else:\n            data_ready = data_ready_status or "missing"\n        data_revision = data_revision or "missing"\n        data_matches_commit = flux_revision_matches_commit(data_revision, commit)\n''',
+          )
+          replace_once(
+              staging,
+              '''        and source_ready == "True"\n        and data_ready == "True"\n        and all(value == "Bound" for value in pvcs.values())\n''',
+              '''        and source_ready == "True"\n        and data_ready == "True"\n        and data_matches_commit\n        and all(value == "Bound" for value in pvcs.values())\n''',
+          )
+          replace_once(
+              staging,
+              '''        "source_ready": source_ready,\n        "data_ready": data_ready,\n        "pvcs": pvcs,\n''',
+              '''        "source_ready": source_ready,\n        "data_ready": data_ready,\n        "data_revision": data_revision,\n        "data_matches_commit": data_matches_commit,\n        "pvcs": pvcs,\n''',
+          )
+          replace_once(
+              staging,
+              '''                    "source_ready": result.get("source_ready") == "True",\n                    "data_ready": result.get("data_ready") == "True",\n                    "pvcs": {\n''',
+              '''                    "source_ready": result.get("source_ready") == "True",\n                    "data_ready": result.get("data_ready") == "True",\n                    "data_revision": str(result.get("data_revision") or ""),\n                    "data_matches_commit": bool(result.get("data_matches_commit")),\n                    "pvcs": {\n''',
+          )
+
+          tests = "scripts/ci/tests/test_staging_cell_runtime_contract.py"
+          replace_once(
+              tests,
+              '''            "source_matches_commit": False,\n            "data_ready": "False",\n            "pvcs": {"postgres-data": "Bound", "nats-data": "Pending"},\n''',
+              '''            "source_matches_commit": False,\n            "data_ready": "False",\n            "data_revision": "main@sha1:" + "d" * 40,\n            "data_matches_commit": False,\n            "pvcs": {"postgres-data": "Bound", "nats-data": "Pending"},\n''',
+          )
+          replace_once(
+              tests,
+              '''        self.assertFalse(public["source_matches_commit"])\n        self.assertEqual(public["pvcs"]["nats-data"], "Pending")\n''',
+              '''        self.assertFalse(public["source_matches_commit"])\n        self.assertFalse(public["data_matches_commit"])\n        self.assertEqual(public["data_revision"], "main@sha1:" + "d" * 40)\n        self.assertEqual(public["pvcs"]["nats-data"], "Pending")\n''',
+          )
+          replace_once(
+              tests,
+              '''                        "1|1|True",\n                        "True",\n                        "Bound",\n                        "Bound",\n''',
+              '''                        "1|1|True",\n                        f"1|1|True|main@sha1:{commit}",\n                        "Bound",\n                        "Bound",\n''',
+          )
+          replace_once(
+              tests,
+              '''                    side_effect=[f"main@sha1:{commit}", "1|1|True", "True", "Bound", "Bound"],\n''',
+              '''                    side_effect=[\n                        f"main@sha1:{commit}",\n                        "1|1|True",\n                        f"1|1|True|main@sha1:{commit}",\n                        "Bound",\n                        "Bound",\n                    ],\n''',
+          )
+          replace_once(
+              tests,
+              '''                        "3|3|False",\n                        "True",\n                        "Bound",\n                        "Bound",\n''',
+              '''                        "3|3|False",\n                        f"1|1|True|main@sha1:{commit}",\n                        "Bound",\n                        "Bound",\n''',
+          )
+
+          extra_test = '''    def test_status_binds_data_kustomization_to_current_revision(self) -> None:\n        owner = "owner-a"\n        commit = "6" * 40\n        other_commit = "8" * 40\n        args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)\n        cases = (\n            (\n                "stale-generation",\n                f"4|3|True|main@sha1:{commit}",\n                "degraded",\n                "stale",\n                True,\n            ),\n            (\n                "wrong-revision",\n                f"4|4|True|main@sha1:{other_commit}",\n                "degraded",\n                "True",\n                False,\n            ),\n            (\n                "current-revision",\n                f"4|4|True|main@sha1:{commit}",\n                "ready",\n                "True",\n                True,\n            ),\n        )\n        for name, data_health, expected_status, expected_ready, expected_match in cases:\n            with self.subTest(name=name):\n                with tempfile.TemporaryDirectory(\n                    prefix=f"staging-cell-data-status-{name}-"\n                ) as tmp_name:\n                    root = Path(tmp_name)\n                    self._write_bound_receipt(root, owner=owner, commit=commit)\n                    with (\n                        mock.patch.object(staging, "state_root", return_value=root),\n                        mock.patch.object(staging, "configure_reference_paths"),\n                        mock.patch.object(\n                            staging,\n                            "load_tool_receipt",\n                            return_value=self._tool_receipt(),\n                        ),\n                        mock.patch.object(\n                            staging.reference,\n                            "clusters",\n                            return_value=[staging.DEFAULT_CLUSTER],\n                        ),\n                        mock.patch.object(staging.reference, "require_owned_cluster"),\n                        mock.patch.object(\n                            staging,\n                            "output",\n                            side_effect=[\n                                f"main@sha1:{commit}",\n                                "1|1|True",\n                                data_health,\n                                "Bound",\n                                "Bound",\n                            ],\n                        ),\n                        mock.patch.object(\n                            staging,\n                            "verify_external_secret_binding",\n                            return_value={\n                                "database": True,\n                                "runtime": True,\n                                "ready": True,\n                            },\n                        ),\n                        mock.patch.object(\n                            staging,\n                            "image_promotion_state",\n                            return_value={"status": "blocked"},\n                        ),\n                    ):\n                        result = staging.command_status(args)\n                self.assertEqual(result["status"], expected_status)\n                self.assertEqual(result["data_ready"], expected_ready)\n                self.assertEqual(result["data_matches_commit"], expected_match)\n                self.assertEqual(\n                    result["data_revision"], data_health.rsplit("|", 1)[-1]\n                )\n\n'''
+          replace_once(
+              tests,
+              '''    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n''',
+              extra_test
+              + '''    def test_wait_data_checks_pvcs_before_flux_health_without_rollout_duplication(self) -> None:\n''',
+          )
+          PY
+
+      - name: Run focused regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --no-cache-dir 'PyYAML==6.0.2'
+          python3 -m compileall -q scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          python3 -m unittest scripts.ci.tests.test_staging_cell_runtime_contract
+          python3 scripts/platform/staging_cell.py self-check
+          git diff --check
+
+      - name: Commit exact fix and remove one-shot writer
+        shell: bash
+        env:
+          BRANCH: bureau/weltgewebe-os-v1-t084/5e0085fc46
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/pr1813-kustomization-status-fix.yml
+          git config user.name 'alexdermohr'
+          git config user.email '216529510+alexdermohr@users.noreply.github.com'
+          git add scripts/platform/staging_cell.py scripts/ci/tests/test_staging_cell_runtime_contract.py
+          git diff --cached --check
+          git commit -m 'fix(platform): bind staging data readiness to revision'
+          git push origin "HEAD:${BRANCH}"
