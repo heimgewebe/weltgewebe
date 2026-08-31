@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
         with:
-          fetch-depth: 2
+          fetch-depth: 20
           persist-credentials: true
       - uses: actions/setup-python@8549b9f8f590ad24eab7482f36f6e1e24d34597b # tag: v7.0.0
         with:
@@ -38,193 +38,216 @@ jobs:
       - uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # tag: v8.3.2
         with:
           version: ${{ steps.uv-version.outputs.uv_version }}
-      - name: Verify exact parent and bootstrap commit
+      - name: Verify exact bootstrap ancestry
         shell: bash
         run: |
           set -euo pipefail
-          expected_parent="9e252e954b968ac1269b70f3eae13dd721656f0c"
-          test "$(git rev-parse HEAD^)" = "${expected_parent}"
-          test "$(git diff --name-only HEAD^ HEAD)" = ".github/workflows/t084-closeout-fix.yml"
+          bootstrap="9e252e954b968ac1269b70f3eae13dd721656f0c"
+          git cat-file -e "${bootstrap}^{commit}"
+          git merge-base --is-ancestor "${bootstrap}" HEAD
+          test "$(git diff --name-only "${bootstrap}" HEAD)" = ".github/workflows/t084-closeout-fix.yml"
       - name: Apply exact review fixes
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import textwrap
 
           code_path = Path("scripts/platform/staging_cell.py")
           tests_path = Path("scripts/ci/tests/test_staging_cell_runtime_contract.py")
           code = code_path.read_text(encoding="utf-8")
           tests = tests_path.read_text(encoding="utf-8")
 
-          old_secret = '''        try:
-              payload = json.loads(path.read_text(encoding="utf-8"))
-          except (json.JSONDecodeError, OSError, UnicodeError) as exc:
-              raise StagingCellError("staging secret source is unreadable or malformed") from exc
-          else:
-          '''
-          new_secret = '''        try:
-              payload = json.loads(path.read_text(encoding="utf-8"))
-          except (json.JSONDecodeError, OSError, UnicodeError) as exc:
-              raise StagingCellError("staging secret source is unreadable or malformed") from exc
-          if not isinstance(payload, dict):
-              raise StagingCellError("staging secret source is malformed")
-          else:
-          '''
-          # The source has an `else:` belonging to `if path.exists()`, so match the
-          # actual indentation without dedent magic.
-          old_secret = old_secret.replace("          else:\n", "      else:\n")
-          new_secret = new_secret.replace("          else:\n", "      else:\n")
-          if code.count(old_secret) != 1:
-              raise SystemExit("secret-source preimage mismatch")
-          code = code.replace(old_secret, new_secret, 1)
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              if text.count(old) != 1:
+                  raise SystemExit(f"{label} preimage mismatch")
+              return text.replace(old, new, 1)
 
-          old_pvc = '''        all_visible = all(observed[pvc] != "missing" for pvc in pvcs)
-          if all_visible:
-              if bind_deadline is None:
-                  bind_deadline = min(
-                      now + bind_timeout_seconds, visibility_deadline
-                  )
-              if now >= bind_deadline:
-                  raise StagingCellError(
-                      "staging PVCs did not bind within "
-                      f"{bind_timeout_seconds:g}s after becoming visible: {observed!r}"
-                  )
-          elif now >= visibility_deadline:
-              raise StagingCellError(
-                  "staging PVCs did not become visible within the Flux Kustomization "
-                  f"budget of {visibility_timeout_seconds:g}s: {observed!r}"
-              )
-          '''
-          new_pvc = '''        all_visible = all(observed[pvc] != "missing" for pvc in pvcs)
-          if all_visible and bind_deadline is None:
-              bind_deadline = min(now + bind_timeout_seconds, visibility_deadline)
-          if bind_deadline is not None and now >= bind_deadline:
-              raise StagingCellError(
-                  "staging PVCs did not bind within "
-                  f"{bind_timeout_seconds:g}s after becoming visible: {observed!r}"
-              )
-          if bind_deadline is None and now >= visibility_deadline:
-              raise StagingCellError(
-                  "staging PVCs did not become visible within the Flux Kustomization "
-                  f"budget of {visibility_timeout_seconds:g}s: {observed!r}"
-              )
-          '''
-          if code.count(old_pvc) != 1:
-              raise SystemExit("PVC deadline preimage mismatch")
-          code = code.replace(old_pvc, new_pvc, 1)
+          old_secret = "\n".join(
+              [
+                  "        try:",
+                  '            payload = json.loads(path.read_text(encoding="utf-8"))',
+                  "        except (json.JSONDecodeError, OSError, UnicodeError) as exc:",
+                  '            raise StagingCellError("staging secret source is unreadable or malformed") from exc',
+                  "    else:",
+              ]
+          ) + "\n"
+          new_secret = "\n".join(
+              [
+                  "        try:",
+                  '            payload = json.loads(path.read_text(encoding="utf-8"))',
+                  "        except (json.JSONDecodeError, OSError, UnicodeError) as exc:",
+                  '            raise StagingCellError("staging secret source is unreadable or malformed") from exc',
+                  "        if not isinstance(payload, dict):",
+                  '            raise StagingCellError("staging secret source is malformed")',
+                  "    else:",
+              ]
+          ) + "\n"
+          code = replace_once(code, old_secret, new_secret, "secret-source")
 
-          malformed_marker = '''    def test_status_degrades_when_injected_secret_is_missing(self) -> None:
-          '''
-          non_object_test = '''    def test_status_degrades_for_non_object_external_secret_json(self) -> None:
-              owner = "owner-a"
-              commit = "d" * 40
-              args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
-              for label, secret_text in (("array-root", "[]"), ("null-root", "null")):
-                  with self.subTest(label=label):
-                      with tempfile.TemporaryDirectory(
-                          prefix=f"staging-cell-status-non-object-secret-{label}-"
-                      ) as tmp_name:
-                          root = Path(tmp_name)
-                          self._write_bound_receipt(root, owner=owner, commit=commit)
-                          secret_path = root / "secrets/staging-runtime.json"
-                          secret_path.write_text(secret_text, encoding="utf-8")
-                          secret_path.chmod(0o600)
-                          with (
-                              mock.patch.object(staging, "state_root", return_value=root),
-                              mock.patch.object(staging, "configure_reference_paths"),
-                              mock.patch.object(
-                                  staging,
-                                  "load_tool_receipt",
-                                  return_value=self._tool_receipt(),
-                              ),
-                              mock.patch.object(
-                                  staging.reference,
-                                  "clusters",
-                                  return_value=[staging.DEFAULT_CLUSTER],
-                              ),
-                              mock.patch.object(staging.reference, "require_owned_cluster"),
-                              mock.patch.object(
-                                  staging,
-                                  "output",
-                                  side_effect=[
-                                      f"main@sha1:{commit}",
-                                      "1|1|True",
-                                      f"1|1|True|main@sha1:{commit}",
-                                      "Bound",
-                                      "Bound",
-                                  ],
-                              ),
-                              mock.patch.object(
-                                  staging,
-                                  "image_promotion_state",
-                                  return_value={"status": "blocked"},
-                              ),
-                          ):
-                              result = staging.command_status(args)
-
-                      self.assertEqual(result["status"], "degraded")
-                      self.assertEqual(
-                          result["external_secret"],
-                          {"database": False, "runtime": False, "ready": False},
+          old_pvc = textwrap.indent(
+              textwrap.dedent(
+                  """\
+                  all_visible = all(observed[pvc] != "missing" for pvc in pvcs)
+                  if all_visible:
+                      if bind_deadline is None:
+                          bind_deadline = min(
+                              now + bind_timeout_seconds, visibility_deadline
+                          )
+                      if now >= bind_deadline:
+                          raise StagingCellError(
+                              "staging PVCs did not bind within "
+                              f"{bind_timeout_seconds:g}s after becoming visible: {observed!r}"
+                          )
+                  elif now >= visibility_deadline:
+                      raise StagingCellError(
+                          "staging PVCs did not become visible within the Flux Kustomization "
+                          f"budget of {visibility_timeout_seconds:g}s: {observed!r}"
                       )
+                  """
+              ),
+              "        ",
+          )
+          new_pvc = textwrap.indent(
+              textwrap.dedent(
+                  """\
+                  all_visible = all(observed[pvc] != "missing" for pvc in pvcs)
+                  if all_visible and bind_deadline is None:
+                      bind_deadline = min(now + bind_timeout_seconds, visibility_deadline)
+                  if bind_deadline is not None and now >= bind_deadline:
+                      raise StagingCellError(
+                          "staging PVCs did not bind within "
+                          f"{bind_timeout_seconds:g}s after becoming visible: {observed!r}"
+                      )
+                  if bind_deadline is None and now >= visibility_deadline:
+                      raise StagingCellError(
+                          "staging PVCs did not become visible within the Flux Kustomization "
+                          f"budget of {visibility_timeout_seconds:g}s: {observed!r}"
+                      )
+                  """
+              ),
+              "        ",
+          )
+          code = replace_once(code, old_pvc, new_pvc, "PVC deadline")
 
-          '''
+          malformed_marker = "    def test_status_degrades_when_injected_secret_is_missing(self) -> None:\n"
+          non_object_body = textwrap.dedent(
+              """\
+              def test_status_degrades_for_non_object_external_secret_json(self) -> None:
+                  owner = "owner-a"
+                  commit = "d" * 40
+                  args = argparse.Namespace(cluster=staging.DEFAULT_CLUSTER)
+                  for label, secret_text in (("array-root", "[]"), ("null-root", "null")):
+                      with self.subTest(label=label):
+                          with tempfile.TemporaryDirectory(
+                              prefix=f"staging-cell-status-non-object-secret-{label}-"
+                          ) as tmp_name:
+                              root = Path(tmp_name)
+                              self._write_bound_receipt(root, owner=owner, commit=commit)
+                              secret_path = root / "secrets/staging-runtime.json"
+                              secret_path.write_text(secret_text, encoding="utf-8")
+                              secret_path.chmod(0o600)
+                              with (
+                                  mock.patch.object(staging, "state_root", return_value=root),
+                                  mock.patch.object(staging, "configure_reference_paths"),
+                                  mock.patch.object(
+                                      staging,
+                                      "load_tool_receipt",
+                                      return_value=self._tool_receipt(),
+                                  ),
+                                  mock.patch.object(
+                                      staging.reference,
+                                      "clusters",
+                                      return_value=[staging.DEFAULT_CLUSTER],
+                                  ),
+                                  mock.patch.object(staging.reference, "require_owned_cluster"),
+                                  mock.patch.object(
+                                      staging,
+                                      "output",
+                                      side_effect=[
+                                          f"main@sha1:{commit}",
+                                          "1|1|True",
+                                          f"1|1|True|main@sha1:{commit}",
+                                          "Bound",
+                                          "Bound",
+                                      ],
+                                  ),
+                                  mock.patch.object(
+                                      staging,
+                                      "image_promotion_state",
+                                      return_value={"status": "blocked"},
+                                  ),
+                              ):
+                                  result = staging.command_status(args)
+
+                          self.assertEqual(result["status"], "degraded")
+                          self.assertEqual(
+                              result["external_secret"],
+                              {"database": False, "runtime": False, "ready": False},
+                          )
+
+              """
+          )
+          non_object_test = textwrap.indent(non_object_body, "    ")
           if tests.count(malformed_marker) != 1:
               raise SystemExit("non-object test insertion point mismatch")
           if "test_status_degrades_for_non_object_external_secret_json" in tests:
               raise SystemExit("non-object regression already present")
           tests = tests.replace(malformed_marker, non_object_test + malformed_marker, 1)
 
-          pvc_marker = '''    def test_pvc_wait_uses_flux_budget_before_claims_exist(self) -> None:
-          '''
-          pvc_test = '''    def test_pvc_wait_keeps_bind_deadline_after_visible_claim_disappears(self) -> None:
-              pending = json.dumps(
-                  {
-                      "apiVersion": "v1",
-                      "kind": "List",
-                      "items": [
-                          {
-                              "metadata": {"name": "postgres-data"},
-                              "status": {"phase": "Pending"},
-                          },
-                          {
-                              "metadata": {"name": "nats-data"},
-                              "status": {"phase": "Pending"},
-                          },
-                      ],
-                  }
-              )
-              one_missing = json.dumps(
-                  {
-                      "apiVersion": "v1",
-                      "kind": "List",
-                      "items": [
-                          {
-                              "metadata": {"name": "postgres-data"},
-                              "status": {"phase": "Pending"},
-                          }
-                      ],
-                  }
-              )
-              with (
-                  mock.patch.object(staging, "output", side_effect=[pending, one_missing]),
-                  mock.patch.object(
-                      staging.time, "monotonic", side_effect=[0.0, 1.0, 12.0]
-                  ),
-                  mock.patch.object(staging.time, "sleep"),
-              ):
-                  with self.assertRaisesRegex(
-                      staging.StagingCellError,
-                      "did not bind within 10s after becoming visible",
+          pvc_marker = "    def test_pvc_wait_uses_flux_budget_before_claims_exist(self) -> None:\n"
+          pvc_body = textwrap.dedent(
+              """\
+              def test_pvc_wait_keeps_bind_deadline_after_visible_claim_disappears(self) -> None:
+                  pending = json.dumps(
+                      {
+                          "apiVersion": "v1",
+                          "kind": "List",
+                          "items": [
+                              {
+                                  "metadata": {"name": "postgres-data"},
+                                  "status": {"phase": "Pending"},
+                              },
+                              {
+                                  "metadata": {"name": "nats-data"},
+                                  "status": {"phase": "Pending"},
+                              },
+                          ],
+                      }
+                  )
+                  one_missing = json.dumps(
+                      {
+                          "apiVersion": "v1",
+                          "kind": "List",
+                          "items": [
+                              {
+                                  "metadata": {"name": "postgres-data"},
+                                  "status": {"phase": "Pending"},
+                              }
+                          ],
+                      }
+                  )
+                  with (
+                      mock.patch.object(staging, "output", side_effect=[pending, one_missing]),
+                      mock.patch.object(
+                          staging.time, "monotonic", side_effect=[0.0, 1.0, 12.0]
+                      ),
+                      mock.patch.object(staging.time, "sleep"),
                   ):
-                      staging.wait_pvcs_bound(
-                          "kubectl",
-                          visibility_timeout_seconds=100.0,
-                          bind_timeout_seconds=10.0,
-                      )
+                      with self.assertRaisesRegex(
+                          staging.StagingCellError,
+                          "did not bind within 10s after becoming visible",
+                      ):
+                          staging.wait_pvcs_bound(
+                              "kubectl",
+                              visibility_timeout_seconds=100.0,
+                              bind_timeout_seconds=10.0,
+                          )
 
-          '''
+              """
+          )
+          pvc_test = textwrap.indent(pvc_body, "    ")
           if tests.count(pvc_marker) != 1:
               raise SystemExit("PVC regression insertion point mismatch")
           if "test_pvc_wait_keeps_bind_deadline_after_visible_claim_disappears" in tests:
@@ -246,14 +269,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          expected_parent="9e252e954b968ac1269b70f3eae13dd721656f0c"
+          bootstrap="9e252e954b968ac1269b70f3eae13dd721656f0c"
           rm .github/workflows/t084-closeout-fix.yml
-          actual_paths=$(git diff --name-only "${expected_parent}" | sort)
+          actual_paths=$(git diff --name-only "${bootstrap}" | sort)
           expected_paths=$(printf '%s\n' \
             'scripts/ci/tests/test_staging_cell_runtime_contract.py' \
             'scripts/platform/staging_cell.py' | sort)
           test "${actual_paths}" = "${expected_paths}"
-          git diff --check "${expected_parent}"
+          git diff --check "${bootstrap}"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A -- \
