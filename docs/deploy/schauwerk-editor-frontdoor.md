@@ -101,7 +101,7 @@ release directory; retargeting host `current` after admission cannot change the
 bytes served by that container.
 
 The production reconciler uses the same raw manifest SHA-256 as part of its
-same-commit no-op decision. A matching Weltgewebe frontend/API commit is therefore
+same-commit no-op decision. A matching commonThing frontend/API commit is therefore
 insufficient when `/schaubild/manifest.json` still belongs to another reviewed
 Schauwerk release: that state requires a full exact-revision redeploy so Caddy is
 recreated with the lock-bound release. The exact-commit helper also replaces the

@@ -819,7 +819,9 @@ class DeployExactCommitIntegrationTests(unittest.TestCase):
                 "https://example.invalid/schaubild/manifest.json"
             ),
             "TEST_COMMIT": self.commit,
-            "TEST_SCHAUWERK_MANIFEST": str(self.schauwerk_manifest),
+            "TEST_SCHAUWERK_MANIFEST": str(
+                getattr(self, "schauwerk_manifest", self.root / "schauwerk-manifest.json")
+            ),
             "TEST_REMOTE": str(self.remote),
             "TEST_WEB_ARTIFACT": str(self.artifact),
             "TEST_UP_LOG": str(self.root / "weltgewebe-up.log"),

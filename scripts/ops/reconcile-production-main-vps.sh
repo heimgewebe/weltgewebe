@@ -1447,7 +1447,7 @@ write_state "observed" "$target_commit" "reconcile started"
 
 # The public Schauwerk shell is separately versioned but served by this edge.
 # A same-commit no-op therefore needs the exact raw manifest bytes reviewed in
-# this Weltgewebe commit, not only matching Weltgewebe frontend/API versions.
+# this repository commit, not only matching commonThing frontend/API versions.
 schauwerk_release_lock_json="$(
   git -C "$SOURCE_CHECKOUT" show "$target_commit:infra/schauwerk-editor/release-lock.json"
 )" || fail "target commit is missing the Schauwerk editor release lock"
