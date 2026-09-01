@@ -22,6 +22,15 @@ def load_workflow() -> dict:
     return payload
 
 
+def step_run(job: dict, name: str) -> str:
+    for step in job["steps"]:
+        if isinstance(step, dict) and step.get("name") == name:
+            run = step.get("run")
+            assert isinstance(run, str)
+            return run
+    raise AssertionError(f"missing workflow step: {name}")
+
+
 def test_promotion_is_manual_staging_only_and_minimally_privileged() -> None:
     workflow = load_workflow()
     assert set(workflow["on"]) == {"workflow_dispatch"}
@@ -63,6 +72,29 @@ def test_promotion_builds_natively_and_pushes_content_by_digest() -> None:
     assert ':sha-$SOURCE_COMMIT-$ARCH' not in text
 
 
+def test_each_architecture_digest_is_source_bound_before_it_is_exported() -> None:
+    workflow = load_workflow()
+    build = workflow["jobs"]["build"]
+    cases = (
+        ("Build and verify API by digest", "$API_CANONICAL", "api"),
+        ("Build and verify Web by digest", "$WEB_CANONICAL", "web"),
+    )
+    for step_name, image, directory in cases:
+        run = step_run(build, step_name)
+        assert f'ref="{image}@$digest"' in run
+        assert 'index .SLSA' in run
+        assert '.metadata.completeness.parameters == true' in run
+        assert 'build-arg:GIT_COMMIT_SHA' in run
+        assert 'index .Image' in run
+        assert 'org.opencontainers.image.revision' in run
+        assert 'org.opencontainers.image.source' in run
+        assert '(.os + "/" + .architecture) == $platform' in run
+        assert 'index .SBOM' in run
+        assert run.index('imagetools inspect "$ref"') < run.index(
+            f'touch "build/staging-image-digests/{directory}/'
+        )
+
+
 def test_promotion_fails_closed_on_protected_main_drift() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert text.count('test "$GITHUB_REF" = "refs/heads/main"') == 2
@@ -87,6 +119,10 @@ def test_canonical_images_are_single_truth_and_legacy_names_are_digest_aliases()
     }
     assert contract["platforms"] == ["linux/amd64", "linux/arm64"]
     assert contract["attestations"] == ["provenance-mode-max", "sbom"]
+    assert any(
+        "provenance" in requirement and "before manifest publication" in requirement
+        for requirement in contract["activation_requirements"]
+    )
 
     text = WORKFLOW.read_text(encoding="utf-8")
     assert '--output "type=image,name=$API_LEGACY' not in text
@@ -97,7 +133,7 @@ def test_canonical_images_are_single_truth_and_legacy_names_are_digest_aliases()
     assert 'test "$web_legacy_digest" = "$web_digest"' in text
 
 
-def test_promotion_merges_digest_artifacts_and_binds_attestations_to_source() -> None:
+def test_promotion_assembles_only_verified_digests_and_rechecks_attestations() -> None:
     workflow = load_workflow()
     promote = workflow["jobs"]["promote"]
     uses = [step.get("uses") for step in promote["steps"] if isinstance(step, dict)]
@@ -106,19 +142,22 @@ def test_promotion_merges_digest_artifacts_and_binds_attestations_to_source() ->
     assert DOWNLOAD in uses
     assert UPLOAD in uses
 
-    text = WORKFLOW.read_text(encoding="utf-8")
-    assert 'test "${#api_digests[@]}" -eq 2' in text
-    assert 'test "${#web_digests[@]}" -eq 2' in text
-    assert 'index .SLSA' in text
-    assert 'index .Image' in text
-    assert 'index .SBOM' in text
-    assert '.metadata.completeness.parameters == true' in text
-    assert 'build-arg:GIT_COMMIT_SHA' in text
-    assert 'org.opencontainers.image.revision' in text
-    assert 'org.opencontainers.image.source' in text
-    assert '--arg commit "$SOURCE_COMMIT"' in text
-    assert '--arg source "$expected_source"' in text
-    assert 'sort == ["amd64", "arm64"]' in text
+    assemble = step_run(promote, "Assemble canonical multi-arch indexes from verified digests")
+    verify = step_run(promote, "Verify indexes, provenance, SBOM, aliases and write receipt")
+    assert 'test "${#api_digests[@]}" -eq 2' in assemble
+    assert 'test "${#web_digests[@]}" -eq 2' in assemble
+    assert "imagetools create" in assemble
+    assert 'index .SLSA' in verify
+    assert 'index .Image' in verify
+    assert 'index .SBOM' in verify
+    assert '.metadata.completeness.parameters == true' in verify
+    assert 'build-arg:GIT_COMMIT_SHA' in verify
+    assert 'org.opencontainers.image.revision' in verify
+    assert 'org.opencontainers.image.source' in verify
+    assert '--arg commit "$SOURCE_COMMIT"' in verify
+    assert '--arg source "$expected_source"' in verify
+    assert 'sort == ["amd64", "arm64"]' in verify
+    assert "| unique" not in verify
 
 
 def test_promotion_persists_a_revision_and_digest_bound_receipt() -> None:

@@ -69,7 +69,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      - name: Build and push API by digest
+      - name: Build and verify API by digest
         shell: bash
         run: |
           set -euo pipefail
@@ -90,8 +90,30 @@ jobs:
             .
           digest="$(jq -r '."containerimage.digest" // empty' build/api-metadata.json)"
           printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          ref="$API_CANONICAL@$digest"
+          expected_source="https://github.com/${GITHUB_REPOSITORY}"
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SLSA \"$PLATFORM\")}}" \
+            | jq -e --arg commit "$SOURCE_COMMIT" '
+                type == "object"
+                and .metadata.completeness.parameters == true
+                and .invocation.parameters.args["build-arg:GIT_COMMIT_SHA"] == $commit
+              ' >/dev/null
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .Image \"$PLATFORM\")}}" \
+            | jq -e \
+                --arg commit "$SOURCE_COMMIT" \
+                --arg source "$expected_source" \
+                --arg platform "$PLATFORM" '
+                  (.os + "/" + .architecture) == $platform
+                  and .config.Labels["org.opencontainers.image.revision"] == $commit
+                  and .config.Labels["org.opencontainers.image.source"] == $source
+                ' >/dev/null
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SBOM \"$PLATFORM\")}}" \
+            | jq -e 'type == "object" and length > 0' >/dev/null
           touch "build/staging-image-digests/api/${digest#sha256:}"
-      - name: Build and push Web by digest
+      - name: Build and verify Web by digest
         shell: bash
         run: |
           set -euo pipefail
@@ -111,8 +133,30 @@ jobs:
             .
           digest="$(jq -r '."containerimage.digest" // empty' build/web-metadata.json)"
           printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          ref="$WEB_CANONICAL@$digest"
+          expected_source="https://github.com/${GITHUB_REPOSITORY}"
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SLSA \"$PLATFORM\")}}" \
+            | jq -e --arg commit "$SOURCE_COMMIT" '
+                type == "object"
+                and .metadata.completeness.parameters == true
+                and .invocation.parameters.args["build-arg:GIT_COMMIT_SHA"] == $commit
+              ' >/dev/null
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .Image \"$PLATFORM\")}}" \
+            | jq -e \
+                --arg commit "$SOURCE_COMMIT" \
+                --arg source "$expected_source" \
+                --arg platform "$PLATFORM" '
+                  (.os + "/" + .architecture) == $platform
+                  and .config.Labels["org.opencontainers.image.revision"] == $commit
+                  and .config.Labels["org.opencontainers.image.source"] == $source
+                ' >/dev/null
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SBOM \"$PLATFORM\")}}" \
+            | jq -e 'type == "object" and length > 0' >/dev/null
           touch "build/staging-image-digests/web/${digest#sha256:}"
-      - name: Upload architecture digests
+      - name: Upload verified architecture digests
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
         with:
           name: staging-image-digests-${{ inputs.source_commit }}-${{ matrix.arch }}
@@ -138,7 +182,7 @@ jobs:
       - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
         with:
           version: v0.35.0
-      - name: Download architecture digests
+      - name: Download verified architecture digests
         uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317 # tag: v8.0.0
         with:
           pattern: staging-image-digests-${{ inputs.source_commit }}-*
@@ -159,7 +203,7 @@ jobs:
         run: |
           set -euo pipefail
           printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
-      - name: Assemble canonical multi-arch indexes
+      - name: Assemble canonical multi-arch indexes from verified digests
         shell: bash
         run: |
           set -euo pipefail
@@ -183,7 +227,7 @@ jobs:
           docker buildx imagetools create \
             --tag "$WEB_CANONICAL:sha-$SOURCE_COMMIT" \
             "${web_sources[@]}"
-      - name: Verify platforms, provenance, SBOM, aliases and write receipt
+      - name: Verify indexes, provenance, SBOM, aliases and write receipt
         shell: bash
         run: |
           set -euo pipefail
@@ -195,12 +239,8 @@ jobs:
             jq -e '
               [.manifests[]
                 | .platform // {}
-                | select(
-                    .os == "linux"
-                    and (.architecture == "amd64" or .architecture == "arm64")
-                  )
+                | select(.os == "linux")
                 | .architecture]
-              | unique
               | sort == ["amd64", "arm64"]
             ' build/index.json >/dev/null
             for platform in linux/amd64 linux/arm64; do

@@ -23,6 +23,7 @@
   "activation_requirements": [
     "workflow executes only for one exact current protected main commit",
     "native amd64 and arm64 image builds succeed from the same source commit",
+    "each architecture digest exposes complete provenance plus OCI source and revision labels bound to the exact source commit before manifest publication",
     "canonical API and Web multi-arch image digests exist in GHCR",
     "legacy image aliases, when published, resolve to the exact canonical digest",
     "promotion receipt binds source commit, platforms, canonical images and immutable digests",
