@@ -1,0 +1,279 @@
+---
+name: Staging image promotion
+
+"on":
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact protected main commit to build and promote
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: staging-image-promotion-${{ inputs.source_commit }}
+  cancel-in-progress: false
+
+env:
+  API_CANONICAL: ghcr.io/heimgewebe/commonthing-api
+  WEB_CANONICAL: ghcr.io/heimgewebe/commonthing-web
+  API_LEGACY: ghcr.io/heimgewebe/weltgewebe-api
+  WEB_LEGACY: ghcr.io/heimgewebe/weltgewebe-web
+
+jobs:
+  build:
+    name: Build ${{ matrix.arch }}
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      PLATFORM: ${{ matrix.platform }}
+      ARCH: ${{ matrix.arch }}
+      GH_TOKEN: ${{ github.token }}
+      GHCR_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
+        with:
+          version: v0.35.0
+      - name: Verify exact protected-main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$SOURCE_COMMIT"
+          main_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$main_head" = "$SOURCE_COMMIT"
+          test -z "$(git status --porcelain)"
+      - name: Authenticate to GHCR
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build and push API by digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_timestamp="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          mkdir -p build/staging-image-digests/api
+          docker buildx build \
+            --file apps/api/Dockerfile \
+            --platform "$PLATFORM" \
+            --build-arg "GIT_COMMIT_SHA=$SOURCE_COMMIT" \
+            --build-arg "BUILD_TIMESTAMP=$build_timestamp" \
+            --build-arg CARGO_BUILD_JOBS=2 \
+            --label "org.opencontainers.image.revision=$SOURCE_COMMIT" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --provenance=mode=max \
+            --sbom=true \
+            --output "type=image,name=$API_CANONICAL,push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file build/api-metadata.json \
+            .
+          digest="$(jq -r '."containerimage.digest" // empty' build/api-metadata.json)"
+          printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          touch "build/staging-image-digests/api/${digest#sha256:}"
+      - name: Build and push Web by digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_timestamp="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          mkdir -p build/staging-image-digests/web
+          docker buildx build \
+            --file apps/web/Dockerfile \
+            --platform "$PLATFORM" \
+            --build-arg "GIT_COMMIT_SHA=$SOURCE_COMMIT" \
+            --build-arg "BUILD_TIMESTAMP=$build_timestamp" \
+            --label "org.opencontainers.image.revision=$SOURCE_COMMIT" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --provenance=mode=max \
+            --sbom=true \
+            --output "type=image,name=$WEB_CANONICAL,push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file build/web-metadata.json \
+            .
+          digest="$(jq -r '."containerimage.digest" // empty' build/web-metadata.json)"
+          printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          touch "build/staging-image-digests/web/${digest#sha256:}"
+      - name: Upload architecture digests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: staging-image-digests-${{ inputs.source_commit }}-${{ matrix.arch }}
+          path: build/staging-image-digests
+          if-no-files-found: error
+          retention-days: 1
+
+  promote:
+    name: Assemble immutable multi-arch digests
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      GH_TOKEN: ${{ github.token }}
+      GHCR_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4
+        with:
+          version: v0.35.0
+      - name: Download architecture digests
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317 # tag: v8.0.0
+        with:
+          pattern: staging-image-digests-${{ inputs.source_commit }}-*
+          path: build/staging-image-digests
+          merge-multiple: true
+      - name: Reverify exact protected-main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$SOURCE_COMMIT"
+          main_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$main_head" = "$SOURCE_COMMIT"
+          test -z "$(git status --porcelain)"
+      - name: Authenticate to GHCR
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Assemble canonical multi-arch indexes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t api_digests < <(find build/staging-image-digests/api -maxdepth 1 -type f -printf '%f\n' | sort)
+          mapfile -t web_digests < <(find build/staging-image-digests/web -maxdepth 1 -type f -printf '%f\n' | sort)
+          test "${#api_digests[@]}" -eq 2
+          test "${#web_digests[@]}" -eq 2
+          api_sources=()
+          web_sources=()
+          for digest in "${api_digests[@]}"; do
+            printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$'
+            api_sources+=("$API_CANONICAL@sha256:$digest")
+          done
+          for digest in "${web_digests[@]}"; do
+            printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$'
+            web_sources+=("$WEB_CANONICAL@sha256:$digest")
+          done
+          docker buildx imagetools create \
+            --tag "$API_CANONICAL:sha-$SOURCE_COMMIT" \
+            "${api_sources[@]}"
+          docker buildx imagetools create \
+            --tag "$WEB_CANONICAL:sha-$SOURCE_COMMIT" \
+            "${web_sources[@]}"
+      - name: Verify platforms, attestations, aliases and write receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_ref="$API_CANONICAL:sha-$SOURCE_COMMIT"
+          web_ref="$WEB_CANONICAL:sha-$SOURCE_COMMIT"
+          for ref in "$api_ref" "$web_ref"; do
+            docker buildx imagetools inspect "$ref" --raw > build/index.json
+            jq -e '
+              [.manifests[]
+                | .platform // {}
+                | select(
+                    .os == "linux"
+                    and (.architecture == "amd64" or .architecture == "arm64")
+                  )
+                | .architecture]
+              | unique
+              | sort == ["amd64", "arm64"]
+            ' build/index.json >/dev/null
+            for platform in linux/amd64 linux/arm64; do
+              docker buildx imagetools inspect "$ref" \
+                --format "{{json (index .SLSA \"$platform\")}}" \
+                | jq -e 'type == "object" and length > 0' >/dev/null
+              docker buildx imagetools inspect "$ref" \
+                --format "{{json (index .SBOM \"$platform\")}}" \
+                | jq -e 'type == "object" and length > 0' >/dev/null
+            done
+          done
+          api_digest="$(
+            docker buildx imagetools inspect "$api_ref" \
+              --format '{{json .Manifest.Digest}}' | jq -r .
+          )"
+          web_digest="$(
+            docker buildx imagetools inspect "$web_ref" \
+              --format '{{json .Manifest.Digest}}' | jq -r .
+          )"
+          printf '%s' "$api_digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          printf '%s' "$web_digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          docker buildx imagetools create \
+            --tag "$API_LEGACY:sha-$SOURCE_COMMIT" \
+            "$API_CANONICAL@$api_digest"
+          docker buildx imagetools create \
+            --tag "$WEB_LEGACY:sha-$SOURCE_COMMIT" \
+            "$WEB_CANONICAL@$web_digest"
+          api_legacy_digest="$(
+            docker buildx imagetools inspect "$API_LEGACY:sha-$SOURCE_COMMIT" \
+              --format '{{json .Manifest.Digest}}' | jq -r .
+          )"
+          web_legacy_digest="$(
+            docker buildx imagetools inspect "$WEB_LEGACY:sha-$SOURCE_COMMIT" \
+              --format '{{json .Manifest.Digest}}' | jq -r .
+          )"
+          test "$api_legacy_digest" = "$api_digest"
+          test "$web_legacy_digest" = "$web_digest"
+          mkdir -p build/staging-image-promotion
+          jq -n \
+            --arg source_commit "$SOURCE_COMMIT" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg api_image "$API_CANONICAL" \
+            --arg api_digest "$api_digest" \
+            --arg api_legacy "$API_LEGACY" \
+            --arg web_image "$WEB_CANONICAL" \
+            --arg web_digest "$web_digest" \
+            --arg web_legacy "$WEB_LEGACY" \
+            '{
+              schema_version: 1,
+              status: "pass",
+              scope: "staging-only",
+              source_commit: $source_commit,
+              repository: $repository,
+              platforms: ["linux/amd64", "linux/arm64"],
+              attestations: ["provenance-mode-max", "sbom"],
+              images: {
+                api: {
+                  canonical: $api_image,
+                  digest: $api_digest,
+                  legacy_alias: $api_legacy
+                },
+                web: {
+                  canonical: $web_image,
+                  digest: $web_digest,
+                  legacy_alias: $web_legacy
+                }
+              },
+              production_activation: false
+            }' \
+            > build/staging-image-promotion/receipt.json
+      - name: Upload immutable promotion receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: staging-image-promotion-${{ inputs.source_commit }}
+          path: build/staging-image-promotion/receipt.json
+          if-no-files-found: error
+          retention-days: 30
