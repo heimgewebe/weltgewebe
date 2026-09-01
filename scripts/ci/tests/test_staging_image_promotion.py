@@ -97,7 +97,7 @@ def test_canonical_images_are_single_truth_and_legacy_names_are_digest_aliases()
     assert 'test "$web_legacy_digest" = "$web_digest"' in text
 
 
-def test_promotion_merges_digest_artifacts_and_verifies_attestations() -> None:
+def test_promotion_merges_digest_artifacts_and_binds_attestations_to_source() -> None:
     workflow = load_workflow()
     promote = workflow["jobs"]["promote"]
     uses = [step.get("uses") for step in promote["steps"] if isinstance(step, dict)]
@@ -110,7 +110,14 @@ def test_promotion_merges_digest_artifacts_and_verifies_attestations() -> None:
     assert 'test "${#api_digests[@]}" -eq 2' in text
     assert 'test "${#web_digests[@]}" -eq 2' in text
     assert 'index .SLSA' in text
+    assert 'index .Image' in text
     assert 'index .SBOM' in text
+    assert '.metadata.completeness.parameters == true' in text
+    assert 'build-arg:GIT_COMMIT_SHA' in text
+    assert 'org.opencontainers.image.revision' in text
+    assert 'org.opencontainers.image.source' in text
+    assert '--arg commit "$SOURCE_COMMIT"' in text
+    assert '--arg source "$expected_source"' in text
     assert 'sort == ["amd64", "arm64"]' in text
 
 
