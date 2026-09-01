@@ -184,7 +184,7 @@ def _assert_oci_proof_mirror() -> None:
         "source_kind": "private-ghcr-digest-mirror",
         "mirror_repository": "ghcr.io/heimgewebe/weltgewebe-proof-oci",
         "visibility": "private",
-        "repository_binding": "heimgewebe/weltgewebe",
+        "repository_binding": "heimgewebe/commonthing",
         "image_count": 25,
     }
     observed = {key: result.get(key) for key in expected}

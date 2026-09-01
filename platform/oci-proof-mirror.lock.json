@@ -23,32 +23,32 @@
     }
   },
   "generation": {
-    "buildx_version": "github.com/docker/buildx v0.35.0 a319e5b15052cf6557ceb666eb8ff6e32380b782",
-    "completed_at": "2026-07-25T08:03:51.587620Z",
+    "buildx_version": "github.com/docker/buildx v0.36.1 1d8dde89b8aba914e05e45366770736fea1fd690",
+    "completed_at": "2026-09-01T22:37:01.986961Z",
     "docker_version": "28.0.4",
     "package_metadata": {
-      "bytes": 6567,
-      "sha256": "31c9e819c1bd27a959dc1168255b618add4a93ead23d53141a19aedc8f047db0"
+      "bytes": 6608,
+      "sha256": "365b90c96c2d6c0e65ecf2cb68d458f54a23bb129af86aca12fde431977238cf"
     },
     "package_preflight": {
-      "bytes": 252,
-      "sha256": "ee89c3b39351daa9c67d1639f761e833425b38c948c8b4271563072d5959b7f2"
+      "bytes": 6687,
+      "sha256": "19795e7c2a423e47d5f1fc733f3357463f82c9e69104083ec1f519a8fbafaae5"
     },
     "provenance": {
-      "bytes": 19925,
-      "sha256": "78d2badbc30e8796c1810581e21606d0334790c984af994691f93cc9eb36ed91"
+      "bytes": 19851,
+      "sha256": "8da9a26e725796fddc05d973a6db2d4b49596fe3e2987c56e01f07b70f7cc64f"
     },
     "publisher_actor": "alexdermohr",
     "read_access": {
-      "bytes": 6579,
+      "bytes": 6620,
       "checked_images": 25,
-      "sha256": "320a4e1fe72f0f2a0acbd590038b01ad532f63732b22959403feaf679487b8f3"
+      "sha256": "569008a704422106a51c7e4f15cdd2b0f203dd7be28046503ccc2407e07e74d0"
     },
     "seed_sha256": "7185ec4a3972a13465e1951fb22ceecbc96157af0c3128261c8bff6d47196b48",
-    "source_head": "c77025cd6cffe117378ac82d983038083c680cf0",
-    "started_at": "2026-07-25T07:57:26.648018Z",
+    "source_head": "299992eb099b28882a98b94a163064dc4cde3feb",
+    "started_at": "2026-09-01T22:36:08.388224Z",
     "workflow_run_attempt": "1",
-    "workflow_run_id": "30150215347"
+    "workflow_run_id": "33567018989"
   },
   "images": {
     "barman_cloud_plugin": {
@@ -342,7 +342,7 @@
     "package_id": 14022808,
     "package_type": "container",
     "repository": "ghcr.io/heimgewebe/weltgewebe-proof-oci",
-    "repository_binding": "heimgewebe/weltgewebe",
+    "repository_binding": "heimgewebe/commonthing",
     "updated_at": "2026-07-25T08:03:47Z",
     "visibility": "private"
   },
