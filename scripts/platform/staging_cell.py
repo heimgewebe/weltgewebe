@@ -38,7 +38,7 @@ LIVE_DEPLOYMENTS = {
     "source-controller": ("flux-system", "source-controller"),
     "kustomize-controller": ("flux-system", "kustomize-controller"),
 }
-PUBLIC_REPOSITORY = "https://github.com/heimgewebe/weltgewebe"
+PUBLIC_REPOSITORY = "https://github.com/heimgewebe/commonthing"
 SECRET_SOURCE_ANNOTATION = "commonthing.net/external-secret-source-sha256"
 DATA_KUSTOMIZATION_TIMEOUT = "8m"
 DATA_KUSTOMIZATION_TIMEOUT_SECONDS = 8 * 60.0

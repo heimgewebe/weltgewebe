@@ -29,7 +29,7 @@ Repo `heimgewebe/heimserver` und anschließende Operatorarbeit.
 
 ## 1. Eigentumsgrenzen
 
-`heimgewebe/weltgewebe` besitzt:
+`heimgewebe/commonthing` besitzt:
 
 - den Inhalt;
 - das statische Quellartefakt;
@@ -107,7 +107,7 @@ Bis zum abgeschlossenen Aktivierungsgate gilt:
 - das Artefakt bleibt inhaltlich frei von Kontakt- und Privatdaten.
 
 Ein späterer, separater Aktivierungs-PR im Owner-Repo
-`heimgewebe/weltgewebe` darf den Robots-Endzustand und den Canonical-Link
+`heimgewebe/commonthing` darf den Robots-Endzustand und den Canonical-Link
 erst nach belegtem HTTPS-, Edge-, DNS- und Publikationsgate ändern.
 
 Die Aktivierungsreihenfolge ist:
@@ -115,7 +115,7 @@ Die Aktivierungsreihenfolge ist:
 1. Das Repo `heimgewebe/heimserver` implementiert und validiert den
    Edge-Vertrag.
 2. Der Operator belegt Deployment, HTTPS, DNS und öffentliche Runtime.
-3. Erst danach aktualisiert ein separater PR in `heimgewebe/weltgewebe`
+3. Erst danach aktualisiert ein separater PR in `heimgewebe/commonthing`
    Robots-Metadaten, Canonical-Link, Browser-Proof und Task-Evidenz.
 
 ## 4. Vorgesehener späterer Edge-Vertrag

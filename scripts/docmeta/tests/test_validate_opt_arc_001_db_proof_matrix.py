@@ -93,7 +93,7 @@ def _evidence_for(proof_id, run_id=123456789):
     deliberately not wired to any real run (the real evidence lives only in the
     repository matrix)."""
     return {
-        "run_url": f"https://github.com/heimgewebe/weltgewebe/actions/runs/{run_id}",
+        "run_url": f"https://github.com/heimgewebe/commonthing/actions/runs/{run_id}",
         "run_id": run_id,
         "commit": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         "job": proof_id,

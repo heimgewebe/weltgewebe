@@ -2,13 +2,13 @@
   "schema_version": 2,
   "kind": "weltgewebe_semantic_search_hybrid_ranking_core",
   "task_id": "WELTGEWEBE-SEMANTIC-SEARCH-V1-T004",
-  "measured_at": "2026-07-20T05:15:52.374987Z",
+  "measured_at": "2026-09-01T19:24:24.713056Z",
   "source": {
-    "repository_head_at_measurement": "8d4c5d84c89df02090b8622c1a2fbac1cbb48591",
+    "repository_head_at_measurement": "113a74c07882b95d3189ce8088865923d8f4934f",
     "measurement_source_mode": "repository_base_plus_hash_bound_worktree_sources",
     "worktree_dirty_at_measurement": true,
     "source_files": {
-      "architecture/semantic-search.md": "82aa0ef45eb772b52b21fb648e848174052bd6bd5d7aa6d3082c683db9411dbd",
+      "architecture/semantic-search.md": "da185404f9cb0e5e90c54aeb44f9d05a05a5ce518bd2abf79b2ebffcdc49e394",
       "contracts/search/examples/relevance-goldset.example.json": "e0cf7f362242bf13c3f69aa3cc1846c35bf615410cc5deee94be2e197bded56c",
       "contracts/search/relevance-goldset.schema.json": "0643fec713e3f883896319701402645c987cc684ca35652feb75f0381395bdc0",
       "contracts/search/examples/relevance-benchmark.heim-pc.json": "cb57434ff1abfa4490050421f8bcb72840b8e49c8fa53e3fc8f0fda19f58bf5a",
@@ -18,7 +18,7 @@
       "scripts/search/probe_hybrid_ranking_core.py": "efeb08d5c38fe87773c8e74fe217b48061a826da26ba345868716278a966a354",
       "scripts/ci/tests/test_semantic_search_ranking_core.py": "5b45e524cf1e1cc3ffbc6c74389b08d5a83e9171f45907af3d24b68c2d4e6ecb"
     },
-    "source_manifest_sha256": "94cb1df98651b54525d868b666c95d055c3046a829da94458d9a6e72a0b16b9e"
+    "source_manifest_sha256": "1d3d092927f41a7eb5e4bc51faa09d970c16ff09c70cf583ad218bd03f9bb7ac"
   },
   "dataset": {
     "path": "contracts/search/examples/relevance-goldset.example.json",
@@ -34,8 +34,8 @@
   },
   "environment": {
     "host_class": "heim-pc-local",
-    "platform": "Linux-7.0.11-76070011-generic-x86_64-with-glibc2.35",
-    "python": "3.10.12",
+    "platform": "Linux-7.1.1-76070101-generic-x86_64-with-glibc2.35",
+    "python": "3.12.12",
     "ollama_url": "http://127.0.0.1:11434",
     "external_cost_usd": 0
   },
@@ -822,12 +822,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 1306.282,
-        "query_embedding_total_ms": 199.89,
+        "document_embedding_total_ms": 204.538,
+        "query_embedding_total_ms": 202.545,
         "ranking": {
-          "median_ms": 5.788,
-          "p95_ms": 6.479,
-          "maximum_ms": 6.542
+          "median_ms": 3.882,
+          "p95_ms": 4.447,
+          "maximum_ms": 4.748
         },
         "document_count": 19,
         "query_count": 24
@@ -1244,12 +1244,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 2173.632,
-        "query_embedding_total_ms": 344.11,
+        "document_embedding_total_ms": 385.691,
+        "query_embedding_total_ms": 341.833,
         "ranking": {
-          "median_ms": 14.343,
-          "p95_ms": 14.967,
-          "maximum_ms": 15.071
+          "median_ms": 9.567,
+          "p95_ms": 9.794,
+          "maximum_ms": 9.796
         },
         "document_count": 19,
         "query_count": 24
@@ -1676,12 +1676,12 @@
         ]
       },
       "performance": {
-        "document_embedding_total_ms": 3557.136,
-        "query_embedding_total_ms": 472.587,
+        "document_embedding_total_ms": 522.627,
+        "query_embedding_total_ms": 454.277,
         "ranking": {
-          "median_ms": 18.908,
-          "p95_ms": 20.606,
-          "maximum_ms": 20.86
+          "median_ms": 14.932,
+          "p95_ms": 15.461,
+          "maximum_ms": 15.489
         },
         "document_count": 19,
         "query_count": 24

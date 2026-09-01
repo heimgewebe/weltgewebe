@@ -11,7 +11,7 @@ V2 validates the completed production-cutover truth and its active status twins.
   - Each proof is either state="prepared" with ci_evidence=null, or
     state="ci_proven" with a concrete ci_evidence object (run_url, run_id,
     commit, job). For a ci_proven proof the evidence job must equal the proof
-    id, and run_url must be a github.com/heimgewebe/weltgewebe Actions run URL
+    id, and run_url must be a github.com/heimgewebe/commonthing Actions run URL
     whose trailing run id matches run_id. The proof's own workflow job block in
     the API workflow and the proof's test file must also be unchanged since the
     evidence commit (job-scoped: adding an unrelated job to the shared workflow
@@ -106,7 +106,7 @@ CI_EVIDENCE_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 # A ci_proven proof's run_url must be a real GitHub Actions run URL for this
 # repository; the trailing path segment of the URL must equal run_id.
-GITHUB_ACTIONS_RUN_URL_PREFIX = "https://github.com/heimgewebe/weltgewebe/actions/runs/"
+GITHUB_ACTIONS_RUN_URL_PREFIX = "https://github.com/heimgewebe/commonthing/actions/runs/"
 
 # All spelling variants of the forbidden completion claim: CI PROVEN,
 # ci proven, CI-Proven, ci-proven, ci_proven, CI_PROVEN, ...

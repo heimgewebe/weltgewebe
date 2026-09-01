@@ -124,5 +124,26 @@ class CommonThingNamingGuardTests(unittest.TestCase):
             self.assertEqual(GUARD.resolve_base(REPO, "abc123"), "abc123")
 
 
+    def test_live_repository_consumers_use_canonical_repo_identity(self) -> None:
+        canonical_bindings = {
+            ".devcontainer/ssh-agent-guard.sh": "git@github.com:heimgewebe/commonthing.git",
+            "platform/clusters/local/source.yaml": "https://github.com/heimgewebe/commonthing",
+            "scripts/platform/staging_cell.py": 'PUBLIC_REPOSITORY = "https://github.com/heimgewebe/commonthing"',
+            "docs/deploy/secondary-domain-web-surfaces.md": "heimgewebe/commonthing",
+            "architecture/semantic-search.md": "heimgewebe/commonthing",
+            "infra/systemd/system/weltgewebe-production-reconcile.service": "Documentation=https://github.com/heimgewebe/commonthing",
+        }
+        retired_slug = "heimgewebe/" + "weltgewebe"
+        for relative, canonical_binding in canonical_bindings.items():
+            with self.subTest(path=relative):
+                text = (REPO / relative).read_text(encoding="utf-8")
+                self.assertNotIn(retired_slug, text)
+                self.assertIn(canonical_binding, text)
+
+        workflow = (REPO / ".github/workflows/kubernetes-proof-oci-mirror.yml").read_text(encoding="utf-8")
+        self.assertNotIn(retired_slug, workflow)
+        self.assertIn('repos/${GITHUB_REPOSITORY}/git/ref/heads/main', workflow)
+
+
 if __name__ == "__main__":
     unittest.main()
