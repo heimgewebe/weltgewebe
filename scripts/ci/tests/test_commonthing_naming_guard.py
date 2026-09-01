@@ -124,5 +124,21 @@ class CommonThingNamingGuardTests(unittest.TestCase):
             self.assertEqual(GUARD.resolve_base(REPO, "abc123"), "abc123")
 
 
+    def test_live_repository_consumers_do_not_hardcode_retired_repo_slug(self) -> None:
+        live_paths = (
+            ".devcontainer/ssh-agent-guard.sh",
+            ".github/workflows/kubernetes-proof-oci-mirror.yml",
+            "platform/clusters/local/source.yaml",
+            "scripts/platform/staging_cell.py",
+            "docs/deploy/secondary-domain-web-surfaces.md",
+            "architecture/semantic-search.md",
+            "infra/systemd/system/weltgewebe-production-reconcile.service",
+        )
+        retired_slug = "heimgewebe/" + "weltgewebe"
+        for relative in live_paths:
+            with self.subTest(path=relative):
+                self.assertNotIn(retired_slug, (REPO / relative).read_text())
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -6,6 +6,6 @@ metadata:
   namespace: flux-system
 spec:
   interval: 1m
-  url: https://github.com/heimgewebe/weltgewebe
+  url: https://github.com/heimgewebe/commonthing
   ref:
     branch: main

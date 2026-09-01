@@ -93,7 +93,7 @@ def _evidence_for(proof_id, run_id=123456789):
     deliberately not wired to any real run (the real evidence lives only in the
     repository matrix)."""
     return {
-        "run_url": f"https://github.com/heimgewebe/weltgewebe/actions/runs/{run_id}",
+        "run_url": f"https://github.com/heimgewebe/commonthing/actions/runs/{run_id}",
         "run_id": run_id,
         "commit": "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef",
         "job": proof_id,
@@ -941,6 +941,22 @@ class ValidateOptArc001DbProofMatrixTests(unittest.TestCase):
         matrix["proofs"][0]["ci_evidence"]["run_url"] = "https://example.com/run/1"
         self._write_json(guard.MATRIX_PATH, matrix)
         self.assert_error_containing("run_url must start with")
+
+    def test_ci_proven_legacy_repository_run_url_remains_valid(self):
+        matrix = _ci_proven_matrix()
+        run_id = matrix["proofs"][0]["ci_evidence"]["run_id"]
+        matrix["proofs"][0]["ci_evidence"]["run_url"] = (
+            f"https://github.com/heimgewebe/weltgewebe/actions/runs/{run_id}"
+        )
+        errors = []
+        self.assertTrue(
+            guard._validate_ci_evidence(
+                matrix["proofs"][0]["id"],
+                matrix["proofs"][0]["ci_evidence"],
+                errors,
+            ),
+            errors,
+        )
 
     def test_ci_proven_run_id_url_mismatch_fails(self):
         matrix = _ci_proven_matrix()

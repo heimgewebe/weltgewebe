@@ -1,6 +1,6 @@
 [Unit]
-Description=Reconcile Weltgewebe origin/main to verified production
-Documentation=https://github.com/heimgewebe/weltgewebe
+Description=Reconcile commonThing origin/main to verified production
+Documentation=https://github.com/heimgewebe/commonthing
 Wants=network-online.target docker.service
 After=network-online.target docker.service
 

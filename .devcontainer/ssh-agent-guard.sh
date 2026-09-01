@@ -73,7 +73,7 @@ if [ "$mode" = "github" ]; then
     *"successfully authenticated"*)
       echo "SSH-AGENT-GUARD: ok GitHub SSH authentication works."
 
-      remote="${SSH_AGENT_GUARD_GIT_REMOTE:-git@github.com:heimgewebe/weltgewebe.git}"
+      remote="${SSH_AGENT_GUARD_GIT_REMOTE:-git@github.com:heimgewebe/commonthing.git}"
       if GIT_SSH_COMMAND="${GIT_SSH_COMMAND:-ssh -F /dev/null -o IdentityAgent=/ssh-agent -o IdentitiesOnly=no}" \
         git ls-remote "$remote" HEAD > /dev/null 2>&1; then
         echo "SSH-AGENT-GUARD: ok Git transport works for $remote."

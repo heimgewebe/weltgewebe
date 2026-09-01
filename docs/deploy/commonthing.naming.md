@@ -43,7 +43,7 @@ Namen Weltgewebe eingeführt.
 | API-Binary | `commonthing-api` | `weltgewebe-api` nur als Migrationskompatibilität |
 | Env-Präfix | `COMMONTHING_*` | `WELTGEWEBE_*` nur als gemessener Legacy-Fallback |
 | Build-Header | `X-CommonThing-*` | `X-Weltgewebe-*` nur als Übergangsheader |
-| Repository | `heimgewebe/commonthing` | `heimgewebe/weltgewebe` bis zum kontrollierten Repo-Rename |
+| Repository | `heimgewebe/commonthing` | `heimgewebe/weltgewebe` nur als GitHub-Redirect und historische Referenz |
 | Betriebsnamen | `commonthing-*` | `weltgewebe-*` bis zur jeweiligen Unit-/Pfad-Migration |
 | interne Domains | `*.commonthing.home.arpa` | `*.weltgewebe.home.arpa` bis zur kontrollierten Heimnetz-Migration |
 
@@ -93,6 +93,8 @@ separat über DNS-, TLS-, Deployment- und Runtime-Readback zu belegen.
 `noreply@login.weltgewebe.net`, `WELTGEWEBE_*`, `weltgewebe-api` und weitere
 Betriebsidentitäten sind ausdrücklich **Übergangsverträge**, nicht der gewünschte
 Endzustand.
+
+Seit dem kontrollierten Repository-Rename am 1. September 2026 ist `heimgewebe/commonthing` die kanonische GitHub-Repository-Identität. `heimgewebe/weltgewebe` bleibt ausschließlich als GitHub-Redirect und historische Referenz erhalten; der alte Slug darf nicht für ein neues Repository wiederverwendet werden.
 
 ## 6. CI-Regel
 

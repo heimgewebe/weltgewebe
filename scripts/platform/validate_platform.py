@@ -297,7 +297,7 @@ def _assert_migration_job() -> None:
 def _assert_flux_chain() -> None:
     cluster = PLATFORM / "clusters/local"
     source = next(_documents(cluster / "source.yaml"))
-    if source.get("kind") != "GitRepository" or source["spec"].get("url") != "https://github.com/heimgewebe/weltgewebe":
+    if source.get("kind") != "GitRepository" or source["spec"].get("url") != "https://github.com/heimgewebe/commonthing":
         raise ContractError("local Flux source is not the canonical repository")
     expected = {
         "local-data.yaml": [],
