@@ -46,7 +46,7 @@ verifies_with:
 
 ## 1. Entscheidung und Geltung
 
-Die nützliche Semantik-Schicht wird direkt in `heimgewebe/commonthing` integriert. Sie ist keine allgemeine Semantikplattform und kein eigener Dienst. Ihr Zweck ist ausschließlich eine interne, hybride und sichtbarkeitsgebundene Suche nach Weltgewebe-Knoten sowie eine klar getrennte Oberfläche „Ähnliche Knoten“.
+Die nützliche Semantik-Schicht wird direkt in `heimgewebe/commonthing` integriert. Sie ist keine allgemeine Semantikplattform und kein eigener Dienst. Ihr Zweck ist ausschließlich eine interne, hybride und sichtbarkeitsgebundene Suche nach commonThing-Knoten sowie eine klar getrennte Oberfläche „Ähnliche Knoten“.
 
 PostgreSQL ist die einzige persistente Wahrheit der späteren Suchprojektion. Lexikalische Repräsentationen, Embeddings, Rangmerkmale und Indexzustände sind vollständig regenerierbare Projektionen aus kanonischen Knotenrevisionen.
 
