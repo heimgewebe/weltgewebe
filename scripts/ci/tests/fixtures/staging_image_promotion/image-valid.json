@@ -1,0 +1,10 @@
+{
+  "architecture": "amd64",
+  "config": {
+    "Labels": {
+      "org.opencontainers.image.revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "org.opencontainers.image.source": "https://github.com/heimgewebe/commonthing"
+    }
+  },
+  "os": "linux"
+}
