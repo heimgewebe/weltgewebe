@@ -12,7 +12,6 @@ V2 validates the completed production-cutover truth and its active status twins.
     state="ci_proven" with a concrete ci_evidence object (run_url, run_id,
     commit, job). For a ci_proven proof the evidence job must equal the proof
     id, and run_url must be a github.com/heimgewebe/commonthing Actions run URL
-    or a historical github.com/heimgewebe/weltgewebe redirect URL
     whose trailing run id matches run_id. The proof's own workflow job block in
     the API workflow and the proof's test file must also be unchanged since the
     evidence commit (job-scoped: adding an unrelated job to the shared workflow
@@ -107,10 +106,7 @@ CI_EVIDENCE_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 # A ci_proven proof's run_url must be a real GitHub Actions run URL for this
 # repository; the trailing path segment of the URL must equal run_id.
-GITHUB_ACTIONS_RUN_URL_PREFIXES = (
-    "https://github.com/heimgewebe/commonthing/actions/runs/",
-    "https://github.com/heimgewebe/weltgewebe/actions/runs/",  # legacy GitHub redirect
-)
+GITHUB_ACTIONS_RUN_URL_PREFIX = "https://github.com/heimgewebe/commonthing/actions/runs/"
 
 # All spelling variants of the forbidden completion claim: CI PROVEN,
 # ci proven, CI-Proven, ci-proven, ci_proven, CI_PROVEN, ...
@@ -713,18 +709,14 @@ def _validate_ci_evidence(proof_id, ci_evidence, errors):
 
     run_url = ci_evidence["run_url"]
     run_id = ci_evidence["run_id"]
-    matched_prefix = next(
-        (prefix for prefix in GITHUB_ACTIONS_RUN_URL_PREFIXES if run_url.startswith(prefix)),
-        None,
-    )
-    if matched_prefix is None:
+    if not run_url.startswith(GITHUB_ACTIONS_RUN_URL_PREFIX):
         errors.append(
-            f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.run_url must start with one of "
-            f"{GITHUB_ACTIONS_RUN_URL_PREFIXES}, got '{run_url}'"
+            f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.run_url must start with "
+            f"'{GITHUB_ACTIONS_RUN_URL_PREFIX}', got '{run_url}'"
         )
         valid = False
     else:
-        url_run_id = run_url[len(matched_prefix):].split("/")[0].split("?")[0]
+        url_run_id = run_url[len(GITHUB_ACTIONS_RUN_URL_PREFIX):].split("/")[0].split("?")[0]
         if url_run_id != str(run_id):
             errors.append(
                 f"{MATRIX_PATH}: proof '{proof_id}': ci_evidence.run_id ({run_id}) "
