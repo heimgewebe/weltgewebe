@@ -1,0 +1,15 @@
+{
+  "buildType": "https://mobyproject.org/buildkit@v1",
+  "invocation": {
+    "parameters": {
+      "args": {
+        "build-arg:GIT_COMMIT_SHA": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+      }
+    }
+  },
+  "metadata": {
+    "completeness": {
+      "parameters": true
+    }
+  }
+}

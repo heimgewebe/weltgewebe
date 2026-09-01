@@ -1,15 +1,41 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "status": "blocked",
+  "workflow_status": "ready",
+  "workflow": ".github/workflows/staging-image-promotion.yml",
+  "source_policy": "exact-current-protected-main",
   "required_images": [
-    "ghcr.io/heimgewebe/weltgewebe-api",
-    "ghcr.io/heimgewebe/weltgewebe-web"
+    "ghcr.io/heimgewebe/commonthing-api",
+    "ghcr.io/heimgewebe/commonthing-web"
+  ],
+  "legacy_aliases": {
+    "ghcr.io/heimgewebe/weltgewebe-api": "ghcr.io/heimgewebe/commonthing-api",
+    "ghcr.io/heimgewebe/weltgewebe-web": "ghcr.io/heimgewebe/commonthing-web"
+  },
+  "platforms": [
+    "linux/amd64",
+    "linux/arm64"
+  ],
+  "attestations": [
+    "provenance-mode-max",
+    "sbom"
   ],
   "activation_requirements": [
-    "multi-arch image digest exists in GHCR",
-    "provenance is bound to one merged commit",
+    "workflow executes only for one exact current protected main commit",
+    "native amd64 and arm64 image builds succeed from the same source commit",
+    "each architecture digest exposes complete provenance plus OCI source and revision labels bound to the exact source commit before manifest publication",
+    "canonical API and Web multi-arch image digests exist in GHCR",
+    "legacy image aliases, when published, resolve to the exact canonical digest",
+    "promotion receipt binds source commit, platforms, canonical images and immutable digests",
+    "staging overlay replaces promotion-required tags with canonical immutable digests",
     "external secret path is configured",
     "staging rollout proof is green"
   ],
+  "promotion_receipt": {
+    "artifact": "staging-image-promotion-<source_commit>",
+    "path": "build/staging-image-promotion/receipt.json",
+    "retention_days": 30
+  },
+  "legacy_alias_policy": "legacy package names are compatibility aliases only and must resolve to the same immutable digest as the canonical commonThing package",
   "production_activation": false
 }

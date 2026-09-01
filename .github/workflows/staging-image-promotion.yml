@@ -1,0 +1,478 @@
+---
+name: Staging image promotion
+
+"on":
+  workflow_dispatch:
+    inputs:
+      source_commit:
+        description: Exact protected main commit to build and promote
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: staging-image-promotion-${{ inputs.source_commit }}
+  cancel-in-progress: false
+
+env:
+  API_CANONICAL: ghcr.io/heimgewebe/commonthing-api
+  WEB_CANONICAL: ghcr.io/heimgewebe/commonthing-web
+  API_LEGACY: ghcr.io/heimgewebe/weltgewebe-api
+  WEB_LEGACY: ghcr.io/heimgewebe/weltgewebe-web
+  BUILDX_VERSION: v0.36.1
+  BUILDKIT_IMAGE: moby/buildkit@sha256:28a898719c18a33f4e8000685287fa36fd0dd9560c6440227d3a732d79bb41d8
+
+jobs:
+  preflight:
+    name: Verify exact protected-main source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    env:
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Validate dispatch input
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$SOURCE_COMMIT" | grep -Eq '^[0-9a-f]{40}$'
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Verify exact protected-main checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$SOURCE_COMMIT"
+          main_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$main_head" = "$SOURCE_COMMIT"
+          test -z "$(git status --porcelain)"
+
+  build:
+    name: Build ${{ matrix.arch }}
+    needs: preflight
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux/amd64
+            arch: amd64
+          - runner: ubuntu-24.04-arm
+            platform: linux/arm64
+            arch: arm64
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 60
+    env:
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      PLATFORM: ${{ matrix.platform }}
+      ARCH: ${{ matrix.arch }}
+      GH_TOKEN: ${{ github.token }}
+      GHCR_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4.2.0
+        with:
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+      - name: Reverify exact protected-main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$SOURCE_COMMIT"
+          main_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$main_head" = "$SOURCE_COMMIT"
+          test -z "$(git status --porcelain)"
+      - name: Authenticate to GHCR
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Build and verify API by digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_timestamp="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          mkdir -p build/staging-image-digests/api build/staging-image-verification
+          docker buildx build \
+            --file apps/api/Dockerfile \
+            --platform "$PLATFORM" \
+            --build-arg "GIT_COMMIT_SHA=$SOURCE_COMMIT" \
+            --build-arg "BUILD_TIMESTAMP=$build_timestamp" \
+            --build-arg CARGO_BUILD_JOBS=2 \
+            --label "org.opencontainers.image.revision=$SOURCE_COMMIT" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --provenance=mode=max,version=v1 \
+            --sbom=true \
+            --output "type=image,name=$API_CANONICAL,push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file build/api-metadata.json \
+            .
+          digest="$(jq -r '."containerimage.digest" // empty' build/api-metadata.json)"
+          printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          ref="$API_CANONICAL@$digest"
+          expected_source="https://github.com/${GITHUB_REPOSITORY}"
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SLSA \"$PLATFORM\")}}" \
+            > build/staging-image-verification/api-slsa.json
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .Image \"$PLATFORM\")}}" \
+            > build/staging-image-verification/api-image.json
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SBOM \"$PLATFORM\")}}" \
+            > build/staging-image-verification/api-sbom.json
+          python3 scripts/ci/verify_staging_image_attestation.py attestation \
+            --slsa-file build/staging-image-verification/api-slsa.json \
+            --image-file build/staging-image-verification/api-image.json \
+            --sbom-file build/staging-image-verification/api-sbom.json \
+            --commit "$SOURCE_COMMIT" \
+            --source "$expected_source" \
+            --platform "$PLATFORM"
+          touch "build/staging-image-digests/api/${digest#sha256:}"
+      - name: Build and verify Web by digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          build_timestamp="$(git show -s --format=%cI "$SOURCE_COMMIT")"
+          mkdir -p build/staging-image-digests/web build/staging-image-verification
+          docker buildx build \
+            --file apps/web/Dockerfile \
+            --platform "$PLATFORM" \
+            --build-arg "GIT_COMMIT_SHA=$SOURCE_COMMIT" \
+            --build-arg "BUILD_TIMESTAMP=$build_timestamp" \
+            --label "org.opencontainers.image.revision=$SOURCE_COMMIT" \
+            --label "org.opencontainers.image.source=https://github.com/${GITHUB_REPOSITORY}" \
+            --provenance=mode=max,version=v1 \
+            --sbom=true \
+            --output "type=image,name=$WEB_CANONICAL,push-by-digest=true,name-canonical=true,push=true" \
+            --metadata-file build/web-metadata.json \
+            .
+          digest="$(jq -r '."containerimage.digest" // empty' build/web-metadata.json)"
+          printf '%s' "$digest" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          ref="$WEB_CANONICAL@$digest"
+          expected_source="https://github.com/${GITHUB_REPOSITORY}"
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SLSA \"$PLATFORM\")}}" \
+            > build/staging-image-verification/web-slsa.json
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .Image \"$PLATFORM\")}}" \
+            > build/staging-image-verification/web-image.json
+          docker buildx imagetools inspect "$ref" \
+            --format "{{json (index .SBOM \"$PLATFORM\")}}" \
+            > build/staging-image-verification/web-sbom.json
+          python3 scripts/ci/verify_staging_image_attestation.py attestation \
+            --slsa-file build/staging-image-verification/web-slsa.json \
+            --image-file build/staging-image-verification/web-image.json \
+            --sbom-file build/staging-image-verification/web-sbom.json \
+            --commit "$SOURCE_COMMIT" \
+            --source "$expected_source" \
+            --platform "$PLATFORM"
+          touch "build/staging-image-digests/web/${digest#sha256:}"
+      - name: Upload verified architecture digests
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: staging-image-digests-${{ inputs.source_commit }}-${{ matrix.arch }}
+          path: build/staging-image-digests
+          if-no-files-found: error
+          retention-days: 1
+
+  promote:
+    name: Assemble immutable multi-arch digests
+    needs: build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      SOURCE_COMMIT: ${{ inputs.source_commit }}
+      GH_TOKEN: ${{ github.token }}
+      GHCR_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # tag: v7.0.1
+        with:
+          ref: ${{ inputs.source_commit }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Reverify exact protected-main source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_COMMIT"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_SHA" = "$SOURCE_COMMIT"
+          main_head="$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq .object.sha)"
+          test "$main_head" = "$SOURCE_COMMIT"
+          test -z "$(git status --porcelain)"
+      - uses: docker/setup-buildx-action@bb05f3f5519dd87d3ba754cc423b652a5edd6d2c # tag: v4.2.0
+        with:
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+      - name: Download verified architecture digests
+        uses: actions/download-artifact@484a0b528fb4d7bd804637ccb632e47a0e638317
+        with:
+          pattern: staging-image-digests-${{ inputs.source_commit }}-*
+          path: build/staging-image-digests
+          merge-multiple: true
+      - name: Authenticate to GHCR
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$GHCR_TOKEN" | docker login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Assemble canonical multi-arch indexes without overwriting immutable tags
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t api_digests < <(find build/staging-image-digests/api -maxdepth 1 -type f -printf '%f\n' | sort)
+          mapfile -t web_digests < <(find build/staging-image-digests/web -maxdepth 1 -type f -printf '%f\n' | sort)
+          test "${#api_digests[@]}" -eq 2
+          test "${#web_digests[@]}" -eq 2
+          api_sources=()
+          web_sources=()
+          for digest in "${api_digests[@]}"; do
+            printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$'
+            api_sources+=("$API_CANONICAL@sha256:$digest")
+          done
+          for digest in "${web_digests[@]}"; do
+            printf '%s' "$digest" | grep -Eq '^[0-9a-f]{64}$'
+            web_sources+=("$WEB_CANONICAL@sha256:$digest")
+          done
+
+          mkdir -p build/staging-image-promotion
+          docker buildx imagetools create --dry-run "${api_sources[@]}" \
+            > build/staging-image-promotion/api-index-preview.json
+          docker buildx imagetools create --dry-run "${web_sources[@]}" \
+            > build/staging-image-promotion/web-index-preview.json
+          python3 scripts/ci/verify_staging_image_attestation.py index \
+            --index-file build/staging-image-promotion/api-index-preview.json
+          python3 scripts/ci/verify_staging_image_attestation.py index \
+            --index-file build/staging-image-promotion/web-index-preview.json
+          api_expected_digest="$(
+            python3 scripts/ci/verify_staging_image_attestation.py manifest-digest \
+              --manifest-file build/staging-image-promotion/api-index-preview.json
+          )"
+          web_expected_digest="$(
+            python3 scripts/ci/verify_staging_image_attestation.py manifest-digest \
+              --manifest-file build/staging-image-promotion/web-index-preview.json
+          )"
+
+          immutable_tag_decision() {
+            local ref="$1"
+            local expected_digest="$2"
+            local existing_digest=""
+            local inspect_error=""
+            if existing_digest="$(
+              docker buildx imagetools inspect "$ref" \
+                --format '{{json .Manifest.Digest}}' 2>build/tag-inspect.err | jq -er .
+            )"; then
+              python3 scripts/ci/verify_staging_image_attestation.py tag \
+                --expected-digest "$expected_digest" \
+                --existing-digest "$existing_digest"
+              return
+            fi
+            inspect_error="$(cat build/tag-inspect.err)"
+            if ! grep -Eqi '(manifest unknown|name unknown|not found)' <<<"$inspect_error"; then
+              printf 'failed to inspect immutable tag %s: %s\n' "$ref" "$inspect_error" >&2
+              return 1
+            fi
+            python3 scripts/ci/verify_staging_image_attestation.py tag \
+              --expected-digest "$expected_digest"
+          }
+
+          ensure_immutable_tag() {
+            local ref="$1"
+            local expected_digest="$2"
+            shift 2
+            local decision=""
+            decision="$(immutable_tag_decision "$ref" "$expected_digest")"
+            case "$decision" in
+              create)
+                docker buildx imagetools create --tag "$ref" "$@"
+                ;;
+              reuse)
+                ;;
+              *)
+                printf 'unexpected immutable-tag decision for %s: %s\n' "$ref" "$decision" >&2
+                return 1
+                ;;
+            esac
+            local actual_digest=""
+            actual_digest="$(
+              docker buildx imagetools inspect "$ref" \
+                --format '{{json .Manifest.Digest}}' | jq -er .
+            )"
+            test "$actual_digest" = "$expected_digest"
+          }
+
+          api_ref="$API_CANONICAL:sha-$SOURCE_COMMIT"
+          web_ref="$WEB_CANONICAL:sha-$SOURCE_COMMIT"
+          ensure_immutable_tag "$api_ref" "$api_expected_digest" "${api_sources[@]}"
+          ensure_immutable_tag "$web_ref" "$web_expected_digest" "${web_sources[@]}"
+          printf '%s\n' "$api_expected_digest" > build/staging-image-promotion/api-digest
+          printf '%s\n' "$web_expected_digest" > build/staging-image-promotion/web-digest
+      - name: Verify indexes, SLSA v1, SBOM, immutable aliases and write receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_ref="$API_CANONICAL:sha-$SOURCE_COMMIT"
+          web_ref="$WEB_CANONICAL:sha-$SOURCE_COMMIT"
+          api_digest="$(cat build/staging-image-promotion/api-digest)"
+          web_digest="$(cat build/staging-image-promotion/web-digest)"
+          expected_source="https://github.com/${GITHUB_REPOSITORY}"
+
+          verify_promoted_ref() {
+            local ref="$1"
+            local expected_digest="$2"
+            local prefix="$3"
+            docker buildx imagetools inspect "$ref" --raw \
+              > "build/staging-image-promotion/${prefix}-index.json"
+            python3 scripts/ci/verify_staging_image_attestation.py index \
+              --index-file "build/staging-image-promotion/${prefix}-index.json"
+            local actual_digest=""
+            actual_digest="$(
+              docker buildx imagetools inspect "$ref" \
+                --format '{{json .Manifest.Digest}}' | jq -er .
+            )"
+            test "$actual_digest" = "$expected_digest"
+            for platform in linux/amd64 linux/arm64; do
+              local arch="${platform#linux/}"
+              docker buildx imagetools inspect "$ref" \
+                --format "{{json (index .SLSA \"$platform\")}}" \
+                > "build/staging-image-promotion/${prefix}-${arch}-slsa.json"
+              docker buildx imagetools inspect "$ref" \
+                --format "{{json (index .Image \"$platform\")}}" \
+                > "build/staging-image-promotion/${prefix}-${arch}-image.json"
+              docker buildx imagetools inspect "$ref" \
+                --format "{{json (index .SBOM \"$platform\")}}" \
+                > "build/staging-image-promotion/${prefix}-${arch}-sbom.json"
+              python3 scripts/ci/verify_staging_image_attestation.py attestation \
+                --slsa-file "build/staging-image-promotion/${prefix}-${arch}-slsa.json" \
+                --image-file "build/staging-image-promotion/${prefix}-${arch}-image.json" \
+                --sbom-file "build/staging-image-promotion/${prefix}-${arch}-sbom.json" \
+                --commit "$SOURCE_COMMIT" \
+                --source "$expected_source" \
+                --platform "$platform"
+            done
+          }
+
+          immutable_tag_decision() {
+            local ref="$1"
+            local expected_digest="$2"
+            local existing_digest=""
+            local inspect_error=""
+            if existing_digest="$(
+              docker buildx imagetools inspect "$ref" \
+                --format '{{json .Manifest.Digest}}' 2>build/tag-inspect.err | jq -er .
+            )"; then
+              python3 scripts/ci/verify_staging_image_attestation.py tag \
+                --expected-digest "$expected_digest" \
+                --existing-digest "$existing_digest"
+              return
+            fi
+            inspect_error="$(cat build/tag-inspect.err)"
+            if ! grep -Eqi '(manifest unknown|name unknown|not found)' <<<"$inspect_error"; then
+              printf 'failed to inspect immutable tag %s: %s\n' "$ref" "$inspect_error" >&2
+              return 1
+            fi
+            python3 scripts/ci/verify_staging_image_attestation.py tag \
+              --expected-digest "$expected_digest"
+          }
+
+          ensure_immutable_alias() {
+            local ref="$1"
+            local expected_digest="$2"
+            local source="$3"
+            local decision=""
+            decision="$(immutable_tag_decision "$ref" "$expected_digest")"
+            case "$decision" in
+              create)
+                docker buildx imagetools create --tag "$ref" "$source"
+                ;;
+              reuse)
+                ;;
+              *)
+                printf 'unexpected immutable-alias decision for %s: %s\n' "$ref" "$decision" >&2
+                return 1
+                ;;
+            esac
+            local actual_digest=""
+            actual_digest="$(
+              docker buildx imagetools inspect "$ref" \
+                --format '{{json .Manifest.Digest}}' | jq -er .
+            )"
+            test "$actual_digest" = "$expected_digest"
+          }
+
+          verify_promoted_ref "$api_ref" "$api_digest" api
+          verify_promoted_ref "$web_ref" "$web_digest" web
+
+          api_legacy_ref="$API_LEGACY:sha-$SOURCE_COMMIT"
+          web_legacy_ref="$WEB_LEGACY:sha-$SOURCE_COMMIT"
+          ensure_immutable_alias "$api_legacy_ref" "$api_digest" "$API_CANONICAL@$api_digest"
+          ensure_immutable_alias "$web_legacy_ref" "$web_digest" "$WEB_CANONICAL@$web_digest"
+
+          mkdir -p build/staging-image-promotion
+          jq -n \
+            --arg source_commit "$SOURCE_COMMIT" \
+            --arg repository "$GITHUB_REPOSITORY" \
+            --arg buildx "$BUILDX_VERSION" \
+            --arg buildkit "$BUILDKIT_IMAGE" \
+            --arg api_image "$API_CANONICAL" \
+            --arg api_digest "$api_digest" \
+            --arg api_legacy "$API_LEGACY" \
+            --arg api_sha_tag "$api_ref" \
+            --arg web_image "$WEB_CANONICAL" \
+            --arg web_digest "$web_digest" \
+            --arg web_legacy "$WEB_LEGACY" \
+            --arg web_sha_tag "$web_ref" \
+            '{
+              schema_version: 1,
+              status: "pass",
+              scope: "staging-only",
+              source_commit: $source_commit,
+              repository: $repository,
+              platforms: ["linux/amd64", "linux/arm64"],
+              attestations: ["slsa-v1-provenance-mode-max", "sbom"],
+              image_identity: "digest-authoritative",
+              tag_policy: "create-or-reuse-same-digest; reject-collision",
+              toolchain: {
+                buildx: $buildx,
+                buildkit: $buildkit
+              },
+              images: {
+                api: {
+                  canonical: $api_image,
+                  digest: $api_digest,
+                  canonical_reference: ($api_image + "@" + $api_digest),
+                  sha_tag: $api_sha_tag,
+                  legacy_alias: $api_legacy,
+                  legacy_reference: ($api_legacy + "@" + $api_digest)
+                },
+                web: {
+                  canonical: $web_image,
+                  digest: $web_digest,
+                  canonical_reference: ($web_image + "@" + $web_digest),
+                  sha_tag: $web_sha_tag,
+                  legacy_alias: $web_legacy,
+                  legacy_reference: ($web_legacy + "@" + $web_digest)
+                }
+              },
+              production_activation: false
+            }' \
+            > build/staging-image-promotion/receipt.json
+      - name: Upload immutable promotion receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: staging-image-promotion-${{ inputs.source_commit }}
+          path: build/staging-image-promotion/receipt.json
+          if-no-files-found: error
+          retention-days: 30
