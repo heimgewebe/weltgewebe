@@ -35,6 +35,7 @@ permissions:
       - "scripts/platform/**"
       - "scripts/security/**"
       - "scripts/ci/tests/test_kubernetes_platform_contract.py"
+      - "scripts/ci/tests/test_kubernetes_platform_workflow.py"
       - "scripts/ci/tests/test_trivy_rendered_manifests.py"
       - "scripts/ci/tests/test_kubernetes_ha_contract.py"
       - "repo.meta.yaml"
@@ -105,6 +106,7 @@ jobs:
         run: >-
           uv run --project tools/py --locked python -m unittest
           scripts.ci.tests.test_kubernetes_platform_contract
+          scripts.ci.tests.test_kubernetes_platform_workflow
           scripts.ci.tests.test_kubernetes_ha_contract
           scripts.ci.tests.test_trivy_rendered_manifests
           scripts.ci.tests.test_kubernetes_python_bootstrap
@@ -224,12 +226,24 @@ jobs:
           install -d -m 0700 "$docker_config"
           echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
       - name: Verify live OCI mirror package budget
+        id: verify-live-package
         if: steps.proof-cache.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           uv run --project tools/py --locked python scripts/platform/oci_proof_mirror.py
           --state "$OCI_MIRROR_EVIDENCE" verify-live
+      - name: Upload failed live OCI package receipt
+        if: >-
+          failure() &&
+          steps.verify-live-package.outcome == 'failure' &&
+          steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-kind-oci-live-package-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/kubernetes-platform/kind-gitops-oci-mirror/live-package-receipt.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Authenticate controlled OCI mirror
         if: steps.proof-cache.outputs.cache-hit != 'true'
         env:
@@ -456,12 +470,24 @@ jobs:
           install -d -m 0700 "$docker_config"
           echo "DOCKER_CONFIG=$docker_config" >> "$GITHUB_ENV"
       - name: Verify live OCI mirror package budget
+        id: verify-live-package
         if: steps.proof-cache.outputs.cache-hit != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
           uv run --project tools/py --locked python scripts/platform/oci_proof_mirror.py
           --state "$OCI_MIRROR_EVIDENCE" verify-live
+      - name: Upload failed live OCI package receipt
+        if: >-
+          failure() &&
+          steps.verify-live-package.outcome == 'failure' &&
+          steps.proof-cache.outputs.cache-hit != 'true'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # tag: v7.0.1
+        with:
+          name: kubernetes-ha-oci-live-package-${{ github.run_id }}-${{ github.run_attempt }}
+          path: build/kubernetes-platform/ha-recovery-oci-mirror/live-package-receipt.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Authenticate controlled OCI mirror
         if: steps.proof-cache.outputs.cache-hit != 'true'
         env:
