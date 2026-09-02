@@ -514,7 +514,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "ghcr.io/heimgewebe/weltgewebe-proof-oci",
         )
         self.assertEqual(result["visibility"], "private")
-        self.assertEqual(result["repository_binding"], "heimgewebe/weltgewebe")
+        self.assertEqual(result["repository_binding"], "heimgewebe/commonthing")
         self.assertEqual(result["image_count"], 25)
         self.assertTrue(result["retention"]["unbounded_growth_prevented"])
         self.assertEqual(result["retention"]["observed_package_versions"], 193)
@@ -850,7 +850,7 @@ class KubernetesPlatformContractTests(unittest.TestCase):
             "name": "weltgewebe-proof-oci",
             "package_type": "container",
             "visibility": "private",
-            "repository": {"full_name": "heimgewebe/weltgewebe"},
+            "repository": {"full_name": "heimgewebe/commonthing"},
             "version_count": lock["budgets"]["package_version_hard_limit"] + 1,
         }
         with tempfile.TemporaryDirectory() as tmp, mock.patch.object(

@@ -299,7 +299,7 @@ def _load_lock() -> dict[str, Any]:
         "repository": "ghcr.io/heimgewebe/weltgewebe-proof-oci",
         "package_type": "container",
         "visibility": "private",
-        "repository_binding": "heimgewebe/weltgewebe",
+        "repository_binding": "heimgewebe/commonthing",
     }
     if {key: mirror.get(key) for key in expected_mirror} != expected_mirror:
         raise IntegrityError("OCI mirror package binding mismatch")
@@ -888,7 +888,7 @@ def verify_live_package(state: Path) -> dict[str, Any]:
         "name": "weltgewebe-proof-oci",
         "package_type": "container",
         "visibility": "private",
-        "repository": "heimgewebe/weltgewebe",
+        "repository": "heimgewebe/commonthing",
     }
     observed = {
         "id": package.get("id"),
