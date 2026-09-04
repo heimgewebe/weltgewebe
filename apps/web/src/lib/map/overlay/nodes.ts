@@ -38,8 +38,8 @@ const MARKER_SCALE_WRITE_EPSILON = 0.001;
 const FULL_DOM_MARKER_LIMIT = 100;
 /**
  * Fixed Web-Mercator bucket zoom for the DOM-marker compatibility layer.
- * The production map currently starts at city-scale zooms, so z14 keeps a
- * moveend query bounded without rebuilding the index for every camera zoom.
+ * Localized viewports stay bounded without rebuilding the index for every
+ * camera zoom; wide views deliberately fall back to the proven full scan.
  */
 const MARKER_SPATIAL_INDEX_ZOOM = 14;
 const MARKER_SPATIAL_TILE_COUNT = 1 << MARKER_SPATIAL_INDEX_ZOOM;
