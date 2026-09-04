@@ -232,6 +232,21 @@ describe("setupKompositionInteraction", () => {
     expect(get(kompositionDraft)?.lngLat).toBeUndefined();
   });
 
+  it("does not arm placement or longpress on a native domain feature", () => {
+    cleanup();
+    cleanup = setupKompositionInteraction(
+      map as never,
+      (point) => point.x === 50 && point.y === 50,
+    );
+    enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
+
+    map.emit("mousedown", pointerEvent(50, 50, 10, 53.5));
+    vi.advanceTimersByTime(800);
+    map.emit("mouseup", pointerEvent(50, 50, 10, 53.5));
+
+    expect(get(kompositionDraft)?.lngLat).toBeUndefined();
+  });
+
   it("does not move the point from nested SVG-like marker content", () => {
     enterKomposition({ mode: "place-garnrolle", source: "tool-fan" });
     const marker = new FakeElement("map-marker");

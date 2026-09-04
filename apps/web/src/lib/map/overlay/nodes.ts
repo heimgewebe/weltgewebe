@@ -36,6 +36,13 @@ export const MARKER_GEO_ANCHOR = "center" as const;
 const WEAVE_DETAIL_ZOOM = 13.5;
 const MARKER_SCALE_WRITE_EPSILON = 0.001;
 const FULL_DOM_MARKER_LIMIT = 100;
+export const NATIVE_ENTITY_LAYER_MIN_COUNT = 1_000;
+export const NATIVE_ENTITY_SOURCE_ID = "commonthing-map-entities";
+export const NATIVE_ENTITY_LAYER_ID = "commonthing-map-entities-body";
+const NATIVE_ENTITY_DEFAULT_COLOR = "#76523d";
+const NATIVE_ENTITY_CENTER_COLOR = "#d7b684";
+const NATIVE_ENTITY_SEARCH_COLOR = "#005fcc";
+const NATIVE_ENTITY_SELECTED_COLOR = "#c06a32";
 /**
  * Fixed Web-Mercator bucket zoom for the DOM-marker compatibility layer.
  * Localized viewports stay bounded without rebuilding the index for every
@@ -53,6 +60,26 @@ const MARKER_SPATIAL_QUERY_BUCKET_LIMIT = 4096;
 type MarkerSpatialIndex = {
   buckets: Map<number, number[]>;
   indexById: Map<string, number>;
+};
+
+type NativeEntityFeatureCollection = {
+  type: "FeatureCollection";
+  features: Array<{
+    type: "Feature";
+    id: string;
+    geometry: { type: "Point"; coordinates: [number, number] };
+    properties: {
+      id: string;
+      title: string;
+      entityType: MapEntityViewModel["type"];
+      color: string;
+      locationState: string;
+    };
+  }>;
+};
+
+type NativeLayerClickEvent = {
+  features?: Array<{ properties?: Record<string, unknown> | null }>;
 };
 
 type MapObjectScaleOwnership = {
@@ -125,6 +152,9 @@ export class NodesOverlay {
   private latestPoints: MapEntityViewModel[] = [];
   private latestShowNodes = true;
   private markerSpatialIndex: MarkerSpatialIndex | null = null;
+  private nativeLayerEnabled = false;
+  private nativeSyncing = false;
+  private nativeClickBound = false;
   private mapScaleContainer: HTMLElement | null = null;
   private readonly mapScaleOwner = Symbol("nodes-overlay-map-scale");
   private readonly handleZoom = () => {
@@ -133,11 +163,31 @@ export class NodesOverlay {
   private readonly handleMoveEnd = () => {
     this.reconcileVirtualizedMarkers();
   };
+  private readonly handleStyleData = () => {
+    if (this.nativeSyncing || !this.latestShowNodes) return;
+    if (!this.shouldUseNativeEntityLayer()) return;
+
+    const map = this.map;
+    if (
+      map?.getSource(NATIVE_ENTITY_SOURCE_ID) &&
+      map.getLayer(NATIVE_ENTITY_LAYER_ID)
+    ) {
+      return;
+    }
+    this.reconcileMarkers(this.latestPoints, this.latestShowNodes);
+  };
+  private readonly handleNativeEntityClick = (event: NativeLayerClickEvent) => {
+    const id = event.features?.[0]?.properties?.id;
+    if (typeof id !== "string") return;
+    const item = this.pointById(id);
+    if (item) this.onEntityActivate?.(item);
+  };
 
   constructor(
     private map: MapLibreMap | null,
     private MarkerClass: MarkerConstructor,
     private readonly runtime: WeaveRuntime = weaveRuntime,
+    private readonly onEntityActivate?: (item: MapEntityViewModel) => void,
   ) {
     if (this.map && typeof this.map.getContainer === "function") {
       const container = this.map.getContainer();
@@ -164,6 +214,229 @@ export class NodesOverlay {
     }
     if (this.map && typeof this.map.on === "function") {
       this.map.on("moveend", this.handleMoveEnd);
+      if (this.supportsNativeEntityLayer()) {
+        this.map.on("styledata", this.handleStyleData);
+      }
+    }
+  }
+
+  private supportsNativeEntityLayer(): boolean {
+    const map = this.map;
+    return Boolean(
+      map &&
+      typeof map.addSource === "function" &&
+      typeof map.getSource === "function" &&
+      typeof map.addLayer === "function" &&
+      typeof map.getLayer === "function" &&
+      typeof map.queryRenderedFeatures === "function" &&
+      typeof map.setFeatureState === "function",
+    );
+  }
+
+  private shouldUseNativeEntityLayer(
+    points: readonly MapEntityViewModel[] = this.latestPoints,
+  ): boolean {
+    return (
+      points.length > NATIVE_ENTITY_LAYER_MIN_COUNT &&
+      this.supportsNativeEntityLayer()
+    );
+  }
+
+  private pointById(id: string): MapEntityViewModel | undefined {
+    const index = this.markerSpatialIndex?.indexById.get(id);
+    if (index !== undefined) return this.latestPoints[index];
+    return this.latestPoints.find((item) => item.id === id);
+  }
+
+  private nativeEntityColor(item: MapEntityViewModel): string {
+    if (item.type === "webgemeindezentrum") return NATIVE_ENTITY_CENTER_COLOR;
+    if (item.type === "node") {
+      return item.weave?.primaryThemeColor ?? NATIVE_ENTITY_DEFAULT_COLOR;
+    }
+    return NATIVE_ENTITY_DEFAULT_COLOR;
+  }
+
+  private nativeFeatureCollection(): NativeEntityFeatureCollection {
+    if (!this.latestShowNodes)
+      return { type: "FeatureCollection", features: [] };
+
+    const features: NativeEntityFeatureCollection["features"] = [];
+    for (const item of this.latestPoints) {
+      if (!hasRenderableMapPosition(item)) continue;
+      features.push({
+        type: "Feature",
+        id: item.id,
+        geometry: {
+          type: "Point",
+          coordinates: [item.lon, item.lat],
+        },
+        properties: {
+          id: item.id,
+          title: item.title,
+          entityType: item.type,
+          color: this.nativeEntityColor(item),
+          locationState:
+            item.type === "webgemeindezentrum" ? item.location_state : "",
+        },
+      });
+    }
+    return { type: "FeatureCollection", features };
+  }
+
+  private syncNativeEntityLayer(): boolean {
+    const map = this.map;
+    if (!map || !this.supportsNativeEntityLayer() || this.nativeSyncing)
+      return false;
+    if (typeof map.isStyleLoaded === "function" && !map.isStyleLoaded())
+      return false;
+
+    this.nativeSyncing = true;
+    try {
+      const data = this.nativeFeatureCollection();
+      let source = map.getSource(NATIVE_ENTITY_SOURCE_ID) as
+        | { setData?: (data: NativeEntityFeatureCollection) => void }
+        | undefined;
+      let sourceCreated = false;
+      if (!source) {
+        map.addSource(NATIVE_ENTITY_SOURCE_ID, {
+          type: "geojson",
+          data,
+        });
+        sourceCreated = true;
+        source = map.getSource(NATIVE_ENTITY_SOURCE_ID) as
+          | { setData?: (data: NativeEntityFeatureCollection) => void }
+          | undefined;
+      }
+
+      if (!map.getLayer(NATIVE_ENTITY_LAYER_ID)) {
+        map.addLayer({
+          id: NATIVE_ENTITY_LAYER_ID,
+          type: "circle",
+          source: NATIVE_ENTITY_SOURCE_ID,
+          paint: {
+            "circle-radius": [
+              "interpolate",
+              ["linear"],
+              ["zoom"],
+              10,
+              [
+                "case",
+                ["==", ["get", "entityType"], "webgemeindezentrum"],
+                6,
+                4,
+              ],
+              14,
+              [
+                "case",
+                ["==", ["get", "entityType"], "webgemeindezentrum"],
+                10,
+                7,
+              ],
+              18,
+              [
+                "case",
+                ["==", ["get", "entityType"], "webgemeindezentrum"],
+                14,
+                11,
+              ],
+            ],
+            "circle-color": ["get", "color"],
+            "circle-opacity": 0.92,
+            "circle-stroke-color": [
+              "case",
+              ["boolean", ["feature-state", "selected"], false],
+              NATIVE_ENTITY_SELECTED_COLOR,
+              ["boolean", ["feature-state", "searchMatch"], false],
+              NATIVE_ENTITY_SEARCH_COLOR,
+              ["==", ["get", "entityType"], "webgemeindezentrum"],
+              "#664835",
+              "#f4e5cd",
+            ],
+            "circle-stroke-width": [
+              "case",
+              [
+                "any",
+                ["boolean", ["feature-state", "selected"], false],
+                ["boolean", ["feature-state", "searchMatch"], false],
+              ],
+              3,
+              1.5,
+            ],
+          },
+        });
+      }
+      if (!sourceCreated) source?.setData?.(data);
+      if (!this.nativeClickBound) {
+        map.on("click", NATIVE_ENTITY_LAYER_ID, this.handleNativeEntityClick);
+        this.nativeClickBound = true;
+      }
+      this.reapplyNativeFeatureStates();
+      return Boolean(source && map.getLayer(NATIVE_ENTITY_LAYER_ID));
+    } catch {
+      // Style replacement can invalidate sources between readiness and mutation.
+      // The caller keeps the proven DOM virtualization path until a later
+      // styledata/update can establish the complete native source + layer.
+      return false;
+    } finally {
+      this.nativeSyncing = false;
+    }
+  }
+
+  private setNativeFeatureState(
+    id: string,
+    state: { selected?: boolean; searchMatch?: boolean },
+  ) {
+    const map = this.map;
+    if (!this.nativeLayerEnabled || !map || !this.supportsNativeEntityLayer()) {
+      return;
+    }
+    try {
+      map.setFeatureState({ source: NATIVE_ENTITY_SOURCE_ID, id }, state);
+    } catch {
+      // Style/source transitions are rehydrated from canonical state later.
+    }
+  }
+
+  private reapplyNativeFeatureStates() {
+    if (this.selectedMarkerId !== null) {
+      this.setNativeFeatureState(this.selectedMarkerId, { selected: true });
+    }
+    for (const id of this.searchMatchIds) {
+      this.setNativeFeatureState(id, { searchMatch: true });
+    }
+  }
+
+  private clearNativeEntityData() {
+    const map = this.map;
+    if (!map || !this.supportsNativeEntityLayer()) return;
+    try {
+      const source = map.getSource(NATIVE_ENTITY_SOURCE_ID) as
+        | { setData?: (data: NativeEntityFeatureCollection) => void }
+        | undefined;
+      source?.setData?.({ type: "FeatureCollection", features: [] });
+    } catch {
+      // Missing source during a style transition already means no stale points.
+    }
+  }
+
+  public hasNativeEntityAt(point: { x: number; y: number }): boolean {
+    const map = this.map;
+    if (
+      !this.nativeLayerEnabled ||
+      !map ||
+      !this.supportsNativeEntityLayer() ||
+      !map.getLayer(NATIVE_ENTITY_LAYER_ID)
+    ) {
+      return false;
+    }
+    try {
+      return (
+        map.queryRenderedFeatures([point.x, point.y], {
+          layers: [NATIVE_ENTITY_LAYER_ID],
+        }).length > 0
+      );
+    } catch {
+      return false;
     }
   }
 
@@ -295,6 +568,7 @@ export class NodesOverlay {
   }
 
   private reconcileVirtualizedMarkers() {
+    if (this.nativeLayerEnabled) return;
     if (this.shouldVirtualizeMarkers()) {
       this.reconcileMarkers(this.latestPoints, this.latestShowNodes);
     }
@@ -316,7 +590,26 @@ export class NodesOverlay {
   private reconcileMarkers(
     points: MapEntityViewModel[],
     showNodes: boolean,
+    syncNativeData = true,
   ): void {
+    const nativeRequested =
+      showNodes && this.shouldUseNativeEntityLayer(points);
+    let useNativeLayer = false;
+    if (nativeRequested) {
+      if (syncNativeData) {
+        // State must be temporarily enabled so selected/search feature-state can
+        // be reapplied while the newly created source/layer is synchronized.
+        this.nativeLayerEnabled = true;
+        useNativeLayer = this.syncNativeEntityLayer();
+      } else {
+        useNativeLayer =
+          this.nativeLayerEnabled &&
+          Boolean(this.map?.getLayer(NATIVE_ENTITY_LAYER_ID));
+      }
+    }
+    this.nativeLayerEnabled = useNativeLayer;
+    if (!nativeRequested) this.clearNativeEntityData();
+
     if (!showNodes) {
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
       this.activeMarkers.clear();
@@ -326,7 +619,8 @@ export class NodesOverlay {
     const map = this.map;
     if (!map) return;
 
-    const shouldVirtualize = this.shouldVirtualizeMarkers(points);
+    const shouldVirtualize =
+      !useNativeLayer && this.shouldVirtualizeMarkers(points);
     const viewportBounds =
       shouldVirtualize && typeof map.getBounds === "function"
         ? map.getBounds()
@@ -335,8 +629,15 @@ export class NodesOverlay {
       shouldVirtualize && viewportBounds
         ? this.spatialCandidateIndexes(viewportBounds)
         : null;
-    const candidates =
-      spatialIndexes === null
+    const nativeSelected =
+      useNativeLayer && this.selectedMarkerId !== null
+        ? this.pointById(this.selectedMarkerId)
+        : undefined;
+    const candidates = useNativeLayer
+      ? nativeSelected
+        ? [nativeSelected]
+        : []
+      : spatialIndexes === null
         ? points
         : spatialIndexes.flatMap((index) => {
             const item = points[index];
@@ -557,14 +858,21 @@ export class NodesOverlay {
   public updateSelection(nextSelectedMarkerId: string | null) {
     if (this.selectedMarkerId === nextSelectedMarkerId) return;
 
-    if (this.selectedMarkerId !== null) {
-      this.setSelected(this.selectedMarkerId, false);
+    const previousSelectedMarkerId = this.selectedMarkerId;
+    if (previousSelectedMarkerId !== null) {
+      this.setSelected(previousSelectedMarkerId, false);
+      this.setNativeFeatureState(previousSelectedMarkerId, { selected: false });
     }
     this.selectedMarkerId = nextSelectedMarkerId;
     if (nextSelectedMarkerId !== null) {
       this.setSelected(nextSelectedMarkerId, true);
+      this.setNativeFeatureState(nextSelectedMarkerId, { selected: true });
     }
-    this.reconcileVirtualizedMarkers();
+    if (this.nativeLayerEnabled) {
+      this.reconcileMarkers(this.latestPoints, this.latestShowNodes, false);
+    } else {
+      this.reconcileVirtualizedMarkers();
+    }
   }
 
   public updateSearchMatches(nextSearchMatchIds: ReadonlySet<string>) {
@@ -573,11 +881,21 @@ export class NodesOverlay {
       nextSearchMatchIds,
     );
 
-    for (const id of removed) this.setSearchMatch(id, false);
-    for (const id of added) this.setSearchMatch(id, true);
+    for (const id of removed) {
+      this.setSearchMatch(id, false);
+      this.setNativeFeatureState(id, { searchMatch: false });
+    }
+    for (const id of added) {
+      this.setSearchMatch(id, true);
+      this.setNativeFeatureState(id, { searchMatch: true });
+    }
 
     this.searchMatchIds = new Set(nextSearchMatchIds);
-    this.reconcileVirtualizedMarkers();
+    if (this.nativeLayerEnabled) {
+      this.reconcileMarkers(this.latestPoints, this.latestShowNodes, false);
+    } else {
+      this.reconcileVirtualizedMarkers();
+    }
   }
 
   public getActiveMarker(id: string) {
@@ -588,6 +906,16 @@ export class NodesOverlay {
     if (this.map && typeof this.map.off === "function") {
       this.map.off("zoom", this.handleZoom);
       this.map.off("moveend", this.handleMoveEnd);
+      if (this.supportsNativeEntityLayer()) {
+        this.map.off("styledata", this.handleStyleData);
+        if (this.nativeClickBound) {
+          this.map.off(
+            "click",
+            NATIVE_ENTITY_LAYER_ID,
+            this.handleNativeEntityClick,
+          );
+        }
+      }
     }
     if (this.mapScaleContainer) {
       const container = this.mapScaleContainer;
@@ -616,5 +944,7 @@ export class NodesOverlay {
     this.latestPoints = [];
     this.latestShowNodes = false;
     this.markerSpatialIndex = null;
+    this.nativeLayerEnabled = false;
+    this.nativeClickBound = false;
   }
 }

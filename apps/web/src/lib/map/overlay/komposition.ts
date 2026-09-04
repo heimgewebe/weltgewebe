@@ -61,7 +61,12 @@ type ActiveGesture = {
   longPressFired: boolean;
 };
 
-export function setupKompositionInteraction(map: MapLibreMap) {
+type DomainFeatureHitTest = (point: { x: number; y: number }) => boolean;
+
+export function setupKompositionInteraction(
+  map: MapLibreMap,
+  isDomainFeatureAtPoint: DomainFeatureHitTest = () => false,
+) {
   let longPressTimer: ReturnType<typeof setTimeout> | undefined;
   let activeGesture: ActiveGesture | null = null;
   let suppressMouseUntil = 0;
@@ -118,7 +123,7 @@ export function setupKompositionInteraction(map: MapLibreMap) {
     cancelGesture();
     // Markers own their own click/tap (focus). A press on a marker must never
     // arm placement, so it can never move an already-chosen Garnrolle point.
-    if (targetIsMarker(target)) return;
+    if (targetIsMarker(target) || isDomainFeatureAtPoint(point)) return;
     if (!canComposeOnMap()) return;
 
     activeGesture = {
