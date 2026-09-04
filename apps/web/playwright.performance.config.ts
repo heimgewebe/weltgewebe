@@ -37,7 +37,10 @@ export default defineConfig({
   ...baseConfig,
   webServer,
   testDir: "tests/proofs",
-  testMatch: "**/web-runtime.performance.proof.ts",
+  testMatch: [
+    "**/web-runtime.performance.proof.ts",
+    "**/map-cardinality.performance.proof.ts",
+  ],
   timeout: 240_000,
   retries: 0,
   workers: 1,
