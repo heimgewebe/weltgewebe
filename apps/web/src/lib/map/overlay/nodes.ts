@@ -36,6 +36,25 @@ export const MARKER_GEO_ANCHOR = "center" as const;
 const WEAVE_DETAIL_ZOOM = 13.5;
 const MARKER_SCALE_WRITE_EPSILON = 0.001;
 const FULL_DOM_MARKER_LIMIT = 100;
+/**
+ * Fixed Web-Mercator bucket zoom for the DOM-marker compatibility layer.
+ * Localized viewports stay bounded without rebuilding the index for every
+ * camera zoom; wide views deliberately fall back to the proven full scan.
+ */
+const MARKER_SPATIAL_INDEX_ZOOM = 14;
+const MARKER_SPATIAL_TILE_COUNT = 1 << MARKER_SPATIAL_INDEX_ZOOM;
+const MARKER_SPATIAL_MAX_LAT = 85.05112878;
+/**
+ * A very wide/invalid viewport is cheaper and safer on the proven full-scan
+ * path than by walking a huge number of empty spatial buckets.
+ */
+const MARKER_SPATIAL_QUERY_BUCKET_LIMIT = 4096;
+
+type MarkerSpatialIndex = {
+  buckets: Map<number, number[]>;
+  indexById: Map<string, number>;
+};
+
 type MapObjectScaleOwnership = {
   owners: Set<symbol>;
   previousValue: string;
@@ -45,6 +64,46 @@ const MAP_OBJECT_SCALE_OWNERS = new WeakMap<
   HTMLElement,
   MapObjectScaleOwnership
 >();
+
+function markerSpatialTileX(lon: number): number {
+  const raw = Math.floor(((lon + 180) / 360) * MARKER_SPATIAL_TILE_COUNT);
+  return Math.max(0, Math.min(MARKER_SPATIAL_TILE_COUNT - 1, raw));
+}
+
+function markerSpatialTileY(lat: number): number {
+  const clamped = Math.max(
+    -MARKER_SPATIAL_MAX_LAT,
+    Math.min(MARKER_SPATIAL_MAX_LAT, lat),
+  );
+  const radians = (clamped * Math.PI) / 180;
+  const normalized = (1 - Math.asinh(Math.tan(radians)) / Math.PI) / 2;
+  const raw = Math.floor(normalized * MARKER_SPATIAL_TILE_COUNT);
+  return Math.max(0, Math.min(MARKER_SPATIAL_TILE_COUNT - 1, raw));
+}
+
+function markerSpatialBucketKey(lon: number, lat: number): number {
+  const x = markerSpatialTileX(lon);
+  const y = markerSpatialTileY(lat);
+  return y * MARKER_SPATIAL_TILE_COUNT + x;
+}
+
+function buildMarkerSpatialIndex(
+  points: readonly MapEntityViewModel[],
+): MarkerSpatialIndex {
+  const buckets = new Map<number, number[]>();
+  const indexById = new Map<string, number>();
+
+  points.forEach((item, index) => {
+    if (!hasRenderableMapPosition(item)) return;
+    const key = markerSpatialBucketKey(item.lon, item.lat);
+    const bucket = buckets.get(key);
+    if (bucket) bucket.push(index);
+    else buckets.set(key, [index]);
+    indexById.set(item.id, index);
+  });
+
+  return { buckets, indexById };
+}
 
 export class NodesOverlay {
   private activeMarkers = new Map<
@@ -65,15 +124,14 @@ export class NodesOverlay {
   private markerScaleInitialized = false;
   private latestPoints: MapEntityViewModel[] = [];
   private latestShowNodes = true;
+  private markerSpatialIndex: MarkerSpatialIndex | null = null;
   private mapScaleContainer: HTMLElement | null = null;
   private readonly mapScaleOwner = Symbol("nodes-overlay-map-scale");
   private readonly handleZoom = () => {
     if (this.map) this.updateZoom(this.map.getZoom());
   };
   private readonly handleMoveEnd = () => {
-    if (this.shouldVirtualizeMarkers()) {
-      this.update(this.latestPoints, this.latestShowNodes);
-    }
+    this.reconcileVirtualizedMarkers();
   };
 
   constructor(
@@ -153,13 +211,92 @@ export class NodesOverlay {
     return "node";
   }
 
-  private shouldVirtualizeMarkers(points = this.latestPoints): boolean {
+  private shouldVirtualizeMarkers(
+    points: readonly MapEntityViewModel[] = this.latestPoints,
+  ): boolean {
     return points.length > FULL_DOM_MARKER_LIMIT;
+  }
+
+  private rebuildMarkerSpatialIndex(points: readonly MapEntityViewModel[]) {
+    this.markerSpatialIndex = this.shouldVirtualizeMarkers(points)
+      ? buildMarkerSpatialIndex(points)
+      : null;
+  }
+
+  private spatialCandidateIndexes(
+    viewportBounds: ReturnType<MapLibreMap["getBounds"]>,
+  ): number[] | null {
+    const index = this.markerSpatialIndex;
+    if (!index) return null;
+    if (
+      typeof viewportBounds.getWest !== "function" ||
+      typeof viewportBounds.getEast !== "function" ||
+      typeof viewportBounds.getSouth !== "function" ||
+      typeof viewportBounds.getNorth !== "function"
+    ) {
+      return null;
+    }
+
+    const west = viewportBounds.getWest();
+    const east = viewportBounds.getEast();
+    const south = viewportBounds.getSouth();
+    const north = viewportBounds.getNorth();
+    if (
+      ![west, east, south, north].every(Number.isFinite) ||
+      west < -180 ||
+      west > 180 ||
+      east < -180 ||
+      east > 180 ||
+      south > north
+    ) {
+      return null;
+    }
+
+    const northY = markerSpatialTileY(north);
+    const southY = markerSpatialTileY(south);
+    const minY = Math.min(northY, southY);
+    const maxY = Math.max(northY, southY);
+    const xRanges: Array<readonly [number, number]> =
+      west <= east
+        ? [[markerSpatialTileX(west), markerSpatialTileX(east)]]
+        : [
+            [markerSpatialTileX(west), MARKER_SPATIAL_TILE_COUNT - 1],
+            [0, markerSpatialTileX(east)],
+          ];
+
+    const ySpan = maxY - minY + 1;
+    const bucketCount = xRanges.reduce(
+      (count, [minX, maxX]) => count + (maxX - minX + 1) * ySpan,
+      0,
+    );
+    if (bucketCount > MARKER_SPATIAL_QUERY_BUCKET_LIMIT) return null;
+
+    const candidateIndexes = new Set<number>();
+    for (const [minX, maxX] of xRanges) {
+      for (let y = minY; y <= maxY; y += 1) {
+        for (let x = minX; x <= maxX; x += 1) {
+          const bucket = index.buckets.get(y * MARKER_SPATIAL_TILE_COUNT + x);
+          if (!bucket) continue;
+          for (const itemIndex of bucket) candidateIndexes.add(itemIndex);
+        }
+      }
+    }
+
+    if (this.selectedMarkerId !== null) {
+      const selectedIndex = index.indexById.get(this.selectedMarkerId);
+      if (selectedIndex !== undefined) candidateIndexes.add(selectedIndex);
+    }
+    for (const id of this.searchMatchIds) {
+      const searchIndex = index.indexById.get(id);
+      if (searchIndex !== undefined) candidateIndexes.add(searchIndex);
+    }
+
+    return Array.from(candidateIndexes).sort((left, right) => left - right);
   }
 
   private reconcileVirtualizedMarkers() {
     if (this.shouldVirtualizeMarkers()) {
-      this.update(this.latestPoints, this.latestShowNodes);
+      this.reconcileMarkers(this.latestPoints, this.latestShowNodes);
     }
   }
 
@@ -176,10 +313,10 @@ export class NodesOverlay {
     }
   }
 
-  public update(points: MapEntityViewModel[], showNodes: boolean): void {
-    this.latestPoints = points;
-    this.latestShowNodes = showNodes;
-
+  private reconcileMarkers(
+    points: MapEntityViewModel[],
+    showNodes: boolean,
+  ): void {
     if (!showNodes) {
       this.activeMarkers.forEach(({ cleanup }) => cleanup());
       this.activeMarkers.clear();
@@ -194,9 +331,20 @@ export class NodesOverlay {
       shouldVirtualize && typeof map.getBounds === "function"
         ? map.getBounds()
         : null;
+    const spatialIndexes =
+      shouldVirtualize && viewportBounds
+        ? this.spatialCandidateIndexes(viewportBounds)
+        : null;
+    const candidates =
+      spatialIndexes === null
+        ? points
+        : spatialIndexes.flatMap((index) => {
+            const item = points[index];
+            return item ? [item] : [];
+          });
     const currentIds = new Set<string>();
 
-    for (const item of points) {
+    for (const item of candidates) {
       if (!hasRenderableMapPosition(item)) {
         const existing = this.activeMarkers.get(item.id);
         if (existing) {
@@ -372,6 +520,13 @@ export class NodesOverlay {
     }
   }
 
+  public update(points: MapEntityViewModel[], showNodes: boolean): void {
+    this.latestPoints = points;
+    this.latestShowNodes = showNodes;
+    this.rebuildMarkerSpatialIndex(points);
+    this.reconcileMarkers(points, showNodes);
+  }
+
   private setSearchMatch(id: string, highlighted: boolean) {
     const entry = this.activeMarkers.get(id);
     if (!entry) return;
@@ -460,5 +615,6 @@ export class NodesOverlay {
     this.selectedMarkerId = null;
     this.latestPoints = [];
     this.latestShowNodes = false;
+    this.markerSpatialIndex = null;
   }
 }
