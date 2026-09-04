@@ -418,16 +418,19 @@ pub(crate) async fn enqueue_delivery_targets(
     Ok(())
 }
 
-pub(crate) async fn backfill_delivery_target(
+pub(crate) async fn backfill_delivery_targets(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
-    target_cell_id: &str,
+    target_cell_ids: &[String],
 ) -> anyhow::Result<()> {
+    if target_cell_ids.is_empty() {
+        return Ok(());
+    }
     sqlx::query(
         "INSERT INTO federation_delivery_attempts (event_id, target_cell_id) \
          SELECT outbox.event_id, relationship.remote_cell_id \
          FROM federation_outbox AS outbox \
          JOIN federation_peer_relationships AS relationship \
-           ON relationship.remote_cell_id = $1 \
+           ON relationship.remote_cell_id = ANY($1::text[]) \
           AND relationship.state = 'trusted' \
           AND relationship.delivery_base_url IS NOT NULL \
           AND ( \
@@ -461,7 +464,7 @@ pub(crate) async fn backfill_delivery_target(
              'delivery-attempts-exhausted' \
            )",
     )
-    .bind(target_cell_id)
+    .bind(target_cell_ids)
     .execute(&mut **tx)
     .await?;
     Ok(())
@@ -778,6 +781,14 @@ async fn mark_dead(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::{collections::HashSet, sync::Arc};
+
+    use sqlx::postgres::PgPoolOptions;
+
+    use crate::federation::{
+        FederationEvent, FederationRepository, FederationService, MemoryFederationRepository,
+        PeerPolicy, PostgresFederationRepository, PublishRequest,
+    };
     use crate::test_helpers::EnvGuard;
     use serial_test::serial;
 
@@ -1054,18 +1065,518 @@ mod tests {
         }
     }
 
+    async fn isolated_delivery_pool() -> anyhow::Result<PgPool> {
+        let database_url = env::var("FEDERATION_TEST_DATABASE_URL")
+            .context("FEDERATION_TEST_DATABASE_URL must identify an isolated database")?;
+        let pool = PgPoolOptions::new()
+            .max_connections(8)
+            .connect(&database_url)
+            .await?;
+        sqlx::migrate!("./migrations").run(&pool).await?;
+        sqlx::query(
+            "TRUNCATE federation_delivery_attempts, federation_event_receipts, \
+             federation_quarantine, federation_inbox, federation_outbox, federation_objects, \
+             federation_peer_keys, federation_peer_relationships RESTART IDENTITY CASCADE",
+        )
+        .execute(&pool)
+        .await?;
+        Ok(pool)
+    }
+
+    fn delivery_peer_policy(cell_id: &str, state: &str, seed: u8) -> PeerPolicy {
+        PeerPolicy {
+            remote_cell_id: cell_id.to_string(),
+            state: state.to_string(),
+            allow_neighbourhood: true,
+            allowed_event_types: HashSet::from(["object.upserted".to_string()]),
+            keys: vec![test_identity(cell_id, &format!("key-{cell_id}"), seed).peer_key()],
+        }
+    }
+
+    async fn postgres_sender(
+        pool: &PgPool,
+        peers: &[PeerPolicy],
+    ) -> anyhow::Result<(Arc<PostgresFederationRepository>, FederationService)> {
+        let repository = Arc::new(PostgresFederationRepository::new(pool.clone()));
+        let sender =
+            FederationService::new(test_identity("cell-a", "key-a", 90), repository.clone());
+        for peer in peers {
+            sender.install_peer(peer.clone()).await?;
+        }
+        Ok((repository, sender))
+    }
+
+    async fn publish_global(
+        sender: &FederationService,
+        object_suffix: &str,
+    ) -> anyhow::Result<FederationEvent> {
+        sender
+            .publish_local(PublishRequest {
+                actor: "system:reconcile-batch-proof".to_string(),
+                event_type: "object.upserted".to_string(),
+                object_address: format!("wg://cell-a/node/{object_suffix}"),
+                object_kind: "node".to_string(),
+                object_version: 1,
+                previous_version: None,
+                scope: "global".to_string(),
+                neighbourhood_targets: vec![],
+                payload: serde_json::json!({"proof": object_suffix}),
+            })
+            .await
+    }
+
+    type RelationshipSnapshot = (String, Option<String>, Option<String>, String);
+
+    async fn relationship_snapshot(pool: &PgPool) -> anyhow::Result<Vec<RelationshipSnapshot>> {
+        Ok(sqlx::query_as(
+            "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256, updated_at::text \
+             FROM federation_peer_relationships ORDER BY remote_cell_id",
+        )
+        .fetch_all(pool)
+        .await?)
+    }
+
+    type AttemptSnapshot = (
+        String,
+        i32,
+        String,
+        Option<Uuid>,
+        Option<String>,
+        Option<i32>,
+        Option<String>,
+        Option<String>,
+        String,
+    );
+
+    async fn attempt_snapshot(
+        pool: &PgPool,
+        event_id: Uuid,
+        target_cell_id: &str,
+    ) -> anyhow::Result<AttemptSnapshot> {
+        Ok(sqlx::query_as(
+            "SELECT state, attempt_count, next_attempt_at::text, lease_owner, \
+                    lease_expires_at::text, last_http_status, last_error_class, \
+                    delivered_at::text, updated_at::text \
+             FROM federation_delivery_attempts \
+             WHERE event_id = $1 AND target_cell_id = $2",
+        )
+        .bind(event_id)
+        .bind(target_cell_id)
+        .fetch_one(pool)
+        .await?)
+    }
+
     #[tokio::test]
     #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_reconcile_noop_preserves_timestamps_and_delivery_state() -> anyhow::Result<()>
+    {
+        let pool = isolated_delivery_pool().await?;
+        let peer = delivery_peer_policy("cell-b", "trusted", 91);
+        let (repository, sender) = postgres_sender(&pool, std::slice::from_ref(&peer)).await?;
+        let binding = (
+            peer.clone(),
+            Some("https://cell-b.example.test/edge".to_string()),
+        );
+        repository
+            .reconcile_delivery_endpoints(std::slice::from_ref(&binding))
+            .await?;
+        let event = publish_global(&sender, "reconcile-noop").await?;
+        sqlx::query(
+            "UPDATE federation_delivery_attempts \
+             SET state = 'dead', attempt_count = 4, \
+                 next_attempt_at = TIMESTAMPTZ '2001-01-01 00:00:00+00', \
+                 last_http_status = 202, last_error_class = 'remote-quarantined', \
+                 updated_at = TIMESTAMPTZ '2001-01-02 00:00:00+00' \
+             WHERE event_id = $1 AND target_cell_id = 'cell-b'",
+        )
+        .bind(event.event_id)
+        .execute(&pool)
+        .await?;
+        let relationships_before = relationship_snapshot(&pool).await?;
+        let attempt_before = attempt_snapshot(&pool, event.event_id, "cell-b").await?;
+
+        let equivalent_binding = (
+            peer,
+            Some("  https://cell-b.example.test/edge/  ".to_string()),
+        );
+        repository
+            .reconcile_delivery_endpoints(std::slice::from_ref(&equivalent_binding))
+            .await?;
+
+        assert_eq!(relationship_snapshot(&pool).await?, relationships_before);
+        assert_eq!(
+            attempt_snapshot(&pool, event.event_id, "cell-b").await?,
+            attempt_before
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_reconcile_empty_bindings_clear_all_delivery_endpoints() -> anyhow::Result<()>
+    {
+        let pool = isolated_delivery_pool().await?;
+        let cell_b = delivery_peer_policy("cell-b", "trusted", 91);
+        let cell_c = delivery_peer_policy("cell-c", "trusted", 92);
+        let (repository, _) = postgres_sender(&pool, &[cell_b.clone(), cell_c.clone()]).await?;
+        repository
+            .reconcile_delivery_endpoints(&[
+                (cell_b, Some("https://cell-b.example.test".to_string())),
+                (cell_c, Some("https://cell-c.example.test".to_string())),
+            ])
+            .await?;
+
+        repository.reconcile_delivery_endpoints(&[]).await?;
+
+        let relationships: Vec<(String, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256 \
+             FROM federation_peer_relationships ORDER BY remote_cell_id",
+        )
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(
+            relationships,
+            vec![
+                ("cell-b".to_string(), None, None),
+                ("cell-c".to_string(), None, None),
+            ]
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_reconcile_clear_only_batch_handles_nullable_arrays() -> anyhow::Result<()> {
+        let pool = isolated_delivery_pool().await?;
+        let cell_b = delivery_peer_policy("cell-b", "trusted", 91);
+        let cell_c = delivery_peer_policy("cell-c", "trusted", 92);
+        let (repository, _) = postgres_sender(&pool, &[cell_b.clone(), cell_c.clone()]).await?;
+        repository
+            .reconcile_delivery_endpoints(&[(
+                cell_b,
+                Some("https://cell-b.example.test".to_string()),
+            )])
+            .await?;
+        let before_cell_c: (Option<String>, Option<String>, String) = sqlx::query_as(
+            "SELECT delivery_base_url, delivery_policy_sha256, updated_at::text \
+             FROM federation_peer_relationships WHERE remote_cell_id = 'cell-c'",
+        )
+        .fetch_one(&pool)
+        .await?;
+
+        repository
+            .reconcile_delivery_endpoints(&[(cell_c, None)])
+            .await?;
+
+        let relationships: Vec<(String, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256 \
+             FROM federation_peer_relationships ORDER BY remote_cell_id",
+        )
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(
+            relationships,
+            vec![
+                ("cell-b".to_string(), None, None),
+                ("cell-c".to_string(), None, None),
+            ]
+        );
+        let after_cell_c: (Option<String>, Option<String>, String) = sqlx::query_as(
+            "SELECT delivery_base_url, delivery_policy_sha256, updated_at::text \
+             FROM federation_peer_relationships WHERE remote_cell_id = 'cell-c'",
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(after_cell_c, before_cell_c);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_reconcile_updates_and_backfills_multiple_changed_peers() -> anyhow::Result<()>
+    {
+        let pool = isolated_delivery_pool().await?;
+        let cell_b = delivery_peer_policy("cell-b", "trusted", 91);
+        let cell_c = delivery_peer_policy("cell-c", "trusted", 92);
+        let (repository, sender) =
+            postgres_sender(&pool, &[cell_b.clone(), cell_c.clone()]).await?;
+        let event = publish_global(&sender, "reconcile-multiple").await?;
+
+        repository
+            .reconcile_delivery_endpoints(&[
+                (
+                    cell_c,
+                    Some("https://cell-c.example.test/edge/".to_string()),
+                ),
+                (cell_b, Some("https://cell-b.example.test".to_string())),
+            ])
+            .await?;
+
+        let relationships: Vec<(String, Option<String>, bool)> = sqlx::query_as(
+            "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256 IS NOT NULL \
+             FROM federation_peer_relationships ORDER BY remote_cell_id",
+        )
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(
+            relationships,
+            vec![
+                (
+                    "cell-b".to_string(),
+                    Some("https://cell-b.example.test".to_string()),
+                    true,
+                ),
+                (
+                    "cell-c".to_string(),
+                    Some("https://cell-c.example.test/edge".to_string()),
+                    true,
+                ),
+            ]
+        );
+        let targets: Vec<String> = sqlx::query_scalar(
+            "SELECT target_cell_id FROM federation_delivery_attempts \
+             WHERE event_id = $1 ORDER BY target_cell_id",
+        )
+        .bind(event.event_id)
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(targets, vec!["cell-b".to_string(), "cell-c".to_string()]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_reconcile_validates_before_mutation_and_rolls_back_unknown_peer(
+    ) -> anyhow::Result<()> {
+        let pool = isolated_delivery_pool().await?;
+        let cell_b = delivery_peer_policy("cell-b", "trusted", 91);
+        let cell_c = delivery_peer_policy("cell-c", "trusted", 92);
+        let (repository, _) = postgres_sender(&pool, &[cell_b.clone(), cell_c.clone()]).await?;
+        repository
+            .reconcile_delivery_endpoints(&[
+                (
+                    cell_b.clone(),
+                    Some("https://cell-b.example.test/original".to_string()),
+                ),
+                (
+                    cell_c.clone(),
+                    Some("https://cell-c.example.test/original".to_string()),
+                ),
+            ])
+            .await?;
+        let before = relationship_snapshot(&pool).await?;
+
+        let validation_error = repository
+            .reconcile_delivery_endpoints(&[
+                (
+                    cell_b.clone(),
+                    Some("https://cell-b.example.test/changed".to_string()),
+                ),
+                (
+                    cell_c.clone(),
+                    Some("http://cell-c.example.test".to_string()),
+                ),
+            ])
+            .await
+            .unwrap_err();
+        assert!(validation_error.to_string().contains("must use https"));
+        assert_eq!(relationship_snapshot(&pool).await?, before);
+
+        let unknown = delivery_peer_policy("cell-unknown", "trusted", 93);
+        let unknown_error = repository
+            .reconcile_delivery_endpoints(&[
+                (
+                    cell_b,
+                    Some("https://cell-b.example.test/changed".to_string()),
+                ),
+                (
+                    unknown,
+                    Some("https://cell-unknown.example.test".to_string()),
+                ),
+            ])
+            .await
+            .unwrap_err();
+        assert!(unknown_error
+            .to_string()
+            .contains("delivery endpoint references unknown peer cell-unknown"));
+        assert_eq!(relationship_snapshot(&pool).await?, before);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_reconcile_backfills_trusted_but_not_blocked_peer() -> anyhow::Result<()> {
+        let pool = isolated_delivery_pool().await?;
+        let trusted = delivery_peer_policy("cell-b", "trusted", 91);
+        let blocked = delivery_peer_policy("cell-c", "blocked", 92);
+        let (repository, sender) =
+            postgres_sender(&pool, &[trusted.clone(), blocked.clone()]).await?;
+        let event = publish_global(&sender, "reconcile-trust-filter").await?;
+
+        repository
+            .reconcile_delivery_endpoints(&[
+                (trusted, Some("https://cell-b.example.test".to_string())),
+                (blocked, Some("https://cell-c.example.test".to_string())),
+            ])
+            .await?;
+
+        let endpoints: Vec<(String, Option<String>)> = sqlx::query_as(
+            "SELECT remote_cell_id, delivery_base_url \
+             FROM federation_peer_relationships ORDER BY remote_cell_id",
+        )
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(
+            endpoints,
+            vec![
+                (
+                    "cell-b".to_string(),
+                    Some("https://cell-b.example.test".to_string()),
+                ),
+                (
+                    "cell-c".to_string(),
+                    Some("https://cell-c.example.test".to_string()),
+                ),
+            ]
+        );
+        let targets: Vec<String> = sqlx::query_scalar(
+            "SELECT target_cell_id FROM federation_delivery_attempts WHERE event_id = $1",
+        )
+        .bind(event.event_id)
+        .fetch_all(&pool)
+        .await?;
+        assert_eq!(targets, vec!["cell-b".to_string()]);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_batch_backfill_preserves_existing_delivery_state_semantics(
+    ) -> anyhow::Result<()> {
+        let pool = isolated_delivery_pool().await?;
+        let peer = delivery_peer_policy("cell-b", "trusted", 91);
+        let (repository, sender) = postgres_sender(&pool, std::slice::from_ref(&peer)).await?;
+        repository
+            .reconcile_delivery_endpoints(&[(
+                peer.clone(),
+                Some("https://cell-b.example.test/original".to_string()),
+            )])
+            .await?;
+        let recoverable = publish_global(&sender, "reconcile-recoverable").await?;
+        let permanent = publish_global(&sender, "reconcile-permanent").await?;
+        let delivered = publish_global(&sender, "reconcile-delivered").await?;
+        sqlx::query(
+            "UPDATE federation_delivery_attempts \
+             SET state = 'dead', attempt_count = 7, \
+                 next_attempt_at = TIMESTAMPTZ '2002-01-01 00:00:00+00', \
+                 last_http_status = 202, last_error_class = 'remote-quarantined', \
+                 updated_at = TIMESTAMPTZ '2002-01-02 00:00:00+00' \
+             WHERE event_id = $1 AND target_cell_id = 'cell-b'",
+        )
+        .bind(recoverable.event_id)
+        .execute(&pool)
+        .await?;
+        sqlx::query(
+            "UPDATE federation_delivery_attempts \
+             SET state = 'dead', attempt_count = 5, \
+                 next_attempt_at = TIMESTAMPTZ '2003-01-01 00:00:00+00', \
+                 last_http_status = 400, last_error_class = 'outbox-envelope-invalid', \
+                 updated_at = TIMESTAMPTZ '2003-01-02 00:00:00+00' \
+             WHERE event_id = $1 AND target_cell_id = 'cell-b'",
+        )
+        .bind(permanent.event_id)
+        .execute(&pool)
+        .await?;
+        sqlx::query(
+            "UPDATE federation_delivery_attempts \
+             SET state = 'delivered', attempt_count = 1, \
+                 next_attempt_at = TIMESTAMPTZ '2004-01-01 00:00:00+00', \
+                 last_http_status = 201, last_error_class = NULL, \
+                 delivered_at = TIMESTAMPTZ '2004-01-02 00:00:00+00', \
+                 updated_at = TIMESTAMPTZ '2004-01-03 00:00:00+00' \
+             WHERE event_id = $1 AND target_cell_id = 'cell-b'",
+        )
+        .bind(delivered.event_id)
+        .execute(&pool)
+        .await?;
+        let permanent_before = attempt_snapshot(&pool, permanent.event_id, "cell-b").await?;
+        let delivered_before = attempt_snapshot(&pool, delivered.event_id, "cell-b").await?;
+
+        repository
+            .reconcile_delivery_endpoints(&[(
+                peer,
+                Some("https://cell-b.example.test/changed".to_string()),
+            )])
+            .await?;
+
+        let reactivated = attempt_snapshot(&pool, recoverable.event_id, "cell-b").await?;
+        assert_eq!(reactivated.0, "pending");
+        assert_eq!(reactivated.1, 0);
+        assert_eq!(reactivated.3, None);
+        assert_eq!(reactivated.4, None);
+        assert_eq!(reactivated.5, None);
+        assert_eq!(reactivated.6, None);
+        assert_eq!(reactivated.7, None);
+        assert_eq!(
+            attempt_snapshot(&pool, permanent.event_id, "cell-b").await?,
+            permanent_before
+        );
+        assert_eq!(
+            attempt_snapshot(&pool, delivered.event_id, "cell-b").await?,
+            delivered_before
+        );
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
+    async fn postgres_reconcile_preserves_sequential_duplicate_binding_semantics(
+    ) -> anyhow::Result<()> {
+        let pool = isolated_delivery_pool().await?;
+        let peer = delivery_peer_policy("cell-b", "trusted", 91);
+        let (repository, sender) = postgres_sender(&pool, std::slice::from_ref(&peer)).await?;
+        let event = publish_global(&sender, "reconcile-duplicate-fallback").await?;
+
+        repository
+            .reconcile_delivery_endpoints(&[
+                (
+                    peer.clone(),
+                    Some("https://cell-b.example.test/transient".to_string()),
+                ),
+                (peer, None),
+            ])
+            .await?;
+
+        let endpoint: Option<String> = sqlx::query_scalar(
+            "SELECT delivery_base_url FROM federation_peer_relationships \
+             WHERE remote_cell_id = 'cell-b'",
+        )
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(endpoint, None);
+        let targets: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM federation_delivery_attempts \
+             WHERE event_id = $1 AND target_cell_id = 'cell-b'",
+        )
+        .bind(event.event_id)
+        .fetch_one(&pool)
+        .await?;
+        assert_eq!(targets, 1);
+        Ok(())
+    }
+
+    #[tokio::test]
+    #[ignore = "requires an isolated FEDERATION_TEST_DATABASE_URL"]
+    #[serial]
     async fn postgres_delivery_retries_and_is_multi_instance_safe() -> anyhow::Result<()> {
-        use std::{collections::HashSet, sync::Arc};
-
-        use sqlx::postgres::PgPoolOptions;
-
-        use crate::federation::{
-            FederationRepository, FederationService, MemoryFederationRepository, PeerPolicy,
-            PostgresFederationRepository, PublishRequest,
-        };
-
         let database_url = env::var("FEDERATION_TEST_DATABASE_URL")
             .context("FEDERATION_TEST_DATABASE_URL must identify an isolated database")?;
         let pool = PgPoolOptions::new()

@@ -811,6 +811,8 @@ impl PostgresFederationRepository {
     ) -> anyhow::Result<()> {
         let mut normalized = Vec::with_capacity(bindings.len());
         let mut cell_ids = Vec::with_capacity(bindings.len());
+        let mut unique_cell_ids = HashSet::with_capacity(bindings.len());
+        let mut has_duplicate_cell_ids = false;
         for (policy, endpoint) in bindings {
             let endpoint = endpoint
                 .as_deref()
@@ -822,23 +824,24 @@ impl PostgresFederationRepository {
                 .transpose()?;
             normalized.push((policy.clone(), endpoint, fingerprint));
             cell_ids.push(policy.remote_cell_id.clone());
+            has_duplicate_cell_ids |= !unique_cell_ids.insert(policy.remote_cell_id.clone());
         }
 
         let mut tx = self.pool.begin().await?;
+        // Reconciliation is authoritative for the complete delivery-endpoint set.
+        // Serialize concurrent instances without holding row locks on unrelated
+        // peer relationships for the duration of the historical outbox backfill.
         sqlx::query(
-            "UPDATE federation_peer_relationships \
-             SET delivery_base_url = NULL, delivery_policy_sha256 = NULL, updated_at = NOW() \
-             WHERE delivery_base_url IS NOT NULL \
-               AND NOT (remote_cell_id = ANY($1::text[]))",
+            "SELECT pg_advisory_xact_lock(\
+             hashtextextended('federation-delivery-endpoint-reconcile', 0))",
         )
-        .bind(&cell_ids)
         .execute(&mut *tx)
         .await?;
-
         let rows = sqlx::query(
             "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256 \
              FROM federation_peer_relationships \
              WHERE remote_cell_id = ANY($1::text[]) \
+                OR delivery_base_url IS NOT NULL \
              ORDER BY remote_cell_id FOR UPDATE",
         )
         .bind(&cell_ids)
@@ -853,31 +856,114 @@ impl PostgresFederationRepository {
             existing_peers.insert(id, (base_url, fingerprint));
         }
 
-        for (policy, endpoint, fingerprint) in normalized {
+        if let Some((policy, _, _)) = normalized
+            .iter()
+            .find(|(policy, _, _)| !existing_peers.contains_key(&policy.remote_cell_id))
+        {
             let cell_id = &policy.remote_cell_id;
-            let Some((previous_endpoint, previous_fingerprint)) = existing_peers.get(cell_id)
+            bail!("delivery endpoint references unknown peer {cell_id}");
+        }
+
+        if has_duplicate_cell_ids {
+            sqlx::query(
+                "UPDATE federation_peer_relationships \
+                 SET delivery_base_url = NULL, delivery_policy_sha256 = NULL, updated_at = NOW() \
+                 WHERE delivery_base_url IS NOT NULL \
+                   AND NOT (remote_cell_id = ANY($1::text[]))",
+            )
+            .bind(&cell_ids)
+            .execute(&mut *tx)
+            .await?;
+
+            // Runtime configuration rejects duplicate cell IDs. Keep the historical
+            // sequential last-binding-wins behavior for any other internal caller
+            // instead of giving duplicate VALUES rows database-dependent semantics.
+            for (policy, endpoint, fingerprint) in normalized {
+                let cell_id = &policy.remote_cell_id;
+                let Some((previous_endpoint, previous_fingerprint)) = existing_peers.get(cell_id)
+                else {
+                    bail!("delivery endpoint state disappeared while locked for {cell_id}");
+                };
+                if previous_endpoint == &endpoint && previous_fingerprint == &fingerprint {
+                    continue;
+                }
+                sqlx::query(
+                    "UPDATE federation_peer_relationships \
+                     SET delivery_base_url = $2, delivery_policy_sha256 = $3, updated_at = NOW() \
+                     WHERE remote_cell_id = $1",
+                )
+                .bind(cell_id)
+                .bind(&endpoint)
+                .bind(&fingerprint)
+                .execute(&mut *tx)
+                .await?;
+                existing_peers.insert(cell_id.clone(), (endpoint.clone(), fingerprint.clone()));
+                if endpoint.is_some() && policy.state == "trusted" {
+                    crate::federation_delivery::backfill_delivery_targets(
+                        &mut tx,
+                        std::slice::from_ref(cell_id),
+                    )
+                    .await?;
+                }
+            }
+            tx.commit().await?;
+            return Ok(());
+        }
+
+        let mut updates = Vec::with_capacity(existing_peers.len());
+        let mut backfill_cell_ids = Vec::with_capacity(normalized.len());
+        for (policy, endpoint, fingerprint) in normalized {
+            let cell_id = policy.remote_cell_id;
+            let Some((previous_endpoint, previous_fingerprint)) = existing_peers.get(&cell_id)
             else {
-                bail!("delivery endpoint references unknown peer {cell_id}");
+                bail!("delivery endpoint state disappeared while locked for {cell_id}");
             };
             if previous_endpoint == &endpoint && previous_fingerprint == &fingerprint {
                 continue;
             }
-            sqlx::query(
-                "UPDATE federation_peer_relationships \
-                 SET delivery_base_url = $2, delivery_policy_sha256 = $3, updated_at = NOW() \
-                 WHERE remote_cell_id = $1",
+            if endpoint.is_some() && policy.state == "trusted" {
+                backfill_cell_ids.push(cell_id.clone());
+            }
+            updates.push((cell_id, endpoint, fingerprint));
+        }
+        for (cell_id, (previous_endpoint, _)) in &existing_peers {
+            if previous_endpoint.is_some() && !unique_cell_ids.contains(cell_id) {
+                updates.push((cell_id.clone(), None, None));
+            }
+        }
+
+        updates.sort_unstable_by(|left, right| left.0.cmp(&right.0));
+        backfill_cell_ids.sort_unstable();
+        if !updates.is_empty() {
+            let mut update_cell_ids = Vec::with_capacity(updates.len());
+            let mut update_endpoints = Vec::with_capacity(updates.len());
+            let mut update_fingerprints = Vec::with_capacity(updates.len());
+            for (cell_id, endpoint, fingerprint) in &updates {
+                update_cell_ids.push(cell_id.clone());
+                update_endpoints.push(endpoint.clone());
+                update_fingerprints.push(fingerprint.clone());
+            }
+            let result = sqlx::query(
+                "UPDATE federation_peer_relationships AS relationship \
+                 SET delivery_base_url = desired.delivery_base_url, \
+                     delivery_policy_sha256 = desired.delivery_policy_sha256, \
+                     updated_at = NOW() \
+                 FROM UNNEST($1::text[], $2::text[], $3::text[]) \
+                      AS desired(remote_cell_id, delivery_base_url, delivery_policy_sha256) \
+                 WHERE relationship.remote_cell_id = desired.remote_cell_id",
             )
-            .bind(cell_id)
-            .bind(&endpoint)
-            .bind(&fingerprint)
+            .bind(&update_cell_ids)
+            .bind(&update_endpoints)
+            .bind(&update_fingerprints)
             .execute(&mut *tx)
             .await?;
-            // Preserve the previous per-binding re-read semantics even if a future
-            // caller supplies the same cell more than once in one reconciliation.
-            existing_peers.insert(cell_id.clone(), (endpoint.clone(), fingerprint.clone()));
-            if endpoint.is_some() && policy.state == "trusted" {
-                crate::federation_delivery::backfill_delivery_target(&mut tx, cell_id).await?;
+            if result.rows_affected() != u64::try_from(updates.len())? {
+                bail!("delivery endpoint batch update did not cover every locked peer");
             }
+        }
+        if !backfill_cell_ids.is_empty() {
+            crate::federation_delivery::backfill_delivery_targets(&mut tx, &backfill_cell_ids)
+                .await?;
         }
         tx.commit().await?;
         Ok(())
