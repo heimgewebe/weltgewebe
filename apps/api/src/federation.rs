@@ -23,7 +23,7 @@ use ed25519_dalek::{Signature, Signer, SigningKey, VerifyingKey};
 use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use sqlx::{PgPool, Row};
 use tokio::sync::RwLock;
 use url::Url;
 use uuid::Uuid;
@@ -828,11 +828,23 @@ impl PostgresFederationRepository {
         }
 
         let mut tx = self.pool.begin().await?;
+        // Reconciliation is authoritative for the complete delivery-endpoint set.
+        // Serialize concurrent instances without holding row locks on unrelated
+        // peer relationships for the duration of the historical outbox backfill.
+        sqlx::query(
+            "SELECT pg_advisory_xact_lock(\
+             hashtextextended('federation-delivery-endpoint-reconcile', 0))",
+        )
+        .execute(&mut *tx)
+        .await?;
         let rows = sqlx::query(
             "SELECT remote_cell_id, delivery_base_url, delivery_policy_sha256 \
              FROM federation_peer_relationships \
+             WHERE remote_cell_id = ANY($1::text[]) \
+                OR delivery_base_url IS NOT NULL \
              ORDER BY remote_cell_id FOR UPDATE",
         )
+        .bind(&cell_ids)
         .fetch_all(&mut *tx)
         .await?;
 
@@ -870,7 +882,7 @@ impl PostgresFederationRepository {
                 let cell_id = &policy.remote_cell_id;
                 let Some((previous_endpoint, previous_fingerprint)) = existing_peers.get(cell_id)
                 else {
-                    unreachable!("all delivery peers were checked while locked");
+                    bail!("delivery endpoint state disappeared while locked for {cell_id}");
                 };
                 if previous_endpoint == &endpoint && previous_fingerprint == &fingerprint {
                     continue;
@@ -904,7 +916,7 @@ impl PostgresFederationRepository {
             let cell_id = policy.remote_cell_id;
             let Some((previous_endpoint, previous_fingerprint)) = existing_peers.get(&cell_id)
             else {
-                unreachable!("all delivery peers were checked while locked");
+                bail!("delivery endpoint state disappeared while locked for {cell_id}");
             };
             if previous_endpoint == &endpoint && previous_fingerprint == &fingerprint {
                 continue;
@@ -923,27 +935,28 @@ impl PostgresFederationRepository {
         updates.sort_unstable_by(|left, right| left.0.cmp(&right.0));
         backfill_cell_ids.sort_unstable();
         if !updates.is_empty() {
-            let mut query = QueryBuilder::<Postgres>::new(
+            let mut update_cell_ids = Vec::with_capacity(updates.len());
+            let mut update_endpoints = Vec::with_capacity(updates.len());
+            let mut update_fingerprints = Vec::with_capacity(updates.len());
+            for (cell_id, endpoint, fingerprint) in &updates {
+                update_cell_ids.push(cell_id.clone());
+                update_endpoints.push(endpoint.clone());
+                update_fingerprints.push(fingerprint.clone());
+            }
+            let result = sqlx::query(
                 "UPDATE federation_peer_relationships AS relationship \
                  SET delivery_base_url = desired.delivery_base_url, \
                      delivery_policy_sha256 = desired.delivery_policy_sha256, \
                      updated_at = NOW() \
-                 FROM (",
-            );
-            query.push_values(
-                updates.iter(),
-                |mut values, (cell_id, endpoint, fingerprint)| {
-                    values
-                        .push_bind(cell_id)
-                        .push_bind(endpoint)
-                        .push_bind(fingerprint);
-                },
-            );
-            query.push(
-                ") AS desired(remote_cell_id, delivery_base_url, delivery_policy_sha256) \
+                 FROM UNNEST($1::text[], $2::text[], $3::text[]) \
+                      AS desired(remote_cell_id, delivery_base_url, delivery_policy_sha256) \
                  WHERE relationship.remote_cell_id = desired.remote_cell_id",
-            );
-            let result = query.build().execute(&mut *tx).await?;
+            )
+            .bind(&update_cell_ids)
+            .bind(&update_endpoints)
+            .bind(&update_fingerprints)
+            .execute(&mut *tx)
+            .await?;
             if result.rows_affected() != u64::try_from(updates.len())? {
                 bail!("delivery endpoint batch update did not cover every locked peer");
             }
