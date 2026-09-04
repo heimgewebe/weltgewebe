@@ -291,9 +291,11 @@ export class NodesOverlay {
     const map = this.map;
     if (!map || !this.supportsNativeEntityLayer() || this.nativeSyncing)
       return false;
-    if (typeof map.isStyleLoaded === "function" && !map.isStyleLoaded())
-      return false;
 
+    // Do not gate this on map.isStyleLoaded(). MapLibre can emit style.load
+    // while that broader predicate is still false because requested basemap
+    // sources/tiles are settling. addSource/addLayer are valid after style.load;
+    // the catch below preserves the DOM fallback for a genuine style race.
     this.nativeSyncing = true;
     try {
       const data = this.nativeFeatureCollection();

@@ -177,6 +177,7 @@ class FakeMap {
   }
 
   addSource(id: string, spec: { type: string; data: FeatureCollection }) {
+    if (!this.styleLoaded) throw new Error("style is not ready");
     expect(spec.type).toBe("geojson");
     this.sources.set(id, new FakeSource(spec.data));
   }
