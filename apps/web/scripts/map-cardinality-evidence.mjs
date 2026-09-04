@@ -2,6 +2,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 export const MAP_CARDINALITY_PAGE_SIZE = 1000;
+export const MAP_CARDINALITY_CLIENT_MAX_PAGES = 10;
+export const MAP_CARDINALITY_CLIENT_MAX_ITEMS = 10_000;
 
 export const MAP_CARDINALITY_BUDGETS = Object.freeze({
   1000: Object.freeze({
@@ -17,10 +19,10 @@ export const MAP_CARDINALITY_BUDGETS = Object.freeze({
     max_api_response_bytes: 10_000_000,
   }),
   100000: Object.freeze({
-    readiness_ms: 30000,
+    readiness_ms: 12000,
     interaction_to_next_paint_ms: 250,
     max_dom_markers: 1,
-    max_api_response_bytes: 100_000_000,
+    max_api_response_bytes: 10_000_000,
   }),
 });
 
@@ -40,7 +42,15 @@ function integer(value, label, minimum = 0) {
 
 export function expectedMapCardinalityPages(cardinality) {
   integer(cardinality, "cardinality", 1);
-  return Math.ceil(cardinality / MAP_CARDINALITY_PAGE_SIZE);
+  return Math.min(
+    Math.ceil(cardinality / MAP_CARDINALITY_PAGE_SIZE),
+    MAP_CARDINALITY_CLIENT_MAX_PAGES,
+  );
+}
+
+export function expectedMapCardinalityItems(cardinality) {
+  integer(cardinality, "cardinality", 1);
+  return Math.min(cardinality, MAP_CARDINALITY_CLIENT_MAX_ITEMS);
 }
 
 export function validateMapCardinalitySample(sample) {
@@ -53,6 +63,7 @@ export function validateMapCardinalitySample(sample) {
 
   integer(sample.api_request_count, "sample.api_request_count", 1);
   integer(sample.api_response_bytes, "sample.api_response_bytes", 1);
+  integer(sample.loaded_item_count, "sample.loaded_item_count", 1);
   integer(sample.dom_marker_count, "sample.dom_marker_count", 0);
   integer(sample.page_size, "sample.page_size", 1);
   finite(sample.readiness_ms, "sample.readiness_ms");
@@ -68,7 +79,24 @@ export function validateMapCardinalitySample(sample) {
   const expectedPages = expectedMapCardinalityPages(cardinality);
   if (sample.api_request_count !== expectedPages) {
     throw new Error(
-      `cardinality ${cardinality}: expected ${expectedPages} node pages, observed ${sample.api_request_count}`,
+      `cardinality ${cardinality}: expected ${expectedPages} consumed node pages, observed ${sample.api_request_count}`,
+    );
+  }
+  const expectedItems = expectedMapCardinalityItems(cardinality);
+  if (sample.loaded_item_count !== expectedItems) {
+    throw new Error(
+      `cardinality ${cardinality}: expected ${expectedItems} loaded items, observed ${sample.loaded_item_count}`,
+    );
+  }
+  const truncatedExpected = cardinality > MAP_CARDINALITY_CLIENT_MAX_ITEMS;
+  if (sample.truncated_by_client_limit !== truncatedExpected) {
+    throw new Error(
+      `cardinality ${cardinality}: client truncation expectation is inconsistent`,
+    );
+  }
+  if (sample.source_has_more_after_last_client_page !== truncatedExpected) {
+    throw new Error(
+      `cardinality ${cardinality}: source continuation expectation is inconsistent`,
     );
   }
   if (sample.readiness_ms > budget.readiness_ms) {
@@ -130,11 +158,16 @@ export function buildMapCardinalityEvidence({
     generated_at: generatedAt,
     browser,
     page_size: MAP_CARDINALITY_PAGE_SIZE,
+    client_limits: {
+      max_pages: MAP_CARDINALITY_CLIENT_MAX_PAGES,
+      max_items: MAP_CARDINALITY_CLIENT_MAX_ITEMS,
+    },
     budgets: MAP_CARDINALITY_BUDGETS,
     samples,
     verdict: "PASS",
     limitations: [
       "Node payloads are served by a deterministic Playwright HTTP fixture so this proof isolates browser pagination and rendering from backend/database capacity.",
+      "The 100k scenario represents a 100,000-item source dataset; the current browser contract intentionally stops after 10 pages / 10,000 loaded items, so this proof does not claim 100,000 simultaneous in-browser entities.",
       "Backend and PostgreSQL scale remain separate evidence lanes; this proof does not claim production network latency or database throughput.",
       "Timing budgets are regression guards on the pinned CI runner class, not user-facing service-level objectives.",
     ],

@@ -3,6 +3,11 @@ import { performance } from "node:perf_hooks";
 import { readFileSync } from "node:fs";
 import { mockApiResponses } from "../fixtures/mockApi";
 import {
+  MAP_CURSOR_MAX_ITEMS,
+  MAP_CURSOR_MAX_PAGES,
+  MAP_CURSOR_PAGE_SIZE,
+} from "../../src/lib/map/cursorPagination";
+import {
   assertExactGitCheckout,
   resolveExactSourceRevision,
 } from "../../scripts/web-runtime-evidence.mjs";
@@ -14,6 +19,10 @@ import * as mapCardinalityEvidenceRuntime from "../../scripts/map-cardinality-ev
 const {
   MAP_CARDINALITY_BUDGETS,
   MAP_CARDINALITY_PAGE_SIZE,
+  MAP_CARDINALITY_CLIENT_MAX_ITEMS,
+  MAP_CARDINALITY_CLIENT_MAX_PAGES,
+  expectedMapCardinalityItems,
+  expectedMapCardinalityPages,
   buildMapCardinalityEvidence,
   writeMapCardinalityEvidence,
 } = mapCardinalityEvidenceRuntime as unknown as {
@@ -27,6 +36,10 @@ const {
     }
   >;
   MAP_CARDINALITY_PAGE_SIZE: number;
+  MAP_CARDINALITY_CLIENT_MAX_ITEMS: number;
+  MAP_CARDINALITY_CLIENT_MAX_PAGES: number;
+  expectedMapCardinalityItems: (cardinality: number) => number;
+  expectedMapCardinalityPages: (cardinality: number) => number;
   buildMapCardinalityEvidence: (input: {
     sourceRevision: string;
     generatedAt: string;
@@ -43,6 +56,9 @@ type CardinalitySample = {
   page_size: number;
   api_request_count: number;
   api_response_bytes: number;
+  loaded_item_count: number;
+  truncated_by_client_limit: boolean;
+  source_has_more_after_last_client_page: boolean;
   readiness_ms: number;
   interaction_to_next_paint_ms: number;
   dom_marker_count: number;
@@ -103,7 +119,8 @@ async function fulfillEmptyList(route: Route): Promise<void> {
 async function installCardinalityApi(page: Page, cardinality: Cardinality) {
   let apiRequestCount = 0;
   let apiResponseBytes = 0;
-  let finalPageServed = false;
+  let loadedItemCount = 0;
+  let lastResponseHasMore = false;
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -142,7 +159,8 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
       });
       apiRequestCount += 1;
       apiResponseBytes += Buffer.byteLength(body);
-      if (!hasMore) finalPageServed = true;
+      loadedItemCount += items.length;
+      lastResponseHasMore = hasMore;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -162,7 +180,12 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
   });
 
   return {
-    snapshot: () => ({ apiRequestCount, apiResponseBytes, finalPageServed }),
+    snapshot: () => ({
+      apiRequestCount,
+      apiResponseBytes,
+      loadedItemCount,
+      lastResponseHasMore,
+    }),
   };
 }
 
@@ -232,6 +255,9 @@ test("keeps 1k/10k/100k map cardinalities inside fixed browser budgets", async (
 }, testInfo) => {
   const sourceRevision = resolveExactSourceRevision();
   assertExactGitCheckout({ revision: sourceRevision });
+  expect(MAP_CARDINALITY_PAGE_SIZE).toBe(MAP_CURSOR_PAGE_SIZE);
+  expect(MAP_CARDINALITY_CLIENT_MAX_PAGES).toBe(MAP_CURSOR_MAX_PAGES);
+  expect(MAP_CARDINALITY_CLIENT_MAX_ITEMS).toBe(MAP_CURSOR_MAX_ITEMS);
   const samples: CardinalitySample[] = [];
 
   for (const cardinality of CARDINALITIES) {
@@ -250,13 +276,15 @@ test("keeps 1k/10k/100k map cardinalities inside fixed browser budgets", async (
         state: "visible",
         timeout: budget.readiness_ms,
       });
+      const expectedPages = expectedMapCardinalityPages(cardinality);
       await expect
-        .poll(() => api.snapshot().finalPageServed, {
+        .poll(() => api.snapshot().apiRequestCount, {
           timeout: budget.readiness_ms,
-          message: `final ${cardinality}-node cursor page was not consumed`,
+          message: `${cardinality}-node source did not settle at ${expectedPages} consumed pages`,
         })
-        .toBe(true);
-      await settleFrames(page, 4);
+        .toBe(expectedPages);
+      await settleFrames(page, 8);
+      expect(api.snapshot().apiRequestCount).toBe(expectedPages);
       const readinessMs = performance.now() - startedAt;
       const domMarkerCount = await page.locator(".map-marker").count();
       if (cardinality === 1000) {
@@ -269,6 +297,10 @@ test("keeps 1k/10k/100k map cardinalities inside fixed browser budgets", async (
         page_size: MAP_CARDINALITY_PAGE_SIZE,
         api_request_count: snapshot.apiRequestCount,
         api_response_bytes: snapshot.apiResponseBytes,
+        loaded_item_count: snapshot.loadedItemCount,
+        truncated_by_client_limit:
+          cardinality > MAP_CARDINALITY_CLIENT_MAX_ITEMS,
+        source_has_more_after_last_client_page: snapshot.lastResponseHasMore,
         readiness_ms: roundMilliseconds(readinessMs),
         interaction_to_next_paint_ms: roundMilliseconds(interactionMs),
         dom_marker_count: domMarkerCount,
