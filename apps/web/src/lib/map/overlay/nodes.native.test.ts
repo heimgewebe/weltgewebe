@@ -310,6 +310,14 @@ describe("NodesOverlay native dense-entity layer", () => {
     expect(overlay.getActiveMarker("node-0")).toBeDefined();
   });
 
+  it("keeps the DOM compatibility path through the exact 1,000-entity boundary", () => {
+    const { map, overlay } = setup();
+    overlay.update(points(1_000), true);
+
+    expect(map.getLayer(NATIVE_ENTITY_LAYER_ID)).toBeUndefined();
+    expect(overlay.getActiveMarker("node-0")).toBeDefined();
+  });
+
   it("keeps only the selected dense entity as a DOM marker and updates feature-state without retransmitting GeoJSON", () => {
     const { map, overlay } = setup();
     overlay.update(points(1_001), true);
@@ -386,6 +394,18 @@ describe("NodesOverlay native dense-entity layer", () => {
     expect(map.getLayer(NATIVE_ENTITY_LAYER_ID)).toBeDefined();
     expect(map.source()?.data.features).toHaveLength(1_001);
     expect(overlay.getActiveMarker("node-0")).toBeUndefined();
+  });
+
+  it("ignores routine styledata events once the native source and layer already exist", () => {
+    const { map, overlay } = setup();
+    overlay.update(points(1_001), true);
+    const source = map.source()!;
+    const beforeSetDataCalls = source.setDataCalls;
+
+    map.emit("styledata", {});
+
+    expect(source.setDataCalls).toBe(beforeSetDataCalls);
+    expect(map.getLayer(NATIVE_ENTITY_LAYER_ID)).toBeDefined();
   });
 
   it("rehydrates source, layer and feature-state after a basemap style replacement", () => {

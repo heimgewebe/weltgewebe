@@ -164,10 +164,17 @@ export class NodesOverlay {
     this.reconcileVirtualizedMarkers();
   };
   private readonly handleStyleData = () => {
-    if (this.nativeSyncing) return;
-    if (this.latestShowNodes && this.shouldUseNativeEntityLayer()) {
-      this.reconcileMarkers(this.latestPoints, this.latestShowNodes);
+    if (this.nativeSyncing || !this.latestShowNodes) return;
+    if (!this.shouldUseNativeEntityLayer()) return;
+
+    const map = this.map;
+    if (
+      map?.getSource(NATIVE_ENTITY_SOURCE_ID) &&
+      map.getLayer(NATIVE_ENTITY_LAYER_ID)
+    ) {
+      return;
     }
+    this.reconcileMarkers(this.latestPoints, this.latestShowNodes);
   };
   private readonly handleNativeEntityClick = (event: NativeLayerClickEvent) => {
     const id = event.features?.[0]?.properties?.id;
