@@ -203,7 +203,9 @@ async function measureWheelToNextPaint(page: Page): Promise<number> {
     );
   });
   const canvas = page.locator("canvas.maplibregl-canvas").first();
-  await canvas.hover();
+  const box = await canvas.boundingBox();
+  if (!box) throw new Error("map canvas bounding box is unavailable");
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.wheel(0, -320);
   await page.waitForFunction(
     () => {
