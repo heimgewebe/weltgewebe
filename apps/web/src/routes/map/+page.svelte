@@ -891,13 +891,27 @@
       );
 
       // Architecture Note: Basemap provides orientation. Overlays (nodes, edges, etc.) carry domain meaning.
-      nodesOverlay = new nodesModule.NodesOverlay(map, maplibregl.Marker);
-      cleanupKomposition = setupKompositionInteraction(map);
+      nodesOverlay = new nodesModule.NodesOverlay(
+        map,
+        maplibregl.Marker,
+        undefined,
+        focusAndFlyToPoint,
+      );
+      const isDomainFeatureAtPoint = (point: { x: number; y: number }) =>
+        nodesOverlay?.hasNativeEntityAt(point) ?? false;
+      cleanupKomposition = setupKompositionInteraction(
+        map,
+        isDomainFeatureAtPoint,
+      );
       let sysStateStr = "";
       unsubscribeSysState = systemState.subscribe((val) => {
         sysStateStr = val;
       });
-      cleanupFocus = setupFocusInteraction(map, () => sysStateStr);
+      cleanupFocus = setupFocusInteraction(
+        map,
+        () => sysStateStr,
+        isDomainFeatureAtPoint,
+      );
       map.on("resize", handleSearchMapResize);
 
       map.once("load", () => {
