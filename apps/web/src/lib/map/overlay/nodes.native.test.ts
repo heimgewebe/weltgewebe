@@ -388,8 +388,14 @@ describe("NodesOverlay native dense-entity layer", () => {
     expect(map.getLayer(NATIVE_ENTITY_LAYER_ID)).toBeUndefined();
     expect(overlay.getActiveMarker("node-0")).toBeDefined();
 
-    map.styleLoaded = true;
+    // Real MapLibre can emit styledata before isStyleLoaded() flips true.
+    // That intermediate event must keep the proven DOM fallback intact.
     map.emit("styledata", {});
+    expect(map.getLayer(NATIVE_ENTITY_LAYER_ID)).toBeUndefined();
+    expect(overlay.getActiveMarker("node-0")).toBeDefined();
+
+    map.styleLoaded = true;
+    map.emit("style.load", {});
 
     expect(map.getLayer(NATIVE_ENTITY_LAYER_ID)).toBeDefined();
     expect(map.source()?.data.features).toHaveLength(1_001);

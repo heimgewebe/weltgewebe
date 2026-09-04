@@ -216,6 +216,10 @@ export class NodesOverlay {
       this.map.on("moveend", this.handleMoveEnd);
       if (this.supportsNativeEntityLayer()) {
         this.map.on("styledata", this.handleStyleData);
+        // styledata can fire while MapLibre still reports isStyleLoaded=false.
+        // style.load is the terminal retry that guarantees dense data arriving
+        // during initial style construction gets another native cut-over chance.
+        this.map.on("style.load", this.handleStyleData);
       }
     }
   }
@@ -908,6 +912,7 @@ export class NodesOverlay {
       this.map.off("moveend", this.handleMoveEnd);
       if (this.supportsNativeEntityLayer()) {
         this.map.off("styledata", this.handleStyleData);
+        this.map.off("style.load", this.handleStyleData);
         if (this.nativeClickBound) {
           this.map.off(
             "click",

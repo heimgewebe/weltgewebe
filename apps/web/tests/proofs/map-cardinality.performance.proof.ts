@@ -21,7 +21,6 @@ const {
   MAP_CARDINALITY_PAGE_SIZE,
   MAP_CARDINALITY_CLIENT_MAX_ITEMS,
   MAP_CARDINALITY_CLIENT_MAX_PAGES,
-  expectedMapCardinalityItems,
   expectedMapCardinalityPages,
   buildMapCardinalityEvidence,
   writeMapCardinalityEvidence,
@@ -38,7 +37,6 @@ const {
   MAP_CARDINALITY_PAGE_SIZE: number;
   MAP_CARDINALITY_CLIENT_MAX_ITEMS: number;
   MAP_CARDINALITY_CLIENT_MAX_PAGES: number;
-  expectedMapCardinalityItems: (cardinality: number) => number;
   expectedMapCardinalityPages: (cardinality: number) => number;
   buildMapCardinalityEvidence: (input: {
     sourceRevision: string;
