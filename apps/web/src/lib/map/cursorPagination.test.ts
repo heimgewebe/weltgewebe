@@ -175,6 +175,7 @@ describe("loadMapResources", () => {
       "edges",
       "webgemeindezentren",
     ]);
+    expect(result.nodeLoadMode).toBe("global");
     expect(result.loadState).toBe("ok");
     expect(result.loadNotice).toBeNull();
   });
@@ -203,8 +204,72 @@ describe("loadMapResources", () => {
         pages: 1,
       },
     ]);
+    expect(result.nodeLoadMode).toBe("global");
     expect(result.loadState).toBe("ok");
     expect(result.loadNotice).toBeNull();
+  });
+
+  it("defers global nodes in viewport mode and fetches only an exact deep-link node", async () => {
+    const focusedNode = {
+      id: "focus-node",
+      kind: "Knoten",
+      title: "Focus",
+      location: { lon: 10.4, lat: 53.5 },
+    };
+    const fetcher = vi.fn(async (input: string) => {
+      const url = new URL(input, "http://localhost");
+      if (url.pathname === "/api/nodes/focus-node") {
+        return new Response(JSON.stringify(focusedNode), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }
+      return page([], false, null, 1000);
+    });
+
+    const result = await loadMapResources(fetcher, "", "cursor", {
+      nodeLoadMode: "viewport",
+      focusedNodeId: "focus-node",
+    });
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/nodes/focus-node",
+      "/api/accounts?pagination=cursor&limit=1000",
+      "/api/edges?pagination=cursor&limit=1000",
+      "/api/webgemeindezentren?pagination=cursor&limit=1000",
+    ]);
+    expect(result.nodes).toEqual([focusedNode]);
+    expect(result.nodeLoadMode).toBe("viewport");
+    expect(result.resourceStatus[0]).toEqual({
+      resource: "nodes",
+      status: "viewport",
+      loaded: 1,
+      pages: 0,
+    });
+    expect(result.loadState).toBe("ok");
+  });
+
+  it("does not issue any node request during ordinary viewport bootstrap", async () => {
+    const fetcher = vi.fn<(input: string) => Promise<Response>>(async () =>
+      page([], false, null, 1000),
+    );
+
+    const result = await loadMapResources(fetcher, "", "cursor", {
+      nodeLoadMode: "viewport",
+    });
+
+    expect(fetcher.mock.calls.map(([url]) => url)).toEqual([
+      "/api/accounts?pagination=cursor&limit=1000",
+      "/api/edges?pagination=cursor&limit=1000",
+      "/api/webgemeindezentren?pagination=cursor&limit=1000",
+    ]);
+    expect(result.nodes).toEqual([]);
+    expect(result.resourceStatus[0]).toEqual({
+      resource: "nodes",
+      status: "viewport",
+      loaded: 0,
+      pages: 0,
+    });
   });
 
   it("loads the built-in static demo endpoints as complete bare arrays", async () => {
@@ -247,6 +312,7 @@ describe("loadMapResources", () => {
         pages: 1,
       },
     ]);
+    expect(result.nodeLoadMode).toBe("global");
     expect(result.loadState).toBe("ok");
     expect(result.loadNotice).toBeNull();
   });

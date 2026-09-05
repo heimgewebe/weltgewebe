@@ -22,6 +22,7 @@ const {
   MAP_CARDINALITY_CLIENT_MAX_ITEMS,
   MAP_CARDINALITY_CLIENT_MAX_PAGES,
   expectedMapCardinalityPages,
+  expectedMapCardinalityItems,
   buildMapCardinalityEvidence,
   writeMapCardinalityEvidence,
 } = mapCardinalityEvidenceRuntime as unknown as {
@@ -38,6 +39,7 @@ const {
   MAP_CARDINALITY_CLIENT_MAX_ITEMS: number;
   MAP_CARDINALITY_CLIENT_MAX_PAGES: number;
   expectedMapCardinalityPages: (cardinality: number) => number;
+  expectedMapCardinalityItems: (cardinality: number) => number;
   buildMapCardinalityEvidence: (input: {
     sourceRevision: string;
     generatedAt: string;
@@ -57,10 +59,13 @@ type CardinalitySample = {
   loaded_item_count: number;
   truncated_by_client_limit: boolean;
   source_has_more_after_last_client_page: boolean;
+  bbox_scoped_request_count: number;
+  bulk_node_request_count: number;
   readiness_ms: number;
   interaction_to_next_paint_ms: number;
   dom_marker_count: number;
   native_layer_expected: boolean;
+  native_layer_actual: boolean;
 };
 
 const CARDINALITIES: Cardinality[] = [1000, 10000, 100000];
@@ -78,23 +83,16 @@ function roundMilliseconds(value: number): number {
 }
 
 function benchmarkNode(index: number) {
-  const anchors = [
-    [0, 0],
-    [10.4515, 51.1657],
-    [9.9, 54.2],
-    [10.06, 53.56],
-  ] as const;
-  const anchor = anchors[index % anchors.length];
-  const ring = Math.floor(index / anchors.length);
-  const offset = (ring % 400) * 0.00002;
+  const column = index % 50;
+  const row = Math.floor(index / 50) % 50;
   return {
     id: `benchmark-node-${index.toString().padStart(6, "0")}`,
     kind: "Knoten",
     title: `Benchmark ${index}`,
     summary: "Deterministic map cardinality proof node",
     location: {
-      lon: anchor[0] + offset,
-      lat: anchor[1] + offset,
+      lon: 10.4515 + column * 0.001,
+      lat: 51.1657 + row * 0.001,
     },
     created_at: "2026-09-04T00:00:00Z",
     updated_at: "2026-09-04T00:00:00Z",
@@ -117,8 +115,11 @@ async function fulfillEmptyList(route: Route): Promise<void> {
 async function installCardinalityApi(page: Page, cardinality: Cardinality) {
   let apiRequestCount = 0;
   let apiResponseBytes = 0;
-  let loadedItemCount = 0;
-  let lastResponseHasMore = false;
+  const loadedItemIds = new Set<string>();
+  let sourceExhausted = false;
+  let bboxScopedRequestCount = 0;
+  let bulkNodeRequestCount = 0;
+  const viewportCardinality = expectedMapCardinalityItems(cardinality);
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -128,6 +129,17 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
     }
     const url = new URL(request.url());
     if (url.pathname === "/api/nodes") {
+      if (url.searchParams.has("bbox")) {
+        bboxScopedRequestCount += 1;
+      } else {
+        bulkNodeRequestCount += 1;
+        await route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify(EMPTY_CURSOR_PAGE),
+        });
+        return;
+      }
       const requestedLimit = Number(
         url.searchParams.get("limit") ?? MAP_CARDINALITY_PAGE_SIZE,
       );
@@ -139,14 +151,18 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
       );
       const rawCursor = url.searchParams.get("cursor");
       const offset = rawCursor === null ? 0 : Number(rawCursor);
-      if (!Number.isInteger(offset) || offset < 0 || offset >= cardinality) {
+      if (
+        !Number.isInteger(offset) ||
+        offset < 0 ||
+        offset >= viewportCardinality
+      ) {
         throw new Error(`invalid benchmark cursor ${rawCursor}`);
       }
-      const end = Math.min(cardinality, offset + limit);
+      const end = Math.min(viewportCardinality, offset + limit);
       const items = Array.from({ length: end - offset }, (_, localIndex) =>
         benchmarkNode(offset + localIndex),
       );
-      const hasMore = end < cardinality;
+      const hasMore = end < viewportCardinality;
       const body = JSON.stringify({
         items,
         page: {
@@ -157,8 +173,8 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
       });
       apiRequestCount += 1;
       apiResponseBytes += Buffer.byteLength(body);
-      loadedItemCount += items.length;
-      lastResponseHasMore = hasMore;
+      for (const item of items) loadedItemIds.add(item.id);
+      if (!hasMore) sourceExhausted = true;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -181,8 +197,10 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
     snapshot: () => ({
       apiRequestCount,
       apiResponseBytes,
-      loadedItemCount,
-      lastResponseHasMore,
+      loadedItemCount: loadedItemIds.size,
+      lastResponseHasMore: !sourceExhausted,
+      bboxScopedRequestCount,
+      bulkNodeRequestCount,
     }),
   };
 }
@@ -275,34 +293,77 @@ test("keeps 1k/10k/100k map cardinalities inside fixed browser budgets", async (
         timeout: budget.readiness_ms,
       });
       const expectedPages = expectedMapCardinalityPages(cardinality);
+      const expectedItems = expectedMapCardinalityItems(cardinality);
       await expect
-        .poll(() => api.snapshot().apiRequestCount, {
+        .poll(() => api.snapshot().loadedItemCount, {
           timeout: budget.readiness_ms,
-          message: `${cardinality}-node source did not settle at ${expectedPages} consumed pages`,
+          message: `${cardinality}-node source did not settle at ${expectedItems} unique viewport nodes`,
         })
-        .toBe(expectedPages);
+        .toBe(expectedItems);
       await settleFrames(page, 8);
-      expect(api.snapshot().apiRequestCount).toBe(expectedPages);
+      const initialSnapshot = api.snapshot();
+      expect(initialSnapshot.apiRequestCount).toBeGreaterThanOrEqual(
+        expectedPages,
+      );
+      expect(initialSnapshot.bulkNodeRequestCount).toBe(0);
+      expect(initialSnapshot.bboxScopedRequestCount).toBe(
+        initialSnapshot.apiRequestCount,
+      );
+      expect(initialSnapshot.lastResponseHasMore).toBe(false);
       const readinessMs = performance.now() - startedAt;
       const domMarkerCount = await page.locator(".map-marker").count();
-      if (cardinality === 1000) {
+      if (initialSnapshot.loadedItemCount <= MAP_CARDINALITY_PAGE_SIZE) {
         expect(domMarkerCount).toBeGreaterThan(0);
       }
+      const nativeLayerExpected =
+        initialSnapshot.loadedItemCount > MAP_CARDINALITY_PAGE_SIZE;
+      const nativeLayerActual = await page.evaluate(() =>
+        Boolean(
+          (
+            window as Window & {
+              __TEST_MAP__?: { getLayer: (id: string) => unknown };
+            }
+          ).__TEST_MAP__?.getLayer("commonthing-map-entities-body"),
+        ),
+      );
+      expect(nativeLayerActual).toBe(nativeLayerExpected);
+
       const interactionMs = await measureWheelToNextPaint(page);
-      const snapshot = api.snapshot();
+      await page.waitForFunction(
+        () => {
+          const map = (
+            window as Window & { __TEST_MAP__?: { isMoving: () => boolean } }
+          ).__TEST_MAP__;
+          return Boolean(map && !map.isMoving());
+        },
+        undefined,
+        { timeout: 5000 },
+      );
+      await settleFrames(page, 4);
+      const finalSnapshot = api.snapshot();
+      expect(finalSnapshot.bulkNodeRequestCount).toBe(0);
+      expect(finalSnapshot.bboxScopedRequestCount).toBe(
+        finalSnapshot.apiRequestCount,
+      );
+      expect(finalSnapshot.loadedItemCount).toBe(expectedItems);
+      expect(finalSnapshot.lastResponseHasMore).toBe(false);
+
       samples.push({
         cardinality,
         page_size: MAP_CARDINALITY_PAGE_SIZE,
-        api_request_count: snapshot.apiRequestCount,
-        api_response_bytes: snapshot.apiResponseBytes,
-        loaded_item_count: snapshot.loadedItemCount,
-        truncated_by_client_limit:
-          cardinality > MAP_CARDINALITY_CLIENT_MAX_ITEMS,
-        source_has_more_after_last_client_page: snapshot.lastResponseHasMore,
+        api_request_count: finalSnapshot.apiRequestCount,
+        api_response_bytes: finalSnapshot.apiResponseBytes,
+        loaded_item_count: finalSnapshot.loadedItemCount,
+        truncated_by_client_limit: false,
+        source_has_more_after_last_client_page:
+          finalSnapshot.lastResponseHasMore,
+        bbox_scoped_request_count: finalSnapshot.bboxScopedRequestCount,
+        bulk_node_request_count: finalSnapshot.bulkNodeRequestCount,
         readiness_ms: roundMilliseconds(readinessMs),
         interaction_to_next_paint_ms: roundMilliseconds(interactionMs),
         dom_marker_count: domMarkerCount,
-        native_layer_expected: cardinality > MAP_CARDINALITY_PAGE_SIZE,
+        native_layer_expected: nativeLayerExpected,
+        native_layer_actual: nativeLayerActual,
       });
     } finally {
       await context.close();

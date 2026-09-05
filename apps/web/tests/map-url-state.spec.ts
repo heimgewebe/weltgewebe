@@ -103,7 +103,28 @@ test.describe("Map URL addressing", () => {
   test("opens the context panel for a node focus deep link", async ({
     page,
   }) => {
+    const nodeGetUrls: string[] = [];
+    page.on("request", (request) => {
+      const url = new URL(request.url());
+      if (
+        request.method() === "GET" &&
+        (url.pathname === "/api/nodes" ||
+          url.pathname.startsWith("/api/nodes/"))
+      ) {
+        nodeGetUrls.push(request.url());
+      }
+    });
+    const firstViewportRequest = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return (
+        request.method() === "GET" &&
+        url.pathname === "/api/nodes" &&
+        url.searchParams.has("bbox")
+      );
+    });
+
     await page.goto("/map?focus=node:url-node-1");
+    await firstViewportRequest;
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
     await expect(panel.locator(".panel-header h2")).toContainText("Knoten");
@@ -121,6 +142,30 @@ test.describe("Map URL addressing", () => {
       undefined,
       { timeout: 15000 },
     );
+
+    const detailRequests = nodeGetUrls.filter((value) =>
+      new URL(value).pathname.startsWith("/api/nodes/"),
+    );
+    const listRequests = nodeGetUrls.filter(
+      (value) => new URL(value).pathname === "/api/nodes",
+    );
+    // The route bootstrap and the existing NodePanel details loader may both
+    // read the same detail endpoint. What matters here is that no other node is
+    // fetched and no global node list is used for deep-link resolution.
+    expect(detailRequests.length).toBeGreaterThanOrEqual(1);
+    expect(
+      detailRequests.every(
+        (value) => new URL(value).pathname === "/api/nodes/url-node-1",
+      ),
+    ).toBe(true);
+    expect(listRequests.length).toBeGreaterThan(0);
+    expect(
+      listRequests.every((value) => new URL(value).searchParams.has("bbox")),
+    ).toBe(true);
+    await expect(page.locator('.map-marker[data-id="url-node-1"]')).toHaveCount(
+      1,
+    );
+    await expect(panel).toBeVisible();
   });
 
   test("opens the context panel for a garnrolle focus deep link", async ({

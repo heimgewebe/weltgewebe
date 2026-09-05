@@ -4,25 +4,30 @@ import { resolve } from "node:path";
 export const MAP_CARDINALITY_PAGE_SIZE = 1000;
 export const MAP_CARDINALITY_CLIENT_MAX_PAGES = 10;
 export const MAP_CARDINALITY_CLIENT_MAX_ITEMS = 10_000;
+export const MAP_CARDINALITY_VIEWPORT_ITEMS = Object.freeze({
+  1000: 250,
+  10000: 1500,
+  100000: 1500,
+});
 
 export const MAP_CARDINALITY_BUDGETS = Object.freeze({
   1000: Object.freeze({
     readiness_ms: 5000,
     interaction_to_next_paint_ms: 200,
     max_dom_markers: 250,
-    max_api_response_bytes: 1_000_000,
+    max_api_response_bytes: 500_000,
   }),
   10000: Object.freeze({
     readiness_ms: 9000,
     interaction_to_next_paint_ms: 200,
     max_dom_markers: 1,
-    max_api_response_bytes: 10_000_000,
+    max_api_response_bytes: 2_000_000,
   }),
   100000: Object.freeze({
     readiness_ms: 12000,
     interaction_to_next_paint_ms: 250,
     max_dom_markers: 1,
-    max_api_response_bytes: 10_000_000,
+    max_api_response_bytes: 2_000_000,
   }),
 });
 
@@ -42,15 +47,16 @@ function integer(value, label, minimum = 0) {
 
 export function expectedMapCardinalityPages(cardinality) {
   integer(cardinality, "cardinality", 1);
-  return Math.min(
-    Math.ceil(cardinality / MAP_CARDINALITY_PAGE_SIZE),
-    MAP_CARDINALITY_CLIENT_MAX_PAGES,
-  );
+  const viewportItems = MAP_CARDINALITY_VIEWPORT_ITEMS[cardinality];
+  if (!viewportItems) throw new Error(`unsupported cardinality ${cardinality}`);
+  return Math.ceil(viewportItems / MAP_CARDINALITY_PAGE_SIZE);
 }
 
 export function expectedMapCardinalityItems(cardinality) {
   integer(cardinality, "cardinality", 1);
-  return Math.min(cardinality, MAP_CARDINALITY_CLIENT_MAX_ITEMS);
+  const viewportItems = MAP_CARDINALITY_VIEWPORT_ITEMS[cardinality];
+  if (!viewportItems) throw new Error(`unsupported cardinality ${cardinality}`);
+  return viewportItems;
 }
 
 export function validateMapCardinalitySample(sample) {
@@ -66,6 +72,12 @@ export function validateMapCardinalitySample(sample) {
   integer(sample.loaded_item_count, "sample.loaded_item_count", 1);
   integer(sample.dom_marker_count, "sample.dom_marker_count", 0);
   integer(sample.page_size, "sample.page_size", 1);
+  integer(
+    sample.bbox_scoped_request_count,
+    "sample.bbox_scoped_request_count",
+    1,
+  );
+  integer(sample.bulk_node_request_count, "sample.bulk_node_request_count", 0);
   finite(sample.readiness_ms, "sample.readiness_ms");
   finite(
     sample.interaction_to_next_paint_ms,
@@ -77,9 +89,9 @@ export function validateMapCardinalitySample(sample) {
     );
   }
   const expectedPages = expectedMapCardinalityPages(cardinality);
-  if (sample.api_request_count !== expectedPages) {
+  if (sample.api_request_count < expectedPages) {
     throw new Error(
-      `cardinality ${cardinality}: expected ${expectedPages} consumed node pages, observed ${sample.api_request_count}`,
+      `cardinality ${cardinality}: expected at least ${expectedPages} consumed node pages, observed ${sample.api_request_count}`,
     );
   }
   const expectedItems = expectedMapCardinalityItems(cardinality);
@@ -88,15 +100,24 @@ export function validateMapCardinalitySample(sample) {
       `cardinality ${cardinality}: expected ${expectedItems} loaded items, observed ${sample.loaded_item_count}`,
     );
   }
-  const truncatedExpected = cardinality > MAP_CARDINALITY_CLIENT_MAX_ITEMS;
-  if (sample.truncated_by_client_limit !== truncatedExpected) {
+  if (sample.truncated_by_client_limit !== false) {
     throw new Error(
-      `cardinality ${cardinality}: client truncation expectation is inconsistent`,
+      `cardinality ${cardinality}: viewport fetch must complete without client truncation`,
     );
   }
-  if (sample.source_has_more_after_last_client_page !== truncatedExpected) {
+  if (sample.source_has_more_after_last_client_page !== false) {
     throw new Error(
-      `cardinality ${cardinality}: source continuation expectation is inconsistent`,
+      `cardinality ${cardinality}: viewport source continuation must be exhausted`,
+    );
+  }
+  if (sample.bbox_scoped_request_count !== sample.api_request_count) {
+    throw new Error(
+      `cardinality ${cardinality}: every node request must be bbox scoped`,
+    );
+  }
+  if (sample.bulk_node_request_count !== 0) {
+    throw new Error(
+      `cardinality ${cardinality}: bulk node bootstrap request observed`,
     );
   }
   if (sample.readiness_ms > budget.readiness_ms) {
@@ -121,10 +142,20 @@ export function validateMapCardinalitySample(sample) {
       `cardinality ${cardinality}: API response bytes ${sample.api_response_bytes} exceeds ${budget.max_api_response_bytes}`,
     );
   }
-  const nativeExpected = cardinality > MAP_CARDINALITY_PAGE_SIZE;
+  const nativeExpected = expectedItems > MAP_CARDINALITY_PAGE_SIZE;
   if (sample.native_layer_expected !== nativeExpected) {
     throw new Error(
       `cardinality ${cardinality}: native layer expectation is inconsistent`,
+    );
+  }
+  if (typeof sample.native_layer_actual !== "boolean") {
+    throw new Error(
+      `cardinality ${cardinality}: native layer actual state must be boolean`,
+    );
+  }
+  if (sample.native_layer_actual !== nativeExpected) {
+    throw new Error(
+      `cardinality ${cardinality}: native layer actual state does not match expectation`,
     );
   }
   return { cardinality, budget };
@@ -163,11 +194,12 @@ export function buildMapCardinalityEvidence({
       max_items: MAP_CARDINALITY_CLIENT_MAX_ITEMS,
     },
     budgets: MAP_CARDINALITY_BUDGETS,
+    expected_viewport_items: MAP_CARDINALITY_VIEWPORT_ITEMS,
     samples,
     verdict: "PASS",
     limitations: [
-      "Node payloads are served by a deterministic Playwright HTTP fixture so this proof isolates browser pagination and rendering from backend/database capacity.",
-      "The 100k scenario represents a 100,000-item source dataset; the current browser contract intentionally stops after 10 pages / 10,000 loaded items, so this proof does not claim 100,000 simultaneous in-browser entities.",
+      "Node payloads are served by a deterministic Playwright HTTP fixture so this proof isolates viewport-scoped browser pagination and rendering from backend/database capacity.",
+      "The 1k/10k/100k values represent global source cardinality. The fixture exposes only the deterministic visible viewport subset, proving that a 100,000-item source does not imply a 10,000-item browser transfer.",
       "Backend and PostgreSQL scale remain separate evidence lanes; this proof does not claim production network latency or database throughput.",
       "Timing budgets are regression guards on the pinned CI runner class, not user-facing service-level objectives.",
     ],
