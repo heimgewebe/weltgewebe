@@ -1,6 +1,11 @@
 import { test, expect, type Page } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
+import {
+  ACCOUNT_MARKER_SELECTOR,
+  NODE_MARKER_SELECTOR,
+  waitForNodeMarker,
+} from "./fixtures/mapReady";
 
 async function centerDemoMarkers(page: Page) {
   await page.waitForFunction(
@@ -22,13 +27,13 @@ test.describe("ContextPanel mobile compact and full states", () => {
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto("/map");
     await centerDemoMarkers(page);
-    await page.waitForSelector(".map-marker", { timeout: 10000 });
+    await waitForNodeMarker(page);
   });
 
   test("Fokus opens as a compact card without mobile tabs or size buttons", async ({
     page,
   }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
 
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
@@ -49,7 +54,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
 
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
@@ -71,7 +76,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
   test("compact mode always shows the summary instead of the previously selected tab", async ({
     page,
   }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
 
@@ -95,7 +100,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
   });
 
   test("collapsing preserves an unsaved edit draft", async ({ page }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
 
@@ -136,7 +141,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
 
@@ -169,7 +174,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
   test("non-primary and secondary pointers cannot start a sheet drag", async ({
     page,
   }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
 
@@ -191,7 +196,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
   test("foreign pointer ids and pointercancel leave no drag state", async ({
     page,
   }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
     const box = await handle.boundingBox();
@@ -243,7 +248,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
   test("lostpointercapture deterministically clears an active drag", async ({
     page,
   }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
     const box = await handle.boundingBox();
@@ -278,7 +283,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
   test("compact Garnrolle keeps tabs and the selected panel in the DOM", async ({
     page,
   }) => {
-    await page.locator(".map-marker.marker-account").first().click();
+    await page.locator(ACCOUNT_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
 
@@ -309,7 +314,7 @@ test.describe("ContextPanel mobile compact and full states", () => {
 
   test("reduced motion removes the height transition", async ({ page }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const transitionDuration = await page
       .getByTestId("context-panel")
       .evaluate((element) => getComputedStyle(element).transitionDuration);
@@ -330,14 +335,14 @@ test.describe("ContextPanel mobile compact and full states", () => {
     });
     await landscapePage.goto("/map");
     await centerDemoMarkers(landscapePage);
-    await landscapePage.waitForSelector(".map-marker", { timeout: 10000 });
+    await waitForNodeMarker(landscapePage);
     expect(
       await landscapePage.evaluate(
         () => window.matchMedia("(pointer: coarse)").matches,
       ),
     ).toBe(true);
 
-    await landscapePage.locator(".map-marker").first().click();
+    await landscapePage.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = landscapePage.getByTestId("context-panel");
     const handle = landscapePage.getByTestId("sheet-handle");
     await expect(handle).toBeVisible();
@@ -361,16 +366,17 @@ test.describe("ContextPanel mobile compact and full states", () => {
   test("switching the selected marker resets the sheet to compact", async ({
     page,
   }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     await page.getByTestId("sheet-handle").click();
     await expect(panel).toHaveAttribute("data-sheet-stage", "full");
 
-    await page.evaluate(() =>
-      (
-        document.querySelectorAll(".map-marker")[1] as HTMLElement
-      )?.dispatchEvent(new MouseEvent("click", { bubbles: true })),
-    );
+    await page
+      .locator(ACCOUNT_MARKER_SELECTOR)
+      .first()
+      .evaluate((marker) => {
+        marker.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
     await expect(panel).toHaveAttribute("data-sheet-stage", "compact");
   });
 });
@@ -383,13 +389,13 @@ test.describe("ContextPanel desktop layout stays unchanged", () => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await page.goto("/map");
     await centerDemoMarkers(page);
-    await page.waitForSelector(".map-marker", { timeout: 10000 });
+    await waitForNodeMarker(page);
   });
 
   test("the sheet affordances stay hidden and tabs retain their desktop behavior", async ({
     page,
   }) => {
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     await expect(panel).toBeVisible();
     const handle = page.getByTestId("sheet-handle");
@@ -413,14 +419,14 @@ test.describe("ContextPanel touch input", () => {
     });
     await page.goto("/map");
     await centerDemoMarkers(page);
-    await page.waitForSelector(".map-marker", { timeout: 10000 });
+    await waitForNodeMarker(page);
   });
 
   test("one real touch tap toggles the handle exactly once", async ({
     page,
   }) => {
     await page.emulateMedia({ reducedMotion: "reduce" });
-    await page.locator(".map-marker").first().click();
+    await page.locator(NODE_MARKER_SELECTOR).first().click();
     const panel = page.getByTestId("context-panel");
     const handle = page.getByTestId("sheet-handle");
     const box = await handle.boundingBox();

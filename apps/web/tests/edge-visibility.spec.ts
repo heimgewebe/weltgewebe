@@ -1,6 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 import { EDGE_VISUAL_STYLE } from "../src/lib/map/overlay/edges";
+import { waitForMapReady } from "./fixtures/mapReady";
 
 test.describe("Edge visibility on load", () => {
   test("edges are rendered after map load without filter toggle", async ({
@@ -9,6 +10,7 @@ test.describe("Edge visibility on load", () => {
     await mockApiResponses(page);
 
     await page.goto("/map");
+    await waitForMapReady(page);
 
     // Wait for the map to fully load (including style)
     await page.waitForFunction(
@@ -33,6 +35,16 @@ test.describe("Edge visibility on load", () => {
       },
       undefined,
       { timeout: 5000 },
+    );
+
+    await page.waitForFunction(
+      () => {
+        const m = (window as any).__TEST_MAP__;
+        const source = m?.getSource("edges-source");
+        return (source?.serialize?.()?.data?.features?.length ?? 0) > 0;
+      },
+      undefined,
+      { timeout: 10_000 },
     );
 
     // Verify the full rendering pipeline: source exists, layers exist, features are populated
