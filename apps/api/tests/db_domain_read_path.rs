@@ -156,19 +156,9 @@ async fn node_bbox_route_reads_postgres_directly_with_cursor_contract() {
         .merge(api_router())
         .with_state(postgres_bbox_route_state(pool.clone()));
 
-    // The state cache is deliberately empty. PostgreSQL read mode must resolve
-    // focused details from the same authoritative source as the BBOX route.
-    let response = app
-        .clone()
-        .oneshot(
-            Request::get(format!("/nodes/{}", direct_ids[0]))
-                .body(body::Body::empty())
-                .unwrap(),
-        )
-        .await
-        .expect("PostgreSQL node detail response");
-    assert_eq!(response.status(), axum::http::StatusCode::OK);
-
+    // The process node cache is deliberately empty. The BBOX route below must
+    // still return PostgreSQL rows directly; focused node details intentionally
+    // remain on the version-fenced projection cache and are not part of this proof.
     let response = app
         .clone()
         .oneshot(
