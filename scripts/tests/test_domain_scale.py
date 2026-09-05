@@ -180,24 +180,18 @@ class DomainScaleTests(unittest.TestCase):
             plans = root / "plans"
             fake_domain_db = root / "domain_db.rs"
             fake_domain_db.write_text(
-                """pub async fn load_nodes_bbox_from_postgres() {\n"
-                "    let rows = sqlx::query_as(\n"
-                "        \"SELECT id, title, lat, lon \\\n"
-                "         FROM domain_nodes \\\n"
-                "         WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 \\\n"
-                "         ORDER BY id ASC LIMIT $5 OFFSET $6\",\n"
-                "    );\n"
-                "}\n\n"
-                "pub async fn load_nodes_bbox_after_id_from_postgres() {\n"
-                "    let rows = sqlx::query_as(\n"
-                "        \"SELECT id, title, lat, lon \\\n"
-                "         FROM domain_nodes \\\n"
-                "         WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 \\\n"
-                "           AND id > $5 \\\n"
-                "         ORDER BY id ASC LIMIT $6\",\n"
-                "    );\n"
-                "}\n"
-                """,
+                """pub async fn load_nodes_bbox_from_postgres() {
+    let rows = sqlx::query_as(
+        "SELECT id, title, lat, lon FROM domain_nodes WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 ORDER BY id ASC LIMIT $5 OFFSET $6",
+    );
+}
+
+pub async fn load_nodes_bbox_after_id_from_postgres() {
+    let rows = sqlx::query_as(
+        "SELECT id, title, lat, lon FROM domain_nodes WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 AND id > $5 ORDER BY id ASC LIMIT $6",
+    );
+}
+""",
                 encoding="utf-8",
                 newline="\n",
             )
