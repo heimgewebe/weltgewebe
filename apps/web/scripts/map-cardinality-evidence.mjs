@@ -69,6 +69,13 @@ export function validateMapCardinalitySample(sample) {
 
   integer(sample.api_request_count, "sample.api_request_count", 1);
   integer(sample.api_response_bytes, "sample.api_response_bytes", 1);
+  integer(sample.source_node_count, "sample.source_node_count", 1);
+  integer(sample.bbox_source_item_count, "sample.bbox_source_item_count", 1);
+  integer(
+    sample.offscreen_source_item_count,
+    "sample.offscreen_source_item_count",
+    0,
+  );
   integer(sample.loaded_item_count, "sample.loaded_item_count", 1);
   integer(sample.dom_marker_count, "sample.dom_marker_count", 0);
   integer(sample.page_size, "sample.page_size", 1);
@@ -88,6 +95,11 @@ export function validateMapCardinalitySample(sample) {
       `page size ${sample.page_size} does not match ${MAP_CARDINALITY_PAGE_SIZE}`,
     );
   }
+  if (sample.source_node_count !== cardinality) {
+    throw new Error(
+      `cardinality ${cardinality}: fixture source contains ${sample.source_node_count} nodes`,
+    );
+  }
   const expectedPages = expectedMapCardinalityPages(cardinality);
   if (sample.api_request_count < expectedPages) {
     throw new Error(
@@ -95,6 +107,16 @@ export function validateMapCardinalitySample(sample) {
     );
   }
   const expectedItems = expectedMapCardinalityItems(cardinality);
+  if (sample.bbox_source_item_count !== expectedItems) {
+    throw new Error(
+      `cardinality ${cardinality}: bbox filtered ${sample.bbox_source_item_count} source items, expected ${expectedItems}`,
+    );
+  }
+  if (sample.offscreen_source_item_count !== cardinality - expectedItems) {
+    throw new Error(
+      `cardinality ${cardinality}: offscreen source count does not reconcile with the global source`,
+    );
+  }
   if (sample.loaded_item_count !== expectedItems) {
     throw new Error(
       `cardinality ${cardinality}: expected ${expectedItems} loaded items, observed ${sample.loaded_item_count}`,
@@ -182,6 +204,35 @@ export function buildMapCardinalityEvidence({
   if (seen.join(",") !== "1000,10000,100000") {
     throw new Error(`unexpected cardinality sequence: ${seen.join(",")}`);
   }
+  const tenThousand = samples[1];
+  const hundredThousand = samples[2];
+  if (
+    hundredThousand.source_node_count !==
+    tenThousand.source_node_count * 10
+  ) {
+    throw new Error(
+      "100k fixture must contain ten times the 10k global source",
+    );
+  }
+  if (
+    hundredThousand.bbox_source_item_count !==
+    tenThousand.bbox_source_item_count
+  ) {
+    throw new Error(
+      "10k and 100k fixtures must expose the same visible bbox population",
+    );
+  }
+  if (hundredThousand.loaded_item_count !== tenThousand.loaded_item_count) {
+    throw new Error("10k and 100k browser loads must stay viewport-bounded");
+  }
+  if (
+    hundredThousand.api_response_bytes >
+    tenThousand.api_response_bytes * 1.1
+  ) {
+    throw new Error(
+      "100k bbox transfer grew materially with global source cardinality",
+    );
+  }
   return {
     schema_version: 1,
     kind: "commonthing_map_cardinality_browser_evidence",
@@ -199,7 +250,7 @@ export function buildMapCardinalityEvidence({
     verdict: "PASS",
     limitations: [
       "Node payloads are served by a deterministic Playwright HTTP fixture so this proof isolates viewport-scoped browser pagination and rendering from backend/database capacity.",
-      "The 1k/10k/100k values represent global source cardinality. The fixture exposes only the deterministic visible viewport subset, proving that a 100,000-item source does not imply a 10,000-item browser transfer.",
+      "The fixture materializes the full 1k/10k/100k global node populations, filters that real source by every requested bbox, and exposes only the deterministic visible subset; the 10k and 100k scenarios intentionally share the same visible geometry so global growth cannot hide inside a changed viewport.",
       "Backend and PostgreSQL scale remain separate evidence lanes; this proof does not claim production network latency or database throughput.",
       "Timing budgets are regression guards on the pinned CI runner class, not user-facing service-level objectives.",
     ],

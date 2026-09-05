@@ -56,6 +56,9 @@ type CardinalitySample = {
   page_size: number;
   api_request_count: number;
   api_response_bytes: number;
+  source_node_count: number;
+  bbox_source_item_count: number;
+  offscreen_source_item_count: number;
   loaded_item_count: number;
   truncated_by_client_limit: boolean;
   source_has_more_after_last_client_page: boolean;
@@ -82,7 +85,7 @@ function roundMilliseconds(value: number): number {
   return Math.round(value * 1000) / 1000;
 }
 
-function benchmarkNode(index: number) {
+function benchmarkNode(index: number, visible: boolean) {
   const column = index % 50;
   const row = Math.floor(index / 50) % 50;
   return {
@@ -90,14 +93,55 @@ function benchmarkNode(index: number) {
     kind: "Knoten",
     title: `Benchmark ${index}`,
     summary: "Deterministic map cardinality proof node",
-    location: {
-      lon: 10.4515 + column * 0.001,
-      lat: 51.1657 + row * 0.001,
-    },
+    location: visible
+      ? {
+          lon: 10.4515 + column * 0.001,
+          lat: 51.1657 + row * 0.001,
+        }
+      : {
+          // Off-screen source population: real objects exist in the global
+          // fixture but are far outside the Germany startup viewport.
+          lon: -150 + (index % 100) * 0.001,
+          lat: -20 + (Math.floor(index / 100) % 100) * 0.001,
+        },
     created_at: "2026-09-04T00:00:00Z",
     updated_at: "2026-09-04T00:00:00Z",
     modules: [],
   };
+}
+
+type BenchmarkNode = ReturnType<typeof benchmarkNode>;
+
+function benchmarkSource(cardinality: Cardinality): BenchmarkNode[] {
+  const visibleItems = expectedMapCardinalityItems(cardinality);
+  const source = Array.from({ length: cardinality }, (_, index) =>
+    benchmarkNode(index, index < visibleItems),
+  );
+  expect(source).toHaveLength(cardinality);
+  return source;
+}
+
+function nodesInsideBbox(
+  source: BenchmarkNode[],
+  bbox: string,
+): BenchmarkNode[] {
+  const coordinates = bbox.split(",").map(Number);
+  if (
+    coordinates.length !== 4 ||
+    coordinates.some((value) => !Number.isFinite(value))
+  ) {
+    throw new Error(`invalid benchmark bbox ${bbox}`);
+  }
+  const [west, south, east, north] = coordinates;
+  if (west > east || south > north)
+    throw new Error(`invalid benchmark bbox ${bbox}`);
+  return source.filter(
+    ({ location }) =>
+      location.lon >= west &&
+      location.lon <= east &&
+      location.lat >= south &&
+      location.lat <= north,
+  );
 }
 
 async function fulfillEmptyList(route: Route): Promise<void> {
@@ -113,13 +157,14 @@ async function fulfillEmptyList(route: Route): Promise<void> {
 }
 
 async function installCardinalityApi(page: Page, cardinality: Cardinality) {
+  const source = benchmarkSource(cardinality);
   let apiRequestCount = 0;
   let apiResponseBytes = 0;
   const loadedItemIds = new Set<string>();
-  let sourceExhausted = false;
+  const bboxSourceItemIds = new Set<string>();
+  let lastResponseHasMore = false;
   let bboxScopedRequestCount = 0;
   let bulkNodeRequestCount = 0;
-  const viewportCardinality = expectedMapCardinalityItems(cardinality);
 
   await page.route("**/api/**", async (route) => {
     const request = route.request();
@@ -129,17 +174,17 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
     }
     const url = new URL(request.url());
     if (url.pathname === "/api/nodes") {
-      if (url.searchParams.has("bbox")) {
-        bboxScopedRequestCount += 1;
-      } else {
+      apiRequestCount += 1;
+      const bbox = url.searchParams.get("bbox");
+      const selectedSource =
+        bbox === null ? source : nodesInsideBbox(source, bbox);
+      if (bbox === null) {
         bulkNodeRequestCount += 1;
-        await route.fulfill({
-          status: 200,
-          contentType: "application/json",
-          body: JSON.stringify(EMPTY_CURSOR_PAGE),
-        });
-        return;
+      } else {
+        bboxScopedRequestCount += 1;
+        for (const item of selectedSource) bboxSourceItemIds.add(item.id);
       }
+
       const requestedLimit = Number(
         url.searchParams.get("limit") ?? MAP_CARDINALITY_PAGE_SIZE,
       );
@@ -154,15 +199,13 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
       if (
         !Number.isInteger(offset) ||
         offset < 0 ||
-        offset >= viewportCardinality
+        offset > selectedSource.length
       ) {
         throw new Error(`invalid benchmark cursor ${rawCursor}`);
       }
-      const end = Math.min(viewportCardinality, offset + limit);
-      const items = Array.from({ length: end - offset }, (_, localIndex) =>
-        benchmarkNode(offset + localIndex),
-      );
-      const hasMore = end < viewportCardinality;
+      const end = Math.min(selectedSource.length, offset + limit);
+      const items = selectedSource.slice(offset, end);
+      const hasMore = end < selectedSource.length;
       const body = JSON.stringify({
         items,
         page: {
@@ -171,10 +214,9 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
           has_more: hasMore,
         },
       });
-      apiRequestCount += 1;
       apiResponseBytes += Buffer.byteLength(body);
       for (const item of items) loadedItemIds.add(item.id);
-      if (!hasMore) sourceExhausted = true;
+      lastResponseHasMore = hasMore;
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -197,8 +239,10 @@ async function installCardinalityApi(page: Page, cardinality: Cardinality) {
     snapshot: () => ({
       apiRequestCount,
       apiResponseBytes,
+      sourceNodeCount: source.length,
+      bboxSourceItemCount: bboxSourceItemIds.size,
       loadedItemCount: loadedItemIds.size,
-      lastResponseHasMore: !sourceExhausted,
+      lastResponseHasMore,
       bboxScopedRequestCount,
       bulkNodeRequestCount,
     }),
@@ -302,6 +346,8 @@ test("keeps 1k/10k/100k map cardinalities inside fixed browser budgets", async (
         .toBe(expectedItems);
       await settleFrames(page, 8);
       const initialSnapshot = api.snapshot();
+      expect(initialSnapshot.sourceNodeCount).toBe(cardinality);
+      expect(initialSnapshot.bboxSourceItemCount).toBe(expectedItems);
       expect(initialSnapshot.apiRequestCount).toBeGreaterThanOrEqual(
         expectedPages,
       );
@@ -345,6 +391,8 @@ test("keeps 1k/10k/100k map cardinalities inside fixed browser budgets", async (
       expect(finalSnapshot.bboxScopedRequestCount).toBe(
         finalSnapshot.apiRequestCount,
       );
+      expect(finalSnapshot.sourceNodeCount).toBe(cardinality);
+      expect(finalSnapshot.bboxSourceItemCount).toBe(expectedItems);
       expect(finalSnapshot.loadedItemCount).toBe(expectedItems);
       expect(finalSnapshot.lastResponseHasMore).toBe(false);
 
@@ -353,6 +401,10 @@ test("keeps 1k/10k/100k map cardinalities inside fixed browser budgets", async (
         page_size: MAP_CARDINALITY_PAGE_SIZE,
         api_request_count: finalSnapshot.apiRequestCount,
         api_response_bytes: finalSnapshot.apiResponseBytes,
+        source_node_count: finalSnapshot.sourceNodeCount,
+        bbox_source_item_count: finalSnapshot.bboxSourceItemCount,
+        offscreen_source_item_count:
+          finalSnapshot.sourceNodeCount - finalSnapshot.bboxSourceItemCount,
         loaded_item_count: finalSnapshot.loadedItemCount,
         truncated_by_client_limit: false,
         source_has_more_after_last_client_page:

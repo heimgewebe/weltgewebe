@@ -18,6 +18,10 @@ function sample(cardinality, overrides = {}) {
       budget.max_api_response_bytes,
       expectedMapCardinalityItems(cardinality) * 256,
     ),
+    source_node_count: cardinality,
+    bbox_source_item_count: expectedMapCardinalityItems(cardinality),
+    offscreen_source_item_count:
+      cardinality - expectedMapCardinalityItems(cardinality),
     loaded_item_count: expectedMapCardinalityItems(cardinality),
     truncated_by_client_limit: false,
     source_has_more_after_last_client_page: false,
@@ -68,6 +72,20 @@ test("budget and client-limit violations fail closed", () => {
   );
   assert.throws(
     () =>
+      validateMapCardinalitySample(
+        sample(100000, { source_node_count: 10000 }),
+      ),
+    /fixture source contains/,
+  );
+  assert.throws(
+    () =>
+      validateMapCardinalitySample(
+        sample(100000, { bbox_source_item_count: 100000 }),
+      ),
+    /bbox filtered/,
+  );
+  assert.throws(
+    () =>
       validateMapCardinalitySample(sample(100000, { api_request_count: 1 })),
     /expected at least 2 consumed node pages/,
   );
@@ -96,6 +114,38 @@ test("budget and client-limit violations fail closed", () => {
   );
 });
 
+test("evidence rejects a fake 100k label without tenfold global source growth", () => {
+  assert.throws(
+    () =>
+      buildMapCardinalityEvidence({
+        sourceRevision: "a".repeat(40),
+        generatedAt: "2026-09-04T00:00:00Z",
+        browser: { name: "chromium", version: "test", headless: true },
+        samples: [
+          sample(1000),
+          sample(10000),
+          sample(100000, { source_node_count: 10000 }),
+        ],
+      }),
+    /fixture source contains|ten times/,
+  );
+});
+
+test("evidence rejects browser transfer growth that tracks the 100k source", () => {
+  const tenK = sample(10000, { api_response_bytes: 400000 });
+  const hundredK = sample(100000, { api_response_bytes: 500000 });
+  assert.throws(
+    () =>
+      buildMapCardinalityEvidence({
+        sourceRevision: "a".repeat(40),
+        generatedAt: "2026-09-04T00:00:00Z",
+        browser: { name: "chromium", version: "test", headless: true },
+        samples: [sample(1000), tenK, hundredK],
+      }),
+    /transfer grew materially/,
+  );
+});
+
 test("evidence is exact-revision bound and distinguishes source from browser cardinality", () => {
   const evidence = buildMapCardinalityEvidence({
     sourceRevision: "a".repeat(40),
@@ -113,5 +163,8 @@ test("evidence is exact-revision bound and distinguishes source from browser car
     evidence.limitations[0],
     /deterministic Playwright HTTP fixture/,
   );
-  assert.match(evidence.limitations[1], /global source cardinality/);
+  assert.match(
+    evidence.limitations[1],
+    /full 1k\/10k\/100k global node populations/,
+  );
 });

@@ -215,6 +215,8 @@
   let viewportNodeAbortController: AbortController | null = null;
   let viewportNodeSequence = 0;
   let requestNodeViewportRefresh: (() => void) | null = null;
+  let pendingViewportRefresh = false;
+  let viewportRouteStatusInitialized = false;
   let lastViewportRouteStatus: PageData["resourceStatus"] | null = null;
   let lastViewportBootstrapKey: string | null = null;
   let viewportBootstrapReleased = $state(false);
@@ -761,7 +763,10 @@
       void refreshNodeViewport();
     };
     const handleNodeViewportMoveEnd = () => {
-      if (!mapHasLoaded) return;
+      if (!mapHasLoaded) {
+        pendingViewportRefresh = true;
+        return;
+      }
       void refreshNodeViewport();
     };
     let styleRehydrateQueued = false;
@@ -808,6 +813,12 @@
       const currentScheme = readDocumentColorScheme();
       if (currentScheme !== activeBasemapScheme) {
         switchBasemapScheme(currentScheme);
+        return;
+      }
+      if (pendingViewportRefresh) {
+        pendingViewportRefresh = false;
+        lastViewportRouteStatus = data.resourceStatus ?? null;
+        void refreshNodeViewport().then(() => finishInitialLoading(generation));
         return;
       }
       mapHasLoaded = true;
@@ -999,8 +1010,9 @@
 
       map.once("load", async () => {
         // The initial visible-node request is part of readiness: do not reveal
-        // an empty map and let markers pop in a frame later. Later moveend
-        // refreshes remain asynchronous and latest-request-wins.
+        // an empty map and let markers pop in a frame later. If a route
+        // invalidation or camera move arrives while that request is in flight,
+        // replay the latest visible viewport before revealing the map.
         await refreshNodeViewport();
         // MapLibre emits this map-level event only once. Bind acceptance to
         // whatever basemap generation is current at that moment rather than to
@@ -1105,12 +1117,24 @@
   // Refresh the same visible bbox whenever SvelteKit replaces the route resource
   // status snapshot so the viewport converges even when no moveend occurs.
   $effect.pre(() => {
-    const currentRouteStatus = data.resourceStatus;
-    if (currentRouteStatus === lastViewportRouteStatus) return;
-    lastViewportRouteStatus = currentRouteStatus;
-    if (data.nodeLoadMode === "viewport" && mapHasLoaded) {
-      requestNodeViewportRefresh?.();
+    const currentRouteStatus = data.resourceStatus ?? null;
+    if (!viewportRouteStatusInitialized) {
+      viewportRouteStatusInitialized = true;
+      lastViewportRouteStatus = currentRouteStatus;
+      return;
     }
+    if (currentRouteStatus === lastViewportRouteStatus) return;
+    if (data.nodeLoadMode !== "viewport") {
+      lastViewportRouteStatus = currentRouteStatus;
+      pendingViewportRefresh = false;
+      return;
+    }
+    if (!mapHasLoaded) {
+      pendingViewportRefresh = true;
+      return;
+    }
+    lastViewportRouteStatus = currentRouteStatus;
+    requestNodeViewportRefresh?.();
   });
 
   // Phase 2: Build the scene from request-scoped route data. The scene stays

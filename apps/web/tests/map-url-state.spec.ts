@@ -1,5 +1,6 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
+import { waitForMapReady } from "./fixtures/mapReady";
 
 /**
  * Map URL addressing (UI Interaction Doctrine — first executable slice).
@@ -166,6 +167,90 @@ test.describe("Map URL addressing", () => {
       1,
     );
     await expect(panel).toBeVisible();
+  });
+
+  test("replays a camera move that lands while the initial bbox request is pending", async ({
+    page,
+  }) => {
+    let bboxRequestCount = 0;
+    let resolveFirstSeen!: () => void;
+    let resolveFirstRelease!: () => void;
+    const firstSeen = new Promise<void>((resolve) => {
+      resolveFirstSeen = resolve;
+    });
+    const firstRelease = new Promise<void>((resolve) => {
+      resolveFirstRelease = resolve;
+    });
+
+    await page.route("**/api/nodes*", async (route) => {
+      const request = route.request();
+      const url = new URL(request.url());
+      if (
+        request.method() !== "GET" ||
+        url.pathname !== "/api/nodes" ||
+        !url.searchParams.has("bbox")
+      ) {
+        await route.fallback();
+        return;
+      }
+
+      bboxRequestCount += 1;
+      const isInitialRequest = bboxRequestCount === 1;
+      if (isInitialRequest) {
+        resolveFirstSeen();
+        await firstRelease;
+      }
+      const node = isInitialRequest
+        ? {
+            id: "stale-initial-node",
+            title: "Stale initial viewport",
+            kind: "Event",
+            location: { lat: 51.1657, lon: 10.4515 },
+            summary: "Must be replaced before the map becomes ready.",
+            tags: [],
+            modules: [],
+            created_at: "2025-01-01T12:00:00Z",
+            updated_at: "2025-01-01T12:00:00Z",
+          }
+        : {
+            id: "fresh-moved-node",
+            title: "Fresh moved viewport",
+            kind: "Event",
+            location: { lat: 52.5, lon: 11.5 },
+            summary: "Belongs to the latest viewport.",
+            tags: [],
+            modules: [],
+            created_at: "2025-01-01T12:00:00Z",
+            updated_at: "2025-01-01T12:00:00Z",
+          };
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(mockListResponse(request.url(), [node])),
+      });
+    });
+
+    await page.goto("/map", { waitUntil: "domcontentloaded" });
+    await firstSeen;
+    await page.waitForFunction(() => Boolean((window as any).__TEST_MAP__));
+    await page.evaluate(() => {
+      (window as any).__TEST_MAP__.jumpTo({
+        center: [11.5, 52.5],
+        zoom: 8,
+      });
+    });
+    resolveFirstRelease();
+
+    await expect
+      .poll(() => bboxRequestCount, { timeout: 10_000 })
+      .toBeGreaterThanOrEqual(2);
+    await waitForMapReady(page);
+    await expect(
+      page.locator('.map-marker[data-id="fresh-moved-node"]'),
+    ).toHaveCount(1);
+    await expect(
+      page.locator('.map-marker[data-id="stale-initial-node"]'),
+    ).toHaveCount(0);
   });
 
   test("opens the context panel for a garnrolle focus deep link", async ({

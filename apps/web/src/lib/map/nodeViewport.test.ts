@@ -129,15 +129,18 @@ describe("map route viewport integration", () => {
     "utf8",
   );
 
-  it("keeps pagination lazy and binds initial plus route-reload viewport refreshes", () => {
+  it("keeps pagination lazy and retains explicit latest-request guards", () => {
     expect(pageSource).not.toContain('from "$lib/map/cursorPagination"');
     expect(pageSource).toContain("await refreshNodeViewport();");
-    expect(pageSource).toContain("if (!mapHasLoaded) return;");
+    expect(pageSource).toContain("pendingViewportRefresh = true;");
+    expect(pageSource).toContain(
+      "void refreshNodeViewport().then(() => finishInitialLoading(generation))",
+    );
     expect(pageSource).toContain(
       'map.on("moveend", handleNodeViewportMoveEnd)',
     );
     expect(pageSource).toMatch(
-      /const currentRouteStatus = data\.resourceStatus;[\s\S]*requestNodeViewportRefresh\?\.\(\);/,
+      /const currentRouteStatus = data\.resourceStatus \?\? null;[\s\S]*requestNodeViewportRefresh\?\.\(\);/,
     );
     expect(pageSource).toContain("new AbortController()");
     expect(pageSource).toContain("viewportNodeAbortController?.abort();");

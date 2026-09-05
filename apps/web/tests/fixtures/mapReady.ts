@@ -5,12 +5,12 @@ export const ACCOUNT_MARKER_SELECTOR =
   '.map-marker[data-marker-category="account"]';
 
 export async function waitForMapReady(page: Page): Promise<void> {
+  const map = page.locator("#map");
+  await expect(map).toBeVisible({ timeout: 15_000 });
   await expect(page.locator(".loading-overlay")).toHaveCount(0, {
     timeout: 15_000,
   });
-  await expect(page.locator("#map")).not.toHaveClass(/map-loading/, {
-    timeout: 15_000,
-  });
+  await expect(map).not.toHaveClass(/map-loading/, { timeout: 15_000 });
 }
 
 async function waitForMarker(page: Page, selector: string): Promise<Locator> {
