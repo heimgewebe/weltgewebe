@@ -15,7 +15,13 @@
     type RelatedMapSelection,
   } from "$lib/components/map/mapRouteEvents";
   import type { NodeSearchStatus } from "$lib/api/search";
-  import type { MapEdge, MapEntityViewModel, Node } from "$lib/map/types";
+  import {
+    summarizeMapResourceStatus,
+    type MapEdge,
+    type MapEntityViewModel,
+    type MapResourceStatus,
+    type Node,
+  } from "$lib/map/types";
   import {
     deriveSearchDirectionIndicators,
     resolveInitialMapCamera,
@@ -204,6 +210,16 @@
   let usableSearchViewportCache: ViewportBounds | null = null;
   let searchViewportGeometryDirty = true;
   let searchViewportResizeObserver: ResizeObserver | null = null;
+  let viewportNodes: Node[] = $state([]);
+  let viewportNodeStatus: MapResourceStatus | null = $state(null);
+  let viewportNodeAbortController: AbortController | null = null;
+  let viewportNodeSequence = 0;
+  let requestNodeViewportRefresh: (() => void) | null = null;
+  let pendingViewportRefresh = false;
+  let viewportRouteStatusInitialized = false;
+  let lastViewportRouteStatus: PageData["resourceStatus"] | null = null;
+  let lastViewportBootstrapKey: string | null = null;
+  let viewportBootstrapReleased = $state(false);
 
   function measureUsableSearchViewport(): ViewportBounds | null {
     if (!mapContainer) return null;
@@ -627,6 +643,10 @@
       cleanupAuthCamera = undefined;
       searchViewportResizeObserver?.disconnect();
       searchViewportResizeObserver = null;
+      viewportNodeAbortController?.abort();
+      viewportNodeAbortController = null;
+      viewportNodeSequence += 1;
+      requestNodeViewportRefresh = null;
       if (searchDirectionFrame !== null) {
         window.cancelAnimationFrame(searchDirectionFrame);
         searchDirectionFrame = null;
@@ -640,6 +660,7 @@
       resolveMotionInput = null;
       if (map) {
         map.off("move", handleSearchMapMove);
+        map.off("moveend", handleNodeViewportMoveEnd);
         map.off("resize", handleSearchMapResize);
         map.off("styledata", handleMapStyleData);
         map.off("idle", rehydrateMapOverlays);
@@ -681,6 +702,72 @@
     };
     const handleSearchMapResize = () => {
       invalidateSearchViewportGeometry();
+    };
+    const refreshNodeViewport = async () => {
+      if (!map || data.nodeLoadMode !== "viewport" || destroyed) return;
+      const bounds = map.getBounds();
+      const sequence = ++viewportNodeSequence;
+      viewportNodeAbortController?.abort();
+      const controller = new AbortController();
+      viewportNodeAbortController = controller;
+      try {
+        const { fetchNodeViewport } = await import("$lib/map/nodeViewport");
+        const result = await fetchNodeViewport(
+          (url) => fetch(url, { signal: controller.signal }),
+          import.meta.env.PUBLIC_GEWEBE_API_BASE ?? "",
+          {
+            west: bounds.getWest(),
+            south: bounds.getSouth(),
+            east: bounds.getEast(),
+            north: bounds.getNorth(),
+          },
+        );
+        if (destroyed || controller.signal.aborted || sequence !== viewportNodeSequence)
+          return;
+        viewportNodes = result.items;
+        if (!viewportBootstrapReleased) {
+          const viewportIds = new Set(result.items.map((node) => node.id));
+          viewportBootstrapReleased = (data.nodes ?? []).every((node) =>
+            viewportIds.has(node.id),
+          );
+        }
+        viewportNodeStatus =
+          result.status === "complete"
+            ? {
+                resource: "nodes",
+                status: "viewport",
+                loaded: result.items.length,
+                pages: result.pages,
+              }
+            : {
+                resource: "nodes",
+                status: "truncated",
+                loaded: result.items.length,
+                pages: result.pages,
+                reason: result.reason,
+              };
+      } catch (error) {
+        if (destroyed || controller.signal.aborted || sequence !== viewportNodeSequence)
+          return;
+        viewportNodeStatus = {
+          resource: "nodes",
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+        };
+      } finally {
+        if (viewportNodeAbortController === controller)
+          viewportNodeAbortController = null;
+      }
+    };
+    requestNodeViewportRefresh = () => {
+      void refreshNodeViewport();
+    };
+    const handleNodeViewportMoveEnd = () => {
+      if (!mapHasLoaded) {
+        pendingViewportRefresh = true;
+        return;
+      }
+      void refreshNodeViewport();
     };
     let styleRehydrateQueued = false;
     let styleRehydrateGeneration = 0;
@@ -726,6 +813,12 @@
       const currentScheme = readDocumentColorScheme();
       if (currentScheme !== activeBasemapScheme) {
         switchBasemapScheme(currentScheme);
+        return;
+      }
+      if (pendingViewportRefresh) {
+        pendingViewportRefresh = false;
+        lastViewportRouteStatus = data.resourceStatus ?? null;
+        void refreshNodeViewport().then(() => finishInitialLoading(generation));
         return;
       }
       mapHasLoaded = true;
@@ -857,6 +950,7 @@
         transformRequest: transformRequestFn,
       });
       map.on("move", handleSearchMapMove);
+      map.on("moveend", handleNodeViewportMoveEnd);
       map.on("styledata", handleMapStyleData);
       stopColorSchemeObserver = observeDocumentColorScheme((scheme) => {
         switchBasemapScheme(scheme);
@@ -914,7 +1008,12 @@
       );
       map.on("resize", handleSearchMapResize);
 
-      map.once("load", () => {
+      map.once("load", async () => {
+        // The initial visible-node request is part of readiness: do not reveal
+        // an empty map and let markers pop in a frame later. If a route
+        // invalidation or camera move arrives while that request is in flight,
+        // replay the latest visible viewport before revealing the map.
+        await refreshNodeViewport();
         // MapLibre emits this map-level event only once. Bind acceptance to
         // whatever basemap generation is current at that moment rather than to
         // the constructor's original style. If the document scheme changed at
@@ -1004,19 +1103,75 @@
   function retryMapInitialisation() {
     window.location.reload();
   }
+  // A genuinely different deep-link bootstrap node needs one fresh handoff
+  // into the viewport scene. Re-fetching the same node during invalidation must
+  // not reopen that handoff after it was already released.
+  $effect.pre(() => {
+    const currentBootstrapKey = (data.nodes ?? []).map((node) => node.id).join("\0");
+    if (currentBootstrapKey === lastViewportBootstrapKey) return;
+    lastViewportBootstrapKey = currentBootstrapKey;
+    viewportBootstrapReleased = false;
+  });
+
+  // A domain-data invalidation can create/delete a node without moving the map.
+  // Refresh the same visible bbox whenever SvelteKit replaces the route resource
+  // status snapshot so the viewport converges even when no moveend occurs.
+  $effect.pre(() => {
+    const currentRouteStatus = data.resourceStatus ?? null;
+    if (!viewportRouteStatusInitialized) {
+      viewportRouteStatusInitialized = true;
+      lastViewportRouteStatus = currentRouteStatus;
+      return;
+    }
+    if (currentRouteStatus === lastViewportRouteStatus) return;
+    if (data.nodeLoadMode !== "viewport") {
+      lastViewportRouteStatus = currentRouteStatus;
+      pendingViewportRefresh = false;
+      return;
+    }
+    if (!mapHasLoaded) {
+      pendingViewportRefresh = true;
+      return;
+    }
+    lastViewportRouteStatus = currentRouteStatus;
+    requestNodeViewportRefresh?.();
+  });
+
   // Phase 2: Build the scene from request-scoped route data. The scene stays
   // local to this component instance (never a module-level store), so no
   // request-specific data is shared across module state. The presentation
   // derivations live as pure functions in `$lib/stores/mapView` and are fed the
   // scene together with the ephemeral UI state (filters, search).
+  let sceneNodes = $derived.by(() => {
+    if (data.nodeLoadMode !== "viewport") return data.nodes || [];
+    const byId = new Map<string, Node>();
+    for (const node of viewportNodes) byId.set(node.id, node);
+    // Route data contains at most the exact deep-link node in viewport mode.
+    // Keep that bootstrap anchor only until a successful bbox response includes
+    // it; otherwise an offscreen deep link would become a permanent scene leak.
+    if (!viewportBootstrapReleased) {
+      for (const node of data.nodes || []) byId.set(node.id, node);
+    }
+    return Array.from(byId.values());
+  });
+  let effectiveResourceStatus = $derived.by(() => {
+    const statuses = data.resourceStatus ?? [];
+    if (data.nodeLoadMode !== "viewport" || !viewportNodeStatus) return statuses;
+    return statuses.map((status) =>
+      status.resource === "nodes" ? viewportNodeStatus! : status,
+    );
+  });
+  let resourceSummary = $derived.by(() =>
+    summarizeMapResourceStatus(effectiveResourceStatus),
+  );
   let scene = $derived.by(() =>
     buildMapScene({
-      nodes: applyNodeUpdateOverrides(data.nodes || [], nodeUpdateOverrides),
+      nodes: applyNodeUpdateOverrides(sceneNodes, nodeUpdateOverrides),
       accounts: data.accounts || [],
       edges: data.edges || [],
       webgemeindezentren: data.webgemeindezentren || [],
-      loadState: data.loadState ?? "ok",
-      resourceStatus: data.resourceStatus ?? [],
+      loadState: resourceSummary.loadState,
+      resourceStatus: effectiveResourceStatus,
       apiBase: import.meta.env.PUBLIC_GEWEBE_API_BASE,
       basemapMode: currentBasemap.mode,
     }),
@@ -1249,7 +1404,7 @@
 >
   <MapRouteStatus
     {loadState}
-    loadNotice={data.loadNotice}
+    loadNotice={resourceSummary.loadNotice}
     loading={isLoading}
     initFailed={mapInitFailed}
     showDebug={import.meta.env.DEV || import.meta.env.MODE === "test"}

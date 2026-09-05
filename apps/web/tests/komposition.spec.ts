@@ -111,7 +111,40 @@ test.describe("Komposition Flow (weber)", () => {
 
     const submitBtn = panel.locator('button[type="submit"]');
     await expect(submitBtn).toBeEnabled();
+    await page.waitForFunction(() =>
+      Boolean(
+        (window as any).__TEST_MAP__ &&
+        !(window as any).__TEST_MAP__.isMoving(),
+      ),
+    );
+    const boundsBeforeSubmit = await page.evaluate(() => {
+      const bounds = (window as any).__TEST_MAP__.getBounds();
+      return {
+        west: bounds.getWest(),
+        south: bounds.getSouth(),
+        east: bounds.getEast(),
+        north: bounds.getNorth(),
+      };
+    });
+    const routeReloadViewport = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return (
+        request.method() === "GET" &&
+        url.pathname === "/api/nodes" &&
+        url.searchParams.has("bbox")
+      );
+    });
     await submitBtn.click();
+    const routeReloadRequest = await routeReloadViewport;
+    const routeReloadUrl = new URL(routeReloadRequest.url());
+    const routeReloadBbox = (routeReloadUrl.searchParams.get("bbox") ?? "")
+      .split(",")
+      .map(Number);
+    expect(routeReloadBbox).toHaveLength(4);
+    expect(routeReloadBbox[0]).toBeCloseTo(boundsBeforeSubmit.west, 5);
+    expect(routeReloadBbox[1]).toBeCloseTo(boundsBeforeSubmit.south, 5);
+    expect(routeReloadBbox[2]).toBeCloseTo(boundsBeforeSubmit.east, 5);
+    expect(routeReloadBbox[3]).toBeCloseTo(boundsBeforeSubmit.north, 5);
 
     // Node created with the form's values before any edge is attempted.
     const nodeReq = await nodeRequest;
@@ -139,6 +172,43 @@ test.describe("Komposition Flow (weber)", () => {
     // The panel leaves komposition mode and the new node is focused: the
     // context panel now shows "Knoten" instead of the create form.
     await expect(panel.locator("h2")).toContainText("Knoten");
+
+    // `lastCreatedNodeId` is a one-shot intent. After the focus has settled,
+    // a later viewport refresh must not snap the camera back to the new node.
+    await page.waitForFunction(() =>
+      Boolean(
+        (window as any).__TEST_MAP__ &&
+        !(window as any).__TEST_MAP__.isMoving(),
+      ),
+    );
+    const shiftedViewportRefresh = page.waitForRequest((request) => {
+      const url = new URL(request.url());
+      return (
+        request.method() === "GET" &&
+        url.pathname === "/api/nodes" &&
+        url.searchParams.has("bbox")
+      );
+    });
+    const shiftedCenter = await page.evaluate(() => {
+      const map = (window as any).__TEST_MAP__;
+      const center = map.getCenter();
+      const target = { lng: center.lng + 0.02, lat: center.lat };
+      map.jumpTo({ center: [target.lng, target.lat] });
+      return target;
+    });
+    await shiftedViewportRefresh;
+    await page.waitForFunction(() =>
+      Boolean(
+        (window as any).__TEST_MAP__ &&
+        !(window as any).__TEST_MAP__.isMoving(),
+      ),
+    );
+    const centerAfterRefresh = await page.evaluate(() => {
+      const center = (window as any).__TEST_MAP__.getCenter();
+      return { lng: center.lng, lat: center.lat };
+    });
+    expect(centerAfterRefresh.lng).toBeCloseTo(shiftedCenter.lng, 4);
+    expect(centerAfterRefresh.lat).toBeCloseTo(shiftedCenter.lat, 4);
   });
 
   test("Node retry reuses its operation id while unchanged form data starts no second action", async ({

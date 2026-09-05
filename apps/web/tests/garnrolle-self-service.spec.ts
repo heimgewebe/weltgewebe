@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { waitForMapReady } from "./fixtures/mapReady";
 
 const ACCOUNT_ID = "00000000-0000-0000-0000-000000000003";
 
@@ -473,6 +474,7 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
       },
     });
     await page.goto("/map?compose=garnrolle");
+    await waitForMapReady(page);
     const placement = page.locator('[data-testid="garnrolle-placement"]');
     await expect(placement).toContainText("Ort ausstehend");
 
@@ -502,6 +504,7 @@ test.describe("Garnrollen-Kartenpunkt per Touch", () => {
       },
     });
     await page.goto("/map?compose=garnrolle");
+    await waitForMapReady(page);
     const placement = page.locator('[data-testid="garnrolle-placement"]');
     await expect(placement).toContainText("Ort ausstehend");
 

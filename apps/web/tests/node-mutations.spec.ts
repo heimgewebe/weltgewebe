@@ -1,17 +1,11 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
+import { waitForNodeMarker } from "./fixtures/mapReady";
 
 async function openFirstNode(page: Page) {
-  await page.waitForSelector(".map-marker", { timeout: 10000 });
-  await page.evaluate(() => {
-    const markers = Array.from(
-      document.querySelectorAll(".map-marker"),
-    ) as HTMLElement[];
-    const nodeMarker =
-      markers.find(
-        (marker) => !marker.classList.contains("garnrolle-marker"),
-      ) ?? markers[0];
-    nodeMarker?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+  const nodeMarker = await waitForNodeMarker(page);
+  await nodeMarker.evaluate((marker) => {
+    marker.dispatchEvent(new MouseEvent("click", { bubbles: true }));
   });
   const panel = page.locator('[data-testid="context-panel"]');
   await expect(panel).toBeVisible();

@@ -1,11 +1,12 @@
-import type {
-  Account,
-  Edge,
-  MapLoadState,
-  MapResourceName,
-  MapResourceStatus,
-  Node,
-  Webgemeindezentrum,
+import {
+  summarizeMapResourceStatus,
+  type Account,
+  type Edge,
+  type MapLoadState,
+  type MapResourceName,
+  type MapResourceStatus,
+  type Node,
+  type Webgemeindezentrum,
 } from "./types";
 
 export const MAP_CURSOR_PAGE_SIZE = 1000;
@@ -34,6 +35,12 @@ export type CursorPaginationOptions = {
 };
 
 export type MapResourceTransport = "cursor" | "static-list";
+export type MapNodeLoadMode = "global" | "viewport";
+
+export type MapResourceLoadOptions = {
+  nodeLoadMode?: MapNodeLoadMode;
+  focusedNodeId?: string | null;
+};
 
 type FetchLike = (input: string) => Promise<Response>;
 
@@ -254,14 +261,51 @@ export type MapResourceLoad = {
   loadState: MapLoadState;
   loadNotice: string | null;
   resourceStatus: MapResourceStatus[];
+  nodeLoadMode: MapNodeLoadMode;
 };
+
+async function fetchFocusedNode(
+  fetcher: FetchLike,
+  apiUrl: string,
+  nodeId: string,
+): Promise<Node | null> {
+  const response = await fetcher(
+    `${apiUrl}/api/nodes/${encodeURIComponent(nodeId)}`,
+  );
+  if (response.status === 404) return null;
+  if (!response.ok) {
+    throw new CursorPaginationError(
+      `HTTP ${response.status} while loading focused node`,
+    );
+  }
+  let body: unknown;
+  try {
+    body = await response.json();
+  } catch {
+    throw new CursorPaginationError("Invalid JSON while loading focused node");
+  }
+  if (
+    !isRecord(body) ||
+    body.id !== nodeId ||
+    !isRecord(body.location) ||
+    typeof body.location.lat !== "number" ||
+    !Number.isFinite(body.location.lat) ||
+    typeof body.location.lon !== "number" ||
+    !Number.isFinite(body.location.lon)
+  ) {
+    throw new CursorPaginationError("Invalid focused node response shape");
+  }
+  return body as unknown as Node;
+}
 
 /** Load all map resources while preserving complete, truncated and failed truth. */
 export async function loadMapResources(
   fetcher: FetchLike,
   apiUrl: string,
   transport: MapResourceTransport = "cursor",
+  options: MapResourceLoadOptions = {},
 ): Promise<MapResourceLoad> {
+  const nodeLoadMode = options.nodeLoadMode ?? "global";
   async function loadResource<T>(
     resource: MapResourceName,
     fallback: T[] = [],
@@ -301,9 +345,41 @@ export async function loadMapResources(
     }
   }
 
+  async function loadViewportNodeBootstrap(): Promise<{
+    items: Node[];
+    status: MapResourceStatus;
+  }> {
+    try {
+      const focusedNode = options.focusedNodeId
+        ? await fetchFocusedNode(fetcher, apiUrl, options.focusedNodeId)
+        : null;
+      const items = focusedNode ? [focusedNode] : [];
+      return {
+        items,
+        status: {
+          resource: "nodes",
+          status: "viewport",
+          loaded: items.length,
+          pages: 0,
+        },
+      };
+    } catch (error) {
+      return {
+        items: [],
+        status: {
+          resource: "nodes",
+          status: "failed",
+          error: error instanceof Error ? error.message : String(error),
+        },
+      };
+    }
+  }
+
   const [nodesResult, accountsResult, edgesResult, centersResult] =
     await Promise.all([
-      loadResource<Node>("nodes"),
+      nodeLoadMode === "viewport"
+        ? loadViewportNodeBootstrap()
+        : loadResource<Node>("nodes"),
       loadResource<Account>("accounts"),
       loadResource<Edge>("edges"),
       loadResource<Webgemeindezentrum>("webgemeindezentren"),
@@ -318,43 +394,7 @@ export async function loadMapResources(
     edgesResult.status,
     centersResult.status,
   ];
-  const failedCount = resourceStatus.filter(
-    (status) => status.status === "failed",
-  ).length;
-  const completeCount = resourceStatus.filter(
-    (status) => status.status === "complete",
-  ).length;
-  const loadState: MapLoadState =
-    failedCount === resourceStatus.length
-      ? "failed"
-      : completeCount === resourceStatus.length
-        ? "ok"
-        : "partial";
-  const resourceLabels: Record<MapResourceName, string> = {
-    nodes: "Knoten",
-    accounts: "Garnrollen",
-    edges: "Fäden",
-    webgemeindezentren: "Webgemeindezentren",
-  };
-  const labelsFor = (status: "failed" | "truncated") =>
-    resourceStatus
-      .filter((entry) => entry.status === status)
-      .map((entry) => resourceLabels[entry.resource]);
-  const failedLabels = labelsFor("failed");
-  const truncatedLabels = labelsFor("truncated");
-  const loadNotice =
-    loadState === "partial"
-      ? [
-          failedLabels.length > 0
-            ? `Einige Kartendaten konnten nicht geladen werden (${failedLabels.join(", ")}).`
-            : null,
-          truncatedLabels.length > 0
-            ? `Der geladene Kartenbestand ist bewusst unvollständig (${truncatedLabels.join(", ")}).`
-            : null,
-        ]
-          .filter(Boolean)
-          .join(" ")
-      : null;
+  const { loadState, loadNotice } = summarizeMapResourceStatus(resourceStatus);
 
   return {
     nodes,
@@ -364,5 +404,6 @@ export async function loadMapResources(
     loadState,
     loadNotice,
     resourceStatus,
+    nodeLoadMode,
   };
 }

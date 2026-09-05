@@ -1,6 +1,11 @@
 import { test, expect } from "@playwright/test";
 import { mockApiResponses } from "./fixtures/mockApi";
 import { activateToolFanAction } from "./fixtures/toolFan";
+import {
+  ACCOUNT_MARKER_SELECTOR,
+  NODE_MARKER_SELECTOR,
+  waitForMapReady,
+} from "./fixtures/mapReady";
 
 test.describe("Map Interaction & Context Panel", () => {
   test.beforeEach(async ({ page }) => {
@@ -8,6 +13,7 @@ test.describe("Map Interaction & Context Panel", () => {
       auth: { authenticated: true, account_id: "e2e-weber", role: "weber" },
     });
     await page.goto("/map");
+    await waitForMapReady(page);
   });
 
   test("displays explicit OSM/ODbL attribution", async ({ page }) => {
@@ -159,11 +165,12 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Open panel on first marker
     // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
-    await page.evaluate(() => {
-      (
-        document.querySelectorAll(".map-marker")[0] as HTMLElement
-      )?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await page
+      .locator(NODE_MARKER_SELECTOR)
+      .first()
+      .evaluate((marker) => {
+        marker.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
 
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
@@ -176,11 +183,12 @@ test.describe("Map Interaction & Context Panel", () => {
 
       // Click a different marker
       // using page.evaluate because map markers overlap with other invisible MapLibre overlay elements
-      await page.evaluate(() => {
-        (
-          document.querySelectorAll(".map-marker")[1] as HTMLElement
-        )?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-      });
+      await page
+        .locator(ACCOUNT_MARKER_SELECTOR)
+        .first()
+        .evaluate((marker) => {
+          marker.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+        });
 
       // Harte Tab-Assertion: Die neue Selection sollte (falls Node) den Übersicht-Tab aktiv haben oder (falls Account) den Profil-Tab
       // Wir scopen auf das Panel und warten explizit auf den finalen DOM-Zustand, um Flakiness zu vermeiden.
@@ -254,16 +262,12 @@ test.describe("Map Interaction & Context Panel", () => {
 
     // Ensure we open a node. In our mock data, nodes usually have the title "Demo Node" or "Hamburg Workshop".
     // We can evaluate and click the first node marker.
-    await page.evaluate(() => {
-      const markers = Array.from(
-        document.querySelectorAll(".map-marker"),
-      ) as HTMLElement[];
-      // Try to find a node by finding a marker that doesn't look like an account (just a generic marker)
-      const nodeMarker =
-        markers.find((m) => !m.classList.contains("garnrolle-marker")) ||
-        markers[0];
-      nodeMarker?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await page
+      .locator(NODE_MARKER_SELECTOR)
+      .first()
+      .evaluate((marker) => {
+        marker.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
 
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();
@@ -583,15 +587,12 @@ test.describe("Map Interaction & Context Panel", () => {
     await page.waitForSelector(".map-marker", { timeout: 10000 });
 
     // Open an account. In our mock data, accounts usually use garnrolle markers.
-    await page.evaluate(() => {
-      const markers = Array.from(
-        document.querySelectorAll(".map-marker"),
-      ) as HTMLElement[];
-      const accountMarker =
-        markers.find((m) => m.classList.contains("garnrolle-marker")) ||
-        markers[markers.length - 1];
-      accountMarker?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await page
+      .locator(ACCOUNT_MARKER_SELECTOR)
+      .first()
+      .evaluate((marker) => {
+        marker.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      });
 
     const panel = page.locator('[data-testid="context-panel"]');
     await expect(panel).toBeVisible();

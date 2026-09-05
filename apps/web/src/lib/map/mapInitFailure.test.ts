@@ -178,7 +178,7 @@ describe("map page early init-timeout wiring", () => {
       "const finishInitialLoading = (generation: number) => {",
     );
     const loadListenerIdx = pageSource.indexOf(
-      'map.once("load", () => {',
+      'map.once("load", async () => {',
       finishIdx,
     );
     expect(finishIdx).toBeGreaterThan(-1);

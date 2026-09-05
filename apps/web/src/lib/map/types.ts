@@ -350,6 +350,12 @@ export type MapResourceStatus =
     }
   | {
       resource: MapResourceName;
+      status: "viewport";
+      loaded: number;
+      pages: number;
+    }
+  | {
+      resource: MapResourceName;
       status: "truncated";
       loaded: number;
       pages: number;
@@ -360,6 +366,49 @@ export type MapResourceStatus =
       status: "failed";
       error: string;
     };
+
+export function summarizeMapResourceStatus(
+  resourceStatus: MapResourceStatus[],
+): { loadState: MapLoadState; loadNotice: string | null } {
+  const failedCount = resourceStatus.filter(
+    (status) => status.status === "failed",
+  ).length;
+  const completeCount = resourceStatus.filter(
+    (status) => status.status === "complete" || status.status === "viewport",
+  ).length;
+  const loadState: MapLoadState =
+    failedCount === resourceStatus.length
+      ? "failed"
+      : completeCount === resourceStatus.length
+        ? "ok"
+        : "partial";
+  const resourceLabels: Record<MapResourceName, string> = {
+    nodes: "Knoten",
+    accounts: "Garnrollen",
+    edges: "Fäden",
+    webgemeindezentren: "Webgemeindezentren",
+  };
+  const labelsFor = (status: "failed" | "truncated") =>
+    resourceStatus
+      .filter((entry) => entry.status === status)
+      .map((entry) => resourceLabels[entry.resource]);
+  const failedLabels = labelsFor("failed");
+  const truncatedLabels = labelsFor("truncated");
+  const loadNotice =
+    loadState === "partial"
+      ? [
+          failedLabels.length > 0
+            ? `Einige Kartendaten konnten nicht geladen werden (${failedLabels.join(", ")}).`
+            : null,
+          truncatedLabels.length > 0
+            ? `Der geladene Kartenbestand ist bewusst unvollständig (${truncatedLabels.join(", ")}).`
+            : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
+      : null;
+  return { loadState, loadNotice };
+}
 
 // Phase 4: Diagnostics – separates API mode from basemap mode
 export type MapDiagnostics = {

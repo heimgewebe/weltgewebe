@@ -2,6 +2,7 @@ import { devices, expect, test, type Page } from "@playwright/test";
 import { FADEN_LIFETIME_MS } from "../src/lib/map/edgeLifecycle";
 import { demoAccounts, demoNodes } from "../src/lib/demo/demoData";
 import { mockApiResponses, mockListResponse } from "./fixtures/mockApi";
+import { waitForMapReady } from "./fixtures/mapReady";
 
 const EDGE_ID = "eb5f41ff-3e64-417e-ae7e-eecd9c886ecc";
 const NODE_ID = "b52be17c-4ab7-4434-98ce-520f86290cf0";
@@ -78,14 +79,18 @@ async function openMap(page: Page) {
   });
   await mockApiResponses(page);
   await page.goto("/map");
+  await waitForMapReady(page);
   try {
     await page.waitForFunction(
       () => {
         const map = window.__TEST_MAP__;
+        const staticFeatures =
+          map?.getSource("edges-source")?.serialize().data?.features ?? [];
         return Boolean(
           map?.isStyleLoaded() &&
           window.__TEST_EDGE_MOTION__ &&
-          map.getLayer("edges-layer"),
+          map.getLayer("edges-layer") &&
+          staticFeatures.length > 0,
         );
       },
       undefined,
