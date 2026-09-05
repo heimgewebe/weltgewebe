@@ -136,7 +136,7 @@ class DomainScaleTests(unittest.TestCase):
                     CONFIG,
                 )
 
-    def test_workload_sql_targets_filter_indexes_without_unrelated_ordering(self) -> None:
+    def test_workload_sql_matches_cursor_and_bbox_api_query_shapes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             fixture = root / "fixture"
@@ -152,6 +152,11 @@ class DomainScaleTests(unittest.TestCase):
             self.assertIn("ORDER BY id ASC LIMIT 1000", sql)
             self.assertIn("WHERE kind = 'Projekt' LIMIT 500", sql)
             self.assertNotIn("WHERE kind = 'Projekt' ORDER BY", sql)
+            self.assertIn(
+                "lat BETWEEN -10.0 AND 10.0 AND lon BETWEEN -10.0 AND 10.0 AND id >",
+                sql,
+            )
+            self.assertIn("ORDER BY id ASC LIMIT 1001", sql)
             self.assertNotIn("ORDER BY id ASC LIMIT 5000", sql)
             self.assertIn("WHERE source_id = 'node-", sql)
             self.assertIn("WHERE target_id = 'node-", sql)

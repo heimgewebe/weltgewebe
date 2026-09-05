@@ -502,7 +502,7 @@ def render_workload_sql(
         _explain_block(
             "bbox",
             plan_dir,
-            f"SELECT id, kind, title, lat, lon FROM {schema}.domain_nodes WHERE lat BETWEEN -10.0 AND 10.0 AND lon BETWEEN -10.0 AND 10.0 LIMIT 5000",
+            f"SELECT id, kind, title, lat, lon FROM {schema}.domain_nodes WHERE lat BETWEEN -10.0 AND 10.0 AND lon BETWEEN -10.0 AND 10.0 AND id > {_sql_literal(middle_node)} ORDER BY id ASC LIMIT 1001",
         ),
         _explain_block(
             "outbound_neighbors",

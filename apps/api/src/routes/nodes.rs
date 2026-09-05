@@ -19,9 +19,9 @@ use crate::config::{
 };
 use crate::domain_db::{
     delete_node_with_edges_in_postgres_audited, insert_domain_node_and_faden_with_creator_limit,
-    lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres_audited,
-    CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodeFadenCreateError,
-    NodePatchInput, NodeWriteError,
+    load_nodes_bbox_from_postgres, lock_node_faden_cache_publication, patch_node_in_postgres,
+    replace_node_in_postgres_audited, CreateOperationKey, NodeConversationDeleteEffect,
+    NodeCreateError, NodeFadenCreateError, NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::node_mutation::{
@@ -3689,6 +3689,59 @@ pub async fn list_nodes(
     let limit: usize = parse_usize_param(&params, "limit", 100)?.min(MAX_PAGE_SIZE);
     let (cursor_mode, after_id) = parse_cursor_params(&params)?;
     validate_cursor_limit(cursor_mode, limit)?;
+
+    if let Some(bb) = bbox
+        .as_ref()
+        .filter(|_| state.config.domain_read_source == DomainReadSource::Postgres)
+    {
+        let pool = state
+            .db_pool
+            .as_ref()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        if cursor_mode {
+            // Fetch one extra row so the existing wire contract can prove
+            // has_more without counting or materialising the global dataset.
+            let rows = load_nodes_bbox_from_postgres(
+                pool,
+                bb.min_lat,
+                bb.max_lat,
+                bb.min_lng,
+                bb.max_lng,
+                limit.saturating_add(1),
+                after_id.as_deref(),
+                0,
+            )
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "PostgreSQL node BBOX read failed");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?;
+            let refs: Vec<&Node> = rows.iter().collect();
+            let page = cursor_page(
+                refs,
+                limit,
+                None,
+                |node: &Node| node.id.as_str(),
+                |node: &Node| node.clone(),
+            );
+            return Ok(Json(ListResponse::Cursor(page)));
+        }
+
+        let offset: usize = parse_usize_param(&params, "offset", 0)?;
+        // PostgreSQL OFFSET is a signed 64-bit value. Treat a client-supplied
+        // value outside that wire range as bad input instead of surfacing it as
+        // an internal database/read failure.
+        let offset = i64::try_from(offset).map_err(|_| StatusCode::BAD_REQUEST)?;
+        let rows = load_nodes_bbox_from_postgres(
+            pool, bb.min_lat, bb.max_lat, bb.min_lng, bb.max_lng, limit, None, offset,
+        )
+        .await
+        .map_err(|error| {
+            tracing::error!(?error, "PostgreSQL legacy node BBOX read failed");
+            StatusCode::INTERNAL_SERVER_ERROR
+        })?;
+        return Ok(Json(ListResponse::Legacy(rows)));
+    }
 
     let cache = state.nodes.read().await;
 

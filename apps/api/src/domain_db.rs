@@ -192,6 +192,46 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
     Ok(cache)
 }
 
+/// Load one bounded, id-ordered node page directly from PostgreSQL for map BBOX reads.
+///
+/// The route keeps the historical in-memory/JSONL path for non-PostgreSQL
+/// deployments. PostgreSQL-backed viewport requests use this helper so global
+/// node cardinality is no longer scanned in process memory on every map move.
+pub async fn load_nodes_bbox_from_postgres(
+    pool: &PgPool,
+    min_lat: f64,
+    max_lat: f64,
+    min_lng: f64,
+    max_lng: f64,
+    limit: usize,
+    after_id: Option<&str>,
+    offset: i64,
+) -> Result<Vec<Node>> {
+    let limit = i64::try_from(limit).context("node BBOX limit exceeds PostgreSQL integer range")?;
+    let rows: Vec<NodeRow> = sqlx::query_as(
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
+         FROM domain_nodes \
+         WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 \
+           AND ($5::text IS NULL OR id > $5) \
+         ORDER BY id ASC LIMIT $6 OFFSET $7",
+    )
+    .bind(min_lat)
+    .bind(max_lat)
+    .bind(min_lng)
+    .bind(max_lng)
+    .bind(after_id)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .context("failed to load BBOX node page from domain_nodes")?;
+
+    rows.into_iter()
+        .map(node_from_row)
+        .collect::<Result<Vec<_>>>()
+        .context("failed to map BBOX node page from domain_nodes")
+}
+
 pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge>> {
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     // No SQL-side LIMIT: rejected rows must not consume a physical row slot
