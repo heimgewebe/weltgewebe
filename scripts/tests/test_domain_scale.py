@@ -111,6 +111,14 @@ class DomainScaleTests(unittest.TestCase):
             self.assertIn("DROP SCHEMA IF EXISTS weltgewebe_perf CASCADE", sql)
             self.assertIn("LIKE public.domain_nodes INCLUDING ALL", sql)
             self.assertIn("LIKE public.domain_edges INCLUDING ALL", sql)
+            self.assertIn(
+                "ADD COLUMN IF NOT EXISTS search_visibility TEXT NOT NULL DEFAULT 'public'",
+                " ".join(sql.split()),
+            )
+            self.assertLess(
+                sql.index("ADD COLUMN IF NOT EXISTS search_visibility"),
+                sql.index("\\copy weltgewebe_perf.domain_nodes"),
+            )
             self.assertNotIn("DROP SCHEMA IF EXISTS public", sql)
             self.assertNotIn("TRUNCATE", sql.upper())
             self.assertNotIn("DELETE FROM public", sql)

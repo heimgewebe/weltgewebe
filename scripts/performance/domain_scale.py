@@ -452,6 +452,12 @@ CREATE SCHEMA {schema};
 CREATE TABLE {schema}.domain_nodes (LIKE public.domain_nodes INCLUDING ALL);
 CREATE TABLE {schema}.domain_edges (LIKE public.domain_edges INCLUDING ALL);
 
+-- The scale foundation intentionally creates only the early domain tables.
+-- Later production columns used by measured queries must still exist in the
+-- isolated benchmark schema so the exact production SQL can execute unchanged.
+ALTER TABLE {schema}.domain_nodes
+    ADD COLUMN IF NOT EXISTS search_visibility TEXT NOT NULL DEFAULT 'public';
+
 \\copy {schema}.domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) FROM {_psql_meta_path_literal(nodes_path)} WITH (FORMAT csv, HEADER true)
 \\copy {schema}.domain_edges (id, source_id, target_id, edge_kind, created_at, payload) FROM {_psql_meta_path_literal(edges_path)} WITH (FORMAT csv, HEADER true)
 
