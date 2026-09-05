@@ -69,7 +69,7 @@ class DomainScaleTests(unittest.TestCase):
                     domain_scale.validate_config(unsafe)
 
         broken = json.loads(json.dumps(config))
-        del broken["plan_budgets"]["workloads"]["bbox"]["required_index"]
+        del broken["plan_budgets"]["workloads"]["bbox_cursor"]["required_index"]
         with self.assertRaisesRegex(domain_scale.DomainScaleError, "required_index"):
             domain_scale.validate_config(broken)
 
@@ -145,7 +145,7 @@ class DomainScaleTests(unittest.TestCase):
             output = root / "workload.sql"
             domain_scale.render_workload_sql(fixture / "manifest.json", plans, output, CONFIG)
             sql = output.read_text(encoding="utf-8")
-            self.assertEqual(sql.count("EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)"), 6)
+            self.assertEqual(sql.count("EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)"), 7)
             for workload in domain_scale.WORKLOAD_ORDER:
                 self.assertIn(f"{workload}.json", sql)
             self.assertIn("WHERE id >", sql)
@@ -153,9 +153,20 @@ class DomainScaleTests(unittest.TestCase):
             self.assertIn("WHERE kind = 'Projekt' LIMIT 500", sql)
             self.assertNotIn("WHERE kind = 'Projekt' ORDER BY", sql)
             self.assertIn(
-                "lat BETWEEN -10.0 AND 10.0 AND lon BETWEEN -10.0 AND 10.0 AND id >",
+                "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 ORDER BY id ASC LIMIT 1001 OFFSET 0",
                 sql,
             )
+            self.assertIn(
+                "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 AND id >",
+                sql,
+            )
+            self.assertEqual(
+                sql.count(
+                    "id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0"
+                ),
+                2,
+            )
+            self.assertIn("ORDER BY id ASC LIMIT 1001 OFFSET 0", sql)
             self.assertIn("ORDER BY id ASC LIMIT 1001", sql)
             self.assertNotIn("ORDER BY id ASC LIMIT 5000", sql)
             self.assertIn("WHERE source_id = 'node-", sql)
@@ -172,27 +183,27 @@ class DomainScaleTests(unittest.TestCase):
             for workload in domain_scale.WORKLOAD_ORDER:
                 self.assertTrue(report["workloads"][workload]["required_index_evidence"])
 
-            wrong_index = _good_plan(config, "bbox")
+            wrong_index = _good_plan(config, "bbox_cursor")
             wrong_index[0]["Plan"]["Plans"][0]["Index Name"] = "domain_nodes_pkey"  # type: ignore[index]
-            _write_json(plan_dir / "bbox.json", wrong_index)
+            _write_json(plan_dir / "bbox_cursor.json", wrong_index)
             failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(failed["status"], "fail")
             self.assertTrue(any("domain_nodes_lat_lon" in item for item in failed["failures"]))
 
             _write_good_plans(config, plan_dir)
-            wrong_condition = _good_plan(config, "bbox")
+            wrong_condition = _good_plan(config, "bbox_cursor")
             wrong_condition[0]["Plan"]["Plans"][0]["Index Cond"] = (
                 "(latitude IS NOT NULL) AND (longitude IS NOT NULL)"
             )  # type: ignore[index]
-            _write_json(plan_dir / "bbox.json", wrong_condition)
+            _write_json(plan_dir / "bbox_cursor.json", wrong_condition)
             condition_failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(condition_failed["status"], "fail")
             self.assertTrue(any("matching Index Cond" in item for item in condition_failed["failures"]))
 
             _write_good_plans(config, plan_dir)
-            not_executed = _good_plan(config, "bbox")
+            not_executed = _good_plan(config, "bbox_cursor")
             not_executed[0]["Plan"]["Plans"][0]["Actual Loops"] = 0  # type: ignore[index]
-            _write_json(plan_dir / "bbox.json", not_executed)
+            _write_json(plan_dir / "bbox_cursor.json", not_executed)
             execution_failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(execution_failed["status"], "fail")
             self.assertTrue(any("was not executed" in item for item in execution_failed["failures"]))

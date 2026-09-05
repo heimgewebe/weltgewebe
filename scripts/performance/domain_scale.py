@@ -30,7 +30,8 @@ EDGE_KINDS = ("bezieht_sich_auf", "wirkt_mit", "liegt_bei", "teilt", "antwortet_
 WORKLOAD_ORDER = (
     "node_cursor",
     "edge_cursor",
-    "bbox",
+    "bbox_initial",
+    "bbox_cursor",
     "outbound_neighbors",
     "inbound_neighbors",
     "kind_filter",
@@ -488,6 +489,9 @@ def render_workload_sql(
     middle_edge = _edge_id(edge_count // 2)
     neighbor_node = _node_id(node_count // 3)
     plan_dir.mkdir(parents=True, exist_ok=True)
+    node_projection = (
+        "id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility"
+    )
     blocks = [
         _explain_block(
             "node_cursor",
@@ -500,9 +504,14 @@ def render_workload_sql(
             f"SELECT id, source_id, target_id, edge_kind FROM {schema}.domain_edges WHERE id > {_sql_literal(middle_edge)} ORDER BY id ASC LIMIT 1000",
         ),
         _explain_block(
-            "bbox",
+            "bbox_initial",
             plan_dir,
-            f"SELECT id, kind, title, lat, lon FROM {schema}.domain_nodes WHERE lat BETWEEN -10.0 AND 10.0 AND lon BETWEEN -10.0 AND 10.0 AND id > {_sql_literal(middle_node)} ORDER BY id ASC LIMIT 1001",
+            f"SELECT {node_projection} FROM {schema}.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 ORDER BY id ASC LIMIT 1001 OFFSET 0",
+        ),
+        _explain_block(
+            "bbox_cursor",
+            plan_dir,
+            f"SELECT {node_projection} FROM {schema}.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 AND id > {_sql_literal(middle_node)} ORDER BY id ASC LIMIT 1001",
         ),
         _explain_block(
             "outbound_neighbors",

@@ -9,8 +9,8 @@ use super::{
     },
     health::{ensure_jsonl_size, load_policy_limits, PolicyLimits},
     query::{
-        cursor_page, parse_cursor_params, parse_usize_param, validate_cursor_limit, ListResponse,
-        MAX_PAGE_SIZE,
+        cursor_page, encode_cursor, parse_cursor_params, parse_usize_param, validate_cursor_limit,
+        CursorPage, ListResponse, PageMeta, MAX_PAGE_SIZE,
     },
 };
 use crate::auth::role::Role;
@@ -19,9 +19,10 @@ use crate::config::{
 };
 use crate::domain_db::{
     delete_node_with_edges_in_postgres_audited, insert_domain_node_and_faden_with_creator_limit,
-    load_nodes_bbox_from_postgres, lock_node_faden_cache_publication, patch_node_in_postgres,
-    replace_node_in_postgres_audited, CreateOperationKey, NodeConversationDeleteEffect,
-    NodeCreateError, NodeFadenCreateError, NodePatchInput, NodeWriteError,
+    load_node_from_postgres, load_nodes_bbox_after_id_from_postgres, load_nodes_bbox_from_postgres,
+    lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres_audited,
+    CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodeFadenCreateError,
+    NodePatchInput, NodeWriteError,
 };
 use crate::middleware::auth::AuthContext;
 use crate::node_mutation::{
@@ -718,15 +719,32 @@ pub async fn get_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<NodeDetails>, StatusCode> {
-    // Clone before reading accounts so this endpoint never holds several state
-    // locks at once.
-    let node = state
-        .nodes
-        .read()
-        .await
-        .get(&id)
-        .cloned()
-        .ok_or(StatusCode::NOT_FOUND)?;
+    // PostgreSQL-backed map BBOX reads are authoritative database reads. Keep
+    // the focused node detail path on the same source so a freshly committed
+    // node cannot be visible on the map yet transiently 404 from a stale cache.
+    let node = if state.config.domain_read_source == DomainReadSource::Postgres {
+        let pool = state
+            .db_pool
+            .as_ref()
+            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
+        load_node_from_postgres(pool, &id)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, node_id = %id, "PostgreSQL node detail read failed");
+                StatusCode::INTERNAL_SERVER_ERROR
+            })?
+            .ok_or(StatusCode::NOT_FOUND)?
+    } else {
+        // Clone before reading accounts so this endpoint never holds several
+        // state locks at once.
+        state
+            .nodes
+            .read()
+            .await
+            .get(&id)
+            .cloned()
+            .ok_or(StatusCode::NOT_FOUND)?
+    };
     let created_by_account_current_title = match node.created_by_account_id.as_deref() {
         Some(account_id) => state
             .accounts
@@ -3678,6 +3696,31 @@ async fn patch_node_jsonl(
         .ok_or(NodeMutationError::Status(StatusCode::INTERNAL_SERVER_ERROR))
 }
 
+/// Build a cursor envelope from rows already ordered by PostgreSQL.
+///
+/// `cursor_page` sorts in Rust. PostgreSQL text collation can differ from Rust
+/// string ordering, so SQL-backed pagination must preserve the database order
+/// used by both `ORDER BY id` and the next page's `id > cursor` predicate.
+fn postgres_bbox_cursor_page(mut rows: Vec<Node>, limit: usize) -> CursorPage<Node> {
+    let has_more = rows.len() > limit;
+    if has_more {
+        rows.truncate(limit);
+    }
+    let next_cursor = if has_more {
+        rows.last().map(|node| encode_cursor(&node.id))
+    } else {
+        None
+    };
+    CursorPage {
+        items: rows,
+        page: PageMeta {
+            limit,
+            next_cursor,
+            has_more,
+        },
+    }
+}
+
 pub async fn list_nodes(
     State(state): State<ApiState>,
     Query(params): Query<HashMap<String, String>>,
@@ -3701,29 +3744,35 @@ pub async fn list_nodes(
         if cursor_mode {
             // Fetch one extra row so the existing wire contract can prove
             // has_more without counting or materialising the global dataset.
-            let rows = load_nodes_bbox_from_postgres(
-                pool,
-                bb.min_lat,
-                bb.max_lat,
-                bb.min_lng,
-                bb.max_lng,
-                limit.saturating_add(1),
-                after_id.as_deref(),
-                0,
-            )
-            .await
+            // Initial and anchored pages use separate SQL statements so the
+            // planner never has to optimise a nullable cursor `OR`.
+            let rows = match after_id.as_deref() {
+                Some(after_id) => load_nodes_bbox_after_id_from_postgres(
+                    pool,
+                    bb.min_lat,
+                    bb.max_lat,
+                    bb.min_lng,
+                    bb.max_lng,
+                    limit.saturating_add(1),
+                    after_id,
+                )
+                .await,
+                None => load_nodes_bbox_from_postgres(
+                    pool,
+                    bb.min_lat,
+                    bb.max_lat,
+                    bb.min_lng,
+                    bb.max_lng,
+                    limit.saturating_add(1),
+                    0,
+                )
+                .await,
+            }
             .map_err(|error| {
                 tracing::error!(?error, "PostgreSQL node BBOX read failed");
                 StatusCode::INTERNAL_SERVER_ERROR
             })?;
-            let refs: Vec<&Node> = rows.iter().collect();
-            let page = cursor_page(
-                refs,
-                limit,
-                None,
-                |node: &Node| node.id.as_str(),
-                |node: &Node| node.clone(),
-            );
+            let page = postgres_bbox_cursor_page(rows, limit);
             return Ok(Json(ListResponse::Cursor(page)));
         }
 
@@ -3733,7 +3782,7 @@ pub async fn list_nodes(
         // an internal database/read failure.
         let offset = i64::try_from(offset).map_err(|_| StatusCode::BAD_REQUEST)?;
         let rows = load_nodes_bbox_from_postgres(
-            pool, bb.min_lat, bb.max_lat, bb.min_lng, bb.max_lng, limit, None, offset,
+            pool, bb.min_lat, bb.max_lat, bb.min_lng, bb.max_lng, limit, offset,
         )
         .await
         .map_err(|error| {
@@ -3776,6 +3825,41 @@ pub async fn list_nodes(
             .cloned()
             .collect();
         Ok(Json(ListResponse::Legacy(out)))
+    }
+}
+
+#[cfg(test)]
+mod postgres_bbox_cursor_page_tests {
+    use super::*;
+
+    fn node(id: &str) -> Node {
+        map_json_to_node(&json!({
+            "id": id,
+            "kind": "place",
+            "title": id,
+            "location": {"lat": 53.5, "lon": 9.9}
+        }))
+        .expect("test node")
+    }
+
+    #[test]
+    fn preserves_database_order_for_collation_sensitive_text_ids() {
+        // Treat this vector as a database result from a locale-aware collation.
+        // Rust byte/string ordering would put `rp-a-c` before `rp-ab`.
+        let page = postgres_bbox_cursor_page(
+            vec![node("rp-ab"), node("rp-a-c"), node("rp-z")],
+            2,
+        );
+
+        assert_eq!(
+            page.items
+                .iter()
+                .map(|node| node.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["rp-ab", "rp-a-c"]
+        );
+        assert!(page.page.has_more);
+        assert_eq!(page.page.next_cursor, Some(encode_cursor("rp-a-c")));
     }
 }
 

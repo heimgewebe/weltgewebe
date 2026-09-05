@@ -134,29 +134,41 @@ async fn node_bbox_route_reads_postgres_directly_with_cursor_contract() {
     let pool = prepare_pool().await;
     sqlx::query(
         "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) VALUES \
-         ('rp-bbox-a', 'place', 'A', 53.50, 9.90, '{}'::jsonb), \
-         ('rp-bbox-b', 'place', 'B', 53.55, 9.95, '{}'::jsonb), \
-         ('rp-bbox-c', 'place', 'C', 53.60, 10.00, '{}'::jsonb), \
+         ('rp-a-c', 'place', 'A-C', 53.50, 9.90, '{}'::jsonb), \
+         ('rp-ab', 'place', 'AB', 53.55, 9.95, '{}'::jsonb), \
+         ('rp-z', 'place', 'Z', 53.60, 10.00, '{}'::jsonb), \
          ('rp-bbox-outside', 'place', 'Outside', 54.50, 11.00, '{}'::jsonb)",
     )
     .execute(&pool)
     .await
     .expect("insert BBOX nodes");
 
-    let direct = load_nodes_bbox_from_postgres(&pool, 53.4, 53.7, 9.8, 10.1, 10, None, 0)
+    let direct = load_nodes_bbox_from_postgres(&pool, 53.4, 53.7, 9.8, 10.1, 10, 0)
         .await
         .expect("direct BBOX query");
-    assert_eq!(
-        direct
-            .iter()
-            .map(|node| node.id.as_str())
-            .collect::<Vec<_>>(),
-        vec!["rp-bbox-a", "rp-bbox-b", "rp-bbox-c"]
-    );
+    let direct_ids = direct
+        .iter()
+        .map(|node| node.id.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(direct_ids.len(), 3);
 
     let app = Router::new()
         .merge(api_router())
         .with_state(postgres_bbox_route_state(pool.clone()));
+
+    // The state cache is deliberately empty. PostgreSQL read mode must resolve
+    // focused details from the same authoritative source as the BBOX route.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!("/nodes/{}", direct_ids[0]))
+                .body(body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("PostgreSQL node detail response");
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+
     let response = app
         .clone()
         .oneshot(
@@ -172,8 +184,8 @@ async fn node_bbox_route_reads_postgres_directly_with_cursor_contract() {
         .expect("first BBOX body");
     let first: serde_json::Value = serde_json::from_slice(&first_body).expect("first BBOX JSON");
     assert_eq!(first["items"].as_array().expect("items").len(), 2);
-    assert_eq!(first["items"][0]["id"], "rp-bbox-a");
-    assert_eq!(first["items"][1]["id"], "rp-bbox-b");
+    assert_eq!(first["items"][0]["id"], direct_ids[0]);
+    assert_eq!(first["items"][1]["id"], direct_ids[1]);
     assert_eq!(first["page"]["has_more"], true);
     let cursor = first["page"]["next_cursor"]
         .as_str()
@@ -197,7 +209,7 @@ async fn node_bbox_route_reads_postgres_directly_with_cursor_contract() {
         .expect("second BBOX body");
     let second: serde_json::Value = serde_json::from_slice(&second_body).expect("second BBOX JSON");
     assert_eq!(second["items"].as_array().expect("items").len(), 1);
-    assert_eq!(second["items"][0]["id"], "rp-bbox-c");
+    assert_eq!(second["items"][0]["id"], direct_ids[2]);
     assert_eq!(second["page"]["has_more"], false);
     assert!(second["page"]["next_cursor"].is_null());
 
