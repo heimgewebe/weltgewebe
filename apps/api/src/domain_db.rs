@@ -195,8 +195,9 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
 /// Load one bounded, id-ordered node page directly from PostgreSQL for map BBOX reads.
 ///
 /// The route keeps the historical in-memory/JSONL path for non-PostgreSQL
-/// deployments. PostgreSQL-backed viewport requests use this helper so global
-/// node cardinality is no longer scanned in process memory on every map move.
+/// deployments. PostgreSQL-backed viewport requests use this helper so BBOX
+/// selection no longer iterates the global in-process node cache. Projection
+/// refresh and cache-generation behavior outside this query remain unchanged.
 pub async fn load_nodes_bbox_from_postgres(
     pool: &PgPool,
     min_lat: f64,
@@ -223,6 +224,10 @@ pub async fn load_nodes_bbox_from_postgres(
     .await
     .context("failed to load BBOX node page from domain_nodes")?;
 
+    // NULL coordinates cannot satisfy the BBOX predicate and
+    // search_visibility is database-constrained. Any remaining mapping error is
+    // therefore fail-visible rather than silently shrinking a limited page; this
+    // deliberately differs from the full projection loader, which may skip bad rows.
     rows.into_iter()
         .map(node_from_row)
         .collect::<Result<Vec<_>>>()
@@ -265,7 +270,8 @@ pub async fn load_nodes_bbox_after_id_from_postgres(
     // Rows with NULL lat/lon cannot satisfy the BBOX predicates, while
     // search_visibility is protected by a database CHECK constraint. A
     // remaining mapping failure therefore signals schema/data corruption and
-    // stays fail-visible instead of silently changing cursor cardinality.
+    // stays fail-visible instead of silently changing cursor cardinality. This
+    // deliberately differs from the full projection loader's skip-on-bad-row policy.
     rows.into_iter()
         .map(node_from_row)
         .collect::<Result<Vec<_>>>()

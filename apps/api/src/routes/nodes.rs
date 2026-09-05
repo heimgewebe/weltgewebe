@@ -19,7 +19,7 @@ use crate::config::{
 };
 use crate::domain_db::{
     delete_node_with_edges_in_postgres_audited, insert_domain_node_and_faden_with_creator_limit,
-    load_node_from_postgres, load_nodes_bbox_after_id_from_postgres, load_nodes_bbox_from_postgres,
+    load_nodes_bbox_after_id_from_postgres, load_nodes_bbox_from_postgres,
     lock_node_faden_cache_publication, patch_node_in_postgres, replace_node_in_postgres_audited,
     CreateOperationKey, NodeConversationDeleteEffect, NodeCreateError, NodeFadenCreateError,
     NodePatchInput, NodeWriteError,
@@ -719,32 +719,16 @@ pub async fn get_node(
     State(state): State<ApiState>,
     Path(id): Path<String>,
 ) -> Result<Json<NodeDetails>, StatusCode> {
-    // PostgreSQL-backed map BBOX reads are authoritative database reads. Keep
-    // the focused node detail path on the same source so a freshly committed
-    // node cannot be visible on the map yet transiently 404 from a stale cache.
-    let node = if state.config.domain_read_source == DomainReadSource::Postgres {
-        let pool = state
-            .db_pool
-            .as_ref()
-            .ok_or(StatusCode::INTERNAL_SERVER_ERROR)?;
-        load_node_from_postgres(pool, &id)
-            .await
-            .map_err(|error| {
-                tracing::error!(?error, node_id = %id, "PostgreSQL node detail read failed");
-                StatusCode::INTERNAL_SERVER_ERROR
-            })?
-            .ok_or(StatusCode::NOT_FOUND)?
-    } else {
-        // Clone before reading accounts so this endpoint never holds several
-        // state locks at once.
-        state
-            .nodes
-            .read()
-            .await
-            .get(&id)
-            .cloned()
-            .ok_or(StatusCode::NOT_FOUND)?
-    };
+    // Clone before reading accounts so this endpoint never holds several state
+    // locks at once. The projection middleware keeps both caches on the same
+    // generation; BBOX-specific PostgreSQL reads must not bypass that contract.
+    let node = state
+        .nodes
+        .read()
+        .await
+        .get(&id)
+        .cloned()
+        .ok_or(StatusCode::NOT_FOUND)?;
     let created_by_account_current_title = match node.created_by_account_id.as_deref() {
         Some(account_id) => state
             .accounts

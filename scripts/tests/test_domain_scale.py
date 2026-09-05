@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -171,6 +172,50 @@ class DomainScaleTests(unittest.TestCase):
             self.assertNotIn("ORDER BY id ASC LIMIT 5000", sql)
             self.assertIn("WHERE source_id = 'node-", sql)
             self.assertIn("WHERE target_id = 'node-", sql)
+
+    def test_bbox_workloads_are_derived_from_production_rust_sql(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = root / "fixture"
+            plans = root / "plans"
+            fake_domain_db = root / "domain_db.rs"
+            fake_domain_db.write_text(
+                """pub async fn load_nodes_bbox_from_postgres() {\n"
+                "    let rows = sqlx::query_as(\n"
+                "        \"SELECT id, title, lat, lon \\\n"
+                "         FROM domain_nodes \\\n"
+                "         WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 \\\n"
+                "         ORDER BY id ASC LIMIT $5 OFFSET $6\",\n"
+                "    );\n"
+                "}\n\n"
+                "pub async fn load_nodes_bbox_after_id_from_postgres() {\n"
+                "    let rows = sqlx::query_as(\n"
+                "        \"SELECT id, title, lat, lon \\\n"
+                "         FROM domain_nodes \\\n"
+                "         WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 \\\n"
+                "           AND id > $5 \\\n"
+                "         ORDER BY id ASC LIMIT $6\",\n"
+                "    );\n"
+                "}\n"
+                """,
+                encoding="utf-8",
+                newline="\n",
+            )
+            domain_scale.generate_fixture(CONFIG, "smoke", fixture)
+            output = root / "workload.sql"
+            with mock.patch.object(domain_scale, "DOMAIN_DB_SOURCE", fake_domain_db):
+                domain_scale.render_workload_sql(
+                    fixture / "manifest.json", plans, output, CONFIG
+                )
+            sql = output.read_text(encoding="utf-8")
+            self.assertIn(
+                "SELECT id, title, lat, lon FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 ORDER BY id ASC LIMIT 1001 OFFSET 0",
+                sql,
+            )
+            self.assertIn(
+                "SELECT id, title, lat, lon FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 AND id >",
+                sql,
+            )
 
     def test_plan_checker_requires_the_workload_specific_index_condition(self) -> None:
         config = domain_scale.load_config(CONFIG)
