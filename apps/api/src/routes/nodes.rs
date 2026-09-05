@@ -3747,26 +3747,30 @@ pub async fn list_nodes(
             // Initial and anchored pages use separate SQL statements so the
             // planner never has to optimise a nullable cursor `OR`.
             let rows = match after_id.as_deref() {
-                Some(after_id) => load_nodes_bbox_after_id_from_postgres(
-                    pool,
-                    bb.min_lat,
-                    bb.max_lat,
-                    bb.min_lng,
-                    bb.max_lng,
-                    limit.saturating_add(1),
-                    after_id,
-                )
-                .await,
-                None => load_nodes_bbox_from_postgres(
-                    pool,
-                    bb.min_lat,
-                    bb.max_lat,
-                    bb.min_lng,
-                    bb.max_lng,
-                    limit.saturating_add(1),
-                    0,
-                )
-                .await,
+                Some(after_id) => {
+                    load_nodes_bbox_after_id_from_postgres(
+                        pool,
+                        bb.min_lat,
+                        bb.max_lat,
+                        bb.min_lng,
+                        bb.max_lng,
+                        limit.saturating_add(1),
+                        after_id,
+                    )
+                    .await
+                }
+                None => {
+                    load_nodes_bbox_from_postgres(
+                        pool,
+                        bb.min_lat,
+                        bb.max_lat,
+                        bb.min_lng,
+                        bb.max_lng,
+                        limit.saturating_add(1),
+                        0,
+                    )
+                    .await
+                }
             }
             .map_err(|error| {
                 tracing::error!(?error, "PostgreSQL node BBOX read failed");
@@ -3846,10 +3850,7 @@ mod postgres_bbox_cursor_page_tests {
     fn preserves_database_order_for_collation_sensitive_text_ids() {
         // Treat this vector as a database result from a locale-aware collation.
         // Rust byte/string ordering would put `rp-a-c` before `rp-ab`.
-        let page = postgres_bbox_cursor_page(
-            vec![node("rp-ab"), node("rp-a-c"), node("rp-z")],
-            2,
-        );
+        let page = postgres_bbox_cursor_page(vec![node("rp-ab"), node("rp-a-c"), node("rp-z")], 2);
 
         assert_eq!(
             page.items
