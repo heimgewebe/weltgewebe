@@ -1,14 +1,27 @@
 mod support;
 
-use std::path::PathBuf;
+use std::{path::PathBuf, sync::Arc};
 
+use axum::{body, http::Request, Router};
 use serial_test::serial;
 use sqlx::{Executor, PgPool};
-use weltgewebe_api::domain_db::{
-    load_accounts_from_postgres, load_edges_from_postgres, load_nodes_from_postgres,
+use tokio::sync::RwLock;
+use tower::ServiceExt;
+use weltgewebe_api::{
+    auth::{accounts::AccountStore, rate_limit::AuthRateLimiter, session::SessionBackend},
+    config::{
+        AppConfig, DomainAccountWriteSource, DomainEdgeWriteSource, DomainNodeWriteSource,
+        DomainReadSource, PasskeyCredentialSource,
+    },
+    domain_db::{
+        load_accounts_from_postgres, load_edges_from_postgres, load_nodes_bbox_from_postgres,
+        load_nodes_from_postgres,
+    },
+    routes::{accounts::GarnrolleMapState, api_router},
+    state::{ApiState, OrderedCache},
+    telemetry::{BuildInfo, Metrics},
+    test_helpers::EnvGuard,
 };
-use weltgewebe_api::routes::accounts::GarnrolleMapState;
-use weltgewebe_api::test_helpers::EnvGuard;
 
 async fn direct_pool() -> PgPool {
     let url = std::env::var("DATABASE_URL")
@@ -43,6 +56,168 @@ async fn prepare_pool() -> PgPool {
     run_migrations(&pool).await;
     clean(&pool).await;
     pool
+}
+
+fn postgres_bbox_route_state(pool: PgPool) -> ApiState {
+    let config = AppConfig {
+        max_guest_owned_nodes: 1_000,
+        domain_read_source: DomainReadSource::Postgres,
+        domain_account_write_source: DomainAccountWriteSource::Postgres,
+        domain_node_write_source: DomainNodeWriteSource::Postgres,
+        domain_edge_write_source: DomainEdgeWriteSource::Postgres,
+        passkey_credential_source: PasskeyCredentialSource::InMemory,
+        auth_public_login: false,
+        auth_cookie_secure: true,
+        app_base_url: None,
+        auth_trusted_proxies: None,
+        auth_allow_emails: None,
+        auth_allow_email_domains: None,
+        auth_auto_provision: false,
+        auth_auto_provision_role: weltgewebe_api::config::AutoProvisionRole::Gast,
+        auth_rl_ip_per_min: None,
+        auth_rl_ip_per_hour: None,
+        auth_rl_email_per_min: None,
+        auth_rl_email_per_hour: None,
+        node_mutation_rate_limits: Default::default(),
+        smtp_host: None,
+        smtp_port: None,
+        smtp_user: None,
+        smtp_pass: None,
+        smtp_from: None,
+        auth_log_magic_token: false,
+        webauthn_rp_id: None,
+        webauthn_rp_origin: None,
+        webauthn_rp_name: None,
+    };
+    let metrics = Metrics::try_new(BuildInfo {
+        version: "test",
+        commit: "test",
+        build_timestamp: "test",
+    })
+    .expect("test metrics");
+    let rate_limiter = Arc::new(AuthRateLimiter::new(&config));
+
+    ApiState {
+        db_pool: Some(pool),
+        db_pool_configured: true,
+        nats_client: None,
+        nats_configured: false,
+        config,
+        metrics,
+        sessions: SessionBackend::new_in_memory(),
+        challenges: Default::default(),
+        tokens: weltgewebe_api::auth::tokens::TokenStore::new(),
+        step_up_tokens: weltgewebe_api::auth::step_up_tokens::StepUpTokenStore::new(),
+        accounts: Arc::new(RwLock::new(AccountStore::new())),
+        // Deliberately empty: this proof fails on the old O(N) cache-backed route.
+        nodes: Arc::new(RwLock::new(OrderedCache::new())),
+        nodes_persist: Arc::new(tokio::sync::Mutex::new(())),
+        accounts_persist: Arc::new(tokio::sync::Mutex::new(())),
+        domain_projection_gate: Arc::new(RwLock::new(())),
+        domain_projection_version: Arc::new(std::sync::atomic::AtomicI64::new(0)),
+        edges: Arc::new(RwLock::new(OrderedCache::new())),
+        rate_limiter,
+        mailer: None,
+        webauthn: None,
+        passkey_registrations: Default::default(),
+        passkey_registration_grants: Default::default(),
+        passkey_authentications: Default::default(),
+        passkeys: Default::default(),
+        web_push: None,
+    }
+}
+
+#[tokio::test]
+#[ignore]
+#[serial]
+async fn node_bbox_route_reads_postgres_directly_with_cursor_contract() {
+    let pool = prepare_pool().await;
+    sqlx::query(
+        "INSERT INTO domain_nodes (id, kind, title, lat, lon, payload) VALUES \
+         ('rp-a-c', 'place', 'A-C', 53.50, 9.90, '{}'::jsonb), \
+         ('rp-ab', 'place', 'AB', 53.55, 9.95, '{}'::jsonb), \
+         ('rp-z', 'place', 'Z', 53.60, 10.00, '{}'::jsonb), \
+         ('rp-bbox-outside', 'place', 'Outside', 54.50, 11.00, '{}'::jsonb)",
+    )
+    .execute(&pool)
+    .await
+    .expect("insert BBOX nodes");
+
+    let direct = load_nodes_bbox_from_postgres(&pool, 53.4, 53.7, 9.8, 10.1, 10, 0)
+        .await
+        .expect("direct BBOX query");
+    let direct_ids = direct
+        .iter()
+        .map(|node| node.id.clone())
+        .collect::<Vec<_>>();
+    assert_eq!(direct_ids.len(), 3);
+
+    let app = Router::new()
+        .merge(api_router())
+        .with_state(postgres_bbox_route_state(pool.clone()));
+
+    // The process node cache is deliberately empty. The BBOX route below must
+    // still return PostgreSQL rows directly; focused node details intentionally
+    // remain on the version-fenced projection cache and are not part of this proof.
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get("/nodes?bbox=9.8,53.4,10.1,53.7&pagination=cursor&limit=2")
+                .body(body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("first BBOX route page");
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let first_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("first BBOX body");
+    let first: serde_json::Value = serde_json::from_slice(&first_body).expect("first BBOX JSON");
+    assert_eq!(first["items"].as_array().expect("items").len(), 2);
+    assert_eq!(first["items"][0]["id"], direct_ids[0]);
+    assert_eq!(first["items"][1]["id"], direct_ids[1]);
+    assert_eq!(first["page"]["has_more"], true);
+    let cursor = first["page"]["next_cursor"]
+        .as_str()
+        .expect("next cursor")
+        .to_string();
+
+    let response = app
+        .clone()
+        .oneshot(
+            Request::get(format!(
+                "/nodes?bbox=9.8,53.4,10.1,53.7&pagination=cursor&limit=2&cursor={cursor}"
+            ))
+            .body(body::Body::empty())
+            .unwrap(),
+        )
+        .await
+        .expect("second BBOX route page");
+    assert_eq!(response.status(), axum::http::StatusCode::OK);
+    let second_body = body::to_bytes(response.into_body(), usize::MAX)
+        .await
+        .expect("second BBOX body");
+    let second: serde_json::Value = serde_json::from_slice(&second_body).expect("second BBOX JSON");
+    assert_eq!(second["items"].as_array().expect("items").len(), 1);
+    assert_eq!(second["items"][0]["id"], direct_ids[2]);
+    assert_eq!(second["page"]["has_more"], false);
+    assert!(second["page"]["next_cursor"].is_null());
+
+    let response = app
+        .oneshot(
+            Request::get("/nodes?bbox=9.8,53.4,10.1,53.7&offset=18446744073709551615")
+                .body(body::Body::empty())
+                .unwrap(),
+        )
+        .await
+        .expect("oversized legacy BBOX offset response");
+    assert_eq!(
+        response.status(),
+        axum::http::StatusCode::BAD_REQUEST,
+        "an offset outside PostgreSQL's signed 64-bit range is client input, not a server failure",
+    );
+
+    clean(&pool).await;
 }
 
 #[tokio::test]

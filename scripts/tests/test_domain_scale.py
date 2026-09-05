@@ -8,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -69,7 +70,7 @@ class DomainScaleTests(unittest.TestCase):
                     domain_scale.validate_config(unsafe)
 
         broken = json.loads(json.dumps(config))
-        del broken["plan_budgets"]["workloads"]["bbox"]["required_index"]
+        del broken["plan_budgets"]["workloads"]["bbox_cursor"]["required_index"]
         with self.assertRaisesRegex(domain_scale.DomainScaleError, "required_index"):
             domain_scale.validate_config(broken)
 
@@ -110,6 +111,14 @@ class DomainScaleTests(unittest.TestCase):
             self.assertIn("DROP SCHEMA IF EXISTS weltgewebe_perf CASCADE", sql)
             self.assertIn("LIKE public.domain_nodes INCLUDING ALL", sql)
             self.assertIn("LIKE public.domain_edges INCLUDING ALL", sql)
+            self.assertIn(
+                "ADD COLUMN IF NOT EXISTS search_visibility TEXT NOT NULL DEFAULT 'public'",
+                " ".join(sql.split()),
+            )
+            self.assertLess(
+                sql.index("ADD COLUMN IF NOT EXISTS search_visibility"),
+                sql.index("\\copy weltgewebe_perf.domain_nodes"),
+            )
             self.assertNotIn("DROP SCHEMA IF EXISTS public", sql)
             self.assertNotIn("TRUNCATE", sql.upper())
             self.assertNotIn("DELETE FROM public", sql)
@@ -136,7 +145,7 @@ class DomainScaleTests(unittest.TestCase):
                     CONFIG,
                 )
 
-    def test_workload_sql_targets_filter_indexes_without_unrelated_ordering(self) -> None:
+    def test_workload_sql_matches_cursor_and_bbox_api_query_shapes(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             fixture = root / "fixture"
@@ -145,16 +154,70 @@ class DomainScaleTests(unittest.TestCase):
             output = root / "workload.sql"
             domain_scale.render_workload_sql(fixture / "manifest.json", plans, output, CONFIG)
             sql = output.read_text(encoding="utf-8")
-            self.assertEqual(sql.count("EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)"), 6)
+            self.assertEqual(sql.count("EXPLAIN (ANALYZE, BUFFERS, WAL, FORMAT JSON)"), 7)
             for workload in domain_scale.WORKLOAD_ORDER:
                 self.assertIn(f"{workload}.json", sql)
             self.assertIn("WHERE id >", sql)
             self.assertIn("ORDER BY id ASC LIMIT 1000", sql)
             self.assertIn("WHERE kind = 'Projekt' LIMIT 500", sql)
             self.assertNotIn("WHERE kind = 'Projekt' ORDER BY", sql)
+            self.assertIn(
+                "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 ORDER BY id ASC LIMIT 1001 OFFSET 0",
+                sql,
+            )
+            self.assertIn(
+                "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 AND id >",
+                sql,
+            )
+            self.assertEqual(
+                sql.count(
+                    "id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0"
+                ),
+                2,
+            )
+            self.assertIn("ORDER BY id ASC LIMIT 1001 OFFSET 0", sql)
+            self.assertIn("ORDER BY id ASC LIMIT 1001", sql)
             self.assertNotIn("ORDER BY id ASC LIMIT 5000", sql)
             self.assertIn("WHERE source_id = 'node-", sql)
             self.assertIn("WHERE target_id = 'node-", sql)
+
+    def test_bbox_workloads_are_derived_from_production_rust_sql(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            fixture = root / "fixture"
+            plans = root / "plans"
+            fake_domain_db = root / "domain_db.rs"
+            fake_domain_db.write_text(
+                """pub async fn load_nodes_bbox_from_postgres() {
+    let rows = sqlx::query_as(
+        "SELECT id, title, lat, lon FROM domain_nodes WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 ORDER BY id ASC LIMIT $5 OFFSET $6",
+    );
+}
+
+pub async fn load_nodes_bbox_after_id_from_postgres() {
+    let rows = sqlx::query_as(
+        "SELECT id, title, lat, lon FROM domain_nodes WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 AND id > $5 ORDER BY id ASC LIMIT $6",
+    );
+}
+""",
+                encoding="utf-8",
+                newline="\n",
+            )
+            domain_scale.generate_fixture(CONFIG, "smoke", fixture)
+            output = root / "workload.sql"
+            with mock.patch.object(domain_scale, "DOMAIN_DB_SOURCE", fake_domain_db):
+                domain_scale.render_workload_sql(
+                    fixture / "manifest.json", plans, output, CONFIG
+                )
+            sql = output.read_text(encoding="utf-8")
+            self.assertIn(
+                "SELECT id, title, lat, lon FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 ORDER BY id ASC LIMIT 1001 OFFSET 0",
+                sql,
+            )
+            self.assertIn(
+                "SELECT id, title, lat, lon FROM weltgewebe_perf.domain_nodes WHERE lat >= -10.0 AND lat <= 10.0 AND lon >= -10.0 AND lon <= 10.0 AND id >",
+                sql,
+            )
 
     def test_plan_checker_requires_the_workload_specific_index_condition(self) -> None:
         config = domain_scale.load_config(CONFIG)
@@ -167,27 +230,27 @@ class DomainScaleTests(unittest.TestCase):
             for workload in domain_scale.WORKLOAD_ORDER:
                 self.assertTrue(report["workloads"][workload]["required_index_evidence"])
 
-            wrong_index = _good_plan(config, "bbox")
+            wrong_index = _good_plan(config, "bbox_cursor")
             wrong_index[0]["Plan"]["Plans"][0]["Index Name"] = "domain_nodes_pkey"  # type: ignore[index]
-            _write_json(plan_dir / "bbox.json", wrong_index)
+            _write_json(plan_dir / "bbox_cursor.json", wrong_index)
             failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(failed["status"], "fail")
             self.assertTrue(any("domain_nodes_lat_lon" in item for item in failed["failures"]))
 
             _write_good_plans(config, plan_dir)
-            wrong_condition = _good_plan(config, "bbox")
+            wrong_condition = _good_plan(config, "bbox_cursor")
             wrong_condition[0]["Plan"]["Plans"][0]["Index Cond"] = (
                 "(latitude IS NOT NULL) AND (longitude IS NOT NULL)"
             )  # type: ignore[index]
-            _write_json(plan_dir / "bbox.json", wrong_condition)
+            _write_json(plan_dir / "bbox_cursor.json", wrong_condition)
             condition_failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(condition_failed["status"], "fail")
             self.assertTrue(any("matching Index Cond" in item for item in condition_failed["failures"]))
 
             _write_good_plans(config, plan_dir)
-            not_executed = _good_plan(config, "bbox")
+            not_executed = _good_plan(config, "bbox_cursor")
             not_executed[0]["Plan"]["Plans"][0]["Actual Loops"] = 0  # type: ignore[index]
-            _write_json(plan_dir / "bbox.json", not_executed)
+            _write_json(plan_dir / "bbox_cursor.json", not_executed)
             execution_failed = domain_scale.check_plans(config, plan_dir, "ci")
             self.assertEqual(execution_failed["status"], "fail")
             self.assertTrue(any("was not executed" in item for item in execution_failed["failures"]))

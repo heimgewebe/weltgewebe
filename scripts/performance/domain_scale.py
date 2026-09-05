@@ -18,7 +18,9 @@ import sys
 import tempfile
 from typing import Any, Iterable, Mapping, Sequence
 
+ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = Path("configs/performance/domain-scale.v1.json")
+DOMAIN_DB_SOURCE = ROOT / "apps/api/src/domain_db.rs"
 BENCHMARK_SCHEMA = "weltgewebe_perf"
 SCHEMA_RE = re.compile(r"^[a-z_][a-z0-9_]*$")
 PSQL_SAFE_PATH_RE = re.compile(r"^/[A-Za-z0-9_./-]+$")
@@ -30,7 +32,8 @@ EDGE_KINDS = ("bezieht_sich_auf", "wirkt_mit", "liegt_bei", "teilt", "antwortet_
 WORKLOAD_ORDER = (
     "node_cursor",
     "edge_cursor",
-    "bbox",
+    "bbox_initial",
+    "bbox_cursor",
     "outbound_neighbors",
     "inbound_neighbors",
     "kind_filter",
@@ -449,6 +452,12 @@ CREATE SCHEMA {schema};
 CREATE TABLE {schema}.domain_nodes (LIKE public.domain_nodes INCLUDING ALL);
 CREATE TABLE {schema}.domain_edges (LIKE public.domain_edges INCLUDING ALL);
 
+-- The scale foundation intentionally creates only the early domain tables.
+-- Later production columns used by measured queries must still exist in the
+-- isolated benchmark schema so the exact production SQL can execute unchanged.
+ALTER TABLE {schema}.domain_nodes
+    ADD COLUMN IF NOT EXISTS search_visibility TEXT NOT NULL DEFAULT 'public';
+
 \\copy {schema}.domain_nodes (id, kind, title, lat, lon, created_at, updated_at, payload) FROM {_psql_meta_path_literal(nodes_path)} WITH (FORMAT csv, HEADER true)
 \\copy {schema}.domain_edges (id, source_id, target_id, edge_kind, created_at, payload) FROM {_psql_meta_path_literal(edges_path)} WITH (FORMAT csv, HEADER true)
 
@@ -463,6 +472,50 @@ COMMIT;
 """
     output_path.parent.mkdir(parents=True, exist_ok=True)
     output_path.write_text(sql, encoding="utf-8", newline="\n")
+
+
+def _production_bbox_sql(function_name: str) -> str:
+    """Read the exact SQL literal used by one production Rust BBOX loader."""
+
+    try:
+        source = DOMAIN_DB_SOURCE.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise DomainScaleError(f"cannot read production domain SQL source {DOMAIN_DB_SOURCE}: {exc}") from exc
+    marker = f"pub async fn {function_name}("
+    start = source.find(marker)
+    if start < 0:
+        raise DomainScaleError(f"production BBOX loader not found: {function_name}")
+    next_function = source.find("\npub async fn ", start + len(marker))
+    block = source[start : next_function if next_function >= 0 else len(source)]
+    match = re.search(r'sqlx::query_as\(\s*"(?P<sql>.*?)"\s*,\s*\)', block, flags=re.DOTALL)
+    if match is None:
+        raise DomainScaleError(f"production BBOX SQL literal not found: {function_name}")
+    raw = re.sub(r"\\\r?\n\s*", " ", match.group("sql"))
+    if "\\" in raw:
+        raise DomainScaleError(f"unsupported escape in production BBOX SQL literal: {function_name}")
+    sql = " ".join(raw.split())
+    if sql.count("FROM domain_nodes") != 1:
+        raise DomainScaleError(f"production BBOX SQL must reference domain_nodes exactly once: {function_name}")
+    return sql
+
+
+def _render_production_bbox_sql(
+    function_name: str, schema: str, bindings: Mapping[int, str]
+) -> str:
+    query = _production_bbox_sql(function_name).replace(
+        "FROM domain_nodes", f"FROM {schema}.domain_nodes", 1
+    )
+    placeholders = {int(value) for value in re.findall(r"\$(\d+)", query)}
+    if placeholders != set(bindings):
+        raise DomainScaleError(
+            f"production BBOX placeholder contract drifted for {function_name}: "
+            f"expected {sorted(bindings)}, observed {sorted(placeholders)}"
+        )
+
+    def replace_binding(match: re.Match[str]) -> str:
+        return bindings[int(match.group(1))]
+
+    return re.sub(r"\$(\d+)", replace_binding, query)
 
 
 def _explain_block(name: str, plan_dir: Path, query: str) -> str:
@@ -488,6 +541,23 @@ def render_workload_sql(
     middle_edge = _edge_id(edge_count // 2)
     neighbor_node = _node_id(node_count // 3)
     plan_dir.mkdir(parents=True, exist_ok=True)
+    bbox_initial_query = _render_production_bbox_sql(
+        "load_nodes_bbox_from_postgres",
+        schema,
+        {1: "-10.0", 2: "10.0", 3: "-10.0", 4: "10.0", 5: "1001", 6: "0"},
+    )
+    bbox_cursor_query = _render_production_bbox_sql(
+        "load_nodes_bbox_after_id_from_postgres",
+        schema,
+        {
+            1: "-10.0",
+            2: "10.0",
+            3: "-10.0",
+            4: "10.0",
+            5: _sql_literal(middle_node),
+            6: "1001",
+        },
+    )
     blocks = [
         _explain_block(
             "node_cursor",
@@ -499,11 +569,8 @@ def render_workload_sql(
             plan_dir,
             f"SELECT id, source_id, target_id, edge_kind FROM {schema}.domain_edges WHERE id > {_sql_literal(middle_edge)} ORDER BY id ASC LIMIT 1000",
         ),
-        _explain_block(
-            "bbox",
-            plan_dir,
-            f"SELECT id, kind, title, lat, lon FROM {schema}.domain_nodes WHERE lat BETWEEN -10.0 AND 10.0 AND lon BETWEEN -10.0 AND 10.0 LIMIT 5000",
-        ),
+        _explain_block("bbox_initial", plan_dir, bbox_initial_query),
+        _explain_block("bbox_cursor", plan_dir, bbox_cursor_query),
         _explain_block(
             "outbound_neighbors",
             plan_dir,

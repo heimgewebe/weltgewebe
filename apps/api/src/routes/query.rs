@@ -125,11 +125,13 @@ pub fn validate_cursor_limit(cursor_mode: bool, limit: usize) -> Result<(), Stat
 
 /// Build a cursor page from references into a backing store.
 ///
-/// The sorting contract is **stable id ascending** for every cursor endpoint.
+/// This helper's sorting contract is **stable Rust `String` id ascending**.
 /// `id_of` extracts the sort/cursor key; `project` maps each retained item to
 /// the response shape (e.g. an account's public projection). The cursor anchors
-/// on the last returned id, so the next page contains strictly larger ids and
-/// can therefore never duplicate or skip an entry across a stable store.
+/// on the last returned id, so the next page contains strictly larger ids under
+/// that same Rust ordering. Storage-backed endpoints that use a different
+/// deterministic collation must preserve their storage order and cursor comparison
+/// directly instead of feeding those rows through this helper.
 ///
 /// **Precondition:** The caller must validate `limit > 0` in cursor mode via
 /// [`validate_cursor_limit`] before calling this function. The caller passes

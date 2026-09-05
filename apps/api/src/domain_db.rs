@@ -192,6 +192,92 @@ pub async fn load_nodes_from_postgres(pool: &PgPool) -> Result<OrderedCache<Node
     Ok(cache)
 }
 
+/// Load one bounded, id-ordered node page directly from PostgreSQL for map BBOX reads.
+///
+/// The route keeps the historical in-memory/JSONL path for non-PostgreSQL
+/// deployments. PostgreSQL-backed viewport requests use this helper so BBOX
+/// selection no longer iterates the global in-process node cache. Projection
+/// refresh and cache-generation behavior outside this query remain unchanged.
+pub async fn load_nodes_bbox_from_postgres(
+    pool: &PgPool,
+    min_lat: f64,
+    max_lat: f64,
+    min_lng: f64,
+    max_lng: f64,
+    limit: usize,
+    offset: i64,
+) -> Result<Vec<Node>> {
+    let limit = i64::try_from(limit).context("node BBOX limit exceeds PostgreSQL integer range")?;
+    let rows: Vec<NodeRow> = sqlx::query_as(
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
+         FROM domain_nodes \
+         WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 \
+         ORDER BY id ASC LIMIT $5 OFFSET $6",
+    )
+    .bind(min_lat)
+    .bind(max_lat)
+    .bind(min_lng)
+    .bind(max_lng)
+    .bind(limit)
+    .bind(offset)
+    .fetch_all(pool)
+    .await
+    .context("failed to load BBOX node page from domain_nodes")?;
+
+    // NULL coordinates cannot satisfy the BBOX predicate and
+    // search_visibility is database-constrained. Any remaining mapping error is
+    // therefore fail-visible rather than silently shrinking a limited page; this
+    // deliberately differs from the full projection loader, which may skip bad rows.
+    rows.into_iter()
+        .map(node_from_row)
+        .collect::<Result<Vec<_>>>()
+        .context("failed to map BBOX node page from domain_nodes")
+}
+
+/// Load one cursor-anchored BBOX page directly from PostgreSQL.
+///
+/// Keeping this as a separate statement from the initial/legacy form avoids a
+/// nullable `OR` predicate whose generic prepared plan could lose the clear
+/// `id > cursor` selectivity. PostgreSQL owns the ordering; callers must not
+/// re-sort the returned rows under Rust's string ordering.
+pub async fn load_nodes_bbox_after_id_from_postgres(
+    pool: &PgPool,
+    min_lat: f64,
+    max_lat: f64,
+    min_lng: f64,
+    max_lng: f64,
+    limit: usize,
+    after_id: &str,
+) -> Result<Vec<Node>> {
+    let limit = i64::try_from(limit).context("node BBOX limit exceeds PostgreSQL integer range")?;
+    let rows: Vec<NodeRow> = sqlx::query_as(
+        "SELECT id, kind, title, lat, lon, created_at, updated_at, payload::text, search_visibility \
+         FROM domain_nodes \
+         WHERE lat >= $1 AND lat <= $2 AND lon >= $3 AND lon <= $4 \
+           AND id > $5 \
+         ORDER BY id ASC LIMIT $6",
+    )
+    .bind(min_lat)
+    .bind(max_lat)
+    .bind(min_lng)
+    .bind(max_lng)
+    .bind(after_id)
+    .bind(limit)
+    .fetch_all(pool)
+    .await
+    .context("failed to load cursor-anchored BBOX node page from domain_nodes")?;
+
+    // Rows with NULL lat/lon cannot satisfy the BBOX predicates, while
+    // search_visibility is protected by a database CHECK constraint. A
+    // remaining mapping failure therefore signals schema/data corruption and
+    // stays fail-visible instead of silently changing cursor cardinality. This
+    // deliberately differs from the full projection loader's skip-on-bad-row policy.
+    rows.into_iter()
+        .map(node_from_row)
+        .collect::<Result<Vec<_>>>()
+        .context("failed to map cursor-anchored BBOX node page from domain_nodes")
+}
+
 pub async fn load_edges_from_postgres(pool: &PgPool) -> Result<OrderedCache<Edge>> {
     let max_edges = crate::routes::edges::max_edges_cache_limit();
     // No SQL-side LIMIT: rejected rows must not consume a physical row slot

@@ -35,7 +35,12 @@
         "required_index": "domain_edges_pkey",
         "required_index_cond_identifiers": ["id"]
       },
-      "bbox": {
+      "bbox_initial": {
+        "forbidden_node_types": ["Seq Scan"],
+        "required_index": "domain_nodes_lat_lon_idx",
+        "required_index_cond_identifiers": ["lat", "lon"]
+      },
+      "bbox_cursor": {
         "forbidden_node_types": ["Seq Scan"],
         "required_index": "domain_nodes_lat_lon_idx",
         "required_index_cond_identifiers": ["lat", "lon"]
